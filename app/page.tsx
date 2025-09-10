@@ -1,103 +1,185 @@
-import Image from "next/image";
+"use client";
+
+import { useEffect, useState } from "react";
+import { HeroSection } from "./components/layout/hero";
+import { ProductGrid } from "./components/layout/product-grid";
+import { useApi, Product as ApiProduct, Category } from "./hooks/use-api";
+import { Button } from "./components/ui/button";
+import { RefreshCw, AlertCircle } from "lucide-react";
+
+interface GridProduct {
+  id: string;
+  name: string;
+  price: number;
+  image_url: string | null;
+  categoryName?: string;
+}
 
 export default function Home() {
-  return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+  const api = useApi();
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [products, setProducts] = useState<GridProduct[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+  useEffect(() => {
+    const loadData = async () => {
+      setLoading(true);
+      setError(null);
+
+      try {
+        const [fetchedProducts, fetchedCategories] = await Promise.all([
+          api.getProducts(),
+          api.getCategories(),
+        ]);
+
+        setCategories(fetchedCategories);
+
+        const featuredProducts = fetchedProducts.map((product: ApiProduct) => {
+          const category = fetchedCategories.find(
+            (cat: Category) => cat.id === product.categoryId
+          );
+          return {
+            id: product.id,
+            name: product.name,
+            price: product.price,
+            image_url: product.image_url || null,
+            categoryName: category?.name,
+          };
+        });
+
+        setProducts(featuredProducts.slice(0, 8)); // Mostrar apenas 8 produtos em destaque
+      } catch {
+        setError("Não foi possível carregar os produtos. Tente novamente.");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadData();
+  }, [api]);
+
+  const handleRetry = () => {
+    api.invalidateCache();
+    window.location.reload();
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white">
+      <HeroSection />
+
+      {/* Seção de Categorias */}
+      <section className="py-16 bg-white">
+        <div className="mx-auto max-w-7xl px-4">
+          <div className="text-center mb-12">
+            <h2 className="text-3xl font-bold text-gray-900 mb-4">
+              Explore nossas categorias
+            </h2>
+            <p className="text-lg text-gray-600 max-w-2xl mx-auto">
+              Descubra produtos selecionados especialmente para cada ocasião
+            </p>
+          </div>
+
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+            {categories.slice(0, 4).map((category) => (
+              <div
+                key={category.id}
+                className="group cursor-pointer p-6 bg-gradient-to-br from-orange-50 to-orange-100 rounded-2xl hover:shadow-lg transition-all duration-300 hover:-translate-y-1"
+              >
+                <div className="text-center">
+                  <div className="w-16 h-16 bg-orange-500 rounded-full mx-auto mb-4 flex items-center justify-center text-white text-2xl font-bold">
+                    {category.name.charAt(0)}
+                  </div>
+                  <h3 className="font-semibold text-gray-900 group-hover:text-orange-600 transition-colors">
+                    {category.name}
+                  </h3>
+                  {category.description && (
+                    <p className="text-sm text-gray-600 mt-2 line-clamp-2">
+                      {category.description}
+                    </p>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+      </section>
+
+      {/* Seção de Produtos */}
+      <section className="py-16 bg-gray-50">
+        <div className="mx-auto max-w-7xl px-4">
+          {error && (
+            <div className="mb-8 p-4 bg-red-50 border border-red-200 rounded-lg flex items-center gap-3">
+              <AlertCircle className="h-5 w-5 text-red-500 flex-shrink-0" />
+              <div className="flex-1">
+                <p className="text-red-800 font-medium">
+                  Erro ao carregar produtos
+                </p>
+                <p className="text-red-600 text-sm">{error}</p>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleRetry}
+                className="border-red-300 text-red-700 hover:bg-red-50"
+              >
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Tentar novamente
+              </Button>
+            </div>
+          )}
+
+          {loading ? (
+            <div className="text-center py-20">
+              <div className="inline-flex items-center gap-3 text-gray-600">
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-orange-500"></div>
+                <span className="text-lg">
+                  Carregando produtos especiais...
+                </span>
+              </div>
+            </div>
+          ) : (
+            <ProductGrid
+              products={products}
+              title="Produtos em Destaque"
+              subtitle="Seleções especiais preparadas com carinho para você"
+            />
+          )}
+
+          {!loading && !error && products.length === 0 && (
+            <div className="text-center py-20">
+              <div className="w-20 h-20 bg-gray-200 rounded-full mx-auto mb-6 flex items-center justify-center">
+                <svg
+                  className="w-10 h-10 text-gray-400"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2 2v-5m16 0h-6a2 2 0 00-2 2v3a2 2 0 01-2 2v-3a2 2 0 00-2-2H4"
+                  />
+                </svg>
+              </div>
+              <h3 className="text-xl font-semibold text-gray-900 mb-2">
+                Nenhum produto encontrado
+              </h3>
+              <p className="text-gray-600 mb-6">
+                Parece que ainda não temos produtos cadastrados.
+              </p>
+              <Button
+                onClick={handleRetry}
+                className="bg-orange-500 hover:bg-orange-600 text-white"
+              >
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Recarregar página
+              </Button>
+            </div>
+          )}
+        </div>
+      </section>
     </div>
   );
 }
