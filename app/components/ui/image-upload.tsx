@@ -3,12 +3,11 @@
 import { useState, useRef } from "react";
 import Image from "next/image";
 import { Button } from "../ui/button";
-import { Upload, X, ImageIcon } from "lucide-react";
-import { useApi } from "../../hooks/use-api";
+import { X, ImageIcon } from "lucide-react";
 
 interface ImageUploadProps {
   value?: string;
-  onChange: (url: string) => void;
+  onChange: (url: string, file?: File) => void;
   onRemove?: () => void;
   className?: string;
   preview?: boolean;
@@ -21,9 +20,8 @@ export function ImageUpload({
   className = "",
   preview = true,
 }: ImageUploadProps) {
-  const api = useApi();
-  const [uploading, setUploading] = useState(false);
   const [dragActive, setDragActive] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileSelect = async (file: File) => {
@@ -38,16 +36,10 @@ export function ImageUpload({
       return;
     }
 
-    setUploading(true);
-    try {
-      const response = await api.uploadImage(file);
-      onChange(response.url);
-    } catch (error) {
-      console.error("Erro ao fazer upload da imagem:", error);
-      alert("Erro ao fazer upload da imagem. Tente novamente.");
-    } finally {
-      setUploading(false);
-    }
+    // Criar preview
+    const url = URL.createObjectURL(file);
+    setPreviewUrl(url);
+    onChange(url, file);
   };
 
   const handleDrop = (e: React.DragEvent) => {
@@ -68,21 +60,30 @@ export function ImageUpload({
   };
 
   const handleRemove = () => {
+    if (previewUrl) {
+      URL.revokeObjectURL(previewUrl);
+      setPreviewUrl(null);
+    }
     if (onRemove) {
       onRemove();
     } else {
-      onChange("");
+      onChange("", undefined);
     }
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
   };
 
-  if (value && preview) {
+  if ((value || previewUrl) && preview) {
     return (
       <div className={`relative ${className}`}>
         <div className="relative w-full h-48 rounded-lg overflow-hidden border border-gray-300">
-          <Image src={value} alt="Preview" fill className="object-cover" />
+          <Image
+            src={previewUrl || value || ""}
+            alt="Preview"
+            fill
+            className="object-cover"
+          />
           <div className="absolute top-2 right-2">
             <Button
               type="button"
@@ -95,7 +96,9 @@ export function ImageUpload({
             </Button>
           </div>
         </div>
-        <p className="text-xs text-gray-500 mt-1 truncate">{value}</p>
+        <p className="text-xs text-gray-500 mt-1 truncate">
+          {value || "Preview"}
+        </p>
       </div>
     );
   }
@@ -110,7 +113,6 @@ export function ImageUpload({
               ? "border-orange-500 bg-orange-50"
               : "border-gray-300 hover:border-gray-400"
           }
-          ${uploading ? "pointer-events-none opacity-50" : ""}
         `}
         onDrop={handleDrop}
         onDragOver={(e) => {
@@ -130,22 +132,15 @@ export function ImageUpload({
         />
 
         <div className="space-y-2">
-          {uploading ? (
-            <>
-              <Upload className="h-10 w-10 text-orange-500 animate-pulse mx-auto" />
-              <p className="text-sm text-gray-600">Fazendo upload...</p>
-            </>
-          ) : (
-            <>
-              <ImageIcon className="h-10 w-10 text-gray-400 mx-auto" />
-              <div className="space-y-1">
-                <p className="text-sm font-medium text-gray-700">
-                  Clique para selecionar ou arraste uma imagem
-                </p>
-                <p className="text-xs text-gray-500">PNG, JPG, GIF até 5MB</p>
-              </div>
-            </>
-          )}
+          <>
+            <ImageIcon className="h-10 w-10 text-gray-400 mx-auto" />
+            <div className="space-y-1">
+              <p className="text-sm font-medium text-gray-700">
+                Clique para selecionar ou arraste uma imagem
+              </p>
+              <p className="text-xs text-gray-500">PNG, JPG, GIF até 5MB</p>
+            </div>
+          </>
         </div>
       </div>
     </div>

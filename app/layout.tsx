@@ -1,8 +1,11 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import Script from "next/script";
 import "./globals.css";
-import { SiteHeader } from "./components/layout/header";
-import { SiteFooter } from "./components/layout/footer-new";
+import { AuthProvider } from "./hooks/use-auth";
+import { CartProvider } from "./hooks/cart-context";
+import ClientLayout from "./components/layout/client-layout";
+import { Toaster } from "./components/ui/sonner";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -30,9 +33,16 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-gray-50 text-gray-900`}
       >
-        <SiteHeader />
-        <main className="min-h-screen">{children}</main>
-        <SiteFooter />
+        <Script
+          src="https://sdk.mercadopago.com/js/v2"
+          strategy="beforeInteractive"
+        />
+        <AuthProvider>
+          <CartProvider>
+            <ClientLayout>{children}</ClientLayout>
+          </CartProvider>
+        </AuthProvider>
+        <Toaster position="top-center" richColors />
       </body>
     </html>
   );

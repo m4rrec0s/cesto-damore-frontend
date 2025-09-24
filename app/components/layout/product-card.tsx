@@ -1,7 +1,13 @@
 import Image from "next/image";
 import Link from "next/link";
-import { ShoppingCart, Heart, Star } from "lucide-react";
+import { useState } from "react";
+import { ShoppingCart } from "lucide-react";
 import { Button } from "@/app/components/ui/button";
+import { useCartContext } from "@/app/hooks/cart-context";
+import { useAuth } from "@/app/hooks/use-auth";
+import { useRouter } from "next/navigation";
+import { CartSheet } from "@/app/components/cart-sheet";
+import { toast } from "sonner";
 
 interface ProductCardProps {
   id: string;
@@ -9,101 +15,132 @@ interface ProductCardProps {
   price: number;
   image_url: string | null;
   categoryName?: string;
+  categoryNames?: string[];
+  discount?: number;
 }
 
 export function ProductCard({
   id,
   name,
   price,
+  discount,
   image_url,
   categoryName,
+  categoryNames,
 }: ProductCardProps) {
+  const { addToCart } = useCartContext();
+  const { user } = useAuth();
+  const router = useRouter();
+  const [showCartSheet, setShowCartSheet] = useState(false);
+
+  const handleAddToCart = async (e: React.MouseEvent) => {
+    e.preventDefault();
+
+    // Verificar se usuário está logado
+    if (!user) {
+      router.push(
+        `/login?redirect=${encodeURIComponent(window.location.pathname)}`
+      );
+      return;
+    }
+
+    try {
+      await addToCart(id, 1);
+      toast.success("Produto adicionado ao carrinho");
+      setShowCartSheet(true);
+    } catch (error) {
+      console.error("❌ Erro ao adicionar produto:", error);
+      toast.error("Erro ao adicionar produto ao carrinho");
+    }
+  };
   return (
-    <div className="group relative bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1 overflow-hidden">
-      <Link href={`/produto/${id}`} className="block">
-        {/* Image Container */}
-        <div className="relative aspect-square overflow-hidden bg-gradient-to-br from-gray-50 to-gray-100">
-          <Image
-            src={image_url || "/placeholder.svg"}
-            alt={name}
-            fill
-            className="object-cover transition-transform duration-500 group-hover:scale-110"
-          />
+    <>
+      <div className="group flex flex-col justify-between relative w-full h-auto bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-xs transition-all duration-300 overflow-hidden">
+        <Link href={`/produto/${id}`} className="block">
+          <div className="relative aspect-square overflow-hidden bg-gradient-to-br from-gray-50 to-gray-100 max-w-[300px] mx-auto">
+            <Image
+              src={image_url || "/placeholder.svg"}
+              alt={name}
+              fill
+              className="object-cover"
+            />
 
-          {/* Category Badge */}
-          {categoryName && (
-            <div className="absolute top-3 left-3 bg-white/90 backdrop-blur-sm px-3 py-1 rounded-full text-xs font-medium text-gray-700">
-              {categoryName}
+            {categoryNames && categoryNames.length > 0 ? (
+              <div className="absolute top-3 left-3 gap-1 flex opacity-80">
+                {categoryNames[0] && (
+                  <div className="bg-white/90 backdrop-blur-sm px-3 py-1 rounded-full text-xs font-medium text-gray-700">
+                    {categoryNames[0]}
+                  </div>
+                )}
+                {categoryNames.length > 1 && (
+                  <div className="bg-white/90 backdrop-blur-sm px-2 py-1 rounded-full text-xs font-medium text-gray-700">
+                    +{categoryNames.length - 1}
+                  </div>
+                )}
+              </div>
+            ) : categoryName ? (
+              <div className="absolute top-3 left-3 bg-white/90 backdrop-blur-sm px-3 py-1 rounded-full text-xs font-medium text-gray-700">
+                {categoryName}
+              </div>
+            ) : null}
+          </div>
+
+          <div className="p-4 space-y-3 flex flex-col overflow-hidden h-28">
+            <div>
+              <h3 className="text-sm font-medium text-gray-900 line-clamp-2 leading-tight group-hover:text-rose-600 transition-colors min-h-[2.5rem]">
+                {name}
+              </h3>
             </div>
-          )}
 
-          {/* Favorite Button */}
-          <button
-            className="absolute top-3 right-3 w-8 h-8 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center text-gray-400 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
-            aria-label="Adicionar aos favoritos"
+            <div className="flex items-center justify-between mt-auto">
+              <div className="flex flex-col">
+                <div className="text-sm text-gray-500 line-through">
+                  {discount ? (
+                    price.toLocaleString("pt-BR", {
+                      style: "currency",
+                      currency: "BRL",
+                    })
+                  ) : (
+                    <span className="invisible">placeholder</span>
+                  )}
+                </div>
+                <div className="text-lg font-semibold text-gray-900">
+                  {discount
+                    ? (price - (discount * price) / 100).toLocaleString(
+                        "pt-BR",
+                        { style: "currency", currency: "BRL" }
+                      )
+                    : price.toLocaleString("pt-BR", {
+                        style: "currency",
+                        currency: "BRL",
+                      })}
+                </div>
+              </div>
+              {discount && (
+                <div className="text-xs text-green-500 px-2 py-1 rounded-full font-medium">
+                  {`${discount.toFixed(0)}% OFF`}
+                </div>
+              )}
+            </div>
+          </div>
+        </Link>
+        <div className="p-4 pt-0 mt-2">
+          <Button
+            size="sm"
+            className="w-full bg-rose-500 hover:bg-rose-600 text-white"
+            onClick={handleAddToCart}
           >
-            <Heart className="h-4 w-4" />
-          </button>
-
-          {/* Quick Actions Overlay */}
-          <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
-            <Button
-              size="sm"
-              className="bg-white text-gray-900 hover:bg-gray-100 shadow-lg transform translate-y-2 group-hover:translate-y-0 transition-transform duration-300"
-              onClick={(e) => {
-                e.preventDefault();
-                // Add to cart logic
-              }}
-            >
-              <ShoppingCart className="h-4 w-4 mr-2" />
-              Adicionar
-            </Button>
-          </div>
+            <ShoppingCart className="h-4 w-4 mr-2" />
+            Adicionar
+          </Button>
         </div>
+      </div>
 
-        {/* Content */}
-        <div className="p-4 space-y-3">
-          <div>
-            <h3 className="font-semibold text-gray-900 line-clamp-2 leading-tight group-hover:text-orange-600 transition-colors">
-              {name}
-            </h3>
-
-            {/* Rating */}
-            <div className="flex items-center gap-1 mt-1">
-              {[...Array(5)].map((_, i) => (
-                <Star
-                  key={i}
-                  className={`h-3 w-3 ${
-                    i < 4 ? "fill-yellow-400 text-yellow-400" : "text-gray-200"
-                  }`}
-                />
-              ))}
-              <span className="text-xs text-gray-500 ml-1">(24)</span>
-            </div>
-          </div>
-
-          <div className="flex items-center justify-between">
-            <div className="space-y-1">
-              <div className="text-lg font-bold text-gray-900">
-                {price.toLocaleString("pt-BR", {
-                  style: "currency",
-                  currency: "BRL",
-                })}
-              </div>
-              <div className="text-sm text-gray-400 line-through">
-                {(price * 1.2).toLocaleString("pt-BR", {
-                  style: "currency",
-                  currency: "BRL",
-                })}
-              </div>
-            </div>
-
-            <div className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full font-medium">
-              -17%
-            </div>
-          </div>
-        </div>
-      </Link>
-    </div>
+      {/* Cart Sheet */}
+      <CartSheet
+        isOpen={showCartSheet}
+        onClose={() => setShowCartSheet(false)}
+      />
+    </>
   );
 }

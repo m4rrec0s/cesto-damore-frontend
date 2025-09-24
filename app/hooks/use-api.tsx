@@ -22,43 +22,84 @@ export interface User {
   id: string;
   name: string;
   email: string;
+  address?: string | null;
+  city?: string | null;
+  state?: string | null;
+  zip_code?: string | null;
 }
 export interface Category {
   id: string;
   name: string;
-  description?: string;
 }
 export interface Product {
   id: string;
   name: string;
   description?: string;
   price: number;
+  discount?: number;
   image_url?: string | null;
-  categoryId?: string;
-  typeId?: string;
+  categories: Category[];
+  type_id: string;
+}
+
+export interface ProductInput {
+  name: string;
+  description?: string;
+  price: number;
+  discount?: number;
+  image_url?: string | null;
+  categories: string[]; // Array of category IDs for API input
+  type_id: string;
 }
 export interface Additional {
   id: string;
   name: string;
   description?: string;
   price: number;
+  discount?: number;
   image_url?: string;
 }
 export interface Type {
   id: string;
   name: string;
 }
+export interface CepInfo {
+  zip_code: string;
+  address: string;
+  neighborhood: string;
+  city: string;
+  state: string;
+  additional_info: {
+    ibge_code: string;
+    ddd: string;
+  };
+}
+export interface PaginationInfo {
+  page: number;
+  perPage: number;
+  total: number;
+  totalPages: number;
+}
+
+export interface ProductsResponse {
+  products: Product[];
+  pagination: PaginationInfo;
+}
 export interface OrderItem {
-  productId: string;
+  product_id: string;
   quantity: number;
-  additionalIds?: string[];
+  price: number;
+  additional_ids?: string[];
+  additionals?: { additional_id: string; quantity: number; price: number }[];
 }
 export interface Order {
   id: string;
-  userId: string;
+  user_id: string;
   items: OrderItem[];
   total: number;
   createdAt: string;
+  delivery_address?: string | null;
+  delivery_date?: string | null;
 }
 
 interface CacheShape {
@@ -101,13 +142,52 @@ class ApiService {
   // ===== Interceptors (auth token) =====
   constructor() {
     this.client.interceptors.request.use((config) => {
-      const token =
-        typeof window !== "undefined" ? localStorage.getItem("token") : null;
+      // Tentar pegar token do localStorage (compatibilidade)
+      let token =
+        typeof window !== "undefined" ? localStorage.getItem("appToken") : null;
+
+      // Se não encontrou, tentar do localStorage antigo
+      if (!token) {
+        token =
+          typeof window !== "undefined" ? localStorage.getItem("token") : null;
+      }
+
       if (token) {
         config.headers = config.headers || {};
         config.headers.Authorization = `Bearer ${token}`;
       }
       return config;
+    });
+
+    // Interceptor de resposta para corrigir URLs duplicadas
+    this.client.interceptors.response.use((response) => {
+      // Função auxiliar para corrigir URLs duplicadas
+      const fixDuplicateApiUrl = (obj: unknown): unknown => {
+        if (typeof obj === "string" && obj.includes("/api/api/")) {
+          return obj.replace("/api/api/", "/api/");
+        }
+        if (Array.isArray(obj)) {
+          return obj.map(fixDuplicateApiUrl);
+        }
+        if (obj && typeof obj === "object") {
+          const fixed: Record<string, unknown> = {};
+          for (const key in obj) {
+            if (obj.hasOwnProperty(key)) {
+              fixed[key] = fixDuplicateApiUrl(
+                (obj as Record<string, unknown>)[key]
+              );
+            }
+          }
+          return fixed;
+        }
+        return obj;
+      };
+
+      if (response.data) {
+        response.data = fixDuplicateApiUrl(response.data);
+      }
+
+      return response;
     });
   }
 
@@ -118,20 +198,30 @@ class ApiService {
   };
   login = async (credentials: LoginCredentials) => {
     const res = await this.client.post("/auth/login", credentials);
-    if (typeof window !== "undefined" && res.data?.token) {
-      localStorage.setItem("token", res.data.token);
+    if (typeof window !== "undefined" && res.data?.appToken) {
+      localStorage.setItem("appToken", res.data.appToken);
+    }
+    if (typeof window !== "undefined" && res.data?.user) {
+      localStorage.setItem("user", JSON.stringify(res.data.user));
     }
     return res.data;
   };
   google = async (googleToken: string) => {
     const res = await this.client.post("/auth/google", { token: googleToken });
-    if (typeof window !== "undefined" && res.data?.token) {
-      localStorage.setItem("token", res.data.token);
+    if (typeof window !== "undefined" && res.data?.appToken) {
+      localStorage.setItem("appToken", res.data.appToken);
+    }
+    if (typeof window !== "undefined" && res.data?.user) {
+      localStorage.setItem("user", JSON.stringify(res.data.user));
     }
     return res.data;
   };
   logoutLocal = () => {
-    if (typeof window !== "undefined") localStorage.removeItem("token");
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("token");
+      localStorage.removeItem("appToken");
+      localStorage.removeItem("user");
+    }
   };
 
   // ===== Users =====
@@ -142,6 +232,10 @@ class ApiService {
     return res.data;
   };
   getUser = async (id: string) => (await this.client.get(`/users/${id}`)).data;
+  getCepInfo = async (zipCode: string): Promise<CepInfo> => {
+    const res = await this.client.get(`/users/cep/${zipCode}`);
+    return res.data;
+  };
   createUser = async (payload: Partial<User>) => {
     const res = await this.client.post("/users", payload);
     this.clearCache("users");
@@ -216,15 +310,64 @@ class ApiService {
   };
   getAdditional = async (id: string) =>
     (await this.client.get(`/additional/${id}`)).data;
-  createAdditional = async (payload: Partial<Additional>) => {
-    const res = await this.client.post("/additional", payload);
-    this.clearCache("additionals");
-    return res.data;
+  createAdditional = async (
+    payload: Partial<Additional>,
+    imageFile?: File
+  ): Promise<Additional> => {
+    if (imageFile) {
+      // Enviar como FormData com imagem
+      const formData = new FormData();
+      formData.append("name", payload.name || "");
+      formData.append("description", payload.description || "");
+      formData.append("price", payload.price?.toString() || "0");
+      if (payload.discount)
+        formData.append("discount", payload.discount.toString());
+      formData.append("image", imageFile);
+
+      const res = await this.client.post("/additional", formData, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+      });
+      this.clearCache("additionals");
+      return res.data;
+    } else {
+      // Enviar como JSON normal
+      const res = await this.client.post("/additional", payload);
+      this.clearCache("additionals");
+      return res.data;
+    }
   };
-  updateAdditional = async (id: string, payload: Partial<Additional>) => {
-    const res = await this.client.put(`/additional/${id}`, payload);
-    this.clearCache("additionals");
-    return res.data;
+  updateAdditional = async (
+    id: string,
+    payload: Partial<Additional>,
+    imageFile?: File
+  ): Promise<Additional> => {
+    if (imageFile) {
+      // Enviar como FormData com imagem
+      const formData = new FormData();
+      if (payload.name) formData.append("name", payload.name);
+      if (payload.description !== undefined)
+        formData.append("description", payload.description);
+      if (payload.price !== undefined)
+        formData.append("price", payload.price.toString());
+      if (payload.discount !== undefined)
+        formData.append("discount", payload.discount.toString());
+      formData.append("image", imageFile);
+
+      const res = await this.client.put(`/additional/${id}`, formData, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+      });
+      this.clearCache("additionals");
+      return res.data;
+    } else {
+      // Enviar como JSON normal
+      const res = await this.client.put(`/additional/${id}`, payload);
+      this.clearCache("additionals");
+      return res.data;
+    }
   };
   deleteAdditional = async (id: string) => {
     const res = await this.client.delete(`/additional/${id}`);
@@ -250,25 +393,86 @@ class ApiService {
     this.clearCache("products");
     return res.data;
   };
+  getAdditionalsByProduct = async (productId: string) => {
+    const res = await this.client.get(`/products/${productId}/additionals`);
+    return res.data;
+  };
 
   // ===== Products =====
-  getProducts = async () => {
-    if (ApiService.cache.products) return ApiService.cache.products;
-    const res = await this.client.get("/products");
-    ApiService.cache.products = res.data;
+  getProducts = async (params?: {
+    page?: number;
+    perPage?: number;
+    search?: string;
+    category_id?: string;
+    type_id?: string;
+  }): Promise<ProductsResponse> => {
+    const queryParams = new URLSearchParams();
+    if (params?.page) queryParams.append("page", params.page.toString());
+    if (params?.perPage)
+      queryParams.append("perPage", params.perPage.toString());
+    if (params?.search) queryParams.append("search", params.search);
+    if (params?.category_id)
+      queryParams.append("category_id", params.category_id);
+    if (params?.type_id) queryParams.append("type_id", params.type_id);
+
+    const queryString = queryParams.toString();
+    const url = `/products${queryString ? `?${queryString}` : ""}`;
+
+    const res = await this.client.get(url);
     return res.data;
   };
   getProduct = async (id: string) =>
     (await this.client.get(`/products/${id}`)).data;
-  createProduct = async (payload: Partial<Product>) => {
-    const res = await this.client.post("/products", payload);
-    this.clearCache("products");
-    return res.data;
+  createProduct = async (
+    payload: Partial<ProductInput>,
+    imageFile?: File
+  ): Promise<Product> => {
+    console.log("🔧 API createProduct - payload recebido:", payload);
+    console.log("🔧 API createProduct - tem imagem?", !!imageFile);
+
+    // TEMPORÁRIO: Desabilitar FormData para debug
+    if (false && imageFile) {
+    } else {
+      // Enviar como JSON normal
+      console.log("📦 Enviando como JSON:", payload);
+      const res = await this.client.post("/products", payload);
+      this.clearCache("products");
+      return res.data;
+    }
   };
-  updateProduct = async (id: string, payload: Partial<Product>) => {
-    const res = await this.client.put(`/products/${id}`, payload);
-    this.clearCache("products");
-    return res.data;
+  updateProduct = async (
+    id: string,
+    payload: Partial<ProductInput>,
+    imageFile?: File
+  ): Promise<Product> => {
+    if (imageFile) {
+      // Enviar como FormData com imagem
+      const formData = new FormData();
+      if (payload.name) formData.append("name", payload.name);
+      if (payload.description !== undefined)
+        formData.append("description", payload.description);
+      if (payload.price !== undefined)
+        formData.append("price", payload.price.toString());
+      if (payload.categories)
+        formData.append("categories", JSON.stringify(payload.categories));
+      if (payload.type_id) formData.append("type_id", payload.type_id);
+      if (payload.discount !== undefined)
+        formData.append("discount", payload.discount.toString());
+      formData.append("image", imageFile);
+
+      const res = await this.client.put(`/products/${id}`, formData, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+      });
+      this.clearCache("products");
+      return res.data;
+    } else {
+      // Enviar como JSON normal
+      const res = await this.client.put(`/products/${id}`, payload);
+      this.clearCache("products");
+      return res.data;
+    }
   };
   deleteProduct = async (id: string) => {
     const res = await this.client.delete(`/products/${id}`);
@@ -313,14 +517,60 @@ class ApiService {
   };
   getOrder = async (id: string) =>
     (await this.client.get(`/orders/${id}`)).data;
-  createOrder = async (payload: { userId: string; items: OrderItem[] }) => {
+  createOrder = async (payload: {
+    user_id: string;
+    total_price: number;
+    items: OrderItem[];
+    delivery_address?: string | null;
+    delivery_date?: Date | null;
+  }) => {
+    console.log("📡 Enviando pedido para o backend:", payload);
     const res = await this.client.post("/orders", payload);
+    console.log("✅ Resposta do backend:", res.data);
     this.clearCache("orders");
     return res.data;
   };
   deleteOrder = async (id: string) => {
     const res = await this.client.delete(`/orders/${id}`);
     this.clearCache("orders");
+    return res.data;
+  };
+
+  // ===== Payments =====
+  createPaymentPreference = async (payload: {
+    items: Array<{
+      title: string;
+      quantity: number;
+      unit_price: number;
+      currency_id: string;
+    }>;
+    payer: {
+      email: string;
+      name?: string;
+      identification?: {
+        type: string;
+        number: string;
+      };
+    };
+    back_urls?: {
+      success: string;
+      failure: string;
+      pending: string;
+    };
+    auto_return?: string;
+    external_reference?: string;
+  }) => {
+    const res = await this.client.post("/payment/preference", payload);
+    return res.data;
+  };
+
+  getPaymentStatus = async (paymentId: string) => {
+    const res = await this.client.get(`/payment/${paymentId}/status`);
+    return res.data;
+  };
+
+  getUserPayments = async () => {
+    const res = await this.client.get("/payments/user");
     return res.data;
   };
 }

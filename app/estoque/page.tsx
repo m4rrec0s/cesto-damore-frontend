@@ -14,6 +14,7 @@ import { TypeManager } from "./components/type-manager";
 import { AdditionalManager } from "./components/additional-manager";
 import { StatsOverview } from "./components/stats-overview";
 import { Package, Tag, Grid3X3, Plus, Settings, BarChart3 } from "lucide-react";
+import { Button } from "../components/ui/button";
 
 export default function EstoquePage() {
   const api = useApi();
@@ -32,15 +33,16 @@ export default function EstoquePage() {
     const loadAllData = async () => {
       setLoading(true);
       try {
-        const [products, categories, types, additionals] = await Promise.all([
-          api.getProducts(),
-          api.getCategories(),
-          api.getTypes(),
-          api.getAdditionals(),
-        ]);
+        const [productsResponse, categories, types, additionals] =
+          await Promise.all([
+            api.getProducts(),
+            api.getCategories(),
+            api.getTypes(),
+            api.getAdditionals(),
+          ]);
 
         setData({
-          products,
+          products: productsResponse.products,
           categories,
           types,
           additionals,
@@ -60,15 +62,16 @@ export default function EstoquePage() {
     // Recarregar dados após uma atualização
     const loadAllData = async () => {
       try {
-        const [products, categories, types, additionals] = await Promise.all([
-          api.getProducts(),
-          api.getCategories(),
-          api.getTypes(),
-          api.getAdditionals(),
-        ]);
+        const [productsResponse, categories, types, additionals] =
+          await Promise.all([
+            api.getProducts(),
+            api.getCategories(),
+            api.getTypes(),
+            api.getAdditionals(),
+          ]);
 
         setData({
-          products,
+          products: productsResponse.products,
           categories,
           types,
           additionals,
@@ -127,7 +130,7 @@ export default function EstoquePage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="bg-white border-b border-gray-200 sticky top-16 z-40">
+      <div className="bg-white border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 py-6">
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-3">
@@ -150,8 +153,9 @@ export default function EstoquePage() {
             {tabs.map((tab) => {
               const Icon = tab.icon;
               return (
-                <button
+                <Button
                   key={tab.id}
+                  variant="ghost"
                   onClick={() => setActiveTab(tab.id)}
                   className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all ${
                     activeTab === tab.id
@@ -172,7 +176,7 @@ export default function EstoquePage() {
                       {tab.count}
                     </span>
                   )}
-                </button>
+                </Button>
               );
             })}
           </nav>

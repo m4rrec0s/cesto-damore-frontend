@@ -2,9 +2,17 @@
 import { Additional, useApi } from "../../hooks/use-api";
 import { Button } from "../../components/ui/button";
 import { ImageUpload } from "../../components/ui/image-upload";
-import { Plus, Search, Edit2, Trash2, Link2, Upload } from "lucide-react";
+import { Plus, Search, Edit2, Trash2, Upload } from "lucide-react";
 import Image from "next/image";
 import { useState } from "react";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "../../components/ui/table";
 
 interface AdditionalManagerProps {
   additionals: Additional[];
@@ -15,7 +23,9 @@ interface AdditionalForm {
   name: string;
   description: string;
   price: number;
+  discount: number;
   image_url: string;
+  imageFile?: File;
 }
 
 export function AdditionalManager({
@@ -33,7 +43,9 @@ export function AdditionalManager({
     name: "",
     description: "",
     price: 0,
+    discount: 0,
     image_url: "",
+    imageFile: undefined,
   });
 
   const filteredAdditionals = additionals.filter(
@@ -42,6 +54,14 @@ export function AdditionalManager({
       additional.description?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  const getFinalPrice = (price: number, discount: number = 0) => {
+    return price * (1 - discount / 100);
+  };
+
+  const getDiscountAmount = (price: number, discount: number = 0) => {
+    return price * (discount / 100);
+  };
+
   const handleOpenModal = (additional?: Additional) => {
     if (additional) {
       setEditingAdditional(additional);
@@ -49,7 +69,9 @@ export function AdditionalManager({
         name: additional.name,
         description: additional.description || "",
         price: additional.price,
+        discount: additional.discount || 0,
         image_url: additional.image_url || "",
+        imageFile: undefined,
       });
     } else {
       setEditingAdditional(null);
@@ -57,7 +79,9 @@ export function AdditionalManager({
         name: "",
         description: "",
         price: 0,
+        discount: 0,
         image_url: "",
+        imageFile: undefined,
       });
     }
     setShowModal(true);
@@ -70,7 +94,9 @@ export function AdditionalManager({
       name: "",
       description: "",
       price: 0,
+      discount: 0,
       image_url: "",
+      imageFile: undefined,
     });
   };
 
@@ -79,10 +105,15 @@ export function AdditionalManager({
     setLoading(true);
 
     try {
+      const { imageFile, ...additionalData } = formData;
       if (editingAdditional) {
-        await api.updateAdditional(editingAdditional.id, formData);
+        await api.updateAdditional(
+          editingAdditional.id,
+          additionalData,
+          imageFile
+        );
       } else {
-        await api.createAdditional(formData);
+        await api.createAdditional(additionalData, imageFile);
       }
       handleCloseModal();
       onUpdate();
@@ -132,76 +163,92 @@ export function AdditionalManager({
         </Button>
       </div>
 
-      {/* Additionals Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredAdditionals.map((additional) => (
-          <div
-            key={additional.id}
-            className="bg-white rounded-lg border border-gray-200 overflow-hidden hover:shadow-lg transition-shadow"
-          >
-            <div className="aspect-video bg-gray-100 relative">
-              {additional.image_url ? (
-                <Image
-                  src={additional.image_url}
-                  alt={additional.name}
-                  fill
-                  className="object-cover"
-                />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center text-gray-400">
-                  <Upload className="h-8 w-8" />
-                </div>
-              )}
-            </div>
-
-            <div className="p-4">
-              <div className="flex items-start justify-between mb-2">
-                <h3 className="font-semibold text-gray-900 line-clamp-1">
-                  {additional.name}
-                </h3>
-                <div className="flex gap-1">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleOpenModal(additional)}
-                  >
-                    <Edit2 className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleDelete(additional.id)}
-                    className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-
-              <p className="text-sm text-gray-600 line-clamp-2 mb-3">
-                {additional.description || "Sem descrição"}
-              </p>
-
-              <div className="flex items-center justify-between">
-                <div className="text-lg font-bold text-green-600">
+      {/* Additionals Table */}
+      <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="w-16">Imagem</TableHead>
+              <TableHead>Nome</TableHead>
+              <TableHead>Descrição</TableHead>
+              <TableHead className="text-right">Preço</TableHead>
+              <TableHead className="text-right">Desconto</TableHead>
+              <TableHead className="text-right">Preço Final</TableHead>
+              <TableHead className="w-24">Ações</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {filteredAdditionals.map((additional) => (
+              <TableRow key={additional.id}>
+                <TableCell>
+                  <div className="w-12 h-12 bg-gray-100 rounded-lg overflow-hidden">
+                    {additional.image_url ? (
+                      <Image
+                        src={additional.image_url}
+                        alt={additional.name}
+                        width={48}
+                        height={48}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-gray-400">
+                        <Upload className="h-6 w-6" />
+                      </div>
+                    )}
+                  </div>
+                </TableCell>
+                <TableCell className="font-medium">{additional.name}</TableCell>
+                <TableCell className="max-w-xs truncate">
+                  {additional.description || "Sem descrição"}
+                </TableCell>
+                <TableCell className="text-right font-semibold text-green-600">
                   {additional.price.toLocaleString("pt-BR", {
                     style: "currency",
                     currency: "BRL",
                   })}
-                </div>
-
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="text-blue-600 border-blue-200 hover:bg-blue-50"
-                >
-                  <Link2 className="h-3 w-3 mr-1" />
-                  Vincular
-                </Button>
-              </div>
-            </div>
-          </div>
-        ))}
+                </TableCell>
+                <TableCell className="text-right">
+                  {additional.discount ? (
+                    <span className="bg-red-100 text-red-700 px-2 py-1 rounded-full text-xs font-medium">
+                      {additional.discount}%
+                    </span>
+                  ) : (
+                    <span className="text-gray-400 text-xs">-</span>
+                  )}
+                </TableCell>
+                <TableCell className="text-right font-bold text-green-700">
+                  {getFinalPrice(
+                    additional.price,
+                    additional.discount
+                  ).toLocaleString("pt-BR", {
+                    style: "currency",
+                    currency: "BRL",
+                  })}
+                </TableCell>
+                <TableCell>
+                  <div className="flex gap-1">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleOpenModal(additional)}
+                      className="h-8 w-8 p-0"
+                    >
+                      <Edit2 className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleDelete(additional.id)}
+                      className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
       </div>
 
       {/* Empty State */}
@@ -230,78 +277,176 @@ export function AdditionalManager({
 
       {/* Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="p-6 border-b border-gray-200">
-              <h2 className="text-xl font-semibold text-gray-900">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
+            <div className="bg-gradient-to-r from-orange-500 to-orange-600 px-6 py-4">
+              <h2 className="text-xl font-bold text-white">
                 {editingAdditional ? "Editar Adicional" : "Novo Adicional"}
               </h2>
+              <p className="text-orange-100 text-sm mt-1">
+                {editingAdditional
+                  ? "Atualize as informações do adicional"
+                  : "Preencha os dados para criar um novo adicional"}
+              </p>
             </div>
 
-            <form onSubmit={handleSubmit} className="p-6 space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Nome *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={formData.name}
-                    onChange={(e) =>
-                      setFormData((prev) => ({ ...prev, name: e.target.value }))
-                    }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
-                    placeholder="Nome do adicional"
-                    aria-label="Nome do adicional"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Preço *
-                  </label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    required
-                    value={formData.price}
-                    onChange={(e) =>
-                      setFormData((prev) => ({
-                        ...prev,
-                        price: parseFloat(e.target.value) || 0,
-                      }))
-                    }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
-                    placeholder="0.00"
-                    aria-label="Preço do adicional"
-                  />
+            <form
+              onSubmit={handleSubmit}
+              className="p-6 space-y-6 overflow-y-auto max-h-[calc(90vh-120px)]"
+            >
+              {/* Seção Principal */}
+              <div className="bg-gray-50 rounded-xl p-4">
+                <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+                  <div className="w-2 h-2 bg-orange-500 rounded-full mr-3"></div>
+                  Informações Principais
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="block text-sm font-medium text-gray-700">
+                      Nome do Adicional *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={formData.name}
+                      onChange={(e) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          name: e.target.value,
+                        }))
+                      }
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all"
+                      placeholder="Digite o nome do adicional"
+                      aria-label="Nome do adicional"
+                    />
+                  </div>
                 </div>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+              {/* Seção de Preços */}
+              <div className="bg-green-50 rounded-xl p-4">
+                <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+                  <div className="w-2 h-2 bg-green-500 rounded-full mr-3"></div>
+                  Preços e Descontos
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="block text-sm font-medium text-gray-700">
+                      Preço Original (R$) *
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      required
+                      value={formData.price === 0 ? "" : String(formData.price)}
+                      onChange={(e) => {
+                        const raw = e.target.value;
+                        const cleaned =
+                          raw.startsWith("0") && !raw.startsWith("0.")
+                            ? raw.replace(/^0+/, "")
+                            : raw;
+                        setFormData((prev) => ({
+                          ...prev,
+                          price: cleaned === "" ? 0 : parseFloat(cleaned),
+                        }));
+                      }}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all"
+                      placeholder="0.00"
+                      aria-label="Preço do adicional"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="block text-sm font-medium text-gray-700">
+                      Desconto (%)
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      max="100"
+                      value={
+                        formData.discount === 0 ? "" : String(formData.discount)
+                      }
+                      onChange={(e) => {
+                        const value = parseFloat(e.target.value) || 0;
+                        setFormData((prev) => ({
+                          ...prev,
+                          discount: Math.min(100, Math.max(0, value)),
+                        }));
+                      }}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all"
+                      placeholder="0.00"
+                      aria-label="Desconto do adicional"
+                    />
+                    {formData.discount > 0 && (
+                      <div className="bg-white rounded-lg p-3 border border-green-200 mt-2">
+                        <div className="flex justify-between items-center text-sm">
+                          <span className="text-gray-600">Preço final:</span>
+                          <span className="font-bold text-green-600">
+                            {getFinalPrice(
+                              formData.price,
+                              formData.discount
+                            ).toLocaleString("pt-BR", {
+                              style: "currency",
+                              currency: "BRL",
+                            })}
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center text-sm mt-1">
+                          <span className="text-gray-600">Economia:</span>
+                          <span className="font-medium text-red-500">
+                            -
+                            {getDiscountAmount(
+                              formData.price,
+                              formData.discount
+                            ).toLocaleString("pt-BR", {
+                              style: "currency",
+                              currency: "BRL",
+                            })}
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Seção de Imagem */}
+              <div className="bg-blue-50 rounded-xl p-4">
+                <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+                  <div className="w-2 h-2 bg-blue-500 rounded-full mr-3"></div>
                   Imagem do Adicional
-                </label>
+                </h3>
                 <ImageUpload
                   value={formData.image_url}
-                  onChange={(url) =>
+                  onChange={(url, file) =>
                     setFormData((prev) => ({
                       ...prev,
                       image_url: url,
+                      imageFile: file,
+                    }))
+                  }
+                  onRemove={() =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      image_url: "",
+                      imageFile: undefined,
                     }))
                   }
                   className="w-full"
                 />
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+              {/* Seção de Descrição */}
+              <div className="bg-purple-50 rounded-xl p-4">
+                <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+                  <div className="w-2 h-2 bg-purple-500 rounded-full mr-3"></div>
                   Descrição
-                </label>
+                </h3>
                 <textarea
-                  rows={3}
+                  rows={4}
                   value={formData.description}
                   onChange={(e) =>
                     setFormData((prev) => ({
@@ -309,32 +454,40 @@ export function AdditionalManager({
                       description: e.target.value,
                     }))
                   }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
-                  placeholder="Descrição do adicional..."
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all resize-none"
+                  placeholder="Descreva o adicional detalhadamente..."
                   aria-label="Descrição do adicional"
                 />
               </div>
 
-              <div className="flex gap-3 pt-4">
+              {/* Botões de Ação */}
+              <div className="flex gap-4 pt-6 border-t border-gray-200">
                 <Button
                   type="button"
                   variant="outline"
                   onClick={handleCloseModal}
                   disabled={loading}
-                  className="flex-1"
+                  className="flex-1 py-3 border-2 border-gray-300 hover:border-gray-400 hover:bg-gray-50 transition-all"
                 >
                   Cancelar
                 </Button>
                 <Button
                   type="submit"
                   disabled={loading}
-                  className="flex-1 bg-orange-500 hover:bg-orange-600 text-white"
+                  className="flex-1 py-3 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white font-semibold shadow-lg hover:shadow-xl transition-all transform hover:scale-[1.02]"
                 >
-                  {loading
-                    ? "Salvando..."
-                    : editingAdditional
-                    ? "Atualizar"
-                    : "Criar"}
+                  {loading ? (
+                    <div className="flex items-center justify-center">
+                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
+                      Salvando...
+                    </div>
+                  ) : (
+                    <>
+                      {editingAdditional
+                        ? "Atualizar Adicional"
+                        : "Criar Adicional"}
+                    </>
+                  )}
                 </Button>
               </div>
             </form>

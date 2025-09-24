@@ -12,7 +12,6 @@ interface CategoryManagerProps {
 
 interface CategoryForm {
   name: string;
-  description: string;
 }
 
 export function CategoryManager({
@@ -26,13 +25,10 @@ export function CategoryManager({
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState<CategoryForm>({
     name: "",
-    description: "",
   });
 
-  const filteredCategories = categories.filter(
-    (category) =>
-      category.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      category.description?.toLowerCase().includes(searchTerm.toLowerCase())
+  const filteredCategories = categories.filter((category) =>
+    category.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const handleOpenModal = (category?: Category) => {
@@ -40,13 +36,11 @@ export function CategoryManager({
       setEditingCategory(category);
       setFormData({
         name: category.name,
-        description: category.description || "",
       });
     } else {
       setEditingCategory(null);
       setFormData({
         name: "",
-        description: "",
       });
     }
     setShowModal(true);
@@ -57,7 +51,6 @@ export function CategoryManager({
     setEditingCategory(null);
     setFormData({
       name: "",
-      description: "",
     });
   };
 
@@ -156,10 +149,6 @@ export function CategoryManager({
                 </Button>
               </div>
             </div>
-
-            <p className="text-sm text-gray-600 line-clamp-3">
-              {category.description || "Sem descrição"}
-            </p>
           </div>
         ))}
       </div>
@@ -213,25 +202,6 @@ export function CategoryManager({
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
                   placeholder="Nome da categoria"
                   aria-label="Nome da categoria"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Descrição
-                </label>
-                <textarea
-                  rows={3}
-                  value={formData.description}
-                  onChange={(e) =>
-                    setFormData((prev) => ({
-                      ...prev,
-                      description: e.target.value,
-                    }))
-                  }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
-                  placeholder="Descrição da categoria..."
-                  aria-label="Descrição da categoria"
                 />
               </div>
 
