@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useAuth } from "@/app/hooks/use-auth";
 import { useCartContext } from "@/app/hooks/cart-context";
 import { useApi } from "@/app/hooks/use-api";
@@ -25,6 +25,7 @@ import {
   ChevronRightIcon,
   CalendarIcon,
   ShoppingCart,
+  ChevronLeftIcon,
 } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
@@ -49,6 +50,32 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/app/components/ui/collapsible";
+import { cn } from "@/app/lib/utils";
+
+const ACCEPTED_CITIES = [
+  "Campina Grande",
+  "Queimadas",
+  "Galante",
+  "Puxinanã",
+  "São José da Mata",
+];
+
+const SHIPPING_RULES: Record<string, { pix: number; card: number }> = {
+  "campina grande": { pix: 0, card: 10 },
+  queimadas: { pix: 15, card: 25 },
+  galante: { pix: 15, card: 25 },
+  puxinana: { pix: 15, card: 25 },
+  "sao jose da mata": { pix: 15, card: 25 },
+};
+
+const normalizeString = (value: string) =>
+  value
+    ? value
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .trim()
+        .toLowerCase()
+    : "";
 
 // Tipos para os componentes
 interface CartItem {
@@ -87,29 +114,29 @@ interface OrderSummaryCardProps {
   cartTotal: number;
 }
 
-interface DeliveryInfoCardProps {
-  address: string;
-  prepareAddressForEditing: () => void;
-}
+// interface DeliveryInfoCardProps {
+//   address: string;
+//   prepareAddressForEditing: () => void;
+// }
 
-interface DeliveryDateCardProps {
-  selectedDate: Date | undefined;
-  selectedTime: string;
-  calendarOpen: boolean;
-  setCalendarOpen: (open: boolean) => void;
-  setSelectedDate: (date: Date | undefined) => void;
-  setSelectedTime: (time: string) => void;
-  isDateDisabled: (date: Date) => boolean;
-  generateTimeSlots: (date: Date) => Array<{ value: string; label: string }>;
-  getMinPreparationHours: () => number;
-}
+// interface DeliveryDateCardProps {
+//   selectedDate: Date | undefined;
+//   selectedTime: string;
+//   calendarOpen: boolean;
+//   setCalendarOpen: (open: boolean) => void;
+//   setSelectedDate: (date: Date | undefined) => void;
+//   setSelectedTime: (time: string) => void;
+//   isDateDisabled: (date: Date) => boolean;
+//   generateTimeSlots: (date: Date) => Array<{ value: string; label: string }>;
+//   getMinPreparationHours: () => number;
+// }
 
-interface CustomerInfoCardProps {
-  user: {
-    name: string;
-    email: string;
-  };
-}
+// interface CustomerInfoCardProps {
+//   user: {
+//     name: string;
+//     email: string;
+//   };
+// }
 
 interface CheckoutButtonProps {
   handleFinalizePurchase: () => void;
@@ -127,6 +154,10 @@ interface CheckoutButtonProps {
     name: string;
     email: string;
   };
+  paymentMethod: "" | "pix" | "card";
+  shippingCost: number | null;
+  grandTotal: number;
+  isAddressServed: boolean;
 }
 
 // Componentes funcionais para o layout responsivo
@@ -261,7 +292,6 @@ const OrderSummaryCard = ({
   originalTotal,
   discountAmount,
   cartTotal,
-  // Props para agendamento
   selectedDate,
   selectedTime,
   calendarOpen,
@@ -271,9 +301,17 @@ const OrderSummaryCard = ({
   isDateDisabled,
   generateTimeSlots,
   getMinPreparationHours,
-  // Props para entrega
   address,
   prepareAddressForEditing,
+  className,
+  paymentMethod,
+  setPaymentMethod,
+  shippingCost,
+  shippingOptions,
+  grandTotal,
+  isAddressServed,
+  addressWarning,
+  acceptedCities,
 }: OrderSummaryCardProps & {
   selectedDate: Date | undefined;
   selectedTime: string;
@@ -286,8 +324,17 @@ const OrderSummaryCard = ({
   getMinPreparationHours: () => number;
   address: string;
   prepareAddressForEditing: () => void;
+  className?: string;
+  paymentMethod: "" | "pix" | "card";
+  setPaymentMethod: (method: "pix" | "card") => void;
+  shippingCost: number | null;
+  shippingOptions: { pix: number | null; card: number | null };
+  grandTotal: number;
+  isAddressServed: boolean;
+  addressWarning?: string | null;
+  acceptedCities: string[];
 }) => (
-  <Card className="p-4 lg:p-6">
+  <Card className={cn("p-4 lg:p-6", className)}>
     <h3 className="text-base lg:text-lg font-semibold text-gray-900 mb-3 lg:mb-4">
       Resumo do Pedido
     </h3>
@@ -307,27 +354,127 @@ const OrderSummaryCard = ({
         </div>
       )}
       <div className="flex justify-between text-xs lg:text-sm">
-        <span>Taxa de entrega</span>
-        <span>Grátis</span>
+        <span>Subtotal com descontos</span>
+        <span>R$ {cartTotal.toFixed(2)}</span>
       </div>
+      <div className="flex justify-between text-xs lg:text-sm">
+        <span>Taxa de entrega</span>
+        <span
+          className={cn(
+            shippingCost === 0 ? "font-semibold text-green-600" : "",
+            !isAddressServed && address ? "text-red-600" : ""
+          )}
+        >
+          {!address
+            ? "Informe o endereço"
+            : !isAddressServed
+            ? "Indisponível"
+            : shippingCost === null
+            ? "Selecione o pagamento"
+            : shippingCost === 0
+            ? "Grátis"
+            : `R$ ${shippingCost.toFixed(2)}`}
+        </span>
+      </div>
+      {paymentMethod && isAddressServed && shippingCost !== null && (
+        <p className="text-[11px] text-gray-500">
+          {paymentMethod === "pix"
+            ? "Pagamento via PIX"
+            : "Pagamento via Cartão de Crédito"}
+          {" · "}
+          {shippingCost === 0
+            ? "Frete gratuito para este endereço"
+            : `Frete de R$ ${shippingCost.toFixed(2)}`}
+        </p>
+      )}
       <hr />
       <div className="flex justify-between font-semibold text-base lg:text-lg">
         <span>Total</span>
-        <span className="text-rose-600">R$ {cartTotal.toFixed(2)}</span>
+        <span className="text-rose-600">R$ {grandTotal.toFixed(2)}</span>
       </div>
     </div>
 
-    {/* Collapsible para informações de entrega e agendamento */}
+    {addressWarning && (
+      <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700">
+        <p>{addressWarning}</p>
+        <p className="mt-1 text-[11px] text-red-600">
+          Cidades atendidas: {acceptedCities.join(", ")} - PB.
+        </p>
+      </div>
+    )}
+
+    <div className="mb-4 space-y-2">
+      <h4 className="text-sm font-semibold text-gray-900">
+        Forma de Pagamento
+      </h4>
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+        <Button
+          type="button"
+          variant={paymentMethod === "pix" ? "default" : "outline"}
+          className={cn(
+            "w-full justify-between gap-2 border px-3 py-2 text-sm transition",
+            paymentMethod === "pix"
+              ? "bg-rose-600 text-white hover:bg-rose-600"
+              : "border-gray-200 text-gray-700 hover:border-rose-400"
+          )}
+          onClick={() => setPaymentMethod("pix")}
+          disabled={!isAddressServed}
+        >
+          <span>PIX</span>
+          <span
+            className={cn(
+              "text-xs sm:text-[11px]",
+              paymentMethod === "pix" ? "text-white/80" : "text-gray-500"
+            )}
+          >
+            {shippingOptions.pix === null
+              ? "--"
+              : shippingOptions.pix === 0
+              ? "Frete grátis"
+              : `Frete R$ ${shippingOptions.pix.toFixed(2)}`}
+          </span>
+        </Button>
+        <Button
+          type="button"
+          variant={paymentMethod === "card" ? "default" : "outline"}
+          className={cn(
+            "w-full justify-between gap-2 border px-3 py-2 text-sm transition",
+            paymentMethod === "card"
+              ? "bg-rose-600 text-white hover:bg-rose-600"
+              : "border-gray-200 text-gray-700 hover:border-rose-400"
+          )}
+          onClick={() => setPaymentMethod("card")}
+          disabled={!isAddressServed}
+        >
+          <span>Cartão de Crédito</span>
+          <span
+            className={cn(
+              "text-xs sm:text-[11px]",
+              paymentMethod === "card" ? "text-white/80" : "text-gray-500"
+            )}
+          >
+            {shippingOptions.card === null
+              ? "--"
+              : shippingOptions.card === 0
+              ? "Frete grátis"
+              : `Frete R$ ${shippingOptions.card.toFixed(2)}`}
+          </span>
+        </Button>
+      </div>
+      {!isAddressServed && address && (
+        <p className="text-xs text-gray-500">
+          Informe um endereço atendido para habilitar as formas de pagamento.
+        </p>
+      )}
+    </div>
+
     <Collapsible>
-      <CollapsibleTrigger className="flex items-center justify-between w-full p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
-        <span className="font-medium text-gray-900">
-          Configurar Entrega e Agendamento
-        </span>
-        <ChevronRightIcon className="h-4 w-4 text-gray-500" />
+      <CollapsibleTrigger className="group flex w-full items-center justify-between rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-left text-sm font-medium text-gray-900 transition-colors hover:bg-gray-100 data-[state=open]:bg-rose-50">
+        <span>Configurar Entrega e Agendamento</span>
+        <ChevronRightIcon className="h-4 w-4 text-gray-500 transition-transform duration-200 group-data-[state=open]:rotate-90" />
       </CollapsibleTrigger>
 
       <CollapsibleContent className="mt-4 space-y-4">
-        {/* Informações de Entrega */}
         <div className="border rounded-lg p-4">
           <h4 className="text-sm font-semibold text-gray-900 flex items-center gap-2 mb-3">
             <MapPin className="h-4 w-4" />
@@ -439,11 +586,30 @@ const OrderSummaryCard = ({
                     mode="single"
                     selected={selectedDate || undefined}
                     onSelect={(date) => {
-                      setSelectedDate(date);
-                      setSelectedTime("");
-                      if (date) {
-                        setCalendarOpen(false);
+                      if (!date) {
+                        setSelectedDate(undefined);
+                        setSelectedTime("");
+                        return;
                       }
+
+                      const normalizedDate = new Date(date);
+                      normalizedDate.setHours(0, 0, 0, 0);
+                      const previousTime = selectedDate
+                        ? new Date(selectedDate).setHours(0, 0, 0, 0)
+                        : undefined;
+                      const normalizedTime = normalizedDate.getTime();
+                      const hasDateChanged =
+                        previousTime === undefined
+                          ? true
+                          : previousTime !== normalizedTime;
+
+                      setSelectedDate(normalizedDate);
+
+                      if (hasDateChanged) {
+                        setSelectedTime("");
+                      }
+
+                      setCalendarOpen(false);
                     }}
                     disabled={isDateDisabled}
                     className="rounded-md border w-full min-w-[280px]"
@@ -541,145 +707,145 @@ const OrderSummaryCard = ({
   );
 }; */
 
-const DeliveryDateCard = ({
-  selectedDate,
-  selectedTime,
-  calendarOpen,
-  setCalendarOpen,
-  setSelectedDate,
-  setSelectedTime,
-  isDateDisabled,
-  generateTimeSlots,
-  getMinPreparationHours,
-}: DeliveryDateCardProps) => (
-  <Card className="p-4 lg:p-6">
-    <h3 className="text-base lg:text-lg font-semibold text-gray-900 flex items-center gap-2 mb-3 lg:mb-4">
-      <CalendarIcon className="h-4 w-4 lg:h-5 lg:w-5" />
-      Agendamento de Entrega
-    </h3>
+// const DeliveryDateCard = ({
+//   selectedDate,
+//   selectedTime,
+//   calendarOpen,
+//   setCalendarOpen,
+//   setSelectedDate,
+//   setSelectedTime,
+//   isDateDisabled,
+//   generateTimeSlots,
+//   getMinPreparationHours,
+// }: DeliveryDateCardProps) => (
+//   <Card className="p-4 lg:p-6">
+//     <h3 className="text-base lg:text-lg font-semibold text-gray-900 flex items-center gap-2 mb-3 lg:mb-4">
+//       <CalendarIcon className="h-4 w-4 lg:h-5 lg:w-5" />
+//       Agendamento de Entrega
+//     </h3>
 
-    <div className="bg-blue-50 rounded-lg border border-blue-200 py-2 px-3 lg:px-4 mb-4">
-      <div className="flex items-start gap-2 lg:gap-3">
-        <div className="flex-shrink-0 mt-0.5">
-          <svg
-            className="h-4 w-4 lg:h-5 lg:w-5 text-blue-600"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-            />
-          </svg>
-        </div>
-        <div className="flex-1">
-          <h4 className="text-xs lg:text-sm font-medium text-blue-900">
-            ⏱️ Tempo de Preparo: {getMinPreparationHours()}h{" "}
-            {getMinPreparationHours() > 1 ? "mínimo" : "mínima"}
-          </h4>
-        </div>
-      </div>
-    </div>
+//     <div className="bg-blue-50 rounded-lg border border-blue-200 py-2 px-3 lg:px-4 mb-4">
+//       <div className="flex items-start gap-2 lg:gap-3">
+//         <div className="flex-shrink-0 mt-0.5">
+//           <svg
+//             className="h-4 w-4 lg:h-5 lg:w-5 text-blue-600"
+//             fill="none"
+//             stroke="currentColor"
+//             viewBox="0 0 24 24"
+//           >
+//             <path
+//               strokeLinecap="round"
+//               strokeLinejoin="round"
+//               strokeWidth={2}
+//               d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+//             />
+//           </svg>
+//         </div>
+//         <div className="flex-1">
+//           <h4 className="text-xs lg:text-sm font-medium text-blue-900">
+//             ⏱️ Tempo de Preparo: {getMinPreparationHours()}h{" "}
+//             {getMinPreparationHours() > 1 ? "mínimo" : "mínima"}
+//           </h4>
+//         </div>
+//       </div>
+//     </div>
 
-    <div className="space-y-3 lg:space-y-4">
-      <div>
-        <Label
-          htmlFor="delivery-date"
-          className="block text-xs lg:text-sm font-medium text-gray-700 mb-2"
-        >
-          Data de Entrega *
-        </Label>
+//     <div className="space-y-3 lg:space-y-4">
+//       <div>
+//         <Label
+//           htmlFor="delivery-date"
+//           className="block text-xs lg:text-sm font-medium text-gray-700 mb-2"
+//         >
+//           Data de Entrega *
+//         </Label>
 
-        <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
-          <PopoverTrigger asChild>
-            <Button
-              id="delivery-date"
-              variant="outline"
-              className="w-full justify-between font-normal h-9 lg:h-10 px-3 py-2 text-xs lg:text-sm"
-            >
-              {selectedDate
-                ? selectedDate.toLocaleDateString("pt-BR", {
-                    weekday: "long",
-                    year: "numeric",
-                    month: "long",
-                    day: "numeric",
-                  })
-                : "Selecione uma data"}
-              <CalendarIcon className="h-3 w-3 lg:h-4 lg:w-4 opacity-50" />
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-auto p-0" align="start">
-            <Calendar
-              mode="single"
-              selected={selectedDate || undefined}
-              onSelect={(date) => {
-                if (date && !isDateDisabled(date)) {
-                  const normalizedDate = new Date(date);
-                  normalizedDate.setHours(0, 0, 0, 0);
+//         <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
+//           <PopoverTrigger asChild>
+//             <Button
+//               id="delivery-date"
+//               variant="outline"
+//               className="w-full justify-between font-normal h-9 lg:h-10 px-3 py-2 text-xs lg:text-sm"
+//             >
+//               {selectedDate
+//                 ? selectedDate.toLocaleDateString("pt-BR", {
+//                     weekday: "long",
+//                     year: "numeric",
+//                     month: "long",
+//                     day: "numeric",
+//                   })
+//                 : "Selecione uma data"}
+//               <CalendarIcon className="h-3 w-3 lg:h-4 lg:w-4 opacity-50" />
+//             </Button>
+//           </PopoverTrigger>
+//           <PopoverContent className="w-auto p-0" align="start">
+//             <Calendar
+//               mode="single"
+//               selected={selectedDate || undefined}
+//               onSelect={(date) => {
+//                 if (date && !isDateDisabled(date)) {
+//                   const normalizedDate = new Date(date);
+//                   normalizedDate.setHours(0, 0, 0, 0);
 
-                  setSelectedDate(normalizedDate);
-                  setSelectedTime("");
-                  setCalendarOpen(false);
-                }
-              }}
-              disabled={isDateDisabled}
-              className="rounded-md border w-full min-w-[280px] lg:min-w-[300px]"
-              captionLayout="dropdown"
-            />
-          </PopoverContent>
-        </Popover>
-      </div>
+//                   setSelectedDate(normalizedDate);
+//                   setSelectedTime("");
+//                   setCalendarOpen(false);
+//                 }
+//               }}
+//               disabled={isDateDisabled}
+//               className="rounded-md border w-full min-w-[280px] lg:min-w-[300px]"
+//               captionLayout="dropdown"
+//             />
+//           </PopoverContent>
+//         </Popover>
+//       </div>
 
-      {selectedDate && (
-        <div>
-          <label className="block text-xs lg:text-sm font-medium text-gray-700 mb-2">
-            Horário de Entrega *
-          </label>
-          <select
-            value={selectedTime}
-            onChange={(e) => setSelectedTime(e.target.value)}
-            title="Selecione o horário de entrega"
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-rose-500 text-xs lg:text-sm"
-          >
-            <option value="">Selecione um horário</option>
-            {generateTimeSlots(selectedDate).map((slot) => (
-              <option key={slot.value} value={slot.value}>
-                {slot.label}
-              </option>
-            ))}
-          </select>
-        </div>
-      )}
+//       {selectedDate && (
+//         <div>
+//           <label className="block text-xs lg:text-sm font-medium text-gray-700 mb-2">
+//             Horário de Entrega *
+//           </label>
+//           <select
+//             value={selectedTime}
+//             onChange={(e) => setSelectedTime(e.target.value)}
+//             title="Selecione o horário de entrega"
+//             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-rose-500 text-xs lg:text-sm"
+//           >
+//             <option value="">Selecione um horário</option>
+//             {generateTimeSlots(selectedDate).map((slot) => (
+//               <option key={slot.value} value={slot.value}>
+//                 {slot.label}
+//               </option>
+//             ))}
+//           </select>
+//         </div>
+//       )}
 
-      <div className="text-xs text-gray-500 bg-gray-50 p-2 lg:p-3 rounded-md">
-        <p>
-          <strong>Horários de funcionamento:</strong>
-        </p>
-        <p>• Segunda à Sexta: 7:30-12:00 e 14:00-17:00</p>
-        <p>• Sábados e Domingos: 8:00-11:00</p>
-      </div>
-    </div>
-  </Card>
-);
+//       <div className="text-xs text-gray-500 bg-gray-50 p-2 lg:p-3 rounded-md">
+//         <p>
+//           <strong>Horários de funcionamento:</strong>
+//         </p>
+//         <p>• Segunda à Sexta: 7:30-12:00 e 14:00-17:00</p>
+//         <p>• Sábados e Domingos: 8:00-11:00</p>
+//       </div>
+//     </div>
+//   </Card>
+// );
 
-const CustomerInfoCard = ({ user }: CustomerInfoCardProps) => (
-  <Card className="p-4 lg:p-6">
-    <h3 className="text-base lg:text-lg font-semibold text-gray-900 mb-3 lg:mb-4">
-      Informações do Cliente
-    </h3>
-    <div className="space-y-1 lg:space-y-2 text-xs lg:text-sm">
-      <p>
-        <strong>Nome:</strong> {user.name}
-      </p>
-      <p>
-        <strong>Email:</strong> {user.email}
-      </p>
-    </div>
-  </Card>
-);
+// const CustomerInfoCard = ({ user }: CustomerInfoCardProps) => (
+//   <Card className="p-4 lg:p-6">
+//     <h3 className="text-base lg:text-lg font-semibold text-gray-900 mb-3 lg:mb-4">
+//       Informações do Cliente
+//     </h3>
+//     <div className="space-y-1 lg:space-y-2 text-xs lg:text-sm">
+//       <p>
+//         <strong>Nome:</strong> {user.name}
+//       </p>
+//       <p>
+//         <strong>Email:</strong> {user.email}
+//       </p>
+//     </div>
+//   </Card>
+// );
 
 const CheckoutButton = ({
   handleFinalizePurchase,
@@ -694,45 +860,91 @@ const CheckoutButton = ({
   cartItems,
   cartTotal,
   user,
-}: CheckoutButtonProps) => (
-  <div className="space-y-3">
-    <Button
-      onClick={handleFinalizePurchase}
-      disabled={
-        isProcessing ||
-        !zipCode.trim() ||
-        !address.trim() ||
-        !houseNumber.trim() ||
-        !city.trim() ||
-        !state.trim() ||
-        !selectedDate ||
-        !selectedTime ||
-        cartItems.length === 0
-      }
-      className="w-full bg-rose-600 hover:bg-rose-700 text-white py-3 text-sm"
-      size="lg"
-    >
-      {isProcessing ? (
-        <>
-          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-          Processando...
-        </>
-      ) : (
-        <>
-          <CreditCard className="h-4 w-4 mr-2" />
-          Finalizar Compra - R$ {cartTotal.toFixed(2)}
-        </>
-      )}
-    </Button>
+  paymentMethod,
+  shippingCost,
+  grandTotal,
+  isAddressServed,
+}: CheckoutButtonProps) => {
+  const shippingLabel = (() => {
+    if (shippingCost === null) return "defina o pagamento";
+    if (shippingCost === 0) return "Grátis";
+    return `R$ ${shippingCost.toFixed(2)}`;
+  })();
 
-    {/* Informações do cliente */}
-    <div className="text-xs text-gray-500 bg-gray-50 p-3 rounded-lg">
-      <p>
-        <strong>Cliente:</strong> {user?.name || "Carregando..."}
-      </p>
+  const paymentLabel = (() => {
+    if (!paymentMethod) return "Não selecionado";
+    if (paymentMethod === "pix") return "Pix";
+    return "Cartão de crédito";
+  })();
+
+  const isDisabled =
+    isProcessing ||
+    !zipCode.trim() ||
+    !address.trim() ||
+    !houseNumber.trim() ||
+    !city.trim() ||
+    !state.trim() ||
+    !selectedDate ||
+    !selectedTime ||
+    cartItems.length === 0 ||
+    !paymentMethod ||
+    shippingCost === null ||
+    !isAddressServed;
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <p className="text-xs font-medium uppercase tracking-wide text-gray-500">
+            Total do pedido
+          </p>
+          <p className="text-lg font-semibold text-gray-900">
+            R$ {grandTotal.toFixed(2)}
+          </p>
+          <p className="text-[11px] text-gray-500">
+            Subtotal: R$ {cartTotal.toFixed(2)} · Frete: {shippingLabel}
+          </p>
+          <p className="text-[11px] text-gray-500">Pagamento: {paymentLabel}</p>
+        </div>
+        <span className="text-xs font-medium text-gray-500">
+          {cartItems.length} {cartItems.length === 1 ? "item" : "itens"}
+        </span>
+      </div>
+
+      <Button
+        onClick={handleFinalizePurchase}
+        disabled={isDisabled}
+        className="w-full justify-center gap-2 bg-rose-600 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-60"
+        size="lg"
+      >
+        {isProcessing ? (
+          <>
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Processando...
+          </>
+        ) : (
+          <>
+            <CreditCard className="h-4 w-4" />
+            Finalizar Compra
+          </>
+        )}
+      </Button>
+
+      <div className="rounded-lg border border-gray-100 bg-gray-50 px-3 py-2 text-xs text-gray-600">
+        <p className="flex items-center gap-2 font-medium text-gray-700">
+          <User className="h-3 w-3" />
+          {user?.name || "Carregando..."}
+        </p>
+        {selectedDate && selectedTime && (
+          <p className="mt-1 text-gray-500">
+            Entrega em {selectedDate.toLocaleDateString("pt-BR")} às{" "}
+            {selectedTime}
+          </p>
+        )}
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 export default function CarrinhoPage() {
   const { user, isLoading, login } = useAuth();
@@ -767,9 +979,11 @@ export default function CarrinhoPage() {
     [getDeliveryDateBounds, generateTimeSlots]
   );
   const [isProcessing, setIsProcessing] = useState(false);
-  const [selectedDate, setSelectedDate] = useState<Date | undefined>(
-    new Date()
-  );
+  const [selectedDate, setSelectedDate] = useState<Date | undefined>(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return today;
+  });
   const [selectedTime, setSelectedTime] = useState("");
 
   const [zipCode, setZipCode] = useState("");
@@ -780,6 +994,7 @@ export default function CarrinhoPage() {
   const [state, setState] = useState("");
   const [isLoadingCep, setIsLoadingCep] = useState(false);
   const [isEditingAddress, setIsEditingAddress] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState<"" | "pix" | "card">("");
 
   const router = useRouter();
 
@@ -872,6 +1087,59 @@ export default function CarrinhoPage() {
   const cartItems = Array.isArray(cart?.items) ? cart.items : [];
   const cartTotal = cart?.total || 0;
 
+  const acceptedCities = useMemo(() => ACCEPTED_CITIES, []);
+  const normalizedCity = useMemo(() => normalizeString(city), [city]);
+  const normalizedState = useMemo(() => normalizeString(state), [state]);
+  const shippingRule = useMemo(
+    () => (normalizedCity ? SHIPPING_RULES[normalizedCity] : undefined),
+    [normalizedCity]
+  );
+  const isAddressServed = useMemo(
+    () => Boolean(shippingRule) && normalizedState === "pb",
+    [shippingRule, normalizedState]
+  );
+  const shippingOptions = useMemo(() => {
+    if (!isAddressServed || !shippingRule) {
+      return { pix: null, card: null };
+    }
+    return {
+      pix: shippingRule.pix,
+      card: shippingRule.card,
+    };
+  }, [isAddressServed, shippingRule]);
+  const shippingCost = useMemo(() => {
+    if (!paymentMethod || !isAddressServed || !shippingRule) {
+      return null;
+    }
+    return shippingRule[paymentMethod];
+  }, [paymentMethod, isAddressServed, shippingRule]);
+  const addressWarning = useMemo(() => {
+    if (!city.trim()) return null;
+    if (state.trim() && normalizedState !== "pb") {
+      return "Atendemos apenas endereços na Paraíba (PB).";
+    }
+    if (!shippingRule) {
+      return `Ainda não entregamos em ${city.trim()}. Cidades atendidas: ${acceptedCities.join(
+        ", "
+      )} - PB.`;
+    }
+    return null;
+  }, [city, state, normalizedState, shippingRule, acceptedCities]);
+  const grandTotal = useMemo(
+    () => cartTotal + (shippingCost ?? 0),
+    [cartTotal, shippingCost]
+  );
+
+  useEffect(() => {
+    if (!isAddressServed && paymentMethod) {
+      setPaymentMethod("");
+    }
+  }, [isAddressServed, paymentMethod]);
+
+  const handlePaymentMethodSelection = useCallback((method: "pix" | "card") => {
+    setPaymentMethod(method);
+  }, []);
+
   const handleCepSearch = async (cep: string) => {
     if (!cep || cep.length !== 8) {
       return;
@@ -959,6 +1227,21 @@ export default function CarrinhoPage() {
       return;
     }
 
+    if (!isAddressServed) {
+      toast.error("Ainda não entregamos no endereço informado.");
+      return;
+    }
+
+    if (!paymentMethod) {
+      toast.error("Selecione uma forma de pagamento para continuar.");
+      return;
+    }
+
+    if (shippingCost === null) {
+      toast.error("Não foi possível calcular o frete para este endereço.");
+      return;
+    }
+
     const fullAddress = `${address}, ${houseNumber} - ${neighborhood}, ${city}/${state} - CEP: ${zipCode}`;
 
     let finalDeliveryDate: Date | null = null;
@@ -978,7 +1261,7 @@ export default function CarrinhoPage() {
 
       const preference = await createPaymentPreference(
         user.email,
-        order.id.toString()
+        order.id?.toString() ?? String(order.id)
       );
 
       const paymentUrl =
@@ -1103,14 +1386,20 @@ export default function CarrinhoPage() {
   }, 0);
 
   const discountAmount = originalTotal - cartTotal;
+  const formattedAddress = `${address}${houseNumber ? `, ${houseNumber}` : ""}${
+    neighborhood ? ` - ${neighborhood}` : ""
+  }${city && state ? `, ${city}/${state}` : ""}${
+    zipCode ? ` - CEP: ${zipCode}` : ""
+  }`;
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="max-w-4xl mx-auto p-4">
-        {/* Título da página */}
-        <h1 className="text-2xl font-bold text-gray-900 mb-6">Meu Carrinho</h1>
+      <div className="max-w-5xl mx-auto p-4">
+        <Link href={"/"} className="flex items-center gap-2 mb-6">
+          <ChevronLeftIcon className="h-5 w-5 text-gray-900" />
+          <h1 className="text-2xl font-bold text-gray-900">Meu Carrinho</h1>
+        </Link>
 
-        {/* Verificação de carrinho vazio */}
         {cartItems.length === 0 ? (
           <Card className="p-8 text-center">
             <div className="text-gray-400 mb-4">
@@ -1130,21 +1419,8 @@ export default function CarrinhoPage() {
             </Button>
           </Card>
         ) : (
-          <div className="grid gap-6 lg:grid-cols-3">
-            {/* Lista de produtos - Foco principal */}
-            <div className="lg:col-span-2 space-y-4">
-              {cartItems.map((item, index) => (
-                <ProductCard
-                  key={`${item.product_id}-${index}`}
-                  item={item}
-                  updateQuantity={updateQuantity}
-                  removeFromCart={removeFromCart}
-                />
-              ))}
-            </div>
-
-            {/* Resumo do pedido com configurações */}
-            <div className="lg:col-span-1">
+          <div className="space-y-6 pb-40">
+            <div className="lg:hidden">
               <OrderSummaryCard
                 originalTotal={originalTotal}
                 discountAmount={discountAmount}
@@ -1158,29 +1434,57 @@ export default function CarrinhoPage() {
                 isDateDisabled={isDateDisabled}
                 generateTimeSlots={generateTimeSlots}
                 getMinPreparationHours={getMinPreparationHours}
-                address={`${address}${houseNumber ? `, ${houseNumber}` : ""}${
-                  neighborhood ? ` - ${neighborhood}` : ""
-                }${city && state ? `, ${city}/${state}` : ""}${
-                  zipCode ? ` - CEP: ${zipCode}` : ""
-                }`}
+                address={formattedAddress}
                 prepareAddressForEditing={prepareAddressForEditing}
+                className="border border-gray-200 shadow-sm"
+                paymentMethod={paymentMethod}
+                setPaymentMethod={handlePaymentMethodSelection}
+                shippingCost={shippingCost}
+                shippingOptions={shippingOptions}
+                grandTotal={grandTotal}
+                isAddressServed={isAddressServed}
+                addressWarning={addressWarning}
+                acceptedCities={acceptedCities}
               />
+            </div>
 
-              {/* Botão de finalizar compra */}
-              <div className="mt-4">
-                <CheckoutButton
-                  handleFinalizePurchase={handleFinalizePurchase}
-                  isProcessing={isProcessing}
-                  zipCode={zipCode}
-                  address={address}
-                  houseNumber={houseNumber}
-                  city={city}
-                  state={state}
+            <div className="lg:grid lg:grid-cols-3 lg:gap-6">
+              <div className="space-y-4 lg:col-span-2 pb-12">
+                {cartItems.map((item, index) => (
+                  <ProductCard
+                    key={`${item.product_id}-${index}`}
+                    item={item}
+                    updateQuantity={updateQuantity}
+                    removeFromCart={removeFromCart}
+                  />
+                ))}
+              </div>
+              0
+              <div className="hidden lg:block lg:col-span-1">
+                <OrderSummaryCard
+                  originalTotal={originalTotal}
+                  discountAmount={discountAmount}
+                  cartTotal={cartTotal}
                   selectedDate={selectedDate}
                   selectedTime={selectedTime}
-                  cartItems={cartItems}
-                  cartTotal={cartTotal}
-                  user={user}
+                  calendarOpen={calendarOpen}
+                  setCalendarOpen={setCalendarOpen}
+                  setSelectedDate={setSelectedDate}
+                  setSelectedTime={setSelectedTime}
+                  isDateDisabled={isDateDisabled}
+                  generateTimeSlots={generateTimeSlots}
+                  getMinPreparationHours={getMinPreparationHours}
+                  address={formattedAddress}
+                  prepareAddressForEditing={prepareAddressForEditing}
+                  className="shadow-sm lg:sticky lg:top-24"
+                  paymentMethod={paymentMethod}
+                  setPaymentMethod={handlePaymentMethodSelection}
+                  shippingCost={shippingCost}
+                  shippingOptions={shippingOptions}
+                  grandTotal={grandTotal}
+                  isAddressServed={isAddressServed}
+                  addressWarning={addressWarning}
+                  acceptedCities={acceptedCities}
                 />
               </div>
             </div>
@@ -1188,7 +1492,31 @@ export default function CarrinhoPage() {
         )}
       </div>
 
-      {/* Dialog para editar endereço */}
+      {cartItems.length > 0 && (
+        <div className="fixed inset-x-0 bottom-0 z-30 border-t border-gray-200 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/75">
+          <div className="mx-auto w-full max-w-5xl px-4 py-4">
+            <CheckoutButton
+              handleFinalizePurchase={handleFinalizePurchase}
+              isProcessing={isProcessing}
+              zipCode={zipCode}
+              address={address}
+              houseNumber={houseNumber}
+              city={city}
+              state={state}
+              selectedDate={selectedDate}
+              selectedTime={selectedTime}
+              cartItems={cartItems}
+              cartTotal={cartTotal}
+              user={user}
+              paymentMethod={paymentMethod}
+              shippingCost={shippingCost}
+              grandTotal={grandTotal}
+              isAddressServed={isAddressServed}
+            />
+          </div>
+        </div>
+      )}
+
       <Dialog open={isEditingAddress} onOpenChange={setIsEditingAddress}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>

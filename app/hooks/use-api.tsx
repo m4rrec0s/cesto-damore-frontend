@@ -100,6 +100,9 @@ export interface Order {
   createdAt: string;
   delivery_address?: string | null;
   delivery_date?: string | null;
+  shipping_price?: number | null;
+  payment_method?: string | null;
+  grand_total?: number | null;
 }
 
 interface CacheShape {
@@ -523,6 +526,9 @@ class ApiService {
     items: OrderItem[];
     delivery_address?: string | null;
     delivery_date?: Date | null;
+    shipping_price?: number | null;
+    payment_method?: string | null;
+    grand_total?: number | null;
   }) => {
     console.log("📡 Enviando pedido para o backend:", payload);
     const res = await this.client.post("/orders", payload);

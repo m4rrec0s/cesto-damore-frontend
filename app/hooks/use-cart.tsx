@@ -230,7 +230,16 @@ export function useCart() {
   }, []);
 
   const createOrder = useCallback(
-    async (userId: string, deliveryAddress?: string, deliveryDate?: Date) => {
+    async (
+      userId: string,
+      deliveryAddress?: string,
+      deliveryDate?: Date,
+      options?: {
+        shippingCost?: number;
+        paymentMethod?: "pix" | "card";
+        grandTotal?: number;
+      }
+    ) => {
       if (cart.items.length === 0) {
         throw new Error("Carrinho está vazio");
       }
@@ -246,9 +255,17 @@ export function useCart() {
         })),
       }));
 
+      const totalPrice =
+        typeof options?.grandTotal === "number"
+          ? options.grandTotal
+          : cart.total + (options?.shippingCost ?? 0);
+
       const order = await api.createOrder({
         user_id: userId,
-        total_price: cart.total,
+        total_price: totalPrice,
+        shipping_price: options?.shippingCost,
+        payment_method: options?.paymentMethod,
+        grand_total: totalPrice,
         items: orderItems,
         delivery_address: deliveryAddress,
         delivery_date: deliveryDate,
@@ -260,7 +277,15 @@ export function useCart() {
   );
 
   const createPaymentPreference = useCallback(
-    async (userEmail: string, orderId?: string) => {
+    async (
+      userEmail: string,
+      orderId?: string,
+      options?: {
+        shippingCost?: number;
+        paymentMethod?: "pix" | "card";
+        grandTotal?: number;
+      }
+    ) => {
       if (
         !process.env.NEXT_PUBLIC_MERCADOPAGO_ACCESS_TOKEN ||
         process.env.NEXT_PUBLIC_MERCADOPAGO_ACCESS_TOKEN === "SEU_TOKEN_AQUI"
@@ -288,6 +313,15 @@ export function useCart() {
         });
       });
 
+      if (options?.shippingCost && options.shippingCost > 0) {
+        items.push({
+          title: "Taxa de entrega",
+          quantity: 1,
+          unit_price: Number(options.shippingCost.toFixed(2)),
+          currency_id: "BRL",
+        });
+      }
+
       try {
         const requestBody = {
           items,
@@ -300,6 +334,10 @@ export function useCart() {
             pending: `${window.location.origin}/payment/pending`,
           },
           external_reference: orderId,
+          metadata: {
+            shipping_cost: options?.shippingCost ?? 0,
+            payment_method: options?.paymentMethod ?? "not-set",
+          },
         };
 
         console.log(
@@ -413,6 +451,90 @@ export function useCart() {
     return maxHours;
   }, [cart.items]);
 
+  const parseTimeOnDate = (referenceDate: Date, time: string) => {
+    const [hourStr, minuteStr] = time.split(":");
+    const hours = parseInt(hourStr ?? "0", 10);
+    const minutes = parseInt(minuteStr ?? "0", 10);
+
+    const result = new Date(referenceDate);
+    result.setHours(hours, minutes, 0, 0);
+    return result;
+  };
+
+  const isWithinServiceHours = useCallback(
+    (date: Date): boolean => {
+      const windows = getDeliveryWindows();
+      const relevantWindows = isWeekend(date)
+        ? windows.weekends
+        : windows.weekdays;
+
+      return relevantWindows.some((window) => {
+        const windowStart = parseTimeOnDate(date, window.start);
+        const windowEnd = parseTimeOnDate(date, window.end);
+        return date >= windowStart && date <= windowEnd;
+      });
+    },
+    [getDeliveryWindows, isWeekend]
+  );
+
+  const getNextServiceWindowStart = useCallback(
+    (from: Date): Date | null => {
+      const windows = getDeliveryWindows();
+
+      for (let offset = 0; offset < 14; offset++) {
+        const candidateDate = new Date(from);
+        candidateDate.setHours(0, 0, 0, 0);
+        candidateDate.setDate(candidateDate.getDate() + offset);
+
+        const relevantWindows = isWeekend(candidateDate)
+          ? windows.weekends
+          : windows.weekdays;
+
+        for (const window of relevantWindows) {
+          const windowStart = parseTimeOnDate(candidateDate, window.start);
+          const windowEnd = parseTimeOnDate(candidateDate, window.end);
+
+          if (offset === 0) {
+            if (from < windowStart) {
+              return windowStart;
+            }
+
+            if (from >= windowStart && from < windowEnd) {
+              return from;
+            }
+          } else {
+            return windowStart;
+          }
+        }
+      }
+
+      return null;
+    },
+    [getDeliveryWindows, isWeekend]
+  );
+
+  const getEarliestDeliveryDateTime = useCallback(() => {
+    const now = new Date();
+    const minHours = getMinPreparationHours();
+    let earliest = new Date(now.getTime() + minHours * 60 * 60 * 1000);
+
+    if (!isWithinServiceHours(now)) {
+      const nextWindowStart = getNextServiceWindowStart(now);
+
+      if (nextWindowStart) {
+        const prepAfterWindow = new Date(
+          nextWindowStart.getTime() + 60 * 60 * 1000
+        );
+
+        if (prepAfterWindow > earliest) {
+          earliest = prepAfterWindow;
+        }
+      }
+    }
+
+    return earliest;
+  }, [getMinPreparationHours, getNextServiceWindowStart, isWithinServiceHours]);
+
   const generateTimeSlots = useCallback(
     (date: Date): TimeSlot[] => {
       const windows = getDeliveryWindows();
@@ -422,7 +544,9 @@ export function useCart() {
         : windows.weekdays;
       const slots: TimeSlot[] = [];
       const now = new Date();
-      const minHours = getMinPreparationHours();
+      const earliestTime = getEarliestDeliveryDateTime();
+      const earliestTimestamp = earliestTime.getTime();
+      const isNowWithinService = isWithinServiceHours(now);
 
       relevantWindows.forEach((window) => {
         const startTime = window.start.split(":");
@@ -505,23 +629,18 @@ export function useCart() {
           if (isToday) {
             const slotEndDateTime = new Date(date);
             slotEndDateTime.setHours(slotEndHour, slotEndMin, 0, 0);
+            const isSlotValid = isNowWithinService
+              ? slotEndDateTime.getTime() >= earliestTimestamp
+              : slotStartDateTime.getTime() >= earliestTimestamp;
 
-            const minRequiredTime = new Date(
-              now.getTime() + minHours * 60 * 60 * 1000
-            );
-
-            if (minRequiredTime.getTime() <= slotEndDateTime.getTime()) {
+            if (isSlotValid) {
               slots.push({
                 value: slotStart,
                 label: `${slotStart} - ${slotEnd}`,
               });
             }
           } else {
-            const minDeliveryTime = new Date(
-              now.getTime() + minHours * 60 * 60 * 1000
-            );
-
-            if (slotStartDateTime.getTime() >= minDeliveryTime.getTime()) {
+            if (slotStartDateTime.getTime() >= earliestTimestamp) {
               slots.push({
                 value: slotStart,
                 label: `${slotStart} - ${slotEnd}`,
@@ -540,21 +659,25 @@ export function useCart() {
 
       return uniqueFinalSlots;
     },
-    [getDeliveryWindows, isWeekend, getMinPreparationHours]
+    [
+      getDeliveryWindows,
+      getEarliestDeliveryDateTime,
+      isWeekend,
+      isWithinServiceHours,
+    ]
   );
 
   const getAvailableDates = useCallback((): AvailableDate[] => {
-    const minHours = getMinPreparationHours();
-    const now = new Date();
-    const minDeliveryTime = new Date(now.getTime() + minHours * 60 * 60 * 1000);
+    const earliestDelivery = getEarliestDeliveryDateTime();
+    const baseDate = new Date(earliestDelivery);
+    baseDate.setHours(0, 0, 0, 0);
 
     const dates: AvailableDate[] = [];
 
     // Gerar próximos 7 dias
     for (let i = 0; i < 7; i++) {
-      const date = new Date(minDeliveryTime);
+      const date = new Date(baseDate);
       date.setDate(date.getDate() + i);
-      date.setHours(0, 0, 0, 0);
 
       const timeSlots = generateTimeSlots(date);
 
@@ -565,7 +688,7 @@ export function useCart() {
     }
 
     return dates;
-  }, [getMinPreparationHours, generateTimeSlots]);
+  }, [getEarliestDeliveryDateTime, generateTimeSlots]);
 
   /**
    * Retorna o intervalo de datas permitido para agendamento:
@@ -573,17 +696,17 @@ export function useCart() {
    * - maxDate: agora + 1 ano
    */
   const getDeliveryDateBounds = useCallback(() => {
-    const now = new Date();
-    const minHours = getMinPreparationHours();
-    const minDate = new Date(now.getTime() + minHours * 60 * 60 * 1000);
+    const earliestDelivery = getEarliestDeliveryDateTime();
+    const minDate = new Date(earliestDelivery);
     minDate.setHours(0, 0, 0, 0);
 
+    const now = new Date();
     const maxDate = new Date(now);
     maxDate.setFullYear(maxDate.getFullYear() + 1);
     maxDate.setHours(23, 59, 59, 999);
 
     return { minDate, maxDate };
-  }, [getMinPreparationHours]);
+  }, [getEarliestDeliveryDateTime]);
 
   const formatDate = useCallback((date: Date): string => {
     return date.toLocaleDateString("pt-BR", {
