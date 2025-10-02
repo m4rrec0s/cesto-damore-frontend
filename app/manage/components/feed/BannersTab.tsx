@@ -22,6 +22,7 @@ import {
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import { ColorPicker } from "@/app/components/ui/color-picker";
+import { Toggle } from "@/app/components/ui/toggle";
 import { cn } from "@/app/lib/utils";
 import { useApi } from "@/app/hooks/use-api";
 import Image from "next/image";
@@ -342,22 +343,25 @@ export default function BannersTab({
             />
 
             {/* Status */}
-            <div className="flex items-center space-x-2">
-              <input
+            <div className="flex items-center justify-between py-2">
+              <div className="space-y-0.5">
+                <label htmlFor="is_active" className="text-sm font-medium">
+                  Banner ativo
+                </label>
+                <p className="text-xs text-gray-500">
+                  Banners ativos serão exibidos na página inicial
+                </p>
+              </div>
+              <Toggle
                 id="is_active"
-                type="checkbox"
-                checked={formData.is_active}
-                onChange={(e) =>
-                  setFormData((prev) => ({
-                    ...prev,
-                    is_active: e.target.checked,
-                  }))
+                pressed={formData.is_active}
+                onPressedChange={(pressed) =>
+                  setFormData((prev) => ({ ...prev, is_active: pressed }))
                 }
-                className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-              />
-              <label htmlFor="is_active" className="text-sm font-medium">
-                Banner ativo
-              </label>
+                aria-label="Ativar banner"
+              >
+                {formData.is_active ? "Ativo" : "Inativo"}
+              </Toggle>
             </div>
 
             {/* Botões */}

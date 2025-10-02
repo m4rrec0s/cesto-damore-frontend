@@ -117,6 +117,25 @@ export interface UpdateFeedSectionInput {
   max_items?: number;
 }
 
+export interface CreateFeedSectionItemInput {
+  feed_section_id: string;
+  item_type: "product" | "category" | "additional";
+  item_id: string;
+  display_order?: number;
+  is_featured?: boolean;
+  custom_title?: string;
+  custom_subtitle?: string;
+}
+
+export interface UpdateFeedSectionItemInput {
+  item_type?: "product" | "category" | "additional";
+  item_id?: string;
+  display_order?: number;
+  is_featured?: boolean;
+  custom_title?: string;
+  custom_subtitle?: string;
+}
+
 // Labels para exibição
 export const FEED_SECTION_TYPE_LABELS: Record<FeedSectionType, string> = {
   [FeedSectionType.RECOMMENDED_PRODUCTS]: "Produtos Recomendados",
@@ -977,6 +996,32 @@ class ApiService {
 
   deleteFeedSection = async (id: string): Promise<void> => {
     await this.client.delete(`/admin/feed/sections/${id}`);
+    ApiService.cache.feedConfigurations = null;
+  };
+
+  // ===== Feed Section Items =====
+  createFeedSectionItem = async (
+    data: CreateFeedSectionItemInput
+  ): Promise<FeedSectionItem> => {
+    const response = await this.client.post("/admin/feed/section-items", data);
+    ApiService.cache.feedConfigurations = null;
+    return response.data;
+  };
+
+  updateFeedSectionItem = async (
+    id: string,
+    data: UpdateFeedSectionItemInput
+  ): Promise<FeedSectionItem> => {
+    const response = await this.client.put(
+      `/admin/feed/section-items/${id}`,
+      data
+    );
+    ApiService.cache.feedConfigurations = null;
+    return response.data;
+  };
+
+  deleteFeedSectionItem = async (id: string): Promise<void> => {
+    await this.client.delete(`/admin/feed/section-items/${id}`);
     ApiService.cache.feedConfigurations = null;
   };
 

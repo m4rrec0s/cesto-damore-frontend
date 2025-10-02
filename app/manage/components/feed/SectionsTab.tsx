@@ -1,7 +1,35 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, Edit2, Trash2, X, Eye, EyeOff, Loader2 } from "lucide-react";
+import {
+  Plus,
+  Edit2,
+  Trash2,
+  X,
+  Eye,
+  EyeOff,
+  Loader2,
+  ChevronDown,
+  ChevronUp,
+  GripVertical,
+} from "lucide-react";
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 
 import {
   FeedSection,
@@ -12,7 +40,9 @@ import {
 } from "@/app/hooks/use-api";
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
+import { Toggle } from "@/app/components/ui/toggle";
 import { useApi } from "@/app/hooks/use-api";
+import ProductSelector from "./ProductSelector";
 
 interface SectionsTabProps {
   configurationId: string;
@@ -38,6 +68,7 @@ export default function SectionsTab({
     null
   );
   const [loading, setLoading] = useState(false);
+  const [expandedSection, setExpandedSection] = useState<string | null>(null);
   const [formData, setFormData] = useState<SectionFormData>({
     title: "",
     section_type: FeedSectionType.RECOMMENDED_PRODUCTS,
@@ -136,6 +167,165 @@ export default function SectionsTab({
     };
     return descriptions[type] || "";
   };
+
+  // Configuração do drag-and-drop
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+
+    if (!over || active.id === over.id) {
+      return;
+    }
+
+    const oldIndex = sections.findIndex((s) => s.id === active.id);
+    const newIndex = sections.findIndex((s) => s.id === over.id);
+
+    if (oldIndex === -1 || newIndex === -1) {
+      return;
+    }
+
+    // Reordenar localmente
+    const reorderedSections = arrayMove(sections, oldIndex, newIndex);
+
+    // Atualizar display_order no backend
+    try {
+      const updatePromises = reorderedSections.map((section, index) =>
+        api.updateFeedSection(section.id, { display_order: index })
+      );
+
+      await Promise.all(updatePromises);
+      onUpdate();
+    } catch (error) {
+      console.error("Erro ao reordenar seções:", error);
+      alert("Erro ao reordenar seções.");
+    }
+  };
+
+  // Componente interno para tornar cada seção draggable
+  function SortableSectionCard({ section }: { section: FeedSection }) {
+    const {
+      attributes,
+      listeners,
+      setNodeRef,
+      transform,
+      transition,
+      isDragging,
+    } = useSortable({ id: section.id });
+
+    const style = {
+      transform: CSS.Transform.toString(transform),
+      transition,
+      opacity: isDragging ? 0.5 : 1,
+    };
+
+    const isExpanded = expandedSection === section.id;
+    const isCustomProducts =
+      section.section_type === FeedSectionType.CUSTOM_PRODUCTS;
+
+    return (
+      <div
+        ref={setNodeRef}
+        style={style}
+        className="border rounded-lg bg-white hover:shadow-md transition-shadow"
+      >
+        <div className="p-4">
+          <div className="flex items-start gap-3">
+            {/* Drag Handle */}
+            <div
+              {...attributes}
+              {...listeners}
+              className="mt-1 cursor-grab active:cursor-grabbing text-gray-400 hover:text-gray-600"
+              title="Arrastar para reordenar"
+            >
+              <GripVertical className="h-5 w-5" />
+            </div>
+
+            {/* Conteúdo */}
+            <div className="flex-1">
+              <div className="flex items-center gap-2 mb-2">
+                <h4 className="font-semibold">{section.title}</h4>
+                {section.is_visible ? (
+                  <span className="flex items-center gap-1 px-2 py-0.5 bg-green-100 text-green-800 rounded-full text-xs">
+                    <Eye className="h-3 w-3" />
+                    Visível
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-1 px-2 py-0.5 bg-gray-100 text-gray-800 rounded-full text-xs">
+                    <EyeOff className="h-3 w-3" />
+                    Oculta
+                  </span>
+                )}
+              </div>
+              <p className="text-sm text-gray-600 mb-2">
+                {FEED_SECTION_TYPE_LABELS[section.section_type]}
+              </p>
+              <p className="text-xs text-gray-500">
+                {getSectionTypeDescription(section.section_type)}
+              </p>
+              <p className="text-xs text-gray-500 mt-2">
+                Máximo de itens: <strong>{section.max_items}</strong>
+                {isCustomProducts && section.items && (
+                  <span className="ml-2">
+                    • {section.items.length} produtos selecionados
+                  </span>
+                )}
+              </p>
+            </div>
+
+            {/* Ações */}
+            <div className="flex items-center gap-2">
+              {isCustomProducts && (
+                <button
+                  onClick={() =>
+                    setExpandedSection(isExpanded ? null : section.id)
+                  }
+                  className="p-2 text-gray-600 hover:bg-gray-50 rounded"
+                  title={isExpanded ? "Ocultar produtos" : "Gerenciar produtos"}
+                >
+                  {isExpanded ? (
+                    <ChevronUp className="h-4 w-4" />
+                  ) : (
+                    <ChevronDown className="h-4 w-4" />
+                  )}
+                </button>
+              )}
+              <button
+                onClick={() => handleEdit(section)}
+                className="p-2 text-blue-600 hover:bg-blue-50 rounded"
+                title="Editar"
+              >
+                <Edit2 className="h-4 w-4" />
+              </button>
+              <button
+                onClick={() => handleDelete(section.id)}
+                className="p-2 text-red-600 hover:bg-red-50 rounded"
+                title="Excluir"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Painel expansível com ProductSelector */}
+        {isExpanded && isCustomProducts && (
+          <div className="border-t bg-gray-50 p-4">
+            <ProductSelector
+              sectionId={section.id}
+              selectedItems={section.items || []}
+              onUpdate={onUpdate}
+            />
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -271,22 +461,25 @@ export default function SectionsTab({
             </div>
 
             {/* Status */}
-            <div className="flex items-center space-x-2">
-              <input
+            <div className="flex items-center justify-between py-2">
+              <div className="space-y-0.5">
+                <label htmlFor="is_visible" className="text-sm font-medium">
+                  Seção visível
+                </label>
+                <p className="text-xs text-gray-500">
+                  Seções visíveis aparecerão na página inicial
+                </p>
+              </div>
+              <Toggle
                 id="is_visible"
-                type="checkbox"
-                checked={formData.is_visible}
-                onChange={(e) =>
-                  setFormData((prev) => ({
-                    ...prev,
-                    is_visible: e.target.checked,
-                  }))
+                pressed={formData.is_visible}
+                onPressedChange={(pressed) =>
+                  setFormData((prev) => ({ ...prev, is_visible: pressed }))
                 }
-                className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-              />
-              <label htmlFor="is_visible" className="text-sm font-medium">
-                Seção visível
-              </label>
+                aria-label="Tornar seção visível"
+              >
+                {formData.is_visible ? "Visível" : "Oculta"}
+              </Toggle>
             </div>
 
             {/* Botões */}
@@ -320,7 +513,7 @@ export default function SectionsTab({
 
       {/* Lista de seções */}
       {!showForm && (
-        <div className="grid gap-4">
+        <div className="space-y-4">
           {sections.length === 0 ? (
             <div className="text-center py-12 border-2 border-dashed border-gray-300 rounded-lg">
               <Plus className="h-12 w-12 text-gray-400 mx-auto mb-4" />
@@ -333,60 +526,24 @@ export default function SectionsTab({
               </p>
             </div>
           ) : (
-            sections
-              .sort((a, b) => a.display_order - b.display_order)
-              .map((section) => (
-                <div
-                  key={section.id}
-                  className="border rounded-lg p-4 hover:shadow-md transition-shadow"
-                >
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-2">
-                        <h4 className="font-semibold">{section.title}</h4>
-                        {section.is_visible ? (
-                          <span className="flex items-center gap-1 px-2 py-0.5 bg-green-100 text-green-800 rounded-full text-xs">
-                            <Eye className="h-3 w-3" />
-                            Visível
-                          </span>
-                        ) : (
-                          <span className="flex items-center gap-1 px-2 py-0.5 bg-gray-100 text-gray-800 rounded-full text-xs">
-                            <EyeOff className="h-3 w-3" />
-                            Oculta
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-sm text-gray-600 mb-2">
-                        {FEED_SECTION_TYPE_LABELS[section.section_type]}
-                      </p>
-                      <p className="text-xs text-gray-500">
-                        {getSectionTypeDescription(section.section_type)}
-                      </p>
-                      <p className="text-xs text-gray-500 mt-2">
-                        Máximo de itens: <strong>{section.max_items}</strong>
-                      </p>
-                    </div>
-
-                    {/* Ações */}
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => handleEdit(section)}
-                        className="p-2 text-blue-600 hover:bg-blue-50 rounded"
-                        title="Editar"
-                      >
-                        <Edit2 className="h-4 w-4" />
-                      </button>
-                      <button
-                        onClick={() => handleDelete(section.id)}
-                        className="p-2 text-red-600 hover:bg-red-50 rounded"
-                        title="Excluir"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    </div>
-                  </div>
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragEnd={handleDragEnd}
+            >
+              <SortableContext
+                items={sections.map((s) => s.id)}
+                strategy={verticalListSortingStrategy}
+              >
+                <div className="space-y-3">
+                  {sections
+                    .sort((a, b) => a.display_order - b.display_order)
+                    .map((section) => (
+                      <SortableSectionCard key={section.id} section={section} />
+                    ))}
                 </div>
-              ))
+              </SortableContext>
+            </DndContext>
           )}
         </div>
       )}

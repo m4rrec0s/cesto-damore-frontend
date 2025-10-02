@@ -8,6 +8,7 @@ import {
 } from "@/app/hooks/use-api";
 import useApi from "@/app/hooks/use-api";
 import { toast } from "sonner";
+import { Toggle } from "@/app/components/ui/toggle";
 
 interface ConfigurationTabProps {
   configuration: FeedConfiguration;
@@ -69,22 +70,28 @@ export default function ConfigurationTab({
               />
             </div>
 
-            <div className="flex items-center space-x-2">
-              <input
+            <div className="flex items-center justify-between py-2">
+              <div className="space-y-0.5">
+                <label
+                  htmlFor="is_active"
+                  className="text-sm font-medium text-gray-700"
+                >
+                  Configuração ativa
+                </label>
+                <p className="text-xs text-gray-500">
+                  Apenas uma configuração pode estar ativa por vez
+                </p>
+              </div>
+              <Toggle
                 id="is_active"
-                type="checkbox"
-                checked={formData.is_active || false}
-                onChange={(e) =>
-                  setFormData({ ...formData, is_active: e.target.checked })
+                pressed={formData.is_active || false}
+                onPressedChange={(pressed) =>
+                  setFormData({ ...formData, is_active: pressed })
                 }
-                className="h-4 w-4 text-rose-600 border-gray-300 rounded focus:ring-rose-500"
-              />
-              <label
-                htmlFor="is_active"
-                className="text-sm font-medium text-gray-700"
+                aria-label="Ativar configuração"
               >
-                Configuração ativa
-              </label>
+                {formData.is_active ? "Ativa" : "Inativa"}
+              </Toggle>
             </div>
           </div>
         </div>
