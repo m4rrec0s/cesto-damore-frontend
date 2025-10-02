@@ -9,6 +9,7 @@ import { Button } from "@/app/components/ui/button";
 import { Badge } from "@/app/components/ui/badge";
 import { Label } from "@/app/components/ui/label";
 import { Calendar } from "@/app/components/ui/calendar";
+import { Alert, AlertDescription } from "@/app/components/ui/alert";
 import {
   Popover,
   PopoverContent,
@@ -21,6 +22,8 @@ import {
   User,
   CreditCard,
   Loader2,
+  AlertCircle,
+  Smartphone,
   MapPin,
   ChevronRightIcon,
   CalendarIcon,
@@ -51,6 +54,7 @@ import {
   CollapsibleTrigger,
 } from "@/app/components/ui/collapsible";
 import { cn } from "@/app/lib/utils";
+import { QRCodePIX } from "@/app/components/QRCodePIX";
 
 const ACCEPTED_CITIES = [
   "Campina Grande",
@@ -76,6 +80,26 @@ const normalizeString = (value: string) =>
         .trim()
         .toLowerCase()
     : "";
+
+type PaymentStatusType = "" | "pending" | "success" | "failure";
+
+interface PixPaymentData {
+  qr_code: string;
+  qr_code_base64: string;
+  ticket_url: string;
+  amount: number;
+  expires_at: string;
+  payment_id: string;
+  mercado_pago_id: string;
+  status: string;
+  status_detail: string;
+  payer_info: {
+    id?: string;
+    email?: string;
+    first_name?: string;
+    last_name?: string;
+  };
+}
 
 // Tipos para os componentes
 interface CartItem {
@@ -158,6 +182,10 @@ interface CheckoutButtonProps {
   shippingCost: number | null;
   grandTotal: number;
   isAddressServed: boolean;
+  paymentStatus: PaymentStatusType;
+  paymentError: string | null;
+  pixData: PixPaymentData | null;
+  onViewPix: () => void;
 }
 
 // Componentes funcionais para o layout responsivo
@@ -334,30 +362,30 @@ const OrderSummaryCard = ({
   addressWarning?: string | null;
   acceptedCities: string[];
 }) => (
-  <Card className={cn("p-4 lg:p-6", className)}>
-    <h3 className="text-base lg:text-lg font-semibold text-gray-900 mb-3 lg:mb-4">
+  <Card className={cn("p-6 lg:p-8", className)}>
+    <h3 className="text-lg lg:text-xl font-semibold text-gray-900 mb-4 lg:mb-6">
       Resumo do Pedido
     </h3>
 
     {/* Resumo financeiro */}
-    <div className="space-y-2 lg:space-y-3 mb-4">
-      <div className="flex justify-between text-xs lg:text-sm">
+    <div className="space-y-3 lg:space-y-4 mb-6">
+      <div className="flex justify-between text-sm lg:text-base">
         <span>{discountAmount > 0 ? "Subtotal dos produtos" : "Subtotal"}</span>
         <span>R$ {originalTotal.toFixed(2)}</span>
       </div>
       {discountAmount > 0 && (
-        <div className="flex justify-between text-xs lg:text-sm">
+        <div className="flex justify-between text-sm lg:text-base">
           <span className="text-green-600">Desconto aplicado</span>
           <span className="text-green-600 font-semibold">
             - R$ {discountAmount.toFixed(2)}
           </span>
         </div>
       )}
-      <div className="flex justify-between text-xs lg:text-sm">
+      <div className="flex justify-between text-sm lg:text-base">
         <span>Subtotal com descontos</span>
         <span>R$ {cartTotal.toFixed(2)}</span>
       </div>
-      <div className="flex justify-between text-xs lg:text-sm">
+      <div className="flex justify-between text-sm lg:text-base">
         <span>Taxa de entrega</span>
         <span
           className={cn(
@@ -377,7 +405,7 @@ const OrderSummaryCard = ({
         </span>
       </div>
       {paymentMethod && isAddressServed && shippingCost !== null && (
-        <p className="text-[11px] text-gray-500">
+        <p className="text-xs text-gray-500">
           {paymentMethod === "pix"
             ? "Pagamento via PIX"
             : "Pagamento via Cartão de Crédito"}
@@ -387,27 +415,27 @@ const OrderSummaryCard = ({
             : `Frete de R$ ${shippingCost.toFixed(2)}`}
         </p>
       )}
-      <hr />
-      <div className="flex justify-between font-semibold text-base lg:text-lg">
+      <hr className="my-4" />
+      <div className="flex justify-between font-semibold text-lg lg:text-xl">
         <span>Total</span>
         <span className="text-rose-600">R$ {grandTotal.toFixed(2)}</span>
       </div>
     </div>
 
     {addressWarning && (
-      <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700">
+      <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
         <p>{addressWarning}</p>
-        <p className="mt-1 text-[11px] text-red-600">
+        <p className="mt-2 text-xs text-red-600">
           Cidades atendidas: {acceptedCities.join(", ")} - PB.
         </p>
       </div>
     )}
 
-    <div className="mb-4 space-y-2">
-      <h4 className="text-sm font-semibold text-gray-900">
+    <div className="mb-6 space-y-4">
+      <h4 className="text-base font-semibold text-gray-900">
         Forma de Pagamento
       </h4>
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <Button
           type="button"
           variant={paymentMethod === "pix" ? "default" : "outline"}
@@ -864,6 +892,10 @@ const CheckoutButton = ({
   shippingCost,
   grandTotal,
   isAddressServed,
+  paymentStatus,
+  paymentError,
+  pixData,
+  onViewPix,
 }: CheckoutButtonProps) => {
   const shippingLabel = (() => {
     if (shippingCost === null) return "defina o pagamento";
@@ -893,6 +925,32 @@ const CheckoutButton = ({
 
   return (
     <div className="space-y-3">
+      {paymentError && (
+        <Alert className="border-red-200 bg-red-50">
+          <AlertCircle className="h-4 w-4 text-red-600" />
+          <AlertDescription className="text-red-700 text-xs lg:text-sm">
+            {paymentError}
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {paymentStatus === "pending" && pixData && (
+        <Alert className="border-green-200 bg-green-50">
+          <Smartphone className="h-4 w-4 text-green-600" />
+          <AlertDescription className="text-green-800 text-xs lg:text-sm flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+            <span>PIX gerado! Abra o QR Code para concluir o pagamento.</span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onViewPix}
+              className="border-green-300 text-green-700 hover:bg-green-100"
+            >
+              Ver QR Code
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
+
       <div className="flex items-center justify-between gap-4">
         <div>
           <p className="text-xs font-medium uppercase tracking-wide text-gray-500">
@@ -948,13 +1006,13 @@ const CheckoutButton = ({
 
 export default function CarrinhoPage() {
   const { user, isLoading, login } = useAuth();
-  const { getCepInfo, updateUser, getUser } = useApi();
+  const { getCepInfo, updateUser, getUser, createTransparentPayment } =
+    useApi();
   const {
     cart,
     updateQuantity,
     removeFromCart,
     createOrder,
-    createPaymentPreference,
     getMinPreparationHours,
     generateTimeSlots,
     getDeliveryDateBounds,
@@ -995,6 +1053,38 @@ export default function CarrinhoPage() {
   const [isLoadingCep, setIsLoadingCep] = useState(false);
   const [isEditingAddress, setIsEditingAddress] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<"" | "pix" | "card">("");
+  const [pixData, setPixData] = useState<PixPaymentData | null>(null);
+  const [paymentStatus, setPaymentStatus] = useState<PaymentStatusType>("");
+  const [paymentError, setPaymentError] = useState<string | null>(null);
+  const [isPixDialogOpen, setIsPixDialogOpen] = useState(false);
+  const [currentOrderId, setCurrentOrderId] = useState<string | null>(null);
+
+  const mapPaymentStatus = useCallback(
+    (status?: string | null): PaymentStatusType => {
+      if (!status) return "";
+
+      switch (status.toLowerCase()) {
+        case "pending":
+        case "in_process":
+        case "pending_waiting_payment":
+        case "pending_waiting_transfer":
+        case "waiting_payment":
+          return "pending";
+        case "approved":
+        case "authorized":
+        case "accredited":
+          return "success";
+        case "rejected":
+        case "cancelled":
+        case "refunded":
+        case "charged_back":
+          return "failure";
+        default:
+          return "";
+      }
+    },
+    []
+  );
 
   const router = useRouter();
 
@@ -1136,9 +1226,23 @@ export default function CarrinhoPage() {
     }
   }, [isAddressServed, paymentMethod]);
 
-  const handlePaymentMethodSelection = useCallback((method: "pix" | "card") => {
-    setPaymentMethod(method);
-  }, []);
+  const handlePaymentMethodSelection = useCallback(
+    (method: "pix" | "card") => {
+      setPaymentMethod(method);
+      setPixData(null);
+      setPaymentStatus("");
+      setPaymentError(null);
+      setIsPixDialogOpen(false);
+      setCurrentOrderId(null);
+    },
+    [
+      setPaymentError,
+      setPaymentStatus,
+      setPixData,
+      setIsPixDialogOpen,
+      setCurrentOrderId,
+    ]
+  );
 
   const handleCepSearch = async (cep: string) => {
     if (!cep || cep.length !== 8) {
@@ -1251,32 +1355,128 @@ export default function CarrinhoPage() {
       finalDeliveryDate.setHours(hours, minutes, 0, 0);
     }
 
+    if (paymentMethod === "card") {
+      setPaymentStatus("");
+      setPixData(null);
+      setPaymentError(null);
+      setCurrentOrderId(null);
+      toast.info("Pagamento com cartão estará disponível em breve.");
+      return;
+    }
+
     setIsProcessing(true);
+    setPaymentError(null);
     try {
-      const order = await createOrder(
+      const createdOrder = await createOrder(
         user.id,
         fullAddress,
-        finalDeliveryDate || undefined
+        finalDeliveryDate || undefined,
+        {
+          shippingCost,
+          paymentMethod,
+          grandTotal,
+          deliveryCity: city,
+          deliveryState: state,
+        }
       );
 
-      const preference = await createPaymentPreference(
-        user.email,
-        order.id?.toString() ?? String(order.id)
-      );
+      const createdOrderId = (() => {
+        if (createdOrder && typeof createdOrder === "object") {
+          if ("id" in createdOrder && createdOrder.id) {
+            return String(createdOrder.id);
+          }
+          if (
+            "order" in createdOrder &&
+            (createdOrder as { order?: { id?: string } }).order?.id
+          ) {
+            return String(
+              (createdOrder as { order?: { id?: string } }).order?.id
+            );
+          }
+        }
+        return "";
+      })();
 
-      const paymentUrl =
-        preference?.init_point || preference?.sandbox_init_point;
+      if (!createdOrderId) {
+        throw new Error("Não foi possível identificar o pedido gerado.");
+      }
 
-      if (paymentUrl) {
-        window.location.href = paymentUrl;
-      } else {
-        throw new Error("URL de pagamento não foi retornada.");
+      setCurrentOrderId(createdOrderId);
+
+      if (paymentMethod === "pix") {
+        const paymentResponse = await createTransparentPayment({
+          orderId: createdOrderId,
+          payment_method_id: "pix",
+          payer: {
+            email: user.email || "",
+            first_name: user.name || "",
+          },
+        });
+
+        if (!paymentResponse?.success) {
+          throw new Error(
+            paymentResponse?.message || "Erro ao gerar pagamento PIX"
+          );
+        }
+
+        const responseData =
+          paymentResponse.data || paymentResponse.point_of_interaction;
+
+        if (!responseData?.qr_code) {
+          console.error(
+            "Resposta inesperada do pagamento PIX:",
+            paymentResponse
+          );
+          throw new Error("Resposta inválida do servidor");
+        }
+
+        const rawStatus =
+          paymentResponse.status || responseData.status || "pending";
+        const normalizedStatus = mapPaymentStatus(rawStatus) || "pending";
+
+        setPixData({
+          qr_code: responseData.qr_code,
+          qr_code_base64: responseData.qr_code_base64 || "",
+          ticket_url: responseData.ticket_url || "",
+          amount: Number(responseData.amount ?? grandTotal) || grandTotal,
+          expires_at:
+            responseData.expires_at ||
+            responseData.expiration_date ||
+            responseData.expiration_time ||
+            new Date(Date.now() + 30 * 60 * 1000).toISOString(),
+          payment_id:
+            responseData.payment_id ||
+            paymentResponse.paymentId ||
+            createdOrderId,
+          mercado_pago_id:
+            responseData.mercado_pago_id || paymentResponse.mercadoPagoId || "",
+          status: rawStatus,
+          status_detail:
+            responseData.status_detail || paymentResponse.status_detail || "",
+          payer_info:
+            responseData.payer_info ||
+            ({
+              email: user.email || undefined,
+              first_name: user.name || undefined,
+            } as PixPaymentData["payer_info"]),
+        });
+
+        setPaymentStatus(normalizedStatus);
+        setIsPixDialogOpen(true);
+        toast.success(
+          "Pedido criado! Escaneie o QR Code para concluir o pagamento."
+        );
       }
     } catch (error) {
       console.error("Erro ao processar pedido:", error);
       const errorMessage =
         error instanceof Error ? error.message : "Erro desconhecido";
-      alert(`Erro ao processar pedido: ${errorMessage}`);
+      setCurrentOrderId(null);
+      setPixData(null);
+      setPaymentStatus("");
+      setIsPixDialogOpen(false);
+      setPaymentError(errorMessage);
+      toast.error(`Erro ao processar pedido: ${errorMessage}`);
     } finally {
       setIsProcessing(false);
     }
@@ -1394,8 +1594,8 @@ export default function CarrinhoPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="max-w-5xl mx-auto p-4">
-        <Link href={"/"} className="flex items-center gap-2 mb-6">
+      <div className="max-w-6xl mx-auto px-4 py-6">
+        <Link href={"/"} className="flex items-center gap-2 mb-8">
           <ChevronLeftIcon className="h-5 w-5 text-gray-900" />
           <h1 className="text-2xl font-bold text-gray-900">Meu Carrinho</h1>
         </Link>
@@ -1419,7 +1619,7 @@ export default function CarrinhoPage() {
             </Button>
           </Card>
         ) : (
-          <div className="space-y-6 pb-40">
+          <div className="space-y-8 pb-32">
             <div className="lg:hidden">
               <OrderSummaryCard
                 originalTotal={originalTotal}
@@ -1448,8 +1648,8 @@ export default function CarrinhoPage() {
               />
             </div>
 
-            <div className="lg:grid lg:grid-cols-3 lg:gap-6">
-              <div className="space-y-4 lg:col-span-2 pb-12">
+            <div className="lg:grid lg:grid-cols-3 lg:gap-8">
+              <div className="space-y-6 lg:col-span-2">
                 {cartItems.map((item, index) => (
                   <ProductCard
                     key={`${item.product_id}-${index}`}
@@ -1459,7 +1659,6 @@ export default function CarrinhoPage() {
                   />
                 ))}
               </div>
-              0
               <div className="hidden lg:block lg:col-span-1">
                 <OrderSummaryCard
                   originalTotal={originalTotal}
@@ -1476,7 +1675,7 @@ export default function CarrinhoPage() {
                   getMinPreparationHours={getMinPreparationHours}
                   address={formattedAddress}
                   prepareAddressForEditing={prepareAddressForEditing}
-                  className="shadow-sm lg:sticky lg:top-24"
+                  className="shadow-sm lg:sticky lg:top-6"
                   paymentMethod={paymentMethod}
                   setPaymentMethod={handlePaymentMethodSelection}
                   shippingCost={shippingCost}
@@ -1493,8 +1692,8 @@ export default function CarrinhoPage() {
       </div>
 
       {cartItems.length > 0 && (
-        <div className="fixed inset-x-0 bottom-0 z-30 border-t border-gray-200 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/75">
-          <div className="mx-auto w-full max-w-5xl px-4 py-4">
+        <div className="fixed inset-x-0 bottom-0 z-30 border-t border-gray-200 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/75 shadow-lg">
+          <div className="mx-auto w-full max-w-6xl px-4 py-6">
             <CheckoutButton
               handleFinalizePurchase={handleFinalizePurchase}
               isProcessing={isProcessing}
@@ -1512,20 +1711,26 @@ export default function CarrinhoPage() {
               shippingCost={shippingCost}
               grandTotal={grandTotal}
               isAddressServed={isAddressServed}
+              paymentStatus={paymentStatus}
+              paymentError={paymentError}
+              pixData={pixData}
+              onViewPix={() => setIsPixDialogOpen(true)}
             />
           </div>
         </div>
       )}
 
       <Dialog open={isEditingAddress} onOpenChange={setIsEditingAddress}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Endereço de Entrega</DialogTitle>
-            <DialogDescription>
+            <DialogTitle className="text-xl font-semibold">
+              Endereço de Entrega
+            </DialogTitle>
+            <DialogDescription className="text-base">
               Informe o endereço para entrega dos produtos
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
+          <div className="space-y-6 py-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 CEP *
@@ -1549,7 +1754,7 @@ export default function CarrinhoPage() {
                     }
                   }}
                   placeholder="00000000"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-rose-500 pr-10"
+                  className="w-full px-3 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-rose-500 pr-10"
                   maxLength={8}
                 />
                 {isLoadingCep && (
@@ -1574,7 +1779,7 @@ export default function CarrinhoPage() {
                 value={address}
                 onChange={(e) => setAddress(e.target.value)}
                 placeholder="Digite o endereço ou será preenchido após buscar o CEP"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-rose-500"
+                className="w-full px-3 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-rose-500"
               />
             </div>
 
@@ -1587,7 +1792,7 @@ export default function CarrinhoPage() {
                 value={houseNumber}
                 onChange={(e) => setHouseNumber(e.target.value)}
                 placeholder="Ex: 123, 45A, S/N"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-rose-500"
+                className="w-full px-3 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-rose-500"
               />
             </div>
 
@@ -1600,7 +1805,7 @@ export default function CarrinhoPage() {
                 value={neighborhood}
                 onChange={(e) => setNeighborhood(e.target.value)}
                 placeholder="Digite o bairro ou será preenchido após buscar o CEP"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-rose-500"
+                className="w-full px-3 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-rose-500"
               />
             </div>
 
@@ -1614,7 +1819,7 @@ export default function CarrinhoPage() {
                   value={city}
                   onChange={(e) => setCity(e.target.value)}
                   placeholder="Digite a cidade ou será preenchida automaticamente"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-rose-500"
+                  className="w-full px-3 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-rose-500"
                 />
               </div>
               <div>
@@ -1626,13 +1831,13 @@ export default function CarrinhoPage() {
                   value={state}
                   onChange={(e) => setState(e.target.value)}
                   placeholder="UF"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-rose-500"
+                  className="w-full px-3 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-rose-500"
                   maxLength={2}
                 />
               </div>
             </div>
           </div>
-          <DialogFooter>
+          <DialogFooter className="mt-6">
             <DialogClose asChild onClick={() => setIsEditingAddress(false)}>
               <Button variant="outline">Cancelar</Button>
             </DialogClose>
@@ -1643,6 +1848,57 @@ export default function CarrinhoPage() {
               }}
             >
               Salvar Endereço
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isPixDialogOpen} onOpenChange={setIsPixDialogOpen}>
+        <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-semibold">
+              Pagamento via PIX
+            </DialogTitle>
+            <DialogDescription className="text-base">
+              Escaneie o QR Code para concluir o pagamento do pedido
+              {currentOrderId ? ` ${currentOrderId}` : ""}.
+            </DialogDescription>
+          </DialogHeader>
+
+          {pixData ? (
+            <div className="space-y-6">
+              {currentOrderId && (
+                <div className="text-sm text-gray-600 bg-gray-50 p-3 rounded-md">
+                  <span className="font-medium text-gray-700">
+                    Código do pedido:
+                  </span>{" "}
+                  {currentOrderId}
+                </div>
+              )}
+              <QRCodePIX
+                pixData={{
+                  ...pixData,
+                  payer_info: {
+                    id: pixData.payer_info.id || "",
+                    email: pixData.payer_info.email || "",
+                    first_name: pixData.payer_info.first_name,
+                    last_name: pixData.payer_info.last_name,
+                  },
+                }}
+              />
+            </div>
+          ) : (
+            <Alert className="border-red-200 bg-red-50">
+              <AlertCircle className="h-4 w-4 text-red-600" />
+              <AlertDescription className="text-red-700 text-sm">
+                Não encontramos informações do PIX. Gere um novo pagamento.
+              </AlertDescription>
+            </Alert>
+          )}
+
+          <DialogFooter className="mt-6">
+            <Button variant="outline" onClick={() => setIsPixDialogOpen(false)}>
+              Fechar
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -1,15 +1,21 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { HeroSection } from "./components/layout/hero";
 import { ProductGrid } from "./components/layout/product-grid";
-import { useApi, Product as ApiProduct, Category } from "./hooks/use-api";
+import {
+  useApi,
+  Product as ApiProduct,
+  Category,
+  PublicFeedResponse,
+} from "./hooks/use-api";
 import { Button } from "./components/ui/button";
 import { RefreshCw } from "lucide-react";
 import { DatabaseErrorFallback } from "./components/database-error-fallback";
 import { Badge } from "./components/ui/badge";
 import { cn } from "./lib/utils";
 import Link from "next/link";
+import FeedBannerCarousel from "./components/feed/FeedBannerCarousel";
+import FeedSection from "./components/feed/FeedSection";
 
 interface GridProduct {
   id: string;
@@ -26,6 +32,8 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [products, setProducts] = useState<GridProduct[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [feedData, setFeedData] = useState<PublicFeedResponse | null>(null);
+  const [useFallback, setUseFallback] = useState(false);
 
   useEffect(() => {
     const loadData = async () => {
@@ -33,6 +41,16 @@ export default function Home() {
       setError(null);
 
       try {
+        let feed = null;
+        try {
+          feed = await api.getPublicFeed();
+          setFeedData(feed);
+          console.log("✅ Feed carregado com sucesso:", feed);
+        } catch (feedError) {
+          console.warn("⚠️ Erro ao carregar feed, usando fallback:", feedError);
+          setUseFallback(true);
+        }
+
         const [productsResponse, fetchedCategories] = await Promise.all([
           api.getProducts(),
           api.getCategories(),
@@ -40,27 +58,30 @@ export default function Home() {
 
         setCategories(fetchedCategories);
 
-        const featuredProducts = productsResponse.products.map(
-          (product: ApiProduct) => {
-            // Get the first category name for display, or "Sem categoria" if none
-            const categoryName =
-              product.categories && product.categories.length > 0
-                ? product.categories[0].name
-                : "Sem categoria";
+        if (feed && !useFallback) {
+          setProducts([]);
+        } else {
+          const featuredProducts = productsResponse.products.map(
+            (product: ApiProduct) => {
+              const categoryName =
+                product.categories && product.categories.length > 0
+                  ? product.categories[0].name
+                  : "Sem categoria";
 
-            return {
-              id: product.id,
-              name: product.name,
-              price: product.price,
-              discount: product.discount || undefined,
-              image_url: product.image_url || null,
-              categoryName,
-              categoryNames: product.categories?.map((cat) => cat.name) || [],
-            };
-          }
-        );
+              return {
+                id: product.id,
+                name: product.name,
+                price: product.price,
+                discount: product.discount || undefined,
+                image_url: product.image_url || null,
+                categoryName,
+                categoryNames: product.categories?.map((cat) => cat.name) || [],
+              };
+            }
+          );
 
-        setProducts(featuredProducts.slice(0, 8)); // Mostrar apenas 8 produtos em destaque
+          setProducts(featuredProducts.slice(0, 8));
+        }
       } catch (err: unknown) {
         console.error("Erro ao carregar dados:", err);
         const errorMessage =
@@ -81,7 +102,7 @@ export default function Home() {
     };
 
     loadData();
-  }, [api]);
+  }, [api, useFallback]);
 
   const handleRetry = () => {
     api.invalidateCache();
@@ -90,9 +111,12 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white">
-      <HeroSection />
+      {feedData && !useFallback && feedData.banners.length > 0 && (
+        <div className="max-w-7xl mx-auto px-4 py-8">
+          <FeedBannerCarousel banners={feedData.banners} />
+        </div>
+      )}
 
-      {/* Seção de Categorias */}
       <section className="pb-5 bg-white w-full flex flex-col justify-center">
         <div className="mx-auto max-w-7xl px-4">
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-6">
@@ -117,69 +141,67 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Seção de Produtos */}
-      <section className="py-16 bg-gray-50">
-        <div className="mx-auto max-w-7xl px-4">
-          {error && (
-            <DatabaseErrorFallback error={error} onRetry={handleRetry} />
-          )}
+      {feedData && !useFallback ? (
+        <div className="bg-gray-50">
+          {feedData.sections.map((section) => (
+            <FeedSection key={section.id} section={section} />
+          ))}
+        </div>
+      ) : (
+        <section className="py-16 bg-gray-50">
+          <div className="mx-auto max-w-7xl px-4">
+            {error && (
+              <DatabaseErrorFallback error={error} onRetry={handleRetry} />
+            )}
 
-          {loading ? (
-            <div className="text-center py-20">
-              <div className="inline-flex items-center gap-3 text-gray-600 mb-4">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500"></div>
-                <span className="text-lg font-medium">
-                  Carregando produtos especiais...
-                </span>
-              </div>
-              <div className="max-w-md mx-auto">
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                  <p className="text-sm text-blue-800">
-                    <strong>Dica:</strong> Se demorar muito, pode haver um
-                    problema temporário de conexão com o banco de dados. Tente
-                    recarregar a página.
-                  </p>
+            {loading ? (
+              <div className="text-center py-20">
+                <div className="inline-flex items-center gap-3 text-gray-600 mb-4">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500"></div>
+                  <span className="text-lg font-medium">
+                    Carregando produtos especiais...
+                  </span>
                 </div>
               </div>
-            </div>
-          ) : (
-            <ProductGrid products={products} title="Produtos em destaque" />
-          )}
+            ) : (
+              <ProductGrid products={products} title="Produtos em destaque" />
+            )}
 
-          {!loading && !error && products.length === 0 && (
-            <div className="text-center py-20">
-              <div className="w-20 h-20 bg-gray-200 rounded-full mx-auto mb-6 flex items-center justify-center">
-                <svg
-                  className="w-10 h-10 text-gray-400"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
+            {!loading && !error && products.length === 0 && (
+              <div className="text-center py-20">
+                <div className="w-20 h-20 bg-gray-200 rounded-full mx-auto mb-6 flex items-center justify-center">
+                  <svg
+                    className="w-10 h-10 text-gray-400"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2 2v-5m16 0h-6a2 2 0 00-2 2v3a2 2 0 01-2 2v-3a2 2 0 00-2-2H4"
+                    />
+                  </svg>
+                </div>
+                <h3 className="text-xl font-semibold text-gray-900 mb-2">
+                  Nenhum produto encontrado
+                </h3>
+                <p className="text-gray-600 mb-6">
+                  Parece que ainda não temos produtos cadastrados.
+                </p>
+                <Button
+                  onClick={handleRetry}
+                  className="bg-orange-500 hover:bg-orange-600 text-white"
                 >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2 2v-5m16 0h-6a2 2 0 00-2 2v3a2 2 0 01-2 2v-3a2 2 0 00-2-2H4"
-                  />
-                </svg>
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  Recarregar página
+                </Button>
               </div>
-              <h3 className="text-xl font-semibold text-gray-900 mb-2">
-                Nenhum produto encontrado
-              </h3>
-              <p className="text-gray-600 mb-6">
-                Parece que ainda não temos produtos cadastrados.
-              </p>
-              <Button
-                onClick={handleRetry}
-                className="bg-orange-500 hover:bg-orange-600 text-white"
-              >
-                <RefreshCw className="h-4 w-4 mr-2" />
-                Recarregar página
-              </Button>
-            </div>
-          )}
-        </div>
-      </section>
+            )}
+          </div>
+        </section>
+      )}
     </div>
   );
 }

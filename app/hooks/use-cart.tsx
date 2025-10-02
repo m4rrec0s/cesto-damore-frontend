@@ -238,10 +238,43 @@ export function useCart() {
         shippingCost?: number;
         paymentMethod?: "pix" | "card";
         grandTotal?: number;
+        deliveryCity?: string;
+        deliveryState?: string;
       }
     ) => {
       if (cart.items.length === 0) {
         throw new Error("Carrinho está vazio");
+      }
+
+      // Extrair cidade e estado se não fornecidos nas opções
+      let deliveryCity = options?.deliveryCity;
+      let deliveryState = options?.deliveryState;
+
+      if (!deliveryCity || !deliveryState) {
+        // Tentar extrair do endereço se não fornecidos
+        if (deliveryAddress) {
+          const addressParts = deliveryAddress.split("/");
+          if (addressParts.length >= 2) {
+            const statePart = addressParts[addressParts.length - 1];
+            const cityPart = addressParts[addressParts.length - 2];
+
+            // Extrair estado após o último '/'
+            const stateMatch = statePart.match(/([A-Z]{2})/);
+            if (stateMatch) {
+              deliveryState = stateMatch[1];
+            }
+
+            // Extrair cidade (remover tudo após '-' se existir)
+            const cityMatch = cityPart.split(",").pop()?.split("-")[0]?.trim();
+            if (cityMatch) {
+              deliveryCity = cityMatch;
+            }
+          }
+        }
+      }
+
+      if (!deliveryCity || !deliveryState) {
+        throw new Error("Cidade e estado de entrega são obrigatórios");
       }
 
       const orderItems: OrderItem[] = cart.items.map((item) => ({
@@ -268,9 +301,12 @@ export function useCart() {
         grand_total: totalPrice,
         items: orderItems,
         delivery_address: deliveryAddress,
+        delivery_city: deliveryCity,
+        delivery_state: deliveryState,
         delivery_date: deliveryDate,
       });
 
+      console.log("✅ Pedido criado com sucesso:", order);
       return order;
     },
     [cart, api]
@@ -708,6 +744,92 @@ export function useCart() {
     return { minDate, maxDate };
   }, [getEarliestDeliveryDateTime]);
 
+  const createOrderWithTransparentCheckout = useCallback(
+    async (
+      userId: string,
+      deliveryAddress?: string,
+      deliveryDate?: Date,
+      options?: {
+        shippingCost?: number;
+        paymentMethod?: "pix" | "card";
+        grandTotal?: number;
+        deliveryCity?: string;
+        deliveryState?: string;
+      }
+    ) => {
+      if (cart.items.length === 0) {
+        throw new Error("Carrinho está vazio");
+      }
+
+      // Criar o pedido primeiro
+      console.log("🛒 Criando pedido para checkout transparente...");
+      const order = await createOrder(
+        userId,
+        deliveryAddress,
+        deliveryDate,
+        options
+      );
+
+      // Retornar URL para checkout transparente
+      const checkoutUrl = `/checkout-transparente?orderId=${order.id}`;
+      console.log("🔗 URL do checkout criada:", checkoutUrl);
+
+      return {
+        order,
+        checkoutUrl,
+        redirectToCheckout: () => {
+          if (typeof window !== "undefined") {
+            console.log("🚀 Redirecionando para:", checkoutUrl);
+            // Pequeno delay para garantir que o pedido foi salvo
+            setTimeout(() => {
+              window.location.href = checkoutUrl;
+            }, 100);
+          }
+        },
+      };
+    },
+    [cart, createOrder]
+  );
+
+  const processTransparentPayment = useCallback(
+    async (
+      orderId: string,
+      paymentData: {
+        payment_method_id: "pix" | "credit_card" | "debit_card";
+        token?: string;
+        issuer_id?: string;
+        installments?: number;
+        payer: {
+          email: string;
+          first_name?: string;
+          last_name?: string;
+          identification?: {
+            type: string;
+            number: string;
+          };
+        };
+      }
+    ) => {
+      try {
+        const response = await api.createTransparentPayment({
+          orderId,
+          ...paymentData,
+        });
+
+        // Limpar carrinho apenas se pagamento foi iniciado com sucesso
+        if (response.success) {
+          clearCart();
+        }
+
+        return response;
+      } catch (error) {
+        console.error("Erro ao processar pagamento transparente:", error);
+        throw error;
+      }
+    },
+    [api, clearCart]
+  );
+
   const formatDate = useCallback((date: Date): string => {
     return date.toLocaleDateString("pt-BR", {
       weekday: "short",
@@ -723,6 +845,8 @@ export function useCart() {
     updateQuantity,
     clearCart,
     createOrder,
+    createOrderWithTransparentCheckout,
+    processTransparentPayment,
     createPaymentPreference,
     getDeliveryWindows,
     isWeekend,

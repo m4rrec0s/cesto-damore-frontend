@@ -26,8 +26,31 @@ interface CartContextType {
   createOrder: (
     userId: string,
     deliveryAddress?: string,
-    deliveryDate?: Date
-  ) => Promise<{ id: number; status: string; total: number }>;
+    deliveryDate?: Date,
+    options?: {
+      shippingCost?: number;
+      paymentMethod?: "pix" | "card";
+      grandTotal?: number;
+      deliveryCity?: string;
+      deliveryState?: string;
+    }
+  ) => Promise<unknown>;
+  createOrderWithTransparentCheckout: (
+    userId: string,
+    deliveryAddress?: string,
+    deliveryDate?: Date,
+    options?: {
+      shippingCost?: number;
+      paymentMethod?: "pix" | "card";
+      grandTotal?: number;
+      deliveryCity?: string;
+      deliveryState?: string;
+    }
+  ) => Promise<{
+    order: { id: number; status: string; total: number };
+    checkoutUrl: string;
+    redirectToCheckout: () => void;
+  }>;
   createPaymentPreference: (
     userEmail: string,
     orderId?: string
@@ -36,6 +59,24 @@ interface CartContextType {
     sandbox_init_point?: string;
     id: string;
   }>;
+  processTransparentPayment: (
+    orderId: string,
+    paymentData: {
+      payment_method_id: "pix" | "credit_card" | "debit_card";
+      token?: string;
+      issuer_id?: string;
+      installments?: number;
+      payer: {
+        email: string;
+        first_name?: string;
+        last_name?: string;
+        identification?: {
+          type: string;
+          number: string;
+        };
+      };
+    }
+  ) => Promise<unknown>;
   // Funções de entrega
   getDeliveryWindows: () => {
     weekdays: DeliveryWindow[];

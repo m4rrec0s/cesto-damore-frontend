@@ -9,7 +9,7 @@ const ClientLayout = ({ children }: { children: ReactNode }) => {
   const pathname = usePathname();
 
   const isDashboardPage =
-    pathname === "/estoque" ||
+    pathname === "/manage" ||
     pathname === "/pedidos" ||
     pathname === "/carrinho";
 

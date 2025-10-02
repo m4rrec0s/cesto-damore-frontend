@@ -7,6 +7,127 @@ import axios from "axios";
   e métodos para autenticação, produtos, categorias, adicionais, tipos, pedidos e usuários.
 */
 
+// ===== Enums =====
+export enum FeedSectionType {
+  RECOMMENDED_PRODUCTS = "RECOMMENDED_PRODUCTS",
+  DISCOUNTED_PRODUCTS = "DISCOUNTED_PRODUCTS",
+  FEATURED_CATEGORIES = "FEATURED_CATEGORIES",
+  FEATURED_ADDITIONALS = "FEATURED_ADDITIONALS",
+  CUSTOM_PRODUCTS = "CUSTOM_PRODUCTS",
+  NEW_ARRIVALS = "NEW_ARRIVALS",
+  BEST_SELLERS = "BEST_SELLERS",
+}
+
+// ===== Tipos do Feed =====
+export interface FeedConfiguration {
+  id: string;
+  name: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  banners?: FeedBanner[];
+  sections?: FeedSection[];
+}
+
+export interface FeedBanner {
+  id: string;
+  feed_config_id: string;
+  title: string;
+  subtitle?: string;
+  image_url: string;
+  link_url?: string;
+  text_color?: string;
+  is_active: boolean;
+  display_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface FeedSection {
+  id: string;
+  feed_config_id: string;
+  title: string;
+  section_type: FeedSectionType;
+  is_visible: boolean;
+  display_order: number;
+  max_items: number;
+  created_at: string;
+  updated_at: string;
+  items?: FeedSectionItem[];
+}
+
+export interface FeedSectionItem {
+  id: string;
+  feed_section_id: string;
+  item_type: "product" | "category" | "additional";
+  item_id: string;
+  display_order: number;
+  is_featured: boolean;
+  custom_title?: string;
+  custom_subtitle?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateFeedConfigurationInput {
+  name: string;
+  is_active?: boolean;
+}
+
+export interface UpdateFeedConfigurationInput {
+  name?: string;
+  is_active?: boolean;
+}
+
+export interface CreateFeedBannerInput {
+  feed_config_id: string;
+  title: string;
+  subtitle?: string;
+  image_url: string;
+  link_url?: string;
+  text_color?: string;
+  is_active?: boolean;
+  display_order?: number;
+}
+
+export interface UpdateFeedBannerInput {
+  title?: string;
+  subtitle?: string;
+  image_url?: string;
+  link_url?: string;
+  text_color?: string;
+  is_active?: boolean;
+  display_order?: number;
+}
+
+export interface CreateFeedSectionInput {
+  feed_config_id: string;
+  title: string;
+  section_type: FeedSectionType;
+  is_visible?: boolean;
+  display_order?: number;
+  max_items?: number;
+}
+
+export interface UpdateFeedSectionInput {
+  title?: string;
+  section_type?: FeedSectionType;
+  is_visible?: boolean;
+  display_order?: number;
+  max_items?: number;
+}
+
+// Labels para exibição
+export const FEED_SECTION_TYPE_LABELS: Record<FeedSectionType, string> = {
+  [FeedSectionType.RECOMMENDED_PRODUCTS]: "Produtos Recomendados",
+  [FeedSectionType.DISCOUNTED_PRODUCTS]: "Produtos com Desconto",
+  [FeedSectionType.FEATURED_CATEGORIES]: "Categorias em Destaque",
+  [FeedSectionType.FEATURED_ADDITIONALS]: "Adicionais em Destaque",
+  [FeedSectionType.CUSTOM_PRODUCTS]: "Produtos Personalizados",
+  [FeedSectionType.NEW_ARRIVALS]: "Novos Produtos",
+  [FeedSectionType.BEST_SELLERS]: "Mais Vendidos",
+};
+
 // ===== Tipagens básicas =====
 export interface LoginCredentials {
   email: string;
@@ -105,6 +226,59 @@ export interface Order {
   grand_total?: number | null;
 }
 
+// Resposta da API para feed público
+export interface PublicFeedResponse {
+  id: string;
+  name: string;
+  is_active: boolean;
+  banners: PublicFeedBanner[];
+  sections: PublicFeedSection[];
+  configuration: {
+    show_banners: boolean;
+    show_recommended: boolean;
+    show_discounted: boolean;
+    show_categories: boolean;
+    show_additionals: boolean;
+    max_recommended: number;
+    max_discounted: number;
+    max_categories: number;
+    max_additionals: number;
+  };
+}
+
+export interface PublicFeedBanner {
+  id: string;
+  title: string;
+  subtitle?: string;
+  image_url: string;
+  background_color?: string;
+  text_color?: string;
+  button_color?: string;
+  display_order: number;
+}
+
+export interface PublicFeedSection {
+  id: string;
+  title: string;
+  section_type: string;
+  display_order: number;
+  max_items: number;
+  show_view_all: boolean;
+  view_all_url?: string;
+  items: PublicFeedItem[];
+}
+
+export interface PublicFeedItem {
+  id: string;
+  item_type: "product" | "category" | "additional";
+  item_id: string;
+  display_order: number;
+  is_featured: boolean;
+  custom_title?: string;
+  custom_subtitle?: string;
+  item_data?: Record<string, unknown>;
+}
+
 interface CacheShape {
   users: unknown | null;
   products: unknown | null;
@@ -112,6 +286,7 @@ interface CacheShape {
   additionals: unknown | null;
   types: unknown | null;
   orders: unknown | null;
+  feedConfigurations: unknown | null;
   [key: string]: unknown | null;
 }
 
@@ -123,6 +298,7 @@ class ApiService {
     additionals: null,
     types: null,
     orders: null,
+    feedConfigurations: null,
   };
 
   private client = axios.create({
@@ -149,10 +325,54 @@ class ApiService {
       let token =
         typeof window !== "undefined" ? localStorage.getItem("appToken") : null;
 
-      // Se não encontrou, tentar do localStorage antigo
+      // Verificar se o token não é "undefined" como string e limpar se necessário
+      if (token === "undefined" || token === "null" || !token) {
+        // Limpar valor inválido do localStorage
+        if (
+          typeof window !== "undefined" &&
+          (token === "undefined" || token === "null")
+        ) {
+          console.log("🧹 Limpando appToken inválido do localStorage:", token);
+          localStorage.removeItem("appToken");
+        }
+        token = null;
+      }
+
+      // Se não encontrou appToken válido, tentar do localStorage antigo
       if (!token) {
-        token =
+        const oldToken =
           typeof window !== "undefined" ? localStorage.getItem("token") : null;
+        if (oldToken && oldToken !== "undefined" && oldToken !== "null") {
+          token = oldToken;
+          // Migrar token antigo para appToken se for válido
+          if (typeof window !== "undefined") {
+            console.log("🔄 Migrando token antigo para appToken");
+            localStorage.setItem("appToken", oldToken);
+            localStorage.removeItem("token");
+          }
+        }
+      }
+
+      // Debug logging
+      if (config.url?.includes("/admin/feed")) {
+        console.log("🔍 Interceptor Debug:", {
+          url: config.url,
+          method: config.method,
+          hasWindow: typeof window !== "undefined",
+          appTokenFromStorage:
+            typeof window !== "undefined"
+              ? localStorage.getItem("appToken")
+              : "SSR",
+          tokenFromStorage:
+            typeof window !== "undefined"
+              ? localStorage.getItem("token")
+              : "SSR",
+          finalToken: token,
+          tokenLength: token ? token.length : 0,
+          tokenPrefix: token ? token.substring(0, 20) + "..." : "NO_TOKEN",
+          allLocalStorageKeys:
+            typeof window !== "undefined" ? Object.keys(localStorage) : "SSR",
+        });
       }
 
       if (token) {
@@ -525,6 +745,8 @@ class ApiService {
     total_price: number;
     items: OrderItem[];
     delivery_address?: string | null;
+    delivery_city: string;
+    delivery_state: string;
     delivery_date?: Date | null;
     shipping_price?: number | null;
     payment_method?: string | null;
@@ -578,6 +800,190 @@ class ApiService {
   getUserPayments = async () => {
     const res = await this.client.get("/payments/user");
     return res.data;
+  };
+
+  // ===== Checkout Transparente =====
+  createTransparentPayment = async (payload: {
+    orderId: string;
+    token?: string;
+    payment_method_id: "pix" | "credit_card" | "debit_card";
+    issuer_id?: string;
+    installments?: number;
+    payer: {
+      email: string;
+      first_name?: string;
+      last_name?: string;
+      identification?: {
+        type: string;
+        number: string;
+      };
+    };
+  }) => {
+    const res = await this.client.post("/payment/transparent", payload);
+    return res.data;
+  };
+
+  getOrderForCheckout = async (orderId: string) => {
+    try {
+      console.log("🌐 Fazendo requisição para:", `/orders/${orderId}`);
+      const res = await this.client.get(`/orders/${orderId}`);
+      console.log("📦 Resposta recebida:", res.data);
+      return res.data;
+    } catch (error: unknown) {
+      console.error("❌ Erro na requisição getOrderForCheckout:", error);
+      if (error && typeof error === "object" && "response" in error) {
+        const axiosError = error as {
+          response: {
+            status: number;
+            data: { error?: string; message?: string };
+          };
+        };
+        console.error("📄 Status:", axiosError.response.status);
+        console.error("📄 Data:", axiosError.response.data);
+        throw new Error(
+          axiosError.response.data?.error ||
+            axiosError.response.data?.message ||
+            "Erro na requisição"
+        );
+      }
+      throw error;
+    }
+  };
+
+  // ===== Payment Methods =====
+  getPaymentMethods = async () => {
+    const res = await this.client.get("/payment-methods");
+    return res.data;
+  };
+
+  // ===== Feed =====
+  getFeedConfigurations = async (): Promise<FeedConfiguration[]> => {
+    console.log("🔍 getFeedConfigurations chamado");
+    console.log("🔍 Cache atual:", ApiService.cache.feedConfigurations);
+
+    if (ApiService.cache.feedConfigurations) {
+      console.log("✅ Usando cache para Feed configurations");
+      return ApiService.cache.feedConfigurations as FeedConfiguration[];
+    }
+
+    console.log("📡 Fazendo requisição para /admin/feed/configurations");
+    const res = await this.client.get("/admin/feed/configurations");
+    console.log("📦 Resposta recebida:", res.data);
+
+    ApiService.cache.feedConfigurations = res.data;
+    return res.data;
+  };
+
+  getFeedConfiguration = async (id: string): Promise<FeedConfiguration> => {
+    const res = await this.client.get(`/admin/feed/configurations/${id}`);
+    return res.data;
+  };
+
+  createFeedConfiguration = async (
+    payload: CreateFeedConfigurationInput
+  ): Promise<FeedConfiguration> => {
+    const res = await this.client.post("/admin/feed/configurations", payload);
+    ApiService.cache.feedConfigurations = null; // Invalidar cache
+    return res.data;
+  };
+
+  updateFeedConfiguration = async (
+    id: string,
+    payload: UpdateFeedConfigurationInput
+  ): Promise<FeedConfiguration> => {
+    const res = await this.client.put(
+      `/admin/feed/configurations/${id}`,
+      payload
+    );
+    ApiService.cache.feedConfigurations = null; // Invalidar cache
+    return res.data;
+  };
+
+  deleteFeedConfiguration = async (id: string): Promise<void> => {
+    await this.client.delete(`/admin/feed/configurations/${id}`);
+    ApiService.cache.feedConfigurations = null; // Invalidar cache
+  };
+
+  createFeedBanner = async (
+    payload: CreateFeedBannerInput,
+    imageFile?: File
+  ): Promise<FeedBanner> => {
+    if (imageFile) {
+      const formData = new FormData();
+      formData.append("image", imageFile);
+      Object.entries(payload).forEach(([key, value]) => {
+        if (value !== undefined && value !== null) {
+          formData.append(key, value.toString());
+        }
+      });
+      const res = await this.client.post("/admin/feed/banners", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      ApiService.cache.feedConfigurations = null;
+      return res.data;
+    } else {
+      const res = await this.client.post("/admin/feed/banners", payload);
+      ApiService.cache.feedConfigurations = null;
+      return res.data;
+    }
+  };
+
+  updateFeedBanner = async (
+    id: string,
+    payload: UpdateFeedBannerInput,
+    imageFile?: File
+  ): Promise<FeedBanner> => {
+    if (imageFile) {
+      const formData = new FormData();
+      formData.append("image", imageFile);
+      Object.entries(payload).forEach(([key, value]) => {
+        if (value !== undefined && value !== null) {
+          formData.append(key, value.toString());
+        }
+      });
+      const res = await this.client.put(`/admin/feed/banners/${id}`, formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      ApiService.cache.feedConfigurations = null;
+      return res.data;
+    } else {
+      const res = await this.client.put(`/admin/feed/banners/${id}`, payload);
+      ApiService.cache.feedConfigurations = null;
+      return res.data;
+    }
+  };
+
+  deleteFeedBanner = async (id: string): Promise<void> => {
+    await this.client.delete(`/admin/feed/banners/${id}`);
+    ApiService.cache.feedConfigurations = null;
+  };
+
+  createFeedSection = async (
+    payload: CreateFeedSectionInput
+  ): Promise<FeedSection> => {
+    const res = await this.client.post("/admin/feed/sections", payload);
+    ApiService.cache.feedConfigurations = null;
+    return res.data;
+  };
+
+  updateFeedSection = async (
+    id: string,
+    payload: UpdateFeedSectionInput
+  ): Promise<FeedSection> => {
+    const res = await this.client.put(`/admin/feed/sections/${id}`, payload);
+    ApiService.cache.feedConfigurations = null;
+    return res.data;
+  };
+
+  deleteFeedSection = async (id: string): Promise<void> => {
+    await this.client.delete(`/admin/feed/sections/${id}`);
+    ApiService.cache.feedConfigurations = null;
+  };
+
+  // ===== Public Feed =====
+  getPublicFeed = async (configId?: string): Promise<PublicFeedResponse> => {
+    const params = configId ? `?configId=${configId}` : "";
+    return (await this.client.get(`/feed${params}`)).data;
   };
 }
 

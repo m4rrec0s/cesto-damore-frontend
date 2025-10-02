@@ -16,6 +16,7 @@ interface User {
   image_url?: string | null;
   phone?: string | null;
   address?: string | null;
+  role?: string; // Mudando para string genérica
   city?: string | null;
   state?: string | null;
   zip_code?: string | null;
@@ -42,14 +43,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const storedUser = localStorage.getItem("user");
       const storedAppToken = localStorage.getItem("appToken");
 
-      if (storedUser && storedAppToken) {
+      if (storedUser && storedAppToken && storedAppToken !== "undefined") {
         try {
-          setUser(JSON.parse(storedUser));
+          const userData = JSON.parse(storedUser);
+          setUser(userData);
           setAppToken(storedAppToken);
+
+          // Sincronizar com cookies para o middleware
+          document.cookie = `appToken=${storedAppToken}; path=/; max-age=${
+            7 * 24 * 60 * 60
+          }`; // 7 dias
+          document.cookie = `user=${encodeURIComponent(
+            storedUser
+          )}; path=/; max-age=${7 * 24 * 60 * 60}`;
         } catch (error) {
           console.error("Erro ao carregar dados do usuário:", error);
           localStorage.removeItem("user");
           localStorage.removeItem("appToken");
+          // Limpar cookies também
+          document.cookie =
+            "appToken=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT";
+          document.cookie =
+            "user=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT";
         }
       }
       setIsLoading(false);
@@ -62,6 +77,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (typeof window !== "undefined") {
       localStorage.setItem("user", JSON.stringify(userData));
       localStorage.setItem("appToken", token);
+
+      // Sincronizar com cookies para o middleware
+      document.cookie = `appToken=${token}; path=/; max-age=${
+        7 * 24 * 60 * 60
+      }`; // 7 dias
+      document.cookie = `user=${encodeURIComponent(
+        JSON.stringify(userData)
+      )}; path=/; max-age=${7 * 24 * 60 * 60}`;
     }
   };
 
@@ -71,6 +94,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (typeof window !== "undefined") {
       localStorage.removeItem("user");
       localStorage.removeItem("appToken");
+
+      // Limpar cookies também
+      document.cookie =
+        "appToken=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT";
+      document.cookie = "user=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT";
     }
   };
 

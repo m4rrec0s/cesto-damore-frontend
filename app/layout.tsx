@@ -5,6 +5,9 @@ import "./globals.css";
 import { AuthProvider } from "./hooks/use-auth";
 import { CartProvider } from "./hooks/cart-context";
 import ClientLayout from "./components/layout/client-layout";
+import TokenMonitor from "./components/auth/token-monitor";
+import TokenExpiryWarning from "./components/auth/token-expiry-warning";
+import AuthStatusDebug from "./components/auth/auth-status-debug";
 import { Toaster } from "./components/ui/sonner";
 
 const geistSans = Geist({
@@ -18,9 +21,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Cesto d'Amore - Produtos Artesanais Gourmet",
+  title: "Cesto d'Amore - Cestas de Presente em Campina Grande",
   description:
-    "Descubra cestas cuidadosamente selecionadas com produtos regionais, ingredientes frescos e combinações perfeitas para momentos especiais.",
+    "As melhores cestas de presente de Campina Grande e região! Feito com amor para você presentear quem você ama.",
 };
 
 export default function RootLayout({
@@ -39,7 +42,11 @@ export default function RootLayout({
         />
         <AuthProvider>
           <CartProvider>
-            <ClientLayout>{children}</ClientLayout>
+            <TokenExpiryWarning />
+            <AuthStatusDebug />
+            <TokenMonitor>
+              <ClientLayout>{children}</ClientLayout>
+            </TokenMonitor>
           </CartProvider>
         </AuthProvider>
         <Toaster position="top-center" richColors />

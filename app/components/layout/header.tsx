@@ -8,21 +8,30 @@ import { Input } from "../ui/input";
 import { useCartContext } from "../../hooks/cart-context";
 import { useAuth } from "../../hooks/use-auth";
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { CartSheet } from "../cart-sheet";
 
 export function SiteHeader() {
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isClient, setIsClient] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
   const { cart } = useCartContext();
   const { user } = useAuth();
+  const router = useRouter();
 
-  // Garantir hidratação correta
   useEffect(() => {
     setIsClient(true);
   }, []);
 
   const handleOpenCart = () => {
     setIsCartOpen(true);
+  };
+
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (searchTerm.trim()) {
+      router.push(`/busca?q=${encodeURIComponent(searchTerm.trim())}`);
+    }
   };
 
   return (
@@ -36,7 +45,6 @@ export function SiteHeader() {
       <header className="sticky top-0 z-50 w-full bg-rose-400 backdrop-blur-md border-b border-gray-200 shadow-sm">
         <div className="mx-auto max-w-7xl px-4">
           <div className="flex h-20 items-center justify-between">
-            {/* Logo */}
             <Link href="/" className="flex items-center flex-shrink-0 py-2">
               <Image
                 src="/logo.png"
@@ -46,19 +54,19 @@ export function SiteHeader() {
               />
             </Link>
 
-            {/* Search Bar - Desktop */}
             <div className="hidden lg:flex items-center flex-1 max-w-lg mx-8">
-              <div className="relative w-full">
+              <form onSubmit={handleSearch} className="relative w-full">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                 <Input
                   type="text"
                   placeholder="Buscar produtos, categorias..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
                   className="w-full pl-10 pr-4 py-2 bg-gray-50 text-black border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent transition-all"
                 />
-              </div>
+              </form>
             </div>
 
-            {/* Navigation - Desktop */}
             <nav className="hidden lg:flex items-center gap-8 text-sm font-medium text-white">
               <Link
                 href="/categorias"
@@ -78,18 +86,18 @@ export function SiteHeader() {
               >
                 Novidades
               </Link>
-              <Link
-                href="/estoque"
-                className="flex items-center gap-1 hover:text-neutral-200 transition-colors"
-              >
-                <Settings className="h-4 w-4" />
-                Estoque
-              </Link>
+              {user?.role === "admin" && (
+                <Link
+                  href="/manage"
+                  className="flex items-center gap-1 hover:text-neutral-200 transition-colors"
+                >
+                  <Settings className="h-4 w-4" />
+                  Gerenciar
+                </Link>
+              )}
             </nav>
 
-            {/* Actions */}
             <div className="flex items-center gap-2">
-              {/* Search Mobile */}
               <Button
                 variant="ghost"
                 size="icon"
@@ -99,35 +107,6 @@ export function SiteHeader() {
                 <Search className="h-5 w-5" />
               </Button>
 
-              {/* Auth Buttons - Desktop */}
-              <div className="hidden md:flex items-center gap-2 ml-5">
-                {user ? (
-                  <Button
-                    variant="ghost"
-                    className="text-white hover:text-gray-900"
-                  >
-                    {user.name}
-                  </Button>
-                ) : (
-                  <>
-                    <Link href="/login">
-                      <Button
-                        variant="ghost"
-                        className="text-white hover:text-gray-900"
-                      >
-                        Entrar
-                      </Button>
-                    </Link>
-                    <Link href="/login">
-                      <Button className="bg-rose-500 hover:bg-rose-600 text-white">
-                        Criar conta
-                      </Button>
-                    </Link>
-                  </>
-                )}
-              </div>
-
-              {/* Cart */}
               <Button
                 variant="ghost"
                 size="icon"
@@ -143,14 +122,28 @@ export function SiteHeader() {
                 )}
               </Button>
 
-              {/* User */}
-              {user && (
+              {user ? (
                 <Button variant="ghost" size="icon" aria-label="Perfil">
                   <User className="h-5 w-5" />
                 </Button>
+              ) : (
+                <>
+                  <Link href="/login">
+                    <Button
+                      variant="ghost"
+                      className="text-white hover:text-gray-900"
+                    >
+                      Entrar
+                    </Button>
+                  </Link>
+                  <Link href="/login">
+                    <Button className="bg-rose-500 hover:bg-rose-600 text-white">
+                      Criar conta
+                    </Button>
+                  </Link>
+                </>
               )}
 
-              {/* Mobile Menu */}
               <Button
                 variant="ghost"
                 size="icon"
@@ -162,16 +155,17 @@ export function SiteHeader() {
             </div>
           </div>
 
-          {/* Mobile Search Bar */}
           <div className="lg:hidden pb-4">
-            <div className="relative">
+            <form onSubmit={handleSearch} className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
               <Input
                 type="text"
                 placeholder="Buscar produtos..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent"
               />
-            </div>
+            </form>
           </div>
         </div>
       </header>

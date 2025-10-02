@@ -24,7 +24,29 @@ function LoginForm() {
   const searchParams = useSearchParams();
 
   // URL de redirecionamento após login
-  const redirectTo = searchParams.get("redirect") || "/";
+  const redirectTo =
+    searchParams.get("redirect") || searchParams.get("redirectTo") || "/";
+  const reason = searchParams.get("reason");
+
+  // Mensagens baseadas no motivo do redirecionamento
+  const getReasonMessage = () => {
+    switch (reason) {
+      case "token_expired":
+        return {
+          type: "warning",
+          message: "Sua sessão expirou. Por favor, faça login novamente.",
+        };
+      case "unauthorized":
+        return {
+          type: "error",
+          message: "Você não tem permissão para acessar esta área.",
+        };
+      default:
+        return null;
+    }
+  };
+
+  const reasonMessage = getReasonMessage();
 
   // Se já estiver logado, redirecionar
   useEffect(() => {
@@ -40,7 +62,7 @@ function LoginForm() {
 
     try {
       const response = await api.login({ email, password });
-      login(response.user, response.token);
+      login(response.user, response.appToken);
       router.push(redirectTo);
     } catch (error: unknown) {
       const errorMessage =
@@ -63,7 +85,7 @@ function LoginForm() {
       await api.register({ name, email, password });
       // Após registro, fazer login automaticamente
       const response = await api.login({ email, password });
-      login(response.user, response.token);
+      login(response.user, response.appToken);
       router.push(redirectTo);
     } catch (error: unknown) {
       const errorMessage =
@@ -116,6 +138,19 @@ function LoginForm() {
               : "Entre em sua conta para continuar"}
           </p>
         </div>
+
+        {reasonMessage && (
+          <div
+            className={`mb-6 p-4 rounded-lg flex items-center gap-2 ${
+              reasonMessage.type === "warning"
+                ? "bg-yellow-50 border border-yellow-200 text-yellow-700"
+                : "bg-red-50 border border-red-200 text-red-700"
+            }`}
+          >
+            <AlertCircle className="h-4 w-4 flex-shrink-0" />
+            <span className="text-sm">{reasonMessage.message}</span>
+          </div>
+        )}
 
         {error && (
           <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2 text-red-700">
