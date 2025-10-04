@@ -1,10 +1,19 @@
 "use client";
-import { Additional, useApi } from "../../hooks/use-api";
+import { Additional, Color, useApi } from "../../hooks/use-api";
 import { Button } from "../../components/ui/button";
 import { ImageUpload } from "../../components/ui/image-upload";
-import { Plus, Search, Edit2, Trash2, Upload } from "lucide-react";
+import {
+  Plus,
+  Search,
+  Edit2,
+  Trash2,
+  Upload,
+  Palette,
+  X,
+  Package,
+} from "lucide-react";
 import Image from "next/image";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Table,
   TableBody,
@@ -24,8 +33,15 @@ interface AdditionalForm {
   description: string;
   price: number;
   discount: number;
+  stock_quantity: number;
   image_url: string;
   imageFile?: File;
+  colors: Array<{
+    color_id: string;
+    stock_quantity: number;
+    color_name: string;
+    color_hex_code: string;
+  }>;
 }
 
 export function AdditionalManager({
@@ -39,14 +55,34 @@ export function AdditionalManager({
     null
   );
   const [loading, setLoading] = useState(false);
+  const [availableColors, setAvailableColors] = useState<Color[]>([]);
+  const [loadingColors, setLoadingColors] = useState(false);
   const [formData, setFormData] = useState<AdditionalForm>({
     name: "",
     description: "",
     price: 0,
     discount: 0,
+    stock_quantity: 0,
     image_url: "",
     imageFile: undefined,
+    colors: [],
   });
+
+  // Carregar cores disponíveis
+  useEffect(() => {
+    const loadColors = async () => {
+      setLoadingColors(true);
+      try {
+        const colors = await api.getColors();
+        setAvailableColors(colors);
+      } catch (error) {
+        console.error("Erro ao carregar cores:", error);
+      } finally {
+        setLoadingColors(false);
+      }
+    };
+    loadColors();
+  }, [api]);
 
   const filteredAdditionals = additionals.filter(
     (additional) =>
@@ -72,6 +108,8 @@ export function AdditionalManager({
         discount: additional.discount || 0,
         image_url: additional.image_url || "",
         imageFile: undefined,
+        colors: additional.colors || [],
+        stock_quantity: additional.stock_quantity || 0,
       });
     } else {
       setEditingAdditional(null);
@@ -82,6 +120,8 @@ export function AdditionalManager({
         discount: 0,
         image_url: "",
         imageFile: undefined,
+        colors: [],
+        stock_quantity: 0,
       });
     }
     setShowModal(true);
@@ -97,6 +137,8 @@ export function AdditionalManager({
       discount: 0,
       image_url: "",
       imageFile: undefined,
+      colors: [],
+      stock_quantity: 0,
     });
   };
 
@@ -174,6 +216,8 @@ export function AdditionalManager({
               <TableHead className="text-right">Preço</TableHead>
               <TableHead className="text-right">Desconto</TableHead>
               <TableHead className="text-right">Preço Final</TableHead>
+              <TableHead className="text-center">Estoque</TableHead>
+              <TableHead className="text-center">Cores</TableHead>
               <TableHead className="w-24">Ações</TableHead>
             </TableRow>
           </TableHeader>
@@ -224,6 +268,52 @@ export function AdditionalManager({
                     style: "currency",
                     currency: "BRL",
                   })}
+                </TableCell>
+                <TableCell className="text-center">
+                  {additional.colors && additional.colors.length > 0 ? (
+                    <div className="flex flex-col items-center gap-1">
+                      {additional.colors.map((color) => (
+                        <div
+                          key={color.color_id}
+                          className="flex items-center gap-1 text-xs"
+                        >
+                          <div
+                            className="w-3 h-3 rounded-full border border-gray-300"
+                            style={{ backgroundColor: color.color_hex_code }}
+                          />
+                          <span className="text-gray-600">
+                            {color.stock_quantity}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <span
+                      className={`px-2 py-1 rounded-full text-xs font-medium ${
+                        (additional.stock_quantity || 0) > 0
+                          ? "bg-green-100 text-green-700"
+                          : "bg-red-100 text-red-700"
+                      }`}
+                    >
+                      {additional.stock_quantity || 0}
+                    </span>
+                  )}
+                </TableCell>
+                <TableCell className="text-center">
+                  {additional.colors && additional.colors.length > 0 ? (
+                    <div className="flex flex-wrap gap-1 justify-center">
+                      {additional.colors.map((color) => (
+                        <div
+                          key={color.color_id}
+                          className="w-6 h-6 rounded-full border-2 border-gray-300"
+                          style={{ backgroundColor: color.color_hex_code }}
+                          title={color.color_name}
+                        />
+                      ))}
+                    </div>
+                  ) : (
+                    <span className="text-gray-400 text-xs">-</span>
+                  )}
                 </TableCell>
                 <TableCell>
                   <div className="flex gap-1">
@@ -437,6 +527,180 @@ export function AdditionalManager({
                   }
                   className="w-full"
                 />
+              </div>
+
+              {/* Seção de Estoque */}
+              <div className="bg-indigo-50 rounded-xl p-4">
+                <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+                  <Package className="h-5 w-5 text-indigo-500 mr-2" />
+                  Controle de Estoque
+                </h3>
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium text-gray-700">
+                    Estoque Total
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={formData.stock_quantity}
+                    onChange={(e) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        stock_quantity: parseInt(e.target.value) || 0,
+                      }))
+                    }
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
+                    placeholder="Quantidade em estoque"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Se você adicionar cores, o estoque será gerenciado
+                    individualmente por cor.
+                  </p>
+                </div>
+              </div>
+
+              {/* Seção de Cores */}
+              <div className="bg-pink-50 rounded-xl p-4">
+                <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+                  <Palette className="h-5 w-5 text-pink-500 mr-2" />
+                  Cores Disponíveis (Opcional)
+                </h3>
+
+                {loadingColors ? (
+                  <div className="text-center py-4">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-pink-500 mx-auto"></div>
+                    <p className="text-sm text-gray-600 mt-2">
+                      Carregando cores...
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {/* Lista de cores selecionadas */}
+                    {formData.colors.length > 0 && (
+                      <div className="bg-white rounded-lg border border-pink-200 p-3 space-y-2">
+                        <p className="text-sm font-medium text-gray-700 mb-2">
+                          Cores Selecionadas:
+                        </p>
+                        {formData.colors.map((colorItem, index) => (
+                          <div
+                            key={colorItem.color_id}
+                            className="flex items-center gap-3 bg-gray-50 rounded-lg p-2"
+                          >
+                            <div
+                              className="w-8 h-8 rounded-full border-2 border-gray-300 flex-shrink-0"
+                              style={{
+                                backgroundColor: colorItem.color_hex_code,
+                              }}
+                            />
+                            <div className="flex-1">
+                              <p className="text-sm font-medium text-gray-800">
+                                {colorItem.color_name}
+                              </p>
+                              <p className="text-xs text-gray-500">
+                                {colorItem.color_hex_code}
+                              </p>
+                            </div>
+                            <input
+                              type="number"
+                              min="0"
+                              value={colorItem.stock_quantity}
+                              onChange={(e) => {
+                                const newColors = [...formData.colors];
+                                newColors[index].stock_quantity =
+                                  parseInt(e.target.value) || 0;
+                                setFormData((prev) => ({
+                                  ...prev,
+                                  colors: newColors,
+                                }));
+                              }}
+                              className="w-24 px-2 py-1 border border-gray-300 rounded text-sm"
+                              placeholder="Estoque"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const newColors = formData.colors.filter(
+                                  (_, i) => i !== index
+                                );
+                                setFormData((prev) => ({
+                                  ...prev,
+                                  colors: newColors,
+                                }));
+                              }}
+                              className="p-1 text-red-500 hover:bg-red-50 rounded"
+                              title="Remover cor"
+                              aria-label="Remover cor"
+                            >
+                              <X className="h-4 w-4" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Seletor de novas cores */}
+                    <div className="space-y-2">
+                      <label className="block text-sm font-medium text-gray-700">
+                        Adicionar Cor:
+                      </label>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                        {availableColors
+                          .filter(
+                            (color) =>
+                              !formData.colors.some(
+                                (c) => c.color_id === color.id
+                              )
+                          )
+                          .map((color) => (
+                            <button
+                              key={color.id}
+                              type="button"
+                              onClick={() => {
+                                setFormData((prev) => ({
+                                  ...prev,
+                                  colors: [
+                                    ...prev.colors,
+                                    {
+                                      color_id: color.id,
+                                      color_name: color.name,
+                                      color_hex_code: color.hex_code,
+                                      stock_quantity: 0,
+                                    },
+                                  ],
+                                }));
+                              }}
+                              className="flex items-center gap-2 p-2 border border-gray-300 rounded-lg hover:border-pink-400 hover:bg-pink-50 transition-all"
+                            >
+                              <div
+                                className="w-6 h-6 rounded-full border-2 border-gray-300"
+                                style={{ backgroundColor: color.hex_code }}
+                              />
+                              <span className="text-sm text-gray-700">
+                                {color.name}
+                              </span>
+                            </button>
+                          ))}
+                      </div>
+                      {availableColors.length === 0 ? (
+                        <p className="text-sm text-gray-500 text-center py-2">
+                          Nenhuma cor cadastrada no sistema. Crie cores primeiro
+                          na página de gerenciamento.
+                        </p>
+                      ) : (
+                        availableColors.filter(
+                          (color) =>
+                            !formData.colors.some(
+                              (c) => c.color_id === color.id
+                            )
+                        ).length === 0 && (
+                          <p className="text-sm text-gray-500 text-center py-2">
+                            Todas as cores disponíveis foram adicionadas.
+                          </p>
+                        )
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Seção de Descrição */}

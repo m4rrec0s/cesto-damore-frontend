@@ -9,6 +9,12 @@ const nextConfig: NextConfig = {
         port: "8080",
         pathname: "/api/**",
       },
+      {
+        protocol: "https",
+        hostname: "dcd856bd81b2.ngrok-free.app",
+        port: "",
+        pathname: "/api/**",
+      },
     ],
   },
 };

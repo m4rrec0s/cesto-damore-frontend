@@ -304,15 +304,23 @@ export function ProductManager({
     original: ProductAdditionalLink[],
     current: ProductAdditionalLink[]
   ) => {
-    if (original.length !== current.length) return true;
+    // Handle undefined or null arrays
+    const safeOriginal = original || [];
+    const safeCurrent = current || [];
 
-    // Sort both arrays by additional_id for comparison
-    const sortedOriginal = [...original].sort((a, b) =>
-      a.additional_id.localeCompare(b.additional_id)
-    );
-    const sortedCurrent = [...current].sort((a, b) =>
-      a.additional_id.localeCompare(b.additional_id)
-    );
+    if (safeOriginal.length !== safeCurrent.length) return true;
+
+    // Filter out any invalid entries and sort by additional_id
+    const sortedOriginal = [...safeOriginal]
+      .filter((a) => a && a.additional_id)
+      .sort((a, b) => a.additional_id.localeCompare(b.additional_id));
+
+    const sortedCurrent = [...safeCurrent]
+      .filter((a) => a && a.additional_id)
+      .sort((a, b) => a.additional_id.localeCompare(b.additional_id));
+
+    // If lengths differ after filtering, there were changes
+    if (sortedOriginal.length !== sortedCurrent.length) return true;
 
     return sortedOriginal.some((orig, index) => {
       const curr = sortedCurrent[index];

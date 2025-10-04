@@ -41,20 +41,29 @@ export default function Home() {
       setError(null);
 
       try {
+        console.log("🔄 Iniciando carregamento de dados...");
+        console.log("📡 API URL:", process.env.NEXT_PUBLIC_API_URL);
+
         let feed = null;
         try {
+          console.log("🎯 Buscando feed público...");
           feed = await api.getPublicFeed();
           setFeedData(feed);
           console.log("✅ Feed carregado com sucesso:", feed);
         } catch (feedError) {
-          console.warn("⚠️ Erro ao carregar feed, usando fallback:", feedError);
+          console.error("❌ Erro ao carregar feed:", feedError);
+          console.warn("⚠️ Usando fallback devido ao erro:", feedError);
           setUseFallback(true);
         }
 
+        console.log("📦 Buscando produtos e categorias...");
         const [productsResponse, fetchedCategories] = await Promise.all([
           api.getProducts(),
           api.getCategories(),
         ]);
+
+        console.log("✅ Produtos recebidos:", productsResponse);
+        console.log("✅ Categorias recebidas:", fetchedCategories);
 
         setCategories(fetchedCategories);
 
@@ -83,18 +92,26 @@ export default function Home() {
           setProducts(featuredProducts.slice(0, 8));
         }
       } catch (err: unknown) {
-        console.error("Erro ao carregar dados:", err);
+        console.error("❌ Erro crítico ao carregar dados:", err);
+        console.error("Tipo do erro:", typeof err);
+        console.error("Erro completo:", JSON.stringify(err, null, 2));
+
         const errorMessage =
           err instanceof Error ? err.message : "Erro desconhecido";
+
+        console.error("Mensagem de erro:", errorMessage);
+
         if (
           errorMessage.includes("database") ||
-          errorMessage.includes("connection")
+          errorMessage.includes("connection") ||
+          errorMessage.includes("Network Error") ||
+          errorMessage.includes("ERR_CONNECTION")
         ) {
           setError(
-            "Erro de conexão com o banco de dados. Verifique se o servidor está rodando."
+            "Erro de conexão com o servidor. Verifique se o ngrok está rodando e a URL está correta."
           );
         } else {
-          setError("Não foi possível carregar os produtos. Tente novamente.");
+          setError(`Não foi possível carregar os dados. Erro: ${errorMessage}`);
         }
       } finally {
         setLoading(false);
@@ -111,41 +128,46 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white">
-      {feedData && !useFallback && feedData.banners.length > 0 && (
-        <div className="max-w-7xl mx-auto px-4 py-8">
-          <FeedBannerCarousel banners={feedData.banners} />
-        </div>
-      )}
+      {feedData &&
+        !useFallback &&
+        feedData.banners &&
+        feedData.banners.length > 0 && (
+          <div className="max-w-7xl mx-auto px-4 py-8">
+            <FeedBannerCarousel banners={feedData.banners} />
+          </div>
+        )}
 
       <section className="pb-5 bg-white w-full flex flex-col justify-center">
         <div className="mx-auto max-w-7xl px-4">
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-6">
-            {categories.slice(0, 6).map((category) => (
-              <Link
-                key={category.id}
-                href={`/category/${category.id}`}
-                className="w-full"
-              >
-                <Badge
-                  className={cn(
-                    "flex items-center justify-center w-full text-center text-base bg-neutral-100 text-neutral-800 border-neutral-200 hover:bg-neutral-200 hover:text-neutral-900 transition-colors shadow-sm",
-                    category.name === "Cesto Express" &&
-                      "bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 text-white hover:text-neutral-100"
-                  )}
+            {Array.isArray(categories) &&
+              categories.slice(0, 6).map((category) => (
+                <Link
+                  key={category.id}
+                  href={`/category/${category.id}`}
+                  className="w-full"
                 >
-                  {category.name}
-                </Badge>
-              </Link>
-            ))}
+                  <Badge
+                    className={cn(
+                      "flex items-center justify-center w-full text-center text-base bg-neutral-100 text-neutral-800 border-neutral-200 hover:bg-neutral-200 hover:text-neutral-900 transition-colors shadow-sm",
+                      category.name === "Cesto Express" &&
+                        "bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 text-white hover:text-neutral-100"
+                    )}
+                  >
+                    {category.name}
+                  </Badge>
+                </Link>
+              ))}
           </div>
         </div>
       </section>
 
       {feedData && !useFallback ? (
         <div className="bg-gray-50">
-          {feedData.sections.map((section) => (
-            <FeedSection key={section.id} section={section} />
-          ))}
+          {feedData.sections &&
+            feedData.sections.map((section) => (
+              <FeedSection key={section.id} section={section} />
+            ))}
         </div>
       ) : (
         <section className="py-16 bg-gray-50">

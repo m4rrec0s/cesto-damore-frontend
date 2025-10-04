@@ -9,6 +9,7 @@ export interface CartItem {
   discount?: number;
   additional_ids?: string[];
   additionals?: Additional[];
+  additional_colors?: Record<string, string>; // Mapeia additional_id -> color_id selecionado
   product: Product;
 }
 
@@ -110,7 +111,12 @@ export function useCart() {
   }, []);
 
   const addToCart = useCallback(
-    async (productId: string, quantity: number = 1, additionals?: string[]) => {
+    async (
+      productId: string,
+      quantity: number = 1,
+      additionals?: string[],
+      additionalColors?: Record<string, string> // Mapeia additional_id -> color_id
+    ) => {
       try {
         const product = await api.getProduct(productId);
 
@@ -130,6 +136,7 @@ export function useCart() {
           discount,
           additional_ids: additionals,
           additionals: additionalDetails,
+          additional_colors: additionalColors,
           product,
         };
 
@@ -141,8 +148,10 @@ export function useCart() {
           const existingIndex = currentItems.findIndex(
             (item) =>
               item.product_id === productId &&
-              JSON.stringify(item.additional_ids) ===
-                JSON.stringify(additionals)
+              JSON.stringify(item.additional_ids?.sort()) ===
+                JSON.stringify(additionals?.sort()) &&
+              JSON.stringify(item.additional_colors) ===
+                JSON.stringify(additionalColors)
           );
 
           let newItems: CartItem[];

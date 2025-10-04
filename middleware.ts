@@ -42,12 +42,7 @@ function isUserAdmin(userString: string | null): boolean {
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Verificar se é uma rota administrativa que precisa de proteção
-  const adminRoutes = [
-    "/estoque",
-    "/feed-test",
-    // Adicione outras rotas administrativas aqui
-  ];
+  const adminRoutes = ["/manage", "/manage/*"];
 
   const isAdminRoute = adminRoutes.some((route) => pathname.startsWith(route));
 

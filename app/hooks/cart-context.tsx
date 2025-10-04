@@ -14,7 +14,8 @@ interface CartContextType {
   addToCart: (
     productId: string,
     quantity?: number,
-    additionals?: string[]
+    additionals?: string[],
+    additionalColors?: Record<string, string>
   ) => Promise<void>;
   removeFromCart: (productId: string, additionals?: string[]) => void;
   updateQuantity: (

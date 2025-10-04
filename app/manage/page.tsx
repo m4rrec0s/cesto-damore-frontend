@@ -24,6 +24,7 @@ import {
   Monitor,
   Lock,
   ChevronLeft,
+  Palette,
 } from "lucide-react";
 import { Button } from "../components/ui/button";
 import FeedManager from "./components/feed-manager";
@@ -207,6 +208,20 @@ export default function EstoquePage() {
               </h1>
             </div>
             <div className="flex items-center gap-3">
+              <Link
+                href="/manage/relatorios/estoque"
+                className="px-4 py-2 bg-orange-100 text-orange-700 hover:bg-orange-200 rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+              >
+                <BarChart3 className="h-4 w-4" />
+                Relatórios
+              </Link>
+              <Link
+                href="/manage/cores"
+                className="px-4 py-2 bg-purple-100 text-purple-700 hover:bg-purple-200 rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+              >
+                <Palette className="h-4 w-4" />
+                Cores
+              </Link>
               <span className="text-sm text-gray-600">Olá, {user?.name}</span>
               {isAdmin && (
                 <span className="px-2 py-1 bg-orange-100 text-orange-800 text-xs rounded-full">

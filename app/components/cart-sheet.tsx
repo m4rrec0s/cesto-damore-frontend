@@ -108,15 +108,36 @@ export function CartSheet({ isOpen, onClose, onCheckout }: CartSheetProps) {
 
                       {item.additionals && item.additionals.length > 0 && (
                         <div className="mt-1 flex flex-wrap gap-1">
-                          {item.additionals.map((add) => (
-                            <Badge
-                              key={add.id}
-                              variant="secondary"
-                              className="text-xs"
-                            >
-                              + {add.name} (+R$ {add.price.toFixed(2)})
-                            </Badge>
-                          ))}
+                          {item.additionals.map((add) => {
+                            // Buscar cor selecionada para este adicional
+                            const selectedColorId =
+                              item.additional_colors?.[add.id];
+                            const selectedColor = selectedColorId
+                              ? add.colors?.find(
+                                  (c) => c.color_id === selectedColorId
+                                )
+                              : null;
+
+                            return (
+                              <Badge
+                                key={add.id}
+                                variant="secondary"
+                                className="text-xs flex items-center gap-1"
+                              >
+                                + {add.name} (+R$ {add.price.toFixed(2)})
+                                {selectedColor && (
+                                  <div
+                                    className="w-3 h-3 rounded-full border border-gray-300"
+                                    style={{
+                                      backgroundColor:
+                                        selectedColor.color_hex_code,
+                                    }}
+                                    title={selectedColor.color_name}
+                                  />
+                                )}
+                              </Badge>
+                            );
+                          })}
                         </div>
                       )}
 

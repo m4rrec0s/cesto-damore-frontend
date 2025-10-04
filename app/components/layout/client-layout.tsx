@@ -11,7 +11,8 @@ const ClientLayout = ({ children }: { children: ReactNode }) => {
   const isDashboardPage =
     pathname === "/manage" ||
     pathname === "/pedidos" ||
-    pathname === "/carrinho";
+    pathname === "/carrinho" ||
+    pathname.startsWith("/manage/");
 
   if (isDashboardPage) {
     return <>{children}</>;

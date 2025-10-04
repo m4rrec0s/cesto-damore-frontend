@@ -60,10 +60,6 @@ import {
   isValidPhone,
   unformatPhoneNumber,
 } from "@/app/lib/phoneMask";
-import {
-  CreditCardForm,
-  type CreditCardData,
-} from "@/app/components/credit-card-form";
 
 const ACCEPTED_CITIES = [
   "Campina Grande",
@@ -187,27 +183,28 @@ const ProductCard = ({
   updateQuantity,
   removeFromCart,
 }: ProductCardProps) => (
-  <div className="flex gap-4 rounded-lg border border-border bg-background p-4 transition-colors hover:border-muted-foreground/20">
-    <div className="relative w-20 h-20 lg:w-24 lg:h-24 flex-shrink-0 rounded-md overflow-hidden">
-      <Image
-        src={item.product.image_url || "/placeholder.svg"}
-        alt={item.product.name}
-        fill
-        className="object-cover"
-      />
-    </div>
+  <Card className="p-4 lg:p-6">
+    <div className="flex gap-3 lg:gap-4">
+      <div className="relative w-20 h-20 lg:w-24 lg:h-24 flex-shrink-0">
+        <Image
+          src={item.product.image_url || "/placeholder.svg"}
+          alt={item.product.name}
+          fill
+          className="object-cover rounded-md"
+        />
+      </div>
 
-    <div className="flex flex-1 flex-col justify-between min-w-0">
-      <div>
-        <h3 className="font-medium text-base mb-1 line-clamp-2">
+      <div className="flex-1 min-w-0">
+        <h3 className="font-semibold text-gray-900 text-base lg:text-lg mb-1 lg:mb-2 line-clamp-2">
           {item.product.name}
         </h3>
-        <p className="text-sm text-muted-foreground mb-2 line-clamp-2">
+
+        <p className="text-gray-600 text-xs lg:text-sm mb-2 lg:mb-3 line-clamp-2">
           {item.product.description}
         </p>
 
         {item.additionals && item.additionals.length > 0 && (
-          <div className="mb-2 flex flex-wrap gap-1 lg:gap-2">
+          <div className="mb-2 lg:mb-3 flex flex-wrap gap-1 lg:gap-2">
             {item.additionals.map((add) => {
               // Buscar cor selecionada para este adicional
               const selectedColorId = item.additional_colors?.[add.id];
@@ -241,93 +238,97 @@ const ProductCard = ({
             })}
           </div>
         )}
-      </div>
 
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2 rounded-md border border-border">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() =>
-              updateQuantity(
-                item.product_id,
-                item.quantity - 1,
-                item.additional_ids
-              )
-            }
-            disabled={item.quantity <= 1}
-            className="h-8 w-8"
-          >
-            <Minus className="h-4 w-4" />
-          </Button>
-          <span className="w-8 text-center text-sm font-medium">
-            {item.quantity}
-          </span>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() =>
-              updateQuantity(
-                item.product_id,
-                item.quantity + 1,
-                item.additional_ids
-              )
-            }
-            className="h-8 w-8"
-          >
-            <Plus className="h-4 w-4" />
-          </Button>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2 lg:gap-3">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() =>
+                updateQuantity(
+                  item.product_id,
+                  item.quantity - 1,
+                  item.additional_ids
+                )
+              }
+              disabled={item.quantity <= 1}
+              className="w-7 h-7 lg:w-8 lg:h-8 p-0"
+            >
+              <Minus className="h-3 w-3 lg:h-4 lg:w-4" />
+            </Button>
+            <span className="w-8 lg:w-12 text-center font-semibold text-sm lg:text-base">
+              {item.quantity}
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() =>
+                updateQuantity(
+                  item.product_id,
+                  item.quantity + 1,
+                  item.additional_ids
+                )
+              }
+              className="w-7 h-7 lg:w-8 lg:h-8 p-0"
+            >
+              <Plus className="h-3 w-3 lg:h-4 lg:w-4" />
+            </Button>
+          </div>
+
+          <div className="flex items-center gap-1 lg:gap-2">
+            <div className="flex flex-col items-end">
+              {item.discount && item.discount > 0 ? (
+                <>
+                  <span className="text-xs text-gray-400 line-through">
+                    R${" "}
+                    {(
+                      item.price * item.quantity +
+                      (item.additionals?.reduce(
+                        (sum: number, add) => sum + add.price * item.quantity,
+                        0
+                      ) || 0)
+                    ).toFixed(2)}
+                  </span>
+                  <span className="text-sm lg:text-base font-semibold text-rose-600">
+                    R${" "}
+                    {(
+                      (item.effectivePrice || item.price) * item.quantity +
+                      (item.additionals?.reduce(
+                        (sum: number, add) => sum + add.price * item.quantity,
+                        0
+                      ) || 0)
+                    ).toFixed(2)}
+                  </span>
+                </>
+              ) : (
+                <span className="text-sm lg:text-base font-semibold text-rose-600">
+                  R${" "}
+                  {(
+                    item.price * item.quantity +
+                    (item.additionals?.reduce(
+                      (sum: number, add) => sum + add.price * item.quantity,
+                      0
+                    ) || 0)
+                  ).toFixed(2)}
+                </span>
+              )}
+            </div>
+            <Button
+              title="Remover item"
+              variant="ghost"
+              size="sm"
+              onClick={() =>
+                removeFromCart(item.product_id, item.additional_ids)
+              }
+              className="text-red-600 hover:text-red-700 hover:bg-red-50 p-1 h-auto"
+            >
+              <Trash2 className="h-3 w-3 lg:h-4 lg:w-4" />
+            </Button>
+          </div>
         </div>
-
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => removeFromCart(item.product_id, item.additional_ids)}
-          className="h-8 w-8 text-destructive hover:text-destructive"
-        >
-          <Trash2 className="h-4 w-4" />
-        </Button>
       </div>
     </div>
-
-    <div className="text-right flex flex-col justify-between">
-      {item.discount && item.discount > 0 ? (
-        <div className="flex flex-col items-end">
-          <span className="text-xs text-muted-foreground line-through">
-            R${" "}
-            {(
-              item.price * item.quantity +
-              (item.additionals?.reduce(
-                (sum: number, add) => sum + add.price * item.quantity,
-                0
-              ) || 0)
-            ).toFixed(2)}
-          </span>
-          <span className="font-semibold">
-            R${" "}
-            {(
-              (item.effectivePrice || item.price) * item.quantity +
-              (item.additionals?.reduce(
-                (sum: number, add) => sum + add.price * item.quantity,
-                0
-              ) || 0)
-            ).toFixed(2)}
-          </span>
-        </div>
-      ) : (
-        <span className="font-semibold">
-          R${" "}
-          {(
-            item.price * item.quantity +
-            (item.additionals?.reduce(
-              (sum: number, add) => sum + add.price * item.quantity,
-              0
-            ) || 0)
-          ).toFixed(2)}
-        </span>
-      )}
-    </div>
-  </div>
+  </Card>
 );
 
 const OrderSummaryCard = ({
@@ -377,33 +378,32 @@ const OrderSummaryCard = ({
   acceptedCities: string[];
 }) => (
   <Card className={cn("p-6 lg:p-8", className)}>
-    <h3 className="text-xl font-semibold mb-6">Resumo do Pedido</h3>
+    <h3 className="text-lg lg:text-xl font-semibold text-gray-900 mb-4 lg:mb-6">
+      Resumo do Pedido
+    </h3>
 
     {/* Resumo financeiro */}
-    <div className="space-y-3 text-sm mb-6">
-      <div className="flex justify-between">
-        <span className="text-muted-foreground">
-          {discountAmount > 0 ? "Subtotal dos produtos" : "Subtotal"}
-        </span>
-        <span className="font-medium">R$ {originalTotal.toFixed(2)}</span>
+    <div className="space-y-3 lg:space-y-4 mb-6">
+      <div className="flex justify-between text-sm lg:text-base">
+        <span>{discountAmount > 0 ? "Subtotal dos produtos" : "Subtotal"}</span>
+        <span>R$ {originalTotal.toFixed(2)}</span>
       </div>
       {discountAmount > 0 && (
-        <div className="flex justify-between">
+        <div className="flex justify-between text-sm lg:text-base">
           <span className="text-green-600">Desconto aplicado</span>
-          <span className="text-green-600 font-medium">
+          <span className="text-green-600 font-semibold">
             - R$ {discountAmount.toFixed(2)}
           </span>
         </div>
       )}
-      <div className="flex justify-between">
-        <span className="text-muted-foreground">Subtotal com descontos</span>
-        <span className="font-medium">R$ {cartTotal.toFixed(2)}</span>
+      <div className="flex justify-between text-sm lg:text-base">
+        <span>Subtotal com descontos</span>
+        <span>R$ {cartTotal.toFixed(2)}</span>
       </div>
-      <div className="flex justify-between">
-        <span className="text-muted-foreground">Taxa de entrega</span>
+      <div className="flex justify-between text-sm lg:text-base">
+        <span>Taxa de entrega</span>
         <span
           className={cn(
-            "font-medium",
             shippingCost === 0 ? "font-semibold text-green-600" : "",
             !isAddressServed && address ? "text-red-600" : ""
           )}
@@ -415,12 +415,12 @@ const OrderSummaryCard = ({
             : shippingCost === null
             ? "Selecione o pagamento"
             : shippingCost === 0
-            ? "GRÁTIS"
+            ? "Grátis"
             : `R$ ${shippingCost.toFixed(2)}`}
         </span>
       </div>
       {paymentMethod && isAddressServed && shippingCost !== null && (
-        <p className="text-xs text-muted-foreground">
+        <p className="text-xs text-gray-500">
           {paymentMethod === "pix"
             ? "Pagamento via PIX"
             : "Pagamento via Cartão de Crédito"}
@@ -430,11 +430,10 @@ const OrderSummaryCard = ({
             : `Frete de R$ ${shippingCost.toFixed(2)}`}
         </p>
       )}
-      <div className="border-t border-border pt-3">
-        <div className="flex justify-between text-base">
-          <span className="font-semibold">Total</span>
-          <span className="font-semibold">R$ {grandTotal.toFixed(2)}</span>
-        </div>
+      <hr className="my-4" />
+      <div className="flex justify-between font-semibold text-lg lg:text-xl">
+        <span>Total</span>
+        <span className="text-rose-600">R$ {grandTotal.toFixed(2)}</span>
       </div>
     </div>
 
@@ -448,7 +447,9 @@ const OrderSummaryCard = ({
     )}
 
     <div className="mb-6 space-y-4">
-      <h4 className="text-base font-semibold">Forma de Pagamento</h4>
+      <h4 className="text-base font-semibold text-gray-900">
+        Forma de Pagamento
+      </h4>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <Button
           type="button"
@@ -456,8 +457,8 @@ const OrderSummaryCard = ({
           className={cn(
             "w-full justify-between gap-2 border px-3 py-2 text-sm transition",
             paymentMethod === "pix"
-              ? "bg-rose-600 text-white hover:bg-rose-700"
-              : "border-border hover:border-muted-foreground/20"
+              ? "bg-rose-600 text-white hover:bg-rose-600"
+              : "border-gray-200 text-gray-700 hover:border-rose-400"
           )}
           onClick={() => setPaymentMethod("pix")}
           disabled={!isAddressServed}
@@ -466,9 +467,7 @@ const OrderSummaryCard = ({
           <span
             className={cn(
               "text-xs sm:text-[11px]",
-              paymentMethod === "pix"
-                ? "text-white/80"
-                : "text-muted-foreground"
+              paymentMethod === "pix" ? "text-white/80" : "text-gray-500"
             )}
           >
             {shippingOptions.pix === null
@@ -484,8 +483,8 @@ const OrderSummaryCard = ({
           className={cn(
             "w-full justify-between gap-2 border px-3 py-2 text-sm transition",
             paymentMethod === "card"
-              ? "bg-rose-600 text-white hover:bg-rose-700"
-              : "border-border hover:border-muted-foreground/20"
+              ? "bg-rose-600 text-white hover:bg-rose-600"
+              : "border-gray-200 text-gray-700 hover:border-rose-400"
           )}
           onClick={() => setPaymentMethod("card")}
           disabled={!isAddressServed}
@@ -494,9 +493,7 @@ const OrderSummaryCard = ({
           <span
             className={cn(
               "text-xs sm:text-[11px]",
-              paymentMethod === "card"
-                ? "text-white/80"
-                : "text-muted-foreground"
+              paymentMethod === "card" ? "text-white/80" : "text-gray-500"
             )}
           >
             {shippingOptions.card === null
@@ -508,16 +505,16 @@ const OrderSummaryCard = ({
         </Button>
       </div>
       {!isAddressServed && address && (
-        <p className="text-xs text-muted-foreground">
+        <p className="text-xs text-gray-500">
           Informe um endereço atendido para habilitar as formas de pagamento.
         </p>
       )}
     </div>
 
     <Collapsible>
-      <CollapsibleTrigger className="group flex w-full items-center justify-between rounded-lg border border-border bg-muted/30 px-4 py-3 text-left text-sm font-medium transition-colors hover:bg-muted/50 data-[state=open]:bg-rose-50">
+      <CollapsibleTrigger className="group flex w-full items-center justify-between rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-left text-sm font-medium text-gray-900 transition-colors hover:bg-gray-100 data-[state=open]:bg-rose-50">
         <span>Configurar Entrega e Agendamento</span>
-        <ChevronRightIcon className="h-4 w-4 text-muted-foreground transition-transform duration-200 group-data-[state=open]:rotate-90" />
+        <ChevronRightIcon className="h-4 w-4 text-gray-500 transition-transform duration-200 group-data-[state=open]:rotate-90" />
       </CollapsibleTrigger>
 
       <CollapsibleContent className="mt-4 space-y-4">
@@ -699,6 +696,144 @@ const OrderSummaryCard = ({
     </Collapsible>
   </Card>
 );
+//   selectedDate,
+//   selectedTime,
+//   calendarOpen,
+//   setCalendarOpen,
+//   setSelectedDate,
+//   setSelectedTime,
+//   isDateDisabled,
+//   generateTimeSlots,
+//   getMinPreparationHours,
+// }: DeliveryDateCardProps) => (
+//   <Card className="p-4 lg:p-6">
+//     <h3 className="text-base lg:text-lg font-semibold text-gray-900 flex items-center gap-2 mb-3 lg:mb-4">
+//       <CalendarIcon className="h-4 w-4 lg:h-5 lg:w-5" />
+//       Agendamento de Entrega
+//     </h3>
+
+//     <div className="bg-blue-50 rounded-lg border border-blue-200 py-2 px-3 lg:px-4 mb-4">
+//       <div className="flex items-start gap-2 lg:gap-3">
+//         <div className="flex-shrink-0 mt-0.5">
+//           <svg
+//             className="h-4 w-4 lg:h-5 lg:w-5 text-blue-600"
+//             fill="none"
+//             stroke="currentColor"
+//             viewBox="0 0 24 24"
+//           >
+//             <path
+//               strokeLinecap="round"
+//               strokeLinejoin="round"
+//               strokeWidth={2}
+//               d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+//             />
+//           </svg>
+//         </div>
+//         <div className="flex-1">
+//           <h4 className="text-xs lg:text-sm font-medium text-blue-900">
+//             ⏱️ Tempo de Preparo: {getMinPreparationHours()}h{" "}
+//             {getMinPreparationHours() > 1 ? "mínimo" : "mínima"}
+//           </h4>
+//         </div>
+//       </div>
+//     </div>
+
+//     <div className="space-y-3 lg:space-y-4">
+//       <div>
+//         <Label
+//           htmlFor="delivery-date"
+//           className="block text-xs lg:text-sm font-medium text-gray-700 mb-2"
+//         >
+//           Data de Entrega *
+//         </Label>
+
+//         <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
+//           <PopoverTrigger asChild>
+//             <Button
+//               id="delivery-date"
+//               variant="outline"
+//               className="w-full justify-between font-normal h-9 lg:h-10 px-3 py-2 text-xs lg:text-sm"
+//             >
+//               {selectedDate
+//                 ? selectedDate.toLocaleDateString("pt-BR", {
+//                     weekday: "long",
+//                     year: "numeric",
+//                     month: "long",
+//                     day: "numeric",
+//                   })
+//                 : "Selecione uma data"}
+//               <CalendarIcon className="h-3 w-3 lg:h-4 lg:w-4 opacity-50" />
+//             </Button>
+//           </PopoverTrigger>
+//           <PopoverContent className="w-auto p-0" align="start">
+//             <Calendar
+//               mode="single"
+//               selected={selectedDate || undefined}
+//               onSelect={(date) => {
+//                 if (date && !isDateDisabled(date)) {
+//                   const normalizedDate = new Date(date);
+//                   normalizedDate.setHours(0, 0, 0, 0);
+
+//                   setSelectedDate(normalizedDate);
+//                   setSelectedTime("");
+//                   setCalendarOpen(false);
+//                 }
+//               }}
+//               disabled={isDateDisabled}
+//               className="rounded-md border w-full min-w-[280px] lg:min-w-[300px]"
+//               captionLayout="dropdown"
+//             />
+//           </PopoverContent>
+//         </Popover>
+//       </div>
+
+//       {selectedDate && (
+//         <div>
+//           <label className="block text-xs lg:text-sm font-medium text-gray-700 mb-2">
+//             Horário de Entrega *
+//           </label>
+//           <select
+//             value={selectedTime}
+//             onChange={(e) => setSelectedTime(e.target.value)}
+//             title="Selecione o horário de entrega"
+//             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-rose-500 text-xs lg:text-sm"
+//           >
+//             <option value="">Selecione um horário</option>
+//             {generateTimeSlots(selectedDate).map((slot) => (
+//               <option key={slot.value} value={slot.value}>
+//                 {slot.label}
+//               </option>
+//             ))}
+//           </select>
+//         </div>
+//       )}
+
+//       <div className="text-xs text-gray-500 bg-gray-50 p-2 lg:p-3 rounded-md">
+//         <p>
+//           <strong>Horários de funcionamento:</strong>
+//         </p>
+//         <p>• Segunda à Sexta: 7:30-12:00 e 14:00-17:00</p>
+//         <p>• Sábados e Domingos: 8:00-11:00</p>
+//       </div>
+//     </div>
+//   </Card>
+// );
+
+// const CustomerInfoCard = ({ user }: CustomerInfoCardProps) => (
+//   <Card className="p-4 lg:p-6">
+//     <h3 className="text-base lg:text-lg font-semibold text-gray-900 mb-3 lg:mb-4">
+//       Informações do Cliente
+//     </h3>
+//     <div className="space-y-1 lg:space-y-2 text-xs lg:text-sm">
+//       <p>
+//         <strong>Nome:</strong> {user.name}
+//       </p>
+//       <p>
+//         <strong>Email:</strong> {user.email}
+//       </p>
+//     </div>
+//   </Card>
+// );
 
 const CheckoutButton = ({
   handleFinalizePurchase,
@@ -771,7 +906,7 @@ const CheckoutButton = ({
               variant="outline"
               size="sm"
               onClick={onViewPix}
-              className="border-green-300 text-green-700 hover:bg-green-100 bg-transparent"
+              className="border-green-300 text-green-700 hover:bg-green-100"
             >
               Ver QR Code
             </Button>
@@ -781,18 +916,18 @@ const CheckoutButton = ({
 
       <div className="flex items-center justify-between gap-4">
         <div>
-          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          <p className="text-xs font-medium uppercase tracking-wide text-gray-500">
             Total do pedido
           </p>
-          <p className="text-lg font-semibold">R$ {grandTotal.toFixed(2)}</p>
-          <p className="text-[11px] text-muted-foreground">
+          <p className="text-lg font-semibold text-gray-900">
+            R$ {grandTotal.toFixed(2)}
+          </p>
+          <p className="text-[11px] text-gray-500">
             Subtotal: R$ {cartTotal.toFixed(2)} · Frete: {shippingLabel}
           </p>
-          <p className="text-[11px] text-muted-foreground">
-            Pagamento: {paymentLabel}
-          </p>
+          <p className="text-[11px] text-gray-500">Pagamento: {paymentLabel}</p>
         </div>
-        <span className="text-xs font-medium text-muted-foreground">
+        <span className="text-xs font-medium text-gray-500">
           {cartItems.length} {cartItems.length === 1 ? "item" : "itens"}
         </span>
       </div>
@@ -816,13 +951,13 @@ const CheckoutButton = ({
         )}
       </Button>
 
-      <div className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs">
-        <p className="flex items-center gap-2 font-medium">
+      <div className="rounded-lg border border-gray-100 bg-gray-50 px-3 py-2 text-xs text-gray-600">
+        <p className="flex items-center gap-2 font-medium text-gray-700">
           <User className="h-3 w-3" />
           {user?.name || "Carregando..."}
         </p>
         {selectedDate && selectedTime && (
-          <p className="mt-1 text-muted-foreground">
+          <p className="mt-1 text-gray-500">
             Entrega em {selectedDate.toLocaleDateString("pt-BR")} às{" "}
             {selectedTime}
           </p>
@@ -887,7 +1022,6 @@ export default function CarrinhoPage() {
   const [paymentError, setPaymentError] = useState<string | null>(null);
   const [isPixDialogOpen, setIsPixDialogOpen] = useState(false);
   const [currentOrderId, setCurrentOrderId] = useState<string | null>(null);
-  const [isCardDialogOpen, setIsCardDialogOpen] = useState(false);
 
   const mapPaymentStatus = useCallback(
     (status?: string | null): PaymentStatusType => {
@@ -1056,14 +1190,23 @@ export default function CarrinhoPage() {
     }
   }, [isAddressServed, paymentMethod]);
 
-  const handlePaymentMethodSelection = useCallback((method: "pix" | "card") => {
-    setPaymentMethod(method);
-    setPixData(null);
-    setPaymentStatus("");
-    setPaymentError(null);
-    setIsPixDialogOpen(false);
-    setCurrentOrderId(null);
-  }, []);
+  const handlePaymentMethodSelection = useCallback(
+    (method: "pix" | "card") => {
+      setPaymentMethod(method);
+      setPixData(null);
+      setPaymentStatus("");
+      setPaymentError(null);
+      setIsPixDialogOpen(false);
+      setCurrentOrderId(null);
+    },
+    [
+      setPaymentError,
+      setPaymentStatus,
+      setPixData,
+      setIsPixDialogOpen,
+      setCurrentOrderId,
+    ]
+  );
 
   const handleCepSearch = async (cep: string) => {
     if (!cep || cep.length !== 8) {
@@ -1093,85 +1236,34 @@ export default function CarrinhoPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-background  flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-rose-500"></div>
       </div>
     );
   }
 
   if (!user) {
     return (
-      <div className="min-h-screen bg-background  flex items-center justify-center p-4">
-        <Card className="border-border bg-card p-8 text-center max-w-md">
-          <User className="h-16 w-16 mx-auto text-muted-foreground mb-4" />
-          <h2 className="text-2xl font-bold mb-2">Faça login para continuar</h2>
-          <p className="text-muted-foreground mb-6">
+      <div className="min-h-screen flex items-center justify-center p-4">
+        <Card className="p-8 text-center max-w-md">
+          <User className="h-16 w-16 mx-auto text-gray-400 mb-4" />
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">
+            Faça login para continuar
+          </h2>
+          <p className="text-gray-600 mb-6">
             Você precisa estar logado para acessar seu carrinho e finalizar
             compras.
           </p>
-          <Button asChild className="w-full bg-rose-600 hover:bg-rose-700">
-            <Link href="/login">Fazer Login</Link>
-          </Button>
+          <Link
+            href="/login"
+            className="inline-block w-full bg-rose-600 hover:bg-rose-700 text-white px-4 py-2 rounded-md text-center"
+          >
+            Fazer Login
+          </Link>
         </Card>
       </div>
     );
   }
-
-  const handleCardPayment = async (cardData: CreditCardData) => {
-    setIsProcessing(true);
-    setPaymentError(null);
-
-    try {
-      if (!currentOrderId) {
-        throw new Error("Pedido não encontrado. Tente novamente.");
-      }
-
-      const paymentResponse = await createTransparentPayment({
-        orderId: currentOrderId,
-        payment_method_id: "credit_card",
-        installments: cardData.installments,
-        payer: {
-          email: cardData.email,
-          first_name: cardData.cardholderName.split(" ")[0],
-          last_name: cardData.cardholderName.split(" ").slice(1).join(" "),
-          identification: {
-            type: cardData.identificationType,
-            number: cardData.identificationNumber,
-          },
-        },
-      });
-
-      if (!paymentResponse?.success) {
-        throw new Error(
-          paymentResponse?.message || "Erro ao processar pagamento"
-        );
-      }
-
-      const rawStatus = paymentResponse.status || "pending";
-      const normalizedStatus = mapPaymentStatus(rawStatus) || "pending";
-
-      setPaymentStatus(normalizedStatus);
-
-      if (normalizedStatus === "success") {
-        toast.success("Pagamento aprovado! Pedido confirmado.");
-        setIsCardDialogOpen(false);
-        router.push("/pedidos");
-      } else if (normalizedStatus === "pending") {
-        toast.info("Pagamento em análise. Aguarde a confirmação.");
-        setIsCardDialogOpen(false);
-      } else {
-        throw new Error("Pagamento recusado. Verifique os dados do cartão.");
-      }
-    } catch (error) {
-      console.error("Erro ao processar pagamento com cartão:", error);
-      const errorMessage =
-        error instanceof Error ? error.message : "Erro desconhecido";
-      setPaymentError(errorMessage);
-      toast.error(`Erro no pagamento: ${errorMessage}`);
-    } finally {
-      setIsProcessing(false);
-    }
-  };
 
   const handleFinalizePurchase = async () => {
     if (!zipCode.trim()) {
@@ -1227,6 +1319,15 @@ export default function CarrinhoPage() {
       finalDeliveryDate.setHours(hours, minutes, 0, 0);
     }
 
+    if (paymentMethod === "card") {
+      setPaymentStatus("");
+      setPixData(null);
+      setPaymentError(null);
+      setCurrentOrderId(null);
+      toast.info("Pagamento com cartão estará disponível em breve.");
+      return;
+    }
+
     setIsProcessing(true);
     setPaymentError(null);
     try {
@@ -1265,12 +1366,6 @@ export default function CarrinhoPage() {
       }
 
       setCurrentOrderId(createdOrderId);
-
-      if (paymentMethod === "card") {
-        setIsCardDialogOpen(true);
-        setIsProcessing(false);
-        return;
-      }
 
       if (paymentMethod === "pix") {
         const paymentResponse = await createTransparentPayment({
@@ -1417,7 +1512,7 @@ export default function CarrinhoPage() {
       if (user.address) {
         const addressStr = user.address;
 
-        if (!user.zip_code && !zipCode) {
+        if (!user.zip_code) {
           const cepMatch = addressStr.match(/CEP:\s*(\d{8})/);
           if (cepMatch) {
             setZipCode(cepMatch[1]);
@@ -1466,155 +1561,107 @@ export default function CarrinhoPage() {
   }`;
 
   return (
-    <div className="min-h-screen bg-background ">
-      {/* Header */}
-      <header className="border-b border-border bg-card">
-        <div className="mx-auto max-w-7xl px-4 py-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Link
-                href="/"
-                className="flex items-center gap-2 text-foreground hover:text-muted-foreground transition-colors"
-              >
-                <ChevronLeftIcon className="h-5 w-5" />
-                <h1 className="text-xl font-semibold">Carrinho</h1>
-              </Link>
+    <div className="min-h-screen bg-gray-50">
+      <div className="max-w-6xl mx-auto px-4 py-6">
+        <Link href={"/"} className="flex items-center gap-2 mb-8">
+          <ChevronLeftIcon className="h-5 w-5 text-gray-900" />
+          <h1 className="text-2xl font-bold text-gray-900">Meu Carrinho</h1>
+        </Link>
+
+        {cartItems.length === 0 ? (
+          <Card className="p-8 text-center">
+            <div className="text-gray-400 mb-4">
+              <ShoppingCart className="h-16 w-16 mx-auto mb-4" />
             </div>
-            <Button variant="ghost" size="sm" asChild>
-              <Link href="/">Continuar Comprando</Link>
+            <h2 className="text-xl font-semibold text-gray-900 mb-2">
+              Seu carrinho está vazio
+            </h2>
+            <p className="text-gray-600 mb-6">
+              Adicione alguns produtos deliciosos do nosso catálogo!
+            </p>
+            <Button
+              onClick={() => router.push("/")}
+              className="bg-rose-600 hover:bg-rose-700"
+            >
+              Continuar Comprando
             </Button>
-          </div>
-        </div>
-      </header>
-
-      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        <div className="grid gap-8 lg:grid-cols-3">
-          {cartItems.length === 0 ? (
-            <div className="lg:col-span-3">
-              <Card className="border-border bg-card p-8 text-center">
-                <div className="text-muted-foreground mb-4">
-                  <ShoppingCart className="h-16 w-16 mx-auto mb-4" />
-                </div>
-                <h2 className="text-xl font-semibold mb-2">
-                  Seu carrinho está vazio
-                </h2>
-                <p className="text-muted-foreground mb-6">
-                  Adicione alguns produtos deliciosos do nosso catálogo!
-                </p>
-                <Button
-                  onClick={() => router.push("/")}
-                  className="bg-rose-600 hover:bg-rose-700"
-                >
-                  Continuar Comprando
-                </Button>
-              </Card>
+          </Card>
+        ) : (
+          <div className="space-y-8 pb-32">
+            <div className="lg:hidden">
+              <OrderSummaryCard
+                originalTotal={originalTotal}
+                discountAmount={discountAmount}
+                cartTotal={cartTotal}
+                selectedDate={selectedDate}
+                selectedTime={selectedTime}
+                calendarOpen={calendarOpen}
+                setCalendarOpen={setCalendarOpen}
+                setSelectedDate={setSelectedDate}
+                setSelectedTime={setSelectedTime}
+                isDateDisabled={isDateDisabled}
+                generateTimeSlots={generateTimeSlots}
+                getMinPreparationHours={getMinPreparationHours}
+                address={formattedAddress}
+                prepareAddressForEditing={prepareAddressForEditing}
+                className="border border-gray-200 shadow-sm"
+                paymentMethod={paymentMethod}
+                setPaymentMethod={handlePaymentMethodSelection}
+                shippingCost={shippingCost}
+                shippingOptions={shippingOptions}
+                grandTotal={grandTotal}
+                isAddressServed={isAddressServed}
+                addressWarning={addressWarning}
+                acceptedCities={acceptedCities}
+              />
             </div>
-          ) : (
-            <>
-              {/* Main Content - Cart Items */}
-              <div className="lg:col-span-2 space-y-6">
-                {/* Step 1: Review Cart */}
-                <Card className="border-border bg-card p-6">
-                  <div className="mb-6 flex items-center gap-3">
-                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground text-sm font-semibold">
-                      1
-                    </div>
-                    <h2 className="text-xl font-semibold">
-                      Revise seu carrinho
-                    </h2>
-                  </div>
 
-                  <div className="space-y-4">
-                    {cartItems.map((item, index) => (
-                      <ProductCard
-                        key={`${item.product_id}-${index}`}
-                        item={item}
-                        updateQuantity={updateQuantity}
-                        removeFromCart={removeFromCart}
-                      />
-                    ))}
-                  </div>
-                </Card>
-
-                {/* Step 2: Delivery Information - Only visible on mobile */}
-                <div className="lg:hidden">
-                  <Card className="border-border bg-card p-6">
-                    <div className="mb-6 flex items-center gap-3">
-                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground text-sm font-semibold">
-                        2
-                      </div>
-                      <h2 className="text-xl font-semibold">
-                        Entrega e Pagamento
-                      </h2>
-                    </div>
-
-                    <OrderSummaryCard
-                      originalTotal={originalTotal}
-                      discountAmount={discountAmount}
-                      cartTotal={cartTotal}
-                      selectedDate={selectedDate}
-                      selectedTime={selectedTime}
-                      calendarOpen={calendarOpen}
-                      setCalendarOpen={setCalendarOpen}
-                      setSelectedDate={setSelectedDate}
-                      setSelectedTime={setSelectedTime}
-                      isDateDisabled={isDateDisabled}
-                      generateTimeSlots={generateTimeSlots}
-                      getMinPreparationHours={getMinPreparationHours}
-                      address={formattedAddress}
-                      prepareAddressForEditing={prepareAddressForEditing}
-                      className="border-0 p-0 shadow-none"
-                      paymentMethod={paymentMethod}
-                      setPaymentMethod={handlePaymentMethodSelection}
-                      shippingCost={shippingCost}
-                      shippingOptions={shippingOptions}
-                      grandTotal={grandTotal}
-                      isAddressServed={isAddressServed}
-                      addressWarning={addressWarning}
-                      acceptedCities={acceptedCities}
-                    />
-                  </Card>
-                </div>
-              </div>
-
-              {/* Order Summary Sidebar - Desktop Only */}
-              <div className="lg:col-span-1">
-                <div className="sticky top-8 hidden lg:block">
-                  <OrderSummaryCard
-                    originalTotal={originalTotal}
-                    discountAmount={discountAmount}
-                    cartTotal={cartTotal}
-                    selectedDate={selectedDate}
-                    selectedTime={selectedTime}
-                    calendarOpen={calendarOpen}
-                    setCalendarOpen={setCalendarOpen}
-                    setSelectedDate={setSelectedDate}
-                    setSelectedTime={setSelectedTime}
-                    isDateDisabled={isDateDisabled}
-                    generateTimeSlots={generateTimeSlots}
-                    getMinPreparationHours={getMinPreparationHours}
-                    address={formattedAddress}
-                    prepareAddressForEditing={prepareAddressForEditing}
-                    className="border-border bg-card"
-                    paymentMethod={paymentMethod}
-                    setPaymentMethod={handlePaymentMethodSelection}
-                    shippingCost={shippingCost}
-                    shippingOptions={shippingOptions}
-                    grandTotal={grandTotal}
-                    isAddressServed={isAddressServed}
-                    addressWarning={addressWarning}
-                    acceptedCities={acceptedCities}
+            <div className="lg:grid lg:grid-cols-3 lg:gap-8">
+              <div className="space-y-6 lg:col-span-2">
+                {cartItems.map((item, index) => (
+                  <ProductCard
+                    key={`${item.product_id}-${index}`}
+                    item={item}
+                    updateQuantity={updateQuantity}
+                    removeFromCart={removeFromCart}
                   />
-                </div>
+                ))}
               </div>
-            </>
-          )}
-        </div>
+              <div className="hidden lg:block lg:col-span-1">
+                <OrderSummaryCard
+                  originalTotal={originalTotal}
+                  discountAmount={discountAmount}
+                  cartTotal={cartTotal}
+                  selectedDate={selectedDate}
+                  selectedTime={selectedTime}
+                  calendarOpen={calendarOpen}
+                  setCalendarOpen={setCalendarOpen}
+                  setSelectedDate={setSelectedDate}
+                  setSelectedTime={setSelectedTime}
+                  isDateDisabled={isDateDisabled}
+                  generateTimeSlots={generateTimeSlots}
+                  getMinPreparationHours={getMinPreparationHours}
+                  address={formattedAddress}
+                  prepareAddressForEditing={prepareAddressForEditing}
+                  className="shadow-sm lg:sticky lg:top-6"
+                  paymentMethod={paymentMethod}
+                  setPaymentMethod={handlePaymentMethodSelection}
+                  shippingCost={shippingCost}
+                  shippingOptions={shippingOptions}
+                  grandTotal={grandTotal}
+                  isAddressServed={isAddressServed}
+                  addressWarning={addressWarning}
+                  acceptedCities={acceptedCities}
+                />
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {cartItems.length > 0 && (
-        <div className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/75 shadow-lg">
-          <div className="mx-auto w-full max-w-7xl px-4 py-4 sm:px-6 lg:px-8">
+        <div className="fixed inset-x-0 bottom-0 z-30 border-t border-gray-200 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/75 shadow-lg">
+          <div className="mx-auto w-full max-w-6xl px-4 py-6">
             <CheckoutButton
               handleFinalizePurchase={handleFinalizePurchase}
               isProcessing={isProcessing}
@@ -1843,42 +1890,6 @@ export default function CarrinhoPage() {
           <DialogFooter className="mt-6">
             <Button variant="outline" onClick={() => setIsPixDialogOpen(false)}>
               Fechar
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={isCardDialogOpen} onOpenChange={setIsCardDialogOpen}>
-        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="text-xl font-semibold">
-              Pagamento com Cartão de Crédito
-            </DialogTitle>
-            <DialogDescription className="text-base">
-              Preencha os dados do cartão para finalizar o pagamento
-              {currentOrderId ? ` do pedido ${currentOrderId}` : ""}.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="py-4">
-            <CreditCardForm
-              onSubmit={handleCardPayment}
-              isProcessing={isProcessing}
-              defaultEmail={user?.email}
-              defaultName={user?.name}
-            />
-          </div>
-
-          <DialogFooter className="mt-6">
-            <Button
-              variant="outline"
-              onClick={() => {
-                setIsCardDialogOpen(false);
-                setCurrentOrderId(null);
-              }}
-              disabled={isProcessing}
-            >
-              Cancelar
             </Button>
           </DialogFooter>
         </DialogContent>
