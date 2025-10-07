@@ -112,14 +112,20 @@ const AdditionalCard = ({ additional, productId }: AdditionalCardProps) => {
         };
 
         // Remover o item existente primeiro
-        removeFromCart(productId, existingProductItem.additional_ids);
+        removeFromCart(
+          productId,
+          existingProductItem.additional_ids,
+          existingProductItem.customizations,
+          existingProductItem.additional_colors
+        );
 
         // Adicionar o novo item com todos os adicionais e cores
         await addToCart(
           productId,
           existingProductItem.quantity,
           newAdditionals,
-          combinedColors
+          combinedColors,
+          existingProductItem.customizations
         );
 
         toast.success(`${additional.name} adicionado ao produto no carrinho!`);

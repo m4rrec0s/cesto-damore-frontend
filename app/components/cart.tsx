@@ -6,6 +6,7 @@ import { Card } from "@/app/components/ui/card";
 import { Badge } from "@/app/components/ui/badge";
 import { Trash2, Plus, Minus, ShoppingBag } from "lucide-react";
 import { useCart } from "@/app/hooks/use-cart";
+import type { CartCustomization } from "@/app/hooks/use-cart";
 import Image from "next/image";
 
 interface CartProps {
@@ -16,6 +17,28 @@ interface CartProps {
 export function Cart({ onCheckout, className = "" }: CartProps) {
   const { cart, updateQuantity, removeFromCart } = useCart();
   const [isExpanded, setIsExpanded] = useState(false);
+
+  const renderCustomizationValue = (custom: CartCustomization) => {
+    switch (custom.customization_type) {
+      case "TEXT_INPUT":
+        return custom.text?.trim() || "Mensagem não informada";
+      case "MULTIPLE_CHOICE":
+        return (
+          custom.selected_option_label ||
+          custom.selected_option ||
+          "Opção não selecionada"
+        );
+      case "ITEM_SUBSTITUTION":
+        if (custom.selected_item) {
+          return `${custom.selected_item.original_item} → ${custom.selected_item.selected_item}`;
+        }
+        return "Substituição não definida";
+      case "PHOTO_UPLOAD":
+        return `${custom.photos?.length || 0} foto(s)`;
+      default:
+        return "Personalização";
+    }
+  };
 
   if (cart.items.length === 0) {
     return (
@@ -103,6 +126,29 @@ export function Cart({ onCheckout, className = "" }: CartProps) {
                 </div>
               )}
 
+              {item.customizations && item.customizations.length > 0 && (
+                <div className="mt-2 space-y-1">
+                  {item.customizations.map((customization) => (
+                    <div
+                      key={customization.customization_id}
+                      className="flex items-start gap-2 rounded-md border border-dashed border-rose-200 bg-rose-50/70 px-2 py-1 text-xs"
+                    >
+                      <span className="font-semibold text-rose-700">
+                        {customization.title}:
+                      </span>
+                      <span className="flex-1 text-rose-900/80 line-clamp-2">
+                        {renderCustomizationValue(customization)}
+                      </span>
+                      {customization.price_adjustment ? (
+                        <span className="text-emerald-600 font-semibold whitespace-nowrap">
+                          +R$ {customization.price_adjustment.toFixed(2)}
+                        </span>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+              )}
+
               <div className="flex items-center justify-between mt-2">
                 <div className="flex items-center gap-2">
                   <Button
@@ -112,7 +158,9 @@ export function Cart({ onCheckout, className = "" }: CartProps) {
                       updateQuantity(
                         item.product_id,
                         item.quantity - 1,
-                        item.additional_ids
+                        item.additional_ids,
+                        item.customizations,
+                        item.additional_colors
                       )
                     }
                     disabled={item.quantity <= 1}
@@ -127,7 +175,9 @@ export function Cart({ onCheckout, className = "" }: CartProps) {
                       updateQuantity(
                         item.product_id,
                         item.quantity + 1,
-                        item.additional_ids
+                        item.additional_ids,
+                        item.customizations,
+                        item.additional_colors
                       )
                     }
                   >
@@ -139,7 +189,7 @@ export function Cart({ onCheckout, className = "" }: CartProps) {
                   <span className="font-semibold text-gray-900">
                     R${" "}
                     {(
-                      item.price * item.quantity +
+                      item.effectivePrice * item.quantity +
                       (item.additionals?.reduce(
                         (sum, add) => sum + add.price * item.quantity,
                         0
@@ -150,7 +200,12 @@ export function Cart({ onCheckout, className = "" }: CartProps) {
                     variant="ghost"
                     size="sm"
                     onClick={() =>
-                      removeFromCart(item.product_id, item.additional_ids)
+                      removeFromCart(
+                        item.product_id,
+                        item.additional_ids,
+                        item.customizations,
+                        item.additional_colors
+                      )
                     }
                     className="text-red-600 hover:text-red-700 hover:bg-red-50"
                   >

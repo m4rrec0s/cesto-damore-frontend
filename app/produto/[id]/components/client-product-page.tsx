@@ -1,12 +1,8 @@
 "use client";
 
-import useApi, { Additional, Product } from "@/app/hooks/use-api";
-import { useCartContext } from "@/app/hooks/cart-context";
-import { useEffect, useState } from "react";
-import { Button } from "@/app/components/ui/button";
-import { Card } from "@/app/components/ui/card";
-import { Badge } from "@/app/components/ui/badge";
 import Image from "next/image";
+import { useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
 import {
   ShoppingCart,
   Heart,
@@ -15,18 +11,148 @@ import {
   Minus,
   Plus,
   Check,
+  UploadCloud,
+  Trash2,
+  AlertCircle,
+  Images,
+  FileText,
+  Loader2,
 } from "lucide-react";
-import { toast } from "sonner";
+
+import { Button } from "@/app/components/ui/button";
+import { Badge } from "@/app/components/ui/badge";
+import { Card } from "@/app/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/app/components/ui/select";
+import { cn } from "@/app/lib/utils";
+import useApi, { Additional, Product } from "@/app/hooks/use-api";
+import { useCartContext } from "@/app/hooks/cart-context";
+import {
+  useCustomization,
+  CustomizationType,
+  PhotoUploadData,
+} from "@/app/hooks/use-customization";
+import type { CartCustomization } from "@/app/hooks/use-cart";
+
 import AdditionalCard from "./additional-card";
+
+const formatCurrency = (value: number) =>
+  value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+
+const serializeAdditionals = (additionals?: string[]) => {
+  if (!additionals || additionals.length === 0) return "[]";
+  return JSON.stringify([...additionals].sort());
+};
+
+const serializeAdditionalColors = (colors?: Record<string, string>) => {
+  if (!colors) return "{}";
+  const normalized = Object.entries(colors).sort(([idA], [idB]) =>
+    idA.localeCompare(idB)
+  );
+  return JSON.stringify(normalized);
+};
+
+const serializeCustomizationsSignature = (
+  customizations?: CartCustomization[]
+) => {
+  if (!customizations || customizations.length === 0) return "[]";
+
+  const normalized = customizations.map((customization) => ({
+    customization_id: customization.customization_id,
+    price_adjustment: customization.price_adjustment || 0,
+    text: customization.text?.trim() || null,
+    selected_option: customization.selected_option || null,
+    selected_item: customization.selected_item
+      ? {
+          original_item: customization.selected_item.original_item,
+          selected_item: customization.selected_item.selected_item,
+        }
+      : null,
+    photos:
+      customization.photos?.map(
+        (photo) =>
+          photo.temp_file_id || photo.preview_url || photo.original_name
+      ) || [],
+  }));
+
+  normalized.sort((a, b) =>
+    a.customization_id.localeCompare(b.customization_id)
+  );
+
+  return JSON.stringify(normalized);
+};
+
+const formatCustomizationValue = (custom: CartCustomization) => {
+  switch (custom.customization_type) {
+    case "TEXT_INPUT":
+      return custom.text?.trim() || "Mensagem não informada";
+    case "MULTIPLE_CHOICE":
+      return (
+        custom.selected_option_label ||
+        custom.selected_option ||
+        "Opção não selecionada"
+      );
+    case "ITEM_SUBSTITUTION":
+      if (custom.selected_item) {
+        return `${custom.selected_item.original_item} → ${custom.selected_item.selected_item}`;
+      }
+      return "Substituição não definida";
+    case "PHOTO_UPLOAD":
+      return `${custom.photos?.length || 0} foto(s) enviada(s)`;
+    default:
+      return "Personalização";
+  }
+};
+
+const isSubstitutionOptions = (
+  options: CustomizationType["available_options"]
+): options is {
+  items: Array<{
+    original_item: string;
+    available_substitutes: Array<{
+      item: string;
+      price_adjustment: number;
+    }>;
+  }>;
+} => {
+  return Boolean(
+    options &&
+      !Array.isArray(options) &&
+      Array.isArray((options as { items?: unknown }).items)
+  );
+};
 
 const ClientProductPage = ({ id }: { id: string }) => {
   const { getProduct, getAdditionalsByProduct } = useApi();
   const { cart, addToCart } = useCartContext();
+
   const [product, setProduct] = useState<Product>({} as Product);
-  const [loading, setLoading] = useState(true);
+  const [loadingProduct, setLoadingProduct] = useState(true);
   const [quantity, setQuantity] = useState(1);
   const [addingToCart, setAddingToCart] = useState(false);
   const [additionals, setAdditionals] = useState<Additional[]>([]);
+  const [uploadingMap, setUploadingMap] = useState<Record<string, boolean>>({});
+  const [missingRequiredFields, setMissingRequiredFields] = useState<string[]>(
+    []
+  );
+
+  const {
+    customizations: customizationValues,
+    availableCustomizations,
+    loading: loadingCustomizations,
+    error: customizationError,
+    fetchAvailableCustomizations,
+    updateCustomization,
+    removeCustomization,
+    uploadFile,
+    deleteFile,
+    validateRequired,
+  } = useCustomization(id, "product");
 
   useEffect(() => {
     const fetchProduct = async () => {
@@ -37,7 +163,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
         console.error("Erro ao carregar produto:", error);
         toast.error("Erro ao carregar produto");
       } finally {
-        setLoading(false);
+        setLoadingProduct(false);
       }
     };
 
@@ -55,12 +181,295 @@ const ClientProductPage = ({ id }: { id: string }) => {
     fetchAdditionals();
   }, [id, getProduct, getAdditionalsByProduct]);
 
+  useEffect(() => {
+    fetchAvailableCustomizations();
+  }, [fetchAvailableCustomizations]);
+
+  useEffect(() => {
+    if (missingRequiredFields.length > 0) {
+      const { missingFields } = validateRequired();
+      const normalizedMissing = missingFields ?? [];
+      if (
+        normalizedMissing.length !== missingRequiredFields.length ||
+        normalizedMissing.some(
+          (title) => !missingRequiredFields.includes(title)
+        )
+      ) {
+        setMissingRequiredFields(normalizedMissing);
+      }
+    }
+  }, [customizationValues, missingRequiredFields, validateRequired]);
+
+  const sortedCustomizationRules = useMemo(() => {
+    return [...availableCustomizations].sort(
+      (a, b) => (a.display_order ?? 0) - (b.display_order ?? 0)
+    );
+  }, [availableCustomizations]);
+
+  const cartCustomizations = useMemo(() => {
+    if (sortedCustomizationRules.length === 0) return [];
+
+    const result: CartCustomization[] = [];
+
+    sortedCustomizationRules.forEach((rule) => {
+      const value = customizationValues.find(
+        (c) => c.customization_id === rule.id
+      );
+      if (!value) return;
+
+      let isFilled = false;
+      let priceAdjustment = 0;
+      let selectedOptionLabel: string | undefined;
+      let selectedItemLabel: string | undefined;
+
+      const normalizedPhotos = (value.photos || []).map((photo, index) => ({
+        ...photo,
+        position: index,
+      }));
+
+      switch (rule.customization_type) {
+        case "PHOTO_UPLOAD": {
+          if (normalizedPhotos.length > 0) {
+            isFilled = true;
+          }
+          break;
+        }
+        case "TEXT_INPUT": {
+          if (value.text && value.text.trim() !== "") {
+            isFilled = true;
+          }
+          break;
+        }
+        case "MULTIPLE_CHOICE": {
+          if (value.selected_option) {
+            isFilled = true;
+            if (Array.isArray(rule.available_options)) {
+              const option = rule.available_options.find(
+                (opt) => opt.value === value.selected_option
+              );
+              if (option) {
+                priceAdjustment = option.price_adjustment || 0;
+                selectedOptionLabel = option.label;
+              }
+            }
+          }
+          break;
+        }
+        case "ITEM_SUBSTITUTION": {
+          if (value.selected_item) {
+            isFilled = true;
+            priceAdjustment = value.selected_item.price_adjustment || 0;
+            selectedItemLabel = `${value.selected_item.original_item} → ${value.selected_item.selected_item}`;
+          }
+          break;
+        }
+        default:
+          break;
+      }
+
+      if (!isFilled) {
+        return;
+      }
+
+      result.push({
+        ...value,
+        photos: normalizedPhotos,
+        title: rule.title || "Personalização",
+        customization_type: rule.customization_type,
+        is_required: rule.is_required,
+        price_adjustment: priceAdjustment,
+        selected_option_label: selectedOptionLabel,
+        selected_item_label: selectedItemLabel,
+      });
+    });
+
+    return result;
+  }, [customizationValues, sortedCustomizationRules]);
+
+  const customizationTotal = useMemo(
+    () =>
+      cartCustomizations.reduce(
+        (sum, customization) => sum + (customization.price_adjustment || 0),
+        0
+      ),
+    [cartCustomizations]
+  );
+
+  const basePrice = useMemo(() => {
+    if (!product.price) return 0;
+    const discount = product.discount || 0;
+    return product.price * (1 - discount / 100);
+  }, [product.price, product.discount]);
+
+  const unitPriceWithCustomizations = useMemo(
+    () => Number((basePrice + customizationTotal).toFixed(2)),
+    [basePrice, customizationTotal]
+  );
+
+  const totalPriceForQuantity = useMemo(
+    () => unitPriceWithCustomizations * quantity,
+    [unitPriceWithCustomizations, quantity]
+  );
+
+  const isUploading = useMemo(
+    () => Object.values(uploadingMap).some(Boolean),
+    [uploadingMap]
+  );
+
+  const currentConfigSignature = useMemo(
+    () => serializeCustomizationsSignature(cartCustomizations),
+    [cartCustomizations]
+  );
+
+  const isCurrentConfigInCart = useMemo(() => {
+    if (!product.id || !cart?.items?.length) return false;
+
+    return cart.items.some(
+      (item) =>
+        item.product_id === product.id &&
+        serializeAdditionals(item.additional_ids) === "[]" &&
+        serializeAdditionalColors(item.additional_colors) === "{}" &&
+        serializeCustomizationsSignature(item.customizations) ===
+          currentConfigSignature
+    );
+  }, [cart?.items, product.id, currentConfigSignature]);
+
+  const handlePhotoUpload = async (
+    customizationId: string,
+    rule: CustomizationType,
+    files: FileList | File[]
+  ) => {
+    const filesArray = Array.from(files || []);
+    if (filesArray.length === 0) {
+      return;
+    }
+
+    const currentValue = customizationValues.find(
+      (c) => c.customization_id === customizationId
+    );
+    const existingPhotos = currentValue?.photos || [];
+
+    const maxFilesFromRule =
+      typeof rule.max_files === "number" && rule.max_files > 0
+        ? rule.max_files
+        : typeof rule.max_items === "number" && rule.max_items > 0
+        ? rule.max_items
+        : undefined;
+
+    if (maxFilesFromRule && existingPhotos.length >= maxFilesFromRule) {
+      toast.error(
+        `Você já enviou o máximo de ${maxFilesFromRule} foto(s) permitido(s).`
+      );
+      return;
+    }
+
+    const availableSlots = maxFilesFromRule
+      ? Math.max(maxFilesFromRule - existingPhotos.length, 0)
+      : filesArray.length;
+
+    if (availableSlots === 0) {
+      toast.error("Limite de fotos atingido.");
+      return;
+    }
+
+    const selectedFiles = filesArray.slice(0, availableSlots);
+
+    setUploadingMap((prev) => ({ ...prev, [customizationId]: true }));
+
+    try {
+      const uploadedPhotos: PhotoUploadData[] = [];
+
+      for (const file of selectedFiles) {
+        const result = await uploadFile(file);
+        if (result) {
+          uploadedPhotos.push({
+            temp_file_id: result.id,
+            original_name: result.original_name,
+            position: existingPhotos.length + uploadedPhotos.length,
+          });
+        }
+      }
+
+      if (uploadedPhotos.length > 0) {
+        const updatedPhotos = [...existingPhotos, ...uploadedPhotos].map(
+          (photo, index) => ({
+            ...photo,
+            position: index,
+          })
+        );
+        updateCustomization(customizationId, { photos: updatedPhotos });
+        toast.success("Foto(s) adicionada(s) com sucesso!");
+      }
+    } catch (error) {
+      console.error("Erro ao enviar fotos:", error);
+      toast.error("Não foi possível enviar as fotos. Tente novamente.");
+    } finally {
+      setUploadingMap((prev) => ({ ...prev, [customizationId]: false }));
+    }
+  };
+
+  const handleRemovePhoto = async (
+    customizationId: string,
+    tempFileId: string
+  ) => {
+    setUploadingMap((prev) => ({ ...prev, [customizationId]: true }));
+
+    try {
+      await deleteFile(tempFileId);
+    } catch (error) {
+      console.error("Erro ao remover foto:", error);
+      toast.error("Não foi possível remover a foto.");
+    } finally {
+      setUploadingMap((prev) => ({ ...prev, [customizationId]: false }));
+    }
+
+    const currentValue = customizationValues.find(
+      (c) => c.customization_id === customizationId
+    );
+    const remainingPhotos = (currentValue?.photos || []).filter(
+      (photo) => photo.temp_file_id !== tempFileId
+    );
+
+    if (remainingPhotos.length === 0) {
+      removeCustomization(customizationId);
+    } else {
+      updateCustomization(customizationId, {
+        photos: remainingPhotos.map((photo, index) => ({
+          ...photo,
+          position: index,
+        })),
+      });
+    }
+  };
+
   const handleAddToCart = async () => {
     if (!product.id) return;
 
+    if (loadingCustomizations || isUploading) {
+      toast.info("Aguarde finalizar o carregamento das personalizações.");
+      return;
+    }
+
+    const { isValid, missingFields } = validateRequired();
+    if (!isValid) {
+      setMissingRequiredFields(missingFields);
+      toast.error(
+        `Complete as personalizações obrigatórias: ${missingFields.join(", ")}`
+      );
+      return;
+    }
+
+    setMissingRequiredFields([]);
     setAddingToCart(true);
+
     try {
-      await addToCart(product.id, quantity);
+      await addToCart(
+        product.id,
+        quantity,
+        undefined,
+        undefined,
+        cartCustomizations
+      );
       toast.success("Produto adicionado ao carrinho!");
     } catch (error) {
       console.error("Erro ao adicionar ao carrinho:", error);
@@ -70,18 +479,12 @@ const ClientProductPage = ({ id }: { id: string }) => {
     }
   };
 
-  const isInCart =
-    cart?.items?.some((item) => item.product_id === product.id) || false;
-
-  const effectivePrice = product.price
-    ? product.price * (1 - (product.discount || 0) / 100)
-    : 0;
   const hasDiscount = product.discount && product.discount > 0;
 
-  if (loading) {
+  if (loadingProduct) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-rose-500"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-rose-500" />
       </div>
     );
   }
@@ -89,8 +492,8 @@ const ClientProductPage = ({ id }: { id: string }) => {
   if (!product.id) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">
+        <div className="text-center space-y-2">
+          <h1 className="text-2xl font-bold text-gray-900">
             Produto não encontrado
           </h1>
           <p className="text-gray-600">
@@ -104,7 +507,6 @@ const ClientProductPage = ({ id }: { id: string }) => {
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-7xl mx-auto px-4 py-8">
-        {/* Breadcrumb */}
         <nav className="text-sm text-gray-600 mb-6">
           <span>Início</span>
           <span className="mx-2">›</span>
@@ -114,7 +516,6 @@ const ClientProductPage = ({ id }: { id: string }) => {
         </nav>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* Imagem do Produto */}
           <div className="space-y-4">
             <Card className="p-4">
               <div className="relative aspect-square w-full max-w-md mx-auto">
@@ -133,131 +534,507 @@ const ClientProductPage = ({ id }: { id: string }) => {
               </div>
             </Card>
 
-            {/* Miniaturas (placeholder para futuras imagens) */}
             <div className="flex gap-2 overflow-x-auto">
-              <div className="w-16 h-16 bg-gray-200 rounded border-2 border-gray-300 flex-shrink-0"></div>
-              <div className="w-16 h-16 bg-gray-200 rounded border-2 border-gray-300 flex-shrink-0"></div>
-              <div className="w-16 h-16 bg-gray-200 rounded border-2 border-gray-300 flex-shrink-0"></div>
+              <div className="w-16 h-16 bg-gray-200 rounded border-2 border-gray-300 flex-shrink-0" />
+              <div className="w-16 h-16 bg-gray-200 rounded border-2 border-gray-300 flex-shrink-0" />
+              <div className="w-16 h-16 bg-gray-200 rounded border-2 border-gray-300 flex-shrink-0" />
             </div>
           </div>
 
-          {/* Informações do Produto */}
           <div className="space-y-6">
-            {/* Título e Avaliação */}
             <div>
               <h1 className="text-2xl lg:text-3xl font-bold text-gray-900 mb-2">
                 {product.name}
               </h1>
               <div className="flex items-center gap-2 mb-4">
-                <div className="flex items-center">
+                <div className="flex items-center text-yellow-400">
                   {[...Array(5)].map((_, i) => (
-                    <Star
-                      key={i}
-                      className="w-4 h-4 fill-yellow-400 text-yellow-400"
-                    />
+                    <Star key={i} className="w-4 h-4 fill-current" />
                   ))}
                 </div>
                 <span className="text-sm text-gray-600">(0 avaliações)</span>
               </div>
             </div>
 
-            {/* Preço */}
-            <Card className="p-6">
+            <Card className="p-6 space-y-4">
               <div className="space-y-2">
                 {hasDiscount ? (
-                  <>
+                  <div className="flex flex-col gap-1">
                     <div className="flex items-center gap-3">
                       <span className="text-3xl font-bold text-gray-900">
-                        R$ {effectivePrice.toFixed(2)}
+                        {formatCurrency(basePrice)}
                       </span>
                       <span className="text-lg text-gray-500 line-through">
-                        R$ {product.price.toFixed(2)}
+                        {formatCurrency(product.price)}
                       </span>
                       <Badge variant="destructive">-{product.discount}%</Badge>
                     </div>
                     <p className="text-sm text-green-600 font-medium">
-                      Você economiza R${" "}
-                      {(product.price - effectivePrice).toFixed(2)}
+                      Você economiza {formatCurrency(product.price - basePrice)}
                     </p>
-                  </>
+                  </div>
                 ) : (
                   <span className="text-3xl font-bold text-gray-900">
-                    R$ {product.price?.toFixed(2) || "0.00"}
+                    {formatCurrency(product.price || 0)}
                   </span>
                 )}
               </div>
-            </Card>
 
-            {/* Quantidade e Adicionar ao Carrinho */}
-            <Card className="p-6">
-              <div className="space-y-4">
-                {/* Quantidade */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Quantidade
-                  </label>
-                  <div className="flex items-center gap-3">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                      disabled={quantity <= 1}
-                    >
-                      <Minus className="w-4 h-4" />
-                    </Button>
-                    <span className="w-12 text-center font-medium">
-                      {quantity}
-                    </span>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setQuantity(quantity + 1)}
-                    >
-                      <Plus className="w-4 h-4" />
-                    </Button>
-                  </div>
+              <div className="rounded-md border border-orange-200 bg-orange-50 p-4 space-y-2">
+                <div className="flex items-center justify-between text-sm text-orange-900">
+                  <span>Personalizações</span>
+                  <span>{formatCurrency(customizationTotal)}</span>
                 </div>
+                {cartCustomizations.length > 0 && (
+                  <ul className="space-y-1 text-xs text-orange-900/80">
+                    {cartCustomizations.map((customization) => (
+                      <li
+                        key={customization.customization_id}
+                        className="flex items-start gap-2"
+                      >
+                        <span className="font-medium text-orange-950">
+                          {customization.title}:
+                        </span>
+                        <span className="flex-1">
+                          {formatCustomizationValue(customization)}
+                          {customization.price_adjustment ? (
+                            <span className="ml-1 font-semibold">
+                              ({formatCurrency(customization.price_adjustment)})
+                            </span>
+                          ) : null}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
 
-                {/* Botão Adicionar ao Carrinho */}
-                <Button
-                  onClick={handleAddToCart}
-                  disabled={addingToCart}
-                  className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 text-lg font-medium"
-                  size="lg"
-                >
-                  {addingToCart ? (
-                    <>
-                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
-                      Adicionando...
-                    </>
-                  ) : isInCart ? (
-                    <>
-                      <Check className="w-5 h-5 mr-2" />
-                      Já no carrinho
-                    </>
-                  ) : (
-                    <>
-                      <ShoppingCart className="w-5 h-5 mr-2" />
-                      Adicionar ao carrinho
-                    </>
-                  )}
-                </Button>
-
-                {/* Ações secundárias */}
-                <div className="flex gap-3 pt-2">
-                  <Button variant="outline" className="flex-1">
-                    <Heart className="w-4 h-4 mr-2" />
-                    Favoritar
-                  </Button>
-                  <Button variant="outline" className="flex-1">
-                    <Share2 className="w-4 h-4 mr-2" />
-                    Compartilhar
-                  </Button>
-                </div>
+              <div className="flex items-center justify-between pt-3 border-t">
+                <span className="text-lg font-semibold text-gray-900">
+                  Total por unidade
+                </span>
+                <span className="text-2xl font-bold text-gray-900">
+                  {formatCurrency(unitPriceWithCustomizations)}
+                </span>
               </div>
             </Card>
 
-            {/* Informações de Entrega */}
+            <Card className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Quantidade
+                </label>
+                <div className="flex items-center gap-3">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setQuantity(Math.max(1, quantity - 1))}
+                    disabled={quantity <= 1}
+                  >
+                    <Minus className="w-4 h-4" />
+                  </Button>
+                  <span className="w-12 text-center font-medium">
+                    {quantity}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setQuantity(quantity + 1)}
+                  >
+                    <Plus className="w-4 h-4" />
+                  </Button>
+                </div>
+              </div>
+
+              <Button
+                onClick={handleAddToCart}
+                disabled={addingToCart || isUploading}
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 text-lg font-medium"
+                size="lg"
+              >
+                {addingToCart ? (
+                  <>
+                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2" />
+                    Adicionando...
+                  </>
+                ) : isCurrentConfigInCart ? (
+                  <>
+                    <Check className="w-5 h-5 mr-2" />
+                    Configuração no carrinho
+                  </>
+                ) : (
+                  <>
+                    <ShoppingCart className="w-5 h-5 mr-2" />
+                    Adicionar por {formatCurrency(totalPriceForQuantity)}
+                  </>
+                )}
+              </Button>
+
+              <div className="text-xs text-gray-600 text-center">
+                Valor total inclui {formatCurrency(customizationTotal)} em
+                personalizações.
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <Button variant="outline" className="flex-1">
+                  <Heart className="w-4 h-4 mr-2" />
+                  Favoritar
+                </Button>
+                <Button variant="outline" className="flex-1">
+                  <Share2 className="w-4 h-4 mr-2" />
+                  Compartilhar
+                </Button>
+              </div>
+            </Card>
+
+            <Card className="p-6 space-y-4">
+              <div className="flex items-center gap-2">
+                <h2 className="text-lg font-semibold text-gray-900">
+                  Personalize seu pedido
+                </h2>
+                {loadingCustomizations && (
+                  <Loader2 className="h-4 w-4 animate-spin text-gray-500" />
+                )}
+              </div>
+
+              {customizationError && (
+                <div className="flex items-start gap-2 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                  <AlertCircle className="h-4 w-4 mt-0.5" />
+                  <span>
+                    Não foi possível carregar as personalizações:{" "}
+                    {customizationError}
+                  </span>
+                </div>
+              )}
+
+              {sortedCustomizationRules.length === 0 &&
+              !loadingCustomizations ? (
+                <p className="text-sm text-muted-foreground">
+                  Este produto não possui personalizações configuradas.
+                </p>
+              ) : (
+                <div className="space-y-5">
+                  {sortedCustomizationRules.map((rule) => {
+                    const value = customizationValues.find(
+                      (c) => c.customization_id === rule.id
+                    );
+                    const cartCustomization = cartCustomizations.find(
+                      (c) => c.customization_id === rule.id
+                    );
+                    const currentPhotos = value?.photos || [];
+                    const isMissing = missingRequiredFields.includes(
+                      rule.title || ""
+                    );
+
+                    const maxAllowed =
+                      typeof rule.max_files === "number" && rule.max_files > 0
+                        ? rule.max_files
+                        : typeof rule.max_items === "number" &&
+                          rule.max_items > 0
+                        ? rule.max_items
+                        : undefined;
+
+                    const remainingPhotos = maxAllowed
+                      ? Math.max(maxAllowed - currentPhotos.length, 0)
+                      : undefined;
+
+                    return (
+                      <div
+                        key={rule.id}
+                        className={cn(
+                          "rounded-lg border border-border bg-muted/40 p-4 space-y-3",
+                          isMissing &&
+                            "border-destructive/60 bg-red-50/60 ring-1 ring-destructive/30"
+                        )}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2">
+                              <h3 className="text-sm font-semibold text-foreground">
+                                {rule.title}
+                              </h3>
+                              {rule.is_required && (
+                                <Badge
+                                  variant="destructive"
+                                  className="text-[10px] uppercase"
+                                >
+                                  Obrigatório
+                                </Badge>
+                              )}
+                              {cartCustomization?.price_adjustment ? (
+                                <Badge
+                                  variant="outline"
+                                  className="text-[10px]"
+                                >
+                                  +
+                                  {formatCurrency(
+                                    cartCustomization.price_adjustment
+                                  )}
+                                </Badge>
+                              ) : null}
+                            </div>
+                            {rule.description && (
+                              <p className="text-xs text-muted-foreground">
+                                {rule.description}
+                              </p>
+                            )}
+                          </div>
+                          {isMissing && (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-destructive/10 px-2 py-1 text-[11px] font-medium text-destructive">
+                              <AlertCircle className="h-3 w-3" /> Necessário
+                            </span>
+                          )}
+                        </div>
+
+                        {(() => {
+                          switch (rule.customization_type) {
+                            case "PHOTO_UPLOAD":
+                              return (
+                                <div className="space-y-3">
+                                  <div className="flex flex-col gap-2 rounded-md border-2 border-dashed border-border/60 bg-white p-4 text-sm text-muted-foreground">
+                                    <div className="flex items-center gap-2 text-foreground">
+                                      <Images className="h-5 w-5" />
+                                      <span>
+                                        Envie fotos para personalizar seu pedido
+                                      </span>
+                                    </div>
+                                    {maxAllowed ? (
+                                      <span className="text-xs text-muted-foreground">
+                                        Você pode enviar até {maxAllowed}{" "}
+                                        foto(s). Restam {remainingPhotos}.
+                                      </span>
+                                    ) : (
+                                      <span className="text-xs text-muted-foreground">
+                                        Você pode enviar múltiplas fotos (limite
+                                        dinâmico).
+                                      </span>
+                                    )}
+                                    <label className="inline-flex items-center gap-2 rounded-md bg-blue-50 px-3 py-2 text-xs font-medium text-blue-700 hover:bg-blue-100 cursor-pointer w-fit">
+                                      <UploadCloud className="h-4 w-4" />
+                                      Selecionar arquivos
+                                      <input
+                                        type="file"
+                                        accept="image/*"
+                                        multiple
+                                        className="hidden"
+                                        onChange={(event) => {
+                                          if (!event.target.files) return;
+                                          handlePhotoUpload(
+                                            rule.id,
+                                            rule,
+                                            event.target.files
+                                          );
+                                          event.target.value = "";
+                                        }}
+                                        disabled={
+                                          isUploading ||
+                                          (maxAllowed
+                                            ? remainingPhotos === 0
+                                            : false)
+                                        }
+                                      />
+                                    </label>
+                                  </div>
+
+                                  {currentPhotos.length > 0 ? (
+                                    <ul className="space-y-2 text-xs">
+                                      {currentPhotos.map((photo) => (
+                                        <li
+                                          key={photo.temp_file_id}
+                                          className="flex items-center justify-between rounded-md border border-border bg-white px-3 py-2"
+                                        >
+                                          <div className="flex items-center gap-2">
+                                            <Images className="h-4 w-4 text-muted-foreground" />
+                                            <span
+                                              className="truncate max-w-[200px]"
+                                              title={photo.original_name}
+                                            >
+                                              {photo.original_name}
+                                            </span>
+                                          </div>
+                                          <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={() =>
+                                              handleRemovePhoto(
+                                                rule.id,
+                                                photo.temp_file_id
+                                              )
+                                            }
+                                            className="text-destructive hover:bg-destructive/10"
+                                          >
+                                            <Trash2 className="h-4 w-4" />
+                                          </Button>
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  ) : (
+                                    <p className="text-xs text-muted-foreground italic">
+                                      Nenhuma foto enviada ainda.
+                                    </p>
+                                  )}
+                                </div>
+                              );
+
+                            case "TEXT_INPUT":
+                              return (
+                                <div className="space-y-2">
+                                  <div className="flex items-center gap-2 text-muted-foreground text-xs">
+                                    <FileText className="h-4 w-4" />
+                                    Escreva uma mensagem personalizada
+                                  </div>
+                                  <textarea
+                                    className="w-full min-h-[120px] resize-none rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                                    placeholder="Digite aqui sua mensagem"
+                                    value={value?.text || ""}
+                                    onChange={(event) =>
+                                      updateCustomization(rule.id, {
+                                        text: event.target.value,
+                                      })
+                                    }
+                                  />
+                                </div>
+                              );
+
+                            case "MULTIPLE_CHOICE":
+                              return (
+                                <div className="space-y-2">
+                                  <span className="text-xs text-muted-foreground">
+                                    Escolha uma das opções disponíveis.
+                                  </span>
+                                  <Select
+                                    value={value?.selected_option || ""}
+                                    onValueChange={(selectedValue) =>
+                                      updateCustomization(rule.id, {
+                                        selected_option: selectedValue,
+                                      })
+                                    }
+                                  >
+                                    <SelectTrigger>
+                                      <SelectValue placeholder="Selecione uma opção" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      {Array.isArray(rule.available_options) ? (
+                                        rule.available_options.map((option) => (
+                                          <SelectItem
+                                            key={option.value}
+                                            value={option.value}
+                                          >
+                                            <div className="flex items-center justify-between gap-2">
+                                              <span>{option.label}</span>
+                                              {option.price_adjustment ? (
+                                                <span className="text-xs text-emerald-600 font-semibold">
+                                                  +
+                                                  {formatCurrency(
+                                                    option.price_adjustment
+                                                  )}
+                                                </span>
+                                              ) : null}
+                                            </div>
+                                          </SelectItem>
+                                        ))
+                                      ) : (
+                                        <SelectItem value="" disabled>
+                                          Nenhuma opção configurada
+                                        </SelectItem>
+                                      )}
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                              );
+
+                            case "ITEM_SUBSTITUTION": {
+                              const substitutionOptions = isSubstitutionOptions(
+                                rule.available_options
+                              )
+                                ? rule.available_options.items.flatMap((item) =>
+                                    item.available_substitutes.map(
+                                      (substitute) => ({
+                                        value: `${item.original_item}__${substitute.item}`,
+                                        label: `${item.original_item} → ${substitute.item}`,
+                                        price_adjustment:
+                                          substitute.price_adjustment,
+                                        original_item: item.original_item,
+                                        selected_item: substitute.item,
+                                      })
+                                    )
+                                  )
+                                : [];
+
+                              return (
+                                <div className="space-y-2">
+                                  <span className="text-xs text-muted-foreground">
+                                    Escolha qual item deseja substituir.
+                                  </span>
+                                  <Select
+                                    value={
+                                      value?.selected_item
+                                        ? `${value.selected_item.original_item}__${value.selected_item.selected_item}`
+                                        : ""
+                                    }
+                                    onValueChange={(selectedValue) => {
+                                      const [originalItem, selectedItem] =
+                                        selectedValue.split("__");
+                                      const option = substitutionOptions.find(
+                                        (opt) => opt.value === selectedValue
+                                      );
+                                      updateCustomization(rule.id, {
+                                        selected_item: {
+                                          original_item: originalItem,
+                                          selected_item: selectedItem,
+                                          price_adjustment:
+                                            option?.price_adjustment || 0,
+                                        },
+                                      });
+                                    }}
+                                  >
+                                    <SelectTrigger>
+                                      <SelectValue placeholder="Selecione a substituição" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      {substitutionOptions.length > 0 ? (
+                                        substitutionOptions.map((option) => (
+                                          <SelectItem
+                                            key={option.value}
+                                            value={option.value}
+                                          >
+                                            <div className="flex items-center justify-between gap-2">
+                                              <span className="truncate">
+                                                {option.label}
+                                              </span>
+                                              {option.price_adjustment ? (
+                                                <span className="text-xs text-emerald-600 font-semibold">
+                                                  +
+                                                  {formatCurrency(
+                                                    option.price_adjustment
+                                                  )}
+                                                </span>
+                                              ) : null}
+                                            </div>
+                                          </SelectItem>
+                                        ))
+                                      ) : (
+                                        <SelectItem value="" disabled>
+                                          Nenhuma substituição disponível
+                                        </SelectItem>
+                                      )}
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                              );
+                            }
+
+                            default:
+                              return null;
+                          }
+                        })()}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </Card>
+
             <Card className="p-4">
               <h3 className="font-medium text-gray-900 mb-2">
                 Descrição do Produto
@@ -308,7 +1085,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
                 key={i}
                 className="p-3 hover:shadow-md transition-shadow cursor-pointer"
               >
-                <div className="aspect-square bg-gray-200 rounded mb-2"></div>
+                <div className="aspect-square bg-gray-200 rounded mb-2" />
                 <h3 className="text-sm font-medium text-gray-900 truncate">
                   Produto {i + 1}
                 </h3>

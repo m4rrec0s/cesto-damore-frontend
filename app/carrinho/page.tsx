@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { useAuth } from "@/app/hooks/use-auth";
 import { useCartContext } from "@/app/hooks/cart-context";
 import { useApi } from "@/app/hooks/use-api";
+import type { CartCustomization } from "@/app/hooks/use-cart";
 import { Card } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
 import { Badge } from "@/app/components/ui/badge";
@@ -136,6 +137,8 @@ interface CartItem {
       stock_quantity: number;
     }>;
   }>;
+  customizations?: CartCustomization[];
+  customization_total?: number;
 }
 
 interface ProductCardProps {
@@ -143,9 +146,16 @@ interface ProductCardProps {
   updateQuantity: (
     productId: string,
     quantity: number,
-    additionalIds?: string[]
+    additionalIds?: string[],
+    customizations?: CartCustomization[],
+    additionalColors?: Record<string, string>
   ) => void;
-  removeFromCart: (productId: string, additionalIds?: string[]) => void;
+  removeFromCart: (
+    productId: string,
+    additionalIds?: string[],
+    customizations?: CartCustomization[],
+    additionalColors?: Record<string, string>
+  ) => void;
 }
 
 interface OrderSummaryCardProps {
@@ -180,6 +190,28 @@ interface CheckoutButtonProps {
   pixData: PixPaymentData | null;
   onViewPix: () => void;
 }
+
+const formatCustomizationValue = (custom: CartCustomization) => {
+  switch (custom.customization_type) {
+    case "TEXT_INPUT":
+      return custom.text?.trim() || "Mensagem não informada";
+    case "MULTIPLE_CHOICE":
+      return (
+        custom.selected_option_label ||
+        custom.selected_option ||
+        "Opção não selecionada"
+      );
+    case "ITEM_SUBSTITUTION":
+      if (custom.selected_item) {
+        return `${custom.selected_item.original_item} → ${custom.selected_item.selected_item}`;
+      }
+      return "Substituição não definida";
+    case "PHOTO_UPLOAD":
+      return `${custom.photos?.length || 0} foto(s)`;
+    default:
+      return "Personalização";
+  }
+};
 
 // Componentes funcionais para o layout responsivo
 const ProductCard = ({
@@ -241,6 +273,29 @@ const ProductCard = ({
             })}
           </div>
         )}
+
+        {item.customizations && item.customizations.length > 0 && (
+          <div className="mb-2 space-y-1">
+            {item.customizations.map((customization) => (
+              <div
+                key={customization.customization_id}
+                className="flex items-start gap-2 rounded-md border border-dashed border-rose-200 bg-rose-50/70 px-2 py-1 text-xs"
+              >
+                <span className="font-semibold text-rose-700">
+                  {customization.title}:
+                </span>
+                <span className="flex-1 text-rose-900/80 line-clamp-2">
+                  {formatCustomizationValue(customization)}
+                </span>
+                {customization.price_adjustment ? (
+                  <span className="text-emerald-600 font-semibold whitespace-nowrap">
+                    +R$ {customization.price_adjustment.toFixed(2)}
+                  </span>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="flex items-center justify-between gap-3">
@@ -252,7 +307,9 @@ const ProductCard = ({
               updateQuantity(
                 item.product_id,
                 item.quantity - 1,
-                item.additional_ids
+                item.additional_ids,
+                item.customizations,
+                item.additional_colors
               )
             }
             disabled={item.quantity <= 1}
@@ -270,7 +327,9 @@ const ProductCard = ({
               updateQuantity(
                 item.product_id,
                 item.quantity + 1,
-                item.additional_ids
+                item.additional_ids,
+                item.customizations,
+                item.additional_colors
               )
             }
             className="h-8 w-8"
@@ -282,14 +341,20 @@ const ProductCard = ({
         <Button
           variant="ghost"
           size="icon"
-          onClick={() => removeFromCart(item.product_id, item.additional_ids)}
+          onClick={() =>
+            removeFromCart(
+              item.product_id,
+              item.additional_ids,
+              item.customizations,
+              item.additional_colors
+            )
+          }
           className="h-8 w-8 text-destructive hover:text-destructive"
         >
           <Trash2 className="h-4 w-4" />
         </Button>
       </div>
     </div>
-
     <div className="text-right flex flex-col justify-between">
       {item.discount && item.discount > 0 ? (
         <div className="flex flex-col items-end">
@@ -297,6 +362,7 @@ const ProductCard = ({
             R${" "}
             {(
               item.price * item.quantity +
+              (item.customization_total || 0) * item.quantity +
               (item.additionals?.reduce(
                 (sum: number, add) => sum + add.price * item.quantity,
                 0
@@ -306,7 +372,7 @@ const ProductCard = ({
           <span className="font-semibold">
             R${" "}
             {(
-              (item.effectivePrice || item.price) * item.quantity +
+              (item.effectivePrice ?? item.price) * item.quantity +
               (item.additionals?.reduce(
                 (sum: number, add) => sum + add.price * item.quantity,
                 0
@@ -318,7 +384,7 @@ const ProductCard = ({
         <span className="font-semibold">
           R${" "}
           {(
-            item.price * item.quantity +
+            (item.effectivePrice ?? item.price) * item.quantity +
             (item.additionals?.reduce(
               (sum: number, add) => sum + add.price * item.quantity,
               0
@@ -327,7 +393,7 @@ const ProductCard = ({
         </span>
       )}
     </div>
-  </div>
+    </div>
 );
 
 const OrderSummaryCard = ({
@@ -1449,9 +1515,8 @@ export default function CarrinhoPage() {
 
     setIsEditingAddress(true);
   };
-
   const originalTotal = cartItems.reduce((sum, item) => {
-    const baseTotal = item.price * item.quantity;
+    const baseTotal = (item.effectivePrice ?? item.price) * item.quantity;
     const additionalsTotal =
       item.additionals?.reduce((a, add) => a + add.price * item.quantity, 0) ||
       0;

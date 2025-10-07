@@ -1,5 +1,28 @@
 import { useState, useCallback, useEffect } from "react";
-import { useApi, OrderItem, Product, Additional } from "./use-api";
+import { useApi, Product, Additional, CustomizationTypeValue } from "./use-api";
+import type { CustomizationValue } from "./use-customization";
+
+export interface CartCustomization extends CustomizationValue {
+  title: string;
+  customization_type: CustomizationTypeValue;
+  is_required: boolean;
+  price_adjustment?: number;
+  selected_option_label?: string;
+  selected_item_label?: string;
+}
+
+interface OrderAdditionalItem {
+  additional_id: string;
+  quantity: number;
+  price: number;
+}
+
+export interface OrderItem {
+  product_id: string;
+  quantity: number;
+  price: number;
+  additionals?: OrderAdditionalItem[];
+}
 
 export interface CartItem {
   product_id: string;
@@ -10,6 +33,8 @@ export interface CartItem {
   additional_ids?: string[];
   additionals?: Additional[];
   additional_colors?: Record<string, string>; // Mapeia additional_id -> color_id selecionado
+  customizations?: CartCustomization[];
+  customization_total?: number;
   product: Product;
 }
 
@@ -34,6 +59,75 @@ export interface AvailableDate {
   slots: TimeSlot[];
 }
 
+const serializeAdditionals = (additionals?: string[]) => {
+  if (!additionals || additionals.length === 0) return "[]";
+  return JSON.stringify([...additionals].sort());
+};
+
+const serializeAdditionalColors = (colors?: Record<string, string>): string => {
+  if (!colors) return "{}";
+  const normalized = Object.entries(colors).sort(([idA], [idB]) =>
+    idA.localeCompare(idB)
+  );
+  return JSON.stringify(normalized);
+};
+
+const serializeCustomizations = (customizations?: CartCustomization[]) => {
+  if (!customizations || customizations.length === 0) {
+    return "[]";
+  }
+
+  const normalized = customizations.map((customization) => ({
+    customization_id: customization.customization_id,
+    price_adjustment: customization.price_adjustment || 0,
+    text: customization.text?.trim() || null,
+    selected_option: customization.selected_option || null,
+    selected_item: customization.selected_item
+      ? {
+          original_item: customization.selected_item.original_item,
+          selected_item: customization.selected_item.selected_item,
+        }
+      : null,
+    photos:
+      customization.photos?.map(
+        (photo) =>
+          photo.temp_file_id || photo.preview_url || photo.original_name
+      ) || [],
+  }));
+
+  normalized.sort((a, b) =>
+    a.customization_id.localeCompare(b.customization_id)
+  );
+
+  return JSON.stringify(normalized);
+};
+
+const cloneCustomizations = (
+  customizations?: CartCustomization[]
+): CartCustomization[] => {
+  if (!customizations || customizations.length === 0) return [];
+
+  return customizations.map((customization) => ({
+    ...customization,
+    photos: customization.photos
+      ? customization.photos.map((photo) => ({ ...photo }))
+      : undefined,
+    selected_item: customization.selected_item
+      ? { ...customization.selected_item }
+      : undefined,
+  }));
+};
+
+const calculateCustomizationTotal = (
+  customizations?: CartCustomization[]
+): number => {
+  if (!customizations) return 0;
+  return customizations.reduce(
+    (sum, customization) => sum + (customization.price_adjustment || 0),
+    0
+  );
+};
+
 export function useCart() {
   const api = useApi();
 
@@ -49,12 +143,28 @@ export function useCart() {
             Array.isArray(parsed.items)
           ) {
             const itemsWithEffectivePrice = parsed.items.map(
-              (item: Partial<CartItem>) => ({
-                ...item,
-                effectivePrice:
-                  item.effectivePrice ||
-                  (item.price || 0) * (1 - (item.discount || 0) / 100),
-              })
+              (item: Partial<CartItem>) => {
+                const customizationTotal = (item.customizations || []).reduce(
+                  (sum: number, customization: Partial<CartCustomization>) =>
+                    sum + (customization?.price_adjustment || 0),
+                  0
+                );
+
+                const baseEffective =
+                  (item.price || 0) * (1 - (item.discount || 0) / 100);
+
+                return {
+                  ...item,
+                  customizations: Array.isArray(item.customizations)
+                    ? item.customizations
+                    : [],
+                  customization_total: customizationTotal,
+                  effectivePrice:
+                    item.effectivePrice !== undefined
+                      ? item.effectivePrice
+                      : Number((baseEffective + customizationTotal).toFixed(2)),
+                } as CartItem;
+              }
             );
             return {
               items: itemsWithEffectivePrice || [],
@@ -115,7 +225,8 @@ export function useCart() {
       productId: string,
       quantity: number = 1,
       additionals?: string[],
-      additionalColors?: Record<string, string> // Mapeia additional_id -> color_id
+      additionalColors?: Record<string, string>,
+      customizations?: CartCustomization[]
     ) => {
       try {
         const product = await api.getProduct(productId);
@@ -126,7 +237,14 @@ export function useCart() {
             : [];
 
         const discount = product.discount || 0;
-        const effectivePrice = product.price * (1 - discount / 100);
+        const customizationEntries = cloneCustomizations(customizations);
+        const customizationTotal =
+          calculateCustomizationTotal(customizationEntries);
+
+        const baseEffective = product.price * (1 - discount / 100);
+        const effectivePrice = Number(
+          (baseEffective + customizationTotal).toFixed(2)
+        );
 
         const newItem: CartItem = {
           product_id: productId,
@@ -137,6 +255,10 @@ export function useCart() {
           additional_ids: additionals,
           additionals: additionalDetails,
           additional_colors: additionalColors,
+          customizations:
+            customizationEntries.length > 0 ? customizationEntries : undefined,
+          customization_total:
+            customizationEntries.length > 0 ? customizationTotal : undefined,
           product,
         };
 
@@ -145,19 +267,37 @@ export function useCart() {
             ? prevCart.items
             : [];
 
+          const targetAdditionalsKey = serializeAdditionals(additionals);
+          const targetColorsKey = serializeAdditionalColors(additionalColors);
+          const targetCustomizationsKey =
+            serializeCustomizations(customizationEntries);
+
           const existingIndex = currentItems.findIndex(
             (item) =>
               item.product_id === productId &&
-              JSON.stringify(item.additional_ids?.sort()) ===
-                JSON.stringify(additionals?.sort()) &&
-              JSON.stringify(item.additional_colors) ===
-                JSON.stringify(additionalColors)
+              serializeAdditionals(item.additional_ids) ===
+                targetAdditionalsKey &&
+              serializeAdditionalColors(item.additional_colors) ===
+                targetColorsKey &&
+              serializeCustomizations(item.customizations) ===
+                targetCustomizationsKey
           );
 
           let newItems: CartItem[];
           if (existingIndex >= 0) {
             newItems = [...currentItems];
             newItems[existingIndex].quantity += quantity;
+            const existingBaseEffective =
+              newItems[existingIndex].price *
+              (1 - (newItems[existingIndex].discount || 0) / 100);
+            newItems[existingIndex].effectivePrice = Number(
+              (existingBaseEffective + customizationTotal).toFixed(2)
+            );
+            newItems[existingIndex].customization_total = customizationTotal;
+            newItems[existingIndex].customizations =
+              customizationEntries.length > 0
+                ? cloneCustomizations(customizationEntries)
+                : undefined;
           } else {
             newItems = [...currentItems, newItem];
           }
@@ -174,18 +314,30 @@ export function useCart() {
   );
 
   const removeFromCart = useCallback(
-    (productId: string, additionals?: string[]) => {
+    (
+      productId: string,
+      additionals?: string[],
+      customizations?: CartCustomization[],
+      additionalColors?: Record<string, string>
+    ) => {
       setCart((prevCart) => {
         const currentItems = Array.isArray(prevCart.items)
           ? prevCart.items
           : [];
 
+        const targetAdditionals = serializeAdditionals(additionals);
+        const targetColors = serializeAdditionalColors(additionalColors);
+        const targetCustomizations = serializeCustomizations(customizations);
+
         const newItems = currentItems.filter(
           (item) =>
             !(
               item.product_id === productId &&
-              JSON.stringify(item.additional_ids) ===
-                JSON.stringify(additionals)
+              serializeAdditionals(item.additional_ids) === targetAdditionals &&
+              serializeAdditionalColors(item.additional_colors) ===
+                targetColors &&
+              serializeCustomizations(item.customizations) ===
+                targetCustomizations
             )
         );
         return calculateTotals(newItems);
@@ -195,9 +347,20 @@ export function useCart() {
   );
 
   const updateQuantity = useCallback(
-    (productId: string, quantity: number, additionals?: string[]) => {
+    (
+      productId: string,
+      quantity: number,
+      additionals?: string[],
+      customizations?: CartCustomization[],
+      additionalColors?: Record<string, string>
+    ) => {
       if (quantity <= 0) {
-        removeFromCart(productId, additionals);
+        removeFromCart(
+          productId,
+          additionals,
+          customizations,
+          additionalColors
+        );
         return;
       }
 
@@ -206,10 +369,17 @@ export function useCart() {
           ? prevCart.items
           : [];
 
+        const targetAdditionals = serializeAdditionals(additionals);
+        const targetCustomizations = serializeCustomizations(customizations);
+        const targetColors = serializeAdditionalColors(additionalColors);
+
         const newItems = currentItems.map((item) => {
           if (
             item.product_id === productId &&
-            JSON.stringify(item.additional_ids) === JSON.stringify(additionals)
+            serializeAdditionals(item.additional_ids) === targetAdditionals &&
+            serializeCustomizations(item.customizations) ===
+              targetCustomizations &&
+            serializeAdditionalColors(item.additional_colors) === targetColors
           ) {
             return { ...item, quantity };
           }

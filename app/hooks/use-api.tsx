@@ -237,24 +237,115 @@ export interface ProductsResponse {
   products: Product[];
   pagination: PaginationInfo;
 }
-export interface OrderItem {
+export type OrderStatus =
+  | "PENDING"
+  | "PAID"
+  | "SHIPPED"
+  | "DELIVERED"
+  | "CANCELED";
+
+export type CustomizationTypeValue =
+  | "PHOTO_UPLOAD"
+  | "ITEM_SUBSTITUTION"
+  | "TEXT_INPUT"
+  | "MULTIPLE_CHOICE";
+
+export type CustomizationAvailableOptions =
+  | Array<{
+      label: string;
+      value: string;
+      price_adjustment?: number;
+    }>
+  | {
+      items: Array<{
+        original_item: string;
+        available_substitutes: Array<{
+          item: string;
+          price_adjustment: number;
+        }>;
+      }>;
+    };
+
+export interface OrderItemAdditional {
+  id: string;
+  additional_id: string;
+  quantity: number;
+  price: number;
+  additional?: Additional;
+}
+
+export interface OrderItemCustomizationSummary {
+  id: string;
+  title: string;
+  customization_type: CustomizationTypeValue;
+  google_drive_url?: string | null;
+}
+
+export interface OrderItemDetailed {
+  id: string;
   product_id: string;
   quantity: number;
   price: number;
-  additional_ids?: string[];
+  product?: Product;
+  additionals: OrderItemAdditional[];
+  customizations: OrderItemCustomizationSummary[];
+}
+
+export interface OrderItemInput {
+  product_id: string;
+  quantity: number;
+  price: number;
   additionals?: { additional_id: string; quantity: number; price: number }[];
 }
+
 export interface Order {
   id: string;
+  status: OrderStatus;
   user_id: string;
-  items: OrderItem[];
+  user?: User & { phone?: string | null };
+  items: OrderItemDetailed[];
   total: number;
-  createdAt: string;
+  discount?: number | null;
+  created_at: string;
+  updated_at: string;
   delivery_address?: string | null;
+  delivery_city?: string | null;
+  delivery_state?: string | null;
   delivery_date?: string | null;
   shipping_price?: number | null;
   payment_method?: string | null;
   grand_total?: number | null;
+  payment?: {
+    id: string;
+    status: string;
+    payment_method?: string | null;
+    approved_at?: string | null;
+  } | null;
+}
+
+export interface CustomizationRule {
+  id: string;
+  customization_type: CustomizationTypeValue;
+  title: string;
+  description?: string | null;
+  is_required: boolean;
+  max_items?: number | null;
+  available_options?: CustomizationAvailableOptions | null;
+  display_order: number;
+  product_id?: string | null;
+  additional_id?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CustomizationRuleInput {
+  customization_type: CustomizationTypeValue;
+  title: string;
+  description?: string;
+  is_required?: boolean;
+  max_items?: number | null;
+  available_options?: CustomizationAvailableOptions | null;
+  display_order?: number;
 }
 
 // Resposta da API para feed público
@@ -451,6 +542,26 @@ class ApiService {
       return response;
     });
   }
+
+  get = async (url: string) => {
+    const res = await this.client.get(url);
+    return res.data;
+  };
+
+  post = async (url: string, data: unknown) => {
+    const res = await this.client.post(url, data);
+    return res.data;
+  };
+
+  put = async (url: string, data: unknown) => {
+    const res = await this.client.put(url, data);
+    return res.data;
+  };
+
+  delete = async (url: string) => {
+    const res = await this.client.delete(url);
+    return res.data;
+  };
 
   // ===== Auth =====
   register = async (data: RegisterCredentials) => {
@@ -813,10 +924,11 @@ class ApiService {
   };
 
   // ===== Orders =====
-  getOrders = async () => {
-    if (ApiService.cache.orders) return ApiService.cache.orders;
-    const res = await this.client.get("/orders");
-    ApiService.cache.orders = res.data;
+  getOrders = async (params?: { status?: string }) => {
+    const res = await this.client.get("/orders", { params });
+    if (!params?.status) {
+      ApiService.cache.orders = res.data;
+    }
     return res.data;
   };
   getOrder = async (id: string) =>
@@ -824,7 +936,7 @@ class ApiService {
   createOrder = async (payload: {
     user_id: string;
     total_price: number;
-    items: OrderItem[];
+    items: OrderItemInput[];
     delivery_address?: string | null;
     delivery_city: string;
     delivery_state: string;
@@ -842,6 +954,144 @@ class ApiService {
   deleteOrder = async (id: string) => {
     const res = await this.client.delete(`/orders/${id}`);
     this.clearCache("orders");
+    return res.data;
+  };
+
+  updateOrderStatus = async (
+    id: string,
+    status: OrderStatus,
+    options?: { notifyCustomer?: boolean }
+  ) => {
+    const res = await this.client.patch(`/orders/${id}/status`, {
+      status,
+      notifyCustomer: options?.notifyCustomer,
+    });
+    this.clearCache("orders");
+    return res.data;
+  };
+
+  // ===== Customization Rules =====
+  getProductCustomizations = async (
+    productId: string
+  ): Promise<CustomizationRule[]> => {
+    const res = await this.client.get(`/products/${productId}/customizations`);
+    return res.data;
+  };
+
+  getAdditionalCustomizations = async (
+    additionalId: string
+  ): Promise<CustomizationRule[]> => {
+    const res = await this.client.get(
+      `/additionals/${additionalId}/customizations`
+    );
+    return res.data;
+  };
+
+  createProductCustomization = async (
+    productId: string,
+    data: CustomizationRuleInput
+  ): Promise<CustomizationRule> => {
+    const res = await this.client.post(`/admin/customization/product`, {
+      ...data,
+      product_id: productId,
+    });
+    return res.data;
+  };
+
+  updateProductCustomization = async (
+    customizationId: string,
+    data: CustomizationRuleInput
+  ): Promise<CustomizationRule> => {
+    const res = await this.client.put(
+      `/admin/customization/product/${customizationId}`,
+      data
+    );
+    return res.data;
+  };
+
+  deleteProductCustomization = async (customizationId: string) => {
+    const res = await this.client.delete(
+      `/admin/customization/product/${customizationId}`
+    );
+    return res.data;
+  };
+
+  createAdditionalCustomization = async (
+    additionalId: string,
+    data: CustomizationRuleInput
+  ): Promise<CustomizationRule> => {
+    const res = await this.client.post(`/admin/customization/additional`, {
+      ...data,
+      additional_id: additionalId,
+    });
+    return res.data;
+  };
+
+  updateAdditionalCustomization = async (
+    customizationId: string,
+    data: CustomizationRuleInput
+  ): Promise<CustomizationRule> => {
+    const res = await this.client.put(
+      `/admin/customization/additional/${customizationId}`,
+      data
+    );
+    return res.data;
+  };
+
+  deleteAdditionalCustomization = async (customizationId: string) => {
+    const res = await this.client.delete(
+      `/admin/customization/additional/${customizationId}`
+    );
+    return res.data;
+  };
+
+  // ===== Product Rules (New System) =====
+  getProductRulesByType = async (productTypeId: string) => {
+    const res = await this.client.get(
+      `/admin/customization/rule/type/${productTypeId}`
+    );
+    return res.data;
+  };
+
+  createProductRule = async (data: {
+    product_type_id: string;
+    rule_type: CustomizationTypeValue;
+    title: string;
+    description?: string;
+    required: boolean;
+    max_items?: number | null;
+    available_options?: CustomizationAvailableOptions | null;
+    conflict_with?: string[] | null;
+    dependencies?: string[] | null;
+    display_order?: number;
+  }) => {
+    const res = await this.client.post(`/admin/customization/rule`, data);
+    return res.data;
+  };
+
+  updateProductRule = async (
+    ruleId: string,
+    data: {
+      rule_type?: CustomizationTypeValue;
+      title?: string;
+      description?: string;
+      required?: boolean;
+      max_items?: number | null;
+      available_options?: CustomizationAvailableOptions | null;
+      conflict_with?: string[] | null;
+      dependencies?: string[] | null;
+      display_order?: number;
+    }
+  ) => {
+    const res = await this.client.put(
+      `/admin/customization/rule/${ruleId}`,
+      data
+    );
+    return res.data;
+  };
+
+  deleteProductRule = async (ruleId: string) => {
+    const res = await this.client.delete(`/admin/customization/rule/${ruleId}`);
     return res.data;
   };
 

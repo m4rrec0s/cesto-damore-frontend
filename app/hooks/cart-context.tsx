@@ -7,6 +7,7 @@ import {
   DeliveryWindow,
   TimeSlot,
   AvailableDate,
+  CartCustomization,
 } from "./use-cart";
 
 interface CartContextType {
@@ -15,13 +16,21 @@ interface CartContextType {
     productId: string,
     quantity?: number,
     additionals?: string[],
-    additionalColors?: Record<string, string>
+    additionalColors?: Record<string, string>,
+    customizations?: CartCustomization[]
   ) => Promise<void>;
-  removeFromCart: (productId: string, additionals?: string[]) => void;
+  removeFromCart: (
+    productId: string,
+    additionals?: string[],
+    customizations?: CartCustomization[],
+    additionalColors?: Record<string, string>
+  ) => void;
   updateQuantity: (
     productId: string,
     quantity: number,
-    additionals?: string[]
+    additionals?: string[],
+    customizations?: CartCustomization[],
+    additionalColors?: Record<string, string>
   ) => void;
   clearCart: () => void;
   createOrder: (

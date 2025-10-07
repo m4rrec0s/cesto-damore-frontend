@@ -25,9 +25,13 @@ import {
   Lock,
   ChevronLeft,
   Palette,
+  ClipboardList,
+  Wand2,
 } from "lucide-react";
 import { Button } from "../components/ui/button";
 import FeedManager from "./components/feed-manager";
+import { OrdersManager } from "./components/orders-manager";
+import { CustomizationManager } from "./components/customization-manager";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
@@ -35,7 +39,14 @@ export default function EstoquePage() {
   const api = useApi();
   const { user, isLoading: authLoading } = useAuth();
   const [activeTab, setActiveTab] = useState<
-    "products" | "categories" | "types" | "additionals" | "stats" | "feed"
+    | "orders"
+    | "products"
+    | "categories"
+    | "types"
+    | "additionals"
+    | "stats"
+    | "feed"
+    | "customizations"
   >("stats");
   const [data, setData] = useState({
     products: [] as Product[],
@@ -145,6 +156,18 @@ export default function EstoquePage() {
       id: "stats" as const,
       label: "Visão Geral",
       icon: BarChart3,
+      count: null,
+    },
+    {
+      id: "orders" as const,
+      label: "Pedidos",
+      icon: ClipboardList,
+      count: null,
+    },
+    {
+      id: "customizations" as const,
+      label: "Customizações",
+      icon: Wand2,
       count: null,
     },
     {
@@ -268,6 +291,7 @@ export default function EstoquePage() {
 
       <div className="max-w-7xl mx-auto px-4 py-8">
         {activeTab === "stats" && <StatsOverview data={data} />}
+        {activeTab === "orders" && <OrdersManager />}
         {activeTab === "products" && (
           <ProductManager
             products={data.products}
@@ -289,6 +313,12 @@ export default function EstoquePage() {
           <AdditionalManager
             additionals={data.additionals}
             onUpdate={handleDataUpdate}
+          />
+        )}
+        {activeTab === "customizations" && (
+          <CustomizationManager
+            products={data.products}
+            additionals={data.additionals}
           />
         )}
         {activeTab === "feed" && isAdmin && (

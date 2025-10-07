@@ -130,7 +130,7 @@ export function Checkout({ user, onClose, isOpen = true }: CheckoutProps) {
                     <span>
                       R${" "}
                       {(
-                        item.price * item.quantity +
+                        item.effectivePrice * item.quantity +
                         (item.additionals?.reduce(
                           (sum, add) => sum + add.price * item.quantity,
                           0
