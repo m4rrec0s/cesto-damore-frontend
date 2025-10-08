@@ -7,6 +7,9 @@ import {
   createContext,
   ReactNode,
 } from "react";
+import { auth } from "@/app/config/firebase";
+import { GoogleAuthProvider, signInWithPopup } from "firebase/auth";
+import { useApi } from "@/app/hooks/use-api";
 
 interface User {
   id: string;
@@ -28,6 +31,7 @@ interface AuthContextType {
   isLoading: boolean;
   login: (userData: User, appToken: string) => void;
   logout: () => void;
+  loginWithGoogle: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -36,6 +40,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [appToken, setAppToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const api = useApi();
 
   useEffect(() => {
     // Carregar dados do localStorage na inicialização
@@ -102,12 +107,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const loginWithGoogle = async () => {
+    const provider = new GoogleAuthProvider();
+    provider.setCustomParameters({
+      prompt: "select_account",
+    });
+
+    try {
+      const result = await signInWithPopup(auth, provider);
+      const idToken = await result.user.getIdToken();
+
+      // Extrair informações do usuário do Google
+      const email = result.user.email;
+      const name = result.user.displayName;
+      const imageUrl = result.user.photoURL;
+
+      // Enviar token e informações do usuário para o backend
+      const response = await api.google(idToken, { email, name, imageUrl });
+
+      // Fazer login localmente com os dados retornados
+      login(response.user, response.appToken);
+    } catch (error) {
+      console.error("Erro no login com Google:", error);
+      throw error;
+    }
+  };
+
   const value: AuthContextType = {
     user,
     appToken,
     isLoading,
     login,
     logout,
+    loginWithGoogle,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

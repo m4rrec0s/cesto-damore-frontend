@@ -1,7 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { ShoppingCart, User, Search, Menu, Settings } from "lucide-react";
+import {
+  ShoppingCart,
+  User,
+  Search,
+  Menu,
+  Settings,
+  ShoppingBasketIcon,
+  LogOutIcon,
+} from "lucide-react";
 import { Button } from "@/app/components/ui/button";
 import Image from "next/image";
 import { Input } from "../ui/input";
@@ -10,13 +18,21 @@ import { useAuth } from "../../hooks/use-auth";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { CartSheet } from "../cart-sheet";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/app/components/ui/dropdown-menu";
 
 export function SiteHeader() {
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isClient, setIsClient] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const { cart } = useCartContext();
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
@@ -123,9 +139,43 @@ export function SiteHeader() {
               </Button>
 
               {user ? (
-                <Button variant="ghost" size="icon" aria-label="Perfil">
-                  <User className="h-5 w-5" />
-                </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon" aria-label="Perfil">
+                      <User className="h-5 w-5" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent
+                    align="end"
+                    className="bg-white text-black"
+                  >
+                    <DropdownMenuLabel>
+                      Olá, {user.name.split(" ")[0]}
+                    </DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem asChild>
+                      <Link href="/perfil">
+                        <User className="h-5 w-5" />
+                        Perfil
+                      </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                      <Link href="/pedidos">
+                        <ShoppingBasketIcon className="h-5 w-5" />
+                        Meus Pedidos
+                      </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      onClick={() => {
+                        logout();
+                      }}
+                    >
+                      <LogOutIcon className="h-5 w-5" />
+                      Sair
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               ) : (
                 <>
                   <Link href="/login">

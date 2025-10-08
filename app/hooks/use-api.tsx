@@ -578,8 +578,31 @@ class ApiService {
     }
     return res.data;
   };
-  google = async (googleToken: string) => {
-    const res = await this.client.post("/auth/google", { token: googleToken });
+  google = async (
+    googleToken: string,
+    userInfo?: {
+      email: string | null;
+      name: string | null;
+      imageUrl: string | null;
+    }
+  ) => {
+    const payload: {
+      idToken: string;
+      email?: string;
+      name?: string;
+      imageUrl?: string;
+    } = {
+      idToken: googleToken,
+    };
+
+    // Adicionar informações do usuário se fornecidas
+    if (userInfo) {
+      if (userInfo.email) payload.email = userInfo.email;
+      if (userInfo.name) payload.name = userInfo.name;
+      if (userInfo.imageUrl) payload.imageUrl = userInfo.imageUrl;
+    }
+
+    const res = await this.client.post("/auth/google", payload);
     if (typeof window !== "undefined" && res.data?.appToken) {
       localStorage.setItem("appToken", res.data.appToken);
     }
