@@ -65,6 +65,7 @@ import {
   CreditCardForm,
   type CreditCardData,
 } from "@/app/components/credit-card-form";
+import { usePaymentPolling } from "@/app/hooks/use-payment-polling";
 
 const ACCEPTED_CITIES = [
   "Campina Grande",
@@ -393,7 +394,7 @@ const ProductCard = ({
         </span>
       )}
     </div>
-    </div>
+  </div>
 );
 
 const OrderSummaryCard = ({
@@ -955,6 +956,40 @@ export default function CarrinhoPage() {
   const [currentOrderId, setCurrentOrderId] = useState<string | null>(null);
   const [isCardDialogOpen, setIsCardDialogOpen] = useState(false);
 
+  // Hook de polling de pagamento
+  const { status: pollingStatus, attempts: pollingAttempts } =
+    usePaymentPolling({
+      orderId: currentOrderId,
+      enabled: Boolean(currentOrderId && paymentStatus === "pending"),
+      maxAttempts: 60, // 5 minutos
+      intervalMs: 5000, // 5 segundos
+      onSuccess: (order) => {
+        console.log("✅ Pagamento confirmado pelo webhook!", order);
+        setPaymentStatus("success");
+        toast.success("Pagamento confirmado! Pedido realizado com sucesso.");
+        // Aguardar 2 segundos antes de redirecionar
+        setTimeout(() => {
+          router.push("/pedidos");
+        }, 2000);
+      },
+      onFailure: (order) => {
+        console.log("❌ Pagamento rejeitado/cancelado", order);
+        setPaymentStatus("failure");
+        setPaymentError(
+          "Pagamento recusado. Por favor, verifique os dados e tente novamente."
+        );
+        toast.error("Pagamento recusado. Verifique os dados do pagamento.");
+      },
+      onTimeout: () => {
+        console.log("⏱️ Timeout ao aguardar confirmação");
+        toast.warning(
+          "Ainda não recebemos a confirmação do pagamento. Você pode acompanhar o status na página de pedidos.",
+          { duration: 6000 }
+        );
+        // Não redireciona automaticamente no timeout
+      },
+    });
+
   const mapPaymentStatus = useCallback(
     (status?: string | null): PaymentStatusType => {
       if (!status) return "";
@@ -1192,20 +1227,26 @@ export default function CarrinhoPage() {
         throw new Error("Pedido não encontrado. Tente novamente.");
       }
 
+      console.log("💳 Processando pagamento com cartão...", {
+        orderId: currentOrderId,
+        installments: cardData.installments,
+      });
+
       const paymentResponse = await createTransparentPayment({
         orderId: currentOrderId,
-        payment_method_id: "credit_card",
+        paymentMethodId: "credit_card",
         installments: cardData.installments,
-        payer: {
-          email: cardData.email,
-          first_name: cardData.cardholderName.split(" ")[0],
-          last_name: cardData.cardholderName.split(" ").slice(1).join(" "),
-          identification: {
-            type: cardData.identificationType,
-            number: cardData.identificationNumber,
-          },
-        },
+        payerEmail: cardData.email,
+        payerName: cardData.cardholderName,
+        payerDocument: cardData.identificationNumber,
+        payerDocumentType:
+          cardData.identificationType === "CPF" ? "CPF" : "CNPJ",
+        // TODO: Implementar geração de cardToken usando SDK do Mercado Pago
+        // cardToken: cardData.token,
+        // issuer_id: cardData.issuerId,
       });
+
+      console.log("📦 Resposta do pagamento:", paymentResponse);
 
       if (!paymentResponse?.success) {
         throw new Error(
@@ -1216,20 +1257,28 @@ export default function CarrinhoPage() {
       const rawStatus = paymentResponse.status || "pending";
       const normalizedStatus = mapPaymentStatus(rawStatus) || "pending";
 
+      console.log(`📊 Status do pagamento: ${rawStatus} → ${normalizedStatus}`);
+
       setPaymentStatus(normalizedStatus);
 
       if (normalizedStatus === "success") {
         toast.success("Pagamento aprovado! Pedido confirmado.");
         setIsCardDialogOpen(false);
-        router.push("/pedidos");
+        // Aguarda 1 segundo antes de redirecionar
+        setTimeout(() => {
+          router.push("/pedidos");
+        }, 1000);
       } else if (normalizedStatus === "pending") {
-        toast.info("Pagamento em análise. Aguarde a confirmação.");
+        toast.info("Pagamento em análise. Aguardando confirmação...", {
+          duration: 5000,
+        });
         setIsCardDialogOpen(false);
+        // O hook de polling vai continuar verificando o status
       } else {
         throw new Error("Pagamento recusado. Verifique os dados do cartão.");
       }
     } catch (error) {
-      console.error("Erro ao processar pagamento com cartão:", error);
+      console.error("❌ Erro ao processar pagamento com cartão:", error);
       const errorMessage =
         error instanceof Error ? error.message : "Erro desconhecido";
       setPaymentError(errorMessage);
@@ -1341,11 +1390,13 @@ export default function CarrinhoPage() {
       if (paymentMethod === "pix") {
         const paymentResponse = await createTransparentPayment({
           orderId: createdOrderId,
-          payment_method_id: "pix",
-          payer: {
-            email: user.email || "",
-            first_name: user.name || "",
-          },
+          paymentMethodId: "pix",
+          payerEmail: user.email || "",
+          payerName: user.name || "",
+          // TODO: Adicionar campo de CPF no cadastro do usuário
+          // Por enquanto usando CPF de teste para desenvolvimento
+          payerDocument: "12345678909",
+          payerDocumentType: "CPF",
         });
 
         if (!paymentResponse?.success) {
@@ -1874,6 +1925,44 @@ export default function CarrinhoPage() {
             </DialogDescription>
           </DialogHeader>
 
+          {/* Indicador de polling de pagamento */}
+          {paymentStatus === "pending" && pollingStatus === "polling" && (
+            <Alert className="border-blue-200 bg-blue-50">
+              <Loader2 className="h-4 w-4 text-blue-600 animate-spin" />
+              <AlertDescription className="text-blue-800 text-sm">
+                <div className="flex flex-col gap-1">
+                  <span className="font-medium">
+                    Aguardando confirmação do pagamento...
+                  </span>
+                  <span className="text-xs">
+                    Verificação {pollingAttempts} de 60 • Isso pode levar alguns
+                    minutos
+                  </span>
+                </div>
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {/* Pagamento confirmado */}
+          {paymentStatus === "success" && (
+            <Alert className="border-green-200 bg-green-50">
+              <AlertCircle className="h-4 w-4 text-green-600" />
+              <AlertDescription className="text-green-800 text-sm font-medium">
+                ✅ Pagamento confirmado! Redirecionando...
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {/* Pagamento rejeitado */}
+          {paymentStatus === "failure" && (
+            <Alert className="border-red-200 bg-red-50">
+              <AlertCircle className="h-4 w-4 text-red-600" />
+              <AlertDescription className="text-red-800 text-sm font-medium">
+                ❌ Pagamento não foi aprovado. Tente outro método de pagamento.
+              </AlertDescription>
+            </Alert>
+          )}
+
           {pixData ? (
             <div className="space-y-6">
               {currentOrderId && (
@@ -1924,6 +2013,23 @@ export default function CarrinhoPage() {
               {currentOrderId ? ` do pedido ${currentOrderId}` : ""}.
             </DialogDescription>
           </DialogHeader>
+
+          {/* Indicador de polling de pagamento */}
+          {paymentStatus === "pending" && pollingStatus === "polling" && (
+            <Alert className="border-blue-200 bg-blue-50 mb-4">
+              <Loader2 className="h-4 w-4 text-blue-600 animate-spin" />
+              <AlertDescription className="text-blue-800 text-sm">
+                <div className="flex flex-col gap-1">
+                  <span className="font-medium">
+                    Aguardando confirmação do pagamento...
+                  </span>
+                  <span className="text-xs">
+                    Verificação {pollingAttempts} de 60 • Não feche esta janela
+                  </span>
+                </div>
+              </AlertDescription>
+            </Alert>
+          )}
 
           <div className="py-4">
             <CreditCardForm

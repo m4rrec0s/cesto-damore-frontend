@@ -100,7 +100,6 @@ export interface CreateFeedSectionInput {
   section_type: FeedSectionType;
   is_visible?: boolean;
   display_order?: number;
-  max_items?: number;
 }
 
 export interface UpdateFeedSectionInput {
@@ -108,7 +107,6 @@ export interface UpdateFeedSectionInput {
   section_type?: FeedSectionType;
   is_visible?: boolean;
   display_order?: number;
-  max_items?: number;
 }
 
 export interface CreateFeedSectionItemInput {
@@ -994,6 +992,10 @@ class ApiService {
   };
 
   // ===== Customization Rules =====
+
+  /**
+   * Busca customizações de um produto (legado - retrocompatibilidade)
+   */
   getProductCustomizations = async (
     productId: string
   ): Promise<CustomizationRule[]> => {
@@ -1001,6 +1003,9 @@ class ApiService {
     return res.data;
   };
 
+  /**
+   * Busca customizações de um adicional (legado - retrocompatibilidade)
+   */
   getAdditionalCustomizations = async (
     additionalId: string
   ): Promise<CustomizationRule[]> => {
@@ -1069,43 +1074,36 @@ class ApiService {
   };
 
   // ===== Product Rules (New System) =====
-  getProductRulesByType = async (productTypeId: string) => {
+
+  /**
+   * Busca regras de customização por tipo de produto
+   */
+  getProductRulesByType = async (
+    productTypeId: string
+  ): Promise<import("../types/customization").ProductRule[]> => {
     const res = await this.client.get(
       `/admin/customization/rule/type/${productTypeId}`
     );
     return res.data;
   };
 
-  createProductRule = async (data: {
-    product_type_id: string;
-    rule_type: CustomizationTypeValue;
-    title: string;
-    description?: string;
-    required: boolean;
-    max_items?: number | null;
-    available_options?: CustomizationAvailableOptions | null;
-    conflict_with?: string[] | null;
-    dependencies?: string[] | null;
-    display_order?: number;
-  }) => {
+  /**
+   * Cria uma nova regra de customização (ProductRule)
+   */
+  createProductRule = async (
+    data: import("../types/customization").ProductRuleInput
+  ): Promise<import("../types/customization").ProductRule> => {
     const res = await this.client.post(`/admin/customization/rule`, data);
     return res.data;
   };
 
+  /**
+   * Atualiza uma regra de customização existente
+   */
   updateProductRule = async (
     ruleId: string,
-    data: {
-      rule_type?: CustomizationTypeValue;
-      title?: string;
-      description?: string;
-      required?: boolean;
-      max_items?: number | null;
-      available_options?: CustomizationAvailableOptions | null;
-      conflict_with?: string[] | null;
-      dependencies?: string[] | null;
-      display_order?: number;
-    }
-  ) => {
+    data: Partial<import("../types/customization").ProductRuleInput>
+  ): Promise<import("../types/customization").ProductRule> => {
     const res = await this.client.put(
       `/admin/customization/rule/${ruleId}`,
       data
@@ -1113,9 +1111,399 @@ class ApiService {
     return res.data;
   };
 
-  deleteProductRule = async (ruleId: string) => {
+  /**
+   * Deleta uma regra de customização
+   */
+  deleteProductRule = async (ruleId: string): Promise<{ message: string }> => {
     const res = await this.client.delete(`/admin/customization/rule/${ruleId}`);
     return res.data;
+  };
+
+  // ===== Temporary File Upload (for customizations) =====
+
+  /**
+   * Faz upload de arquivo temporário para customização
+   */
+  uploadTemporaryFile = async (
+    sessionId: string,
+    file: File
+  ): Promise<{
+    id: string;
+    original_name: string;
+    size: number;
+    mime_type: string;
+    expires_at: string;
+  }> => {
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("sessionId", sessionId);
+
+    const res = await this.client.post("/customization/upload-temp", formData, {
+      headers: {
+        "Content-Type": "multipart/form-data",
+      },
+    });
+    return res.data;
+  };
+
+  /**
+   * Busca arquivos temporários de uma sessão
+   */
+  getSessionFiles = async (
+    sessionId: string
+  ): Promise<{
+    files: Array<{
+      id: string;
+      original_name: string;
+      size: number;
+      mime_type: string;
+      expires_at: string;
+    }>;
+  }> => {
+    const res = await this.client.get(
+      `/customization/session/${sessionId}/files`
+    );
+    return res.data;
+  };
+
+  /**
+   * Deleta arquivo temporário
+   */
+  deleteTemporaryFile = async (
+    fileId: string
+  ): Promise<{ message: string }> => {
+    const res = await this.client.delete(`/customization/temp-file/${fileId}`);
+    return res.data;
+  };
+
+  /**
+   * Valida customizações de um produto
+   */
+  validateCustomizations = async (
+    productId: string,
+    customizations: Array<{
+      rule_id: string;
+      data: Record<string, unknown>;
+    }>
+  ): Promise<{ valid: boolean; errors: string[] }> => {
+    const res = await this.client.post("/customization/validate", {
+      productId,
+      customizations,
+    });
+    return res.data;
+  };
+
+  /**
+   * Gera preview de customização
+   */
+  generateCustomizationPreview = async (
+    productId: string,
+    customizationData: Record<string, unknown>
+  ): Promise<{
+    previewUrl?: string;
+    model3d?: string;
+    message?: string;
+  }> => {
+    const res = await this.client.post("/customization/preview", {
+      productId,
+      customizationData,
+    });
+    return res.data;
+  };
+
+  // ===== New Customization API Methods =====
+
+  /**
+   * Busca configuração de customização para um item (produto ou adicional)
+   * GET /customizations/:itemType/:itemId
+   */
+  getItemCustomizations = async (
+    itemType: "PRODUCT" | "ADDITIONAL",
+    itemId: string
+  ): Promise<import("../types/customization").CustomizationConfigResponse> => {
+    const res = await this.client.get(`/customizations/${itemType}/${itemId}`);
+    return res.data;
+  };
+
+  /**
+   * Busca customizações por referência (compatibilidade)
+   * GET /customizations/reference/:referenceId
+   */
+  getCustomizationsByReference = async (
+    referenceId: string
+  ): Promise<{
+    itemType: "PRODUCT" | "ADDITIONAL";
+    config: import("../types/customization").CustomizationConfigResponse | null;
+  }> => {
+    const res = await this.client.get(
+      `/customizations/reference/${referenceId}`
+    );
+    return res.data;
+  };
+
+  /**
+   * Valida customizações antes de salvar
+   * POST /customizations/validate
+   */
+  validateCustomizationsV2 = async (payload: {
+    itemType: "PRODUCT" | "ADDITIONAL";
+    itemId: string;
+    inputs: import("../types/customization").CustomizationInput[];
+  }): Promise<import("../types/customization").ValidationResponse> => {
+    const res = await this.client.post("/customizations/validate", payload);
+    return res.data;
+  };
+
+  /**
+   * Gera preview de customização 3D
+   * POST /customizations/preview
+   */
+  generatePreview = async (payload: {
+    layoutId: string;
+    customizations: import("../types/customization").CustomizationInput[];
+  }): Promise<import("../types/customization").PreviewPayload> => {
+    const res = await this.client.post("/customizations/preview", payload);
+    return res.data;
+  };
+
+  /**
+   * Lista customizações de um pedido
+   * GET /orders/:orderId/customizations
+   */
+  listOrderCustomizations = async (
+    orderId: string
+  ): Promise<{
+    orderId: string;
+    items: Array<{
+      id: string;
+      order_id: string;
+      product_id: string;
+      quantity: number;
+      unit_price: number;
+      product: {
+        id: string;
+        name: string;
+      };
+      customizations: Array<{
+        id: string;
+        order_item_id: string;
+        customization_rule_id: string | null;
+        customization_type: string;
+        title: string;
+        customization_data: string;
+        created_at: string;
+        updated_at: string;
+      }>;
+    }>;
+  }> => {
+    const res = await this.client.get(`/orders/${orderId}/customizations`);
+    return res.data;
+  };
+
+  /**
+   * Salva customização de um item do pedido
+   * POST /orders/:orderId/items/:itemId/customizations
+   */
+  saveOrderItemCustomization = async (
+    orderId: string,
+    itemId: string,
+    payload: import("../types/customization").SaveOrderItemCustomizationPayload
+  ): Promise<{
+    id: string;
+    order_item_id: string;
+    customization_rule_id: string | null;
+    customization_type: string;
+    title: string;
+    customization_data: string;
+    created_at: string;
+    updated_at: string;
+  }> => {
+    const res = await this.client.post(
+      `/orders/${orderId}/items/${itemId}/customizations`,
+      payload
+    );
+    return res.data;
+  };
+
+  /**
+   * Upload de imagem para preview de customização
+   * POST /customization/upload-image
+   */
+  uploadCustomizationImage = async (
+    imageFile: File
+  ): Promise<{
+    success: boolean;
+    imageUrl: string;
+    filename: string;
+    mimeType: string;
+    size: number;
+  }> => {
+    const formData = new FormData();
+    formData.append("image", imageFile);
+
+    const res = await this.client.post(
+      "/customization/upload-image",
+      formData,
+      {
+        headers: { "Content-Type": "multipart/form-data" },
+      }
+    );
+    return res.data;
+  };
+
+  /**
+   * Deleta imagem de customização
+   * DELETE /customization/image/:filename
+   */
+  deleteCustomizationImage = async (filename: string): Promise<void> => {
+    await this.client.delete(`/customization/image/${filename}`);
+  };
+
+  /**
+   * Lista todos os constraints
+   * GET /admin/constraints
+   */
+  listAllConstraints = async (): Promise<
+    Array<{
+      id: string;
+      target_item_id: string;
+      target_item_type: "PRODUCT" | "ADDITIONAL";
+      target_item_name: string | null;
+      constraint_type: "MUTUALLY_EXCLUSIVE" | "REQUIRES";
+      related_item_id: string;
+      related_item_type: "PRODUCT" | "ADDITIONAL";
+      related_item_name: string | null;
+      message: string | null;
+      created_at: string;
+      updated_at: string;
+    }>
+  > => {
+    const res = await this.client.get("/admin/constraints");
+    return res.data;
+  };
+
+  /**
+   * Busca constraints de um item específico
+   * GET /admin/constraints/item/:itemType/:itemId
+   */
+  getConstraintsByItem = async (
+    itemType: "PRODUCT" | "ADDITIONAL",
+    itemId: string
+  ): Promise<
+    Array<{
+      id: string;
+      target_item_id: string;
+      target_item_type: "PRODUCT" | "ADDITIONAL";
+      target_item_name: string | null;
+      constraint_type: "MUTUALLY_EXCLUSIVE" | "REQUIRES";
+      related_item_id: string;
+      related_item_type: "PRODUCT" | "ADDITIONAL";
+      related_item_name: string | null;
+      message: string | null;
+      created_at: string;
+      updated_at: string;
+    }>
+  > => {
+    const res = await this.client.get(
+      `/admin/constraints/item/${itemType}/${itemId}`
+    );
+    return res.data;
+  };
+
+  /**
+   * Busca produtos/adicionais para autocomplete
+   * GET /admin/constraints/search?q=termo
+   */
+  searchItemsForConstraints = async (
+    query: string
+  ): Promise<{
+    products: Array<{
+      id: string;
+      name: string;
+      type: "PRODUCT";
+      image_url: string | null;
+    }>;
+    additionals: Array<{
+      id: string;
+      name: string;
+      type: "ADDITIONAL";
+      image_url: string | null;
+    }>;
+  }> => {
+    const res = await this.client.get(
+      `/admin/constraints/search?q=${encodeURIComponent(query)}`
+    );
+    return res.data;
+  };
+
+  /**
+   * Cria um novo constraint
+   * POST /admin/constraints
+   */
+  createConstraint = async (payload: {
+    target_item_id: string;
+    target_item_type: "PRODUCT" | "ADDITIONAL";
+    constraint_type: "MUTUALLY_EXCLUSIVE" | "REQUIRES";
+    related_item_id: string;
+    related_item_type: "PRODUCT" | "ADDITIONAL";
+    message?: string;
+  }): Promise<{
+    id: string;
+    target_item_id: string;
+    target_item_type: "PRODUCT" | "ADDITIONAL";
+    target_item_name: string | null;
+    constraint_type: "MUTUALLY_EXCLUSIVE" | "REQUIRES";
+    related_item_id: string;
+    related_item_type: "PRODUCT" | "ADDITIONAL";
+    related_item_name: string | null;
+    message: string | null;
+    created_at: string;
+    updated_at: string;
+  }> => {
+    const res = await this.client.post("/admin/constraints", payload);
+    return res.data;
+  };
+
+  /**
+   * Atualiza um constraint
+   * PUT /admin/constraints/:constraintId
+   */
+  updateConstraint = async (
+    constraintId: string,
+    payload: Partial<{
+      target_item_id: string;
+      target_item_type: "PRODUCT" | "ADDITIONAL";
+      constraint_type: "MUTUALLY_EXCLUSIVE" | "REQUIRES";
+      related_item_id: string;
+      related_item_type: "PRODUCT" | "ADDITIONAL";
+      message: string;
+    }>
+  ): Promise<{
+    id: string;
+    target_item_id: string;
+    target_item_type: "PRODUCT" | "ADDITIONAL";
+    target_item_name: string | null;
+    constraint_type: "MUTUALLY_EXCLUSIVE" | "REQUIRES";
+    related_item_id: string;
+    related_item_type: "PRODUCT" | "ADDITIONAL";
+    related_item_name: string | null;
+    message: string | null;
+    created_at: string;
+    updated_at: string;
+  }> => {
+    const res = await this.client.put(
+      `/admin/constraints/${constraintId}`,
+      payload
+    );
+    return res.data;
+  };
+
+  /**
+   * Deleta um constraint
+   * DELETE /admin/constraints/:constraintId
+   */
+  deleteConstraint = async (constraintId: string): Promise<void> => {
+    await this.client.delete(`/admin/constraints/${constraintId}`);
   };
 
   // ===== Payments =====
@@ -1159,21 +1547,19 @@ class ApiService {
   // ===== Checkout Transparente =====
   createTransparentPayment = async (payload: {
     orderId: string;
-    token?: string;
-    payment_method_id: "pix" | "credit_card" | "debit_card";
-    issuer_id?: string;
+    payerEmail: string;
+    payerName: string;
+    payerDocument: string;
+    payerDocumentType: "CPF" | "CNPJ";
+    paymentMethodId: "pix" | "credit_card" | "debit_card";
+    cardToken?: string;
     installments?: number;
-    payer: {
-      email: string;
-      first_name?: string;
-      last_name?: string;
-      identification?: {
-        type: string;
-        number: string;
-      };
-    };
+    issuer_id?: string;
   }) => {
-    const res = await this.client.post("/payment/transparent", payload);
+    const res = await this.client.post(
+      "/payment/transparent-checkout",
+      payload
+    );
     return res.data;
   };
 

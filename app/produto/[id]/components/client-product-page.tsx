@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import { toast } from "sonner";
 import {
   ShoppingCart,
@@ -16,7 +16,6 @@ import {
   AlertCircle,
   Images,
   FileText,
-  Loader2,
 } from "lucide-react";
 
 import { Button } from "@/app/components/ui/button";
@@ -34,12 +33,33 @@ import useApi, { Additional, Product } from "@/app/hooks/use-api";
 import { useCartContext } from "@/app/hooks/cart-context";
 import {
   useCustomization,
-  CustomizationType,
   PhotoUploadData,
 } from "@/app/hooks/use-customization";
 import type { CartCustomization } from "@/app/hooks/use-cart";
+import type {
+  ProductRule,
+  RuleAvailableOptions,
+  SelectOption,
+  LayoutPreset,
+  LayoutWithPhotos,
+  RuleType,
+} from "@/app/types/customization";
+
+interface RuleValue {
+  rule_id: string;
+  photos?: PhotoUploadData[];
+  text?: string;
+  selected_option?: string;
+  selected_layout?: string;
+  selected_item?: {
+    original_item: string;
+    selected_item: string;
+    price_adjustment: number;
+  };
+}
 
 import AdditionalCard from "./additional-card";
+import Link from "next/link";
 
 const formatCurrency = (value: number) =>
   value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -110,7 +130,7 @@ const formatCustomizationValue = (custom: CartCustomization) => {
 };
 
 const isSubstitutionOptions = (
-  options: CustomizationType["available_options"]
+  options: RuleAvailableOptions | undefined
 ): options is {
   items: Array<{
     original_item: string;
@@ -127,8 +147,64 @@ const isSubstitutionOptions = (
   );
 };
 
+// Type guards para opções específicas
+const isSelectOptions = (
+  options: RuleAvailableOptions | undefined
+): options is SelectOption[] => {
+  return (
+    Array.isArray(options) &&
+    options.every((o): o is SelectOption => {
+      const opt = o as Partial<SelectOption>;
+      return typeof opt.value === "string" && typeof opt.label === "string";
+    })
+  );
+};
+
+const isLayoutPresetOptions = (
+  options: RuleAvailableOptions | undefined
+): options is LayoutPreset[] => {
+  return (
+    Array.isArray(options) &&
+    options.every(
+      (o) => typeof (o as Partial<LayoutPreset>).preview_image_url === "string"
+    )
+  );
+};
+
+const isLayoutWithPhotosOptions = (
+  options: RuleAvailableOptions | undefined
+): options is LayoutWithPhotos[] => {
+  return (
+    Array.isArray(options) &&
+    options.every(
+      (o) => typeof (o as Partial<LayoutWithPhotos>).photo_slots === "number"
+    )
+  );
+};
+
+// Mapeia tipos novos para os tipos legados usados no carrinho
+const mapRuleTypeToLegacy = (
+  ruleType: RuleType
+): "PHOTO_UPLOAD" | "TEXT_INPUT" | "MULTIPLE_CHOICE" | "ITEM_SUBSTITUTION" => {
+  switch (ruleType) {
+    case "PHOTO_UPLOAD":
+      return "PHOTO_UPLOAD";
+    case "TEXT_INPUT":
+      return "TEXT_INPUT";
+    case "OPTION_SELECT":
+      return "MULTIPLE_CHOICE";
+    case "ITEM_SUBSTITUTION":
+      return "ITEM_SUBSTITUTION";
+    case "LAYOUT_PRESET":
+      return "MULTIPLE_CHOICE";
+    case "LAYOUT_WITH_PHOTOS":
+      return "PHOTO_UPLOAD";
+  }
+};
+
 const ClientProductPage = ({ id }: { id: string }) => {
-  const { getProduct, getAdditionalsByProduct } = useApi();
+  const { getProduct, getAdditionalsByProduct, getProductRulesByType } =
+    useApi();
   const { cart, addToCart } = useCartContext();
 
   const [product, setProduct] = useState<Product>({} as Product);
@@ -140,25 +216,26 @@ const ClientProductPage = ({ id }: { id: string }) => {
   const [missingRequiredFields, setMissingRequiredFields] = useState<string[]>(
     []
   );
+  const [productRules, setProductRules] = useState<ProductRule[]>([]);
+  const [ruleValues, setRuleValues] = useState<RuleValue[]>([]);
 
-  const {
-    customizations: customizationValues,
-    availableCustomizations,
-    loading: loadingCustomizations,
-    error: customizationError,
-    fetchAvailableCustomizations,
-    updateCustomization,
-    removeCustomization,
-    uploadFile,
-    deleteFile,
-    validateRequired,
-  } = useCustomization(id, "product");
+  const { uploadFile, deleteFile } = useCustomization(id, "product");
 
   useEffect(() => {
     const fetchProduct = async () => {
       try {
         const data = await getProduct(id);
         setProduct(data);
+        // Buscar regras de customização do tipo do produto
+        if (data.type_id) {
+          try {
+            const rules = await getProductRulesByType(data.type_id);
+            setProductRules(rules);
+          } catch (error) {
+            console.error("Erro ao carregar regras de customização:", error);
+            // Não mostrar toast para erro de regras, pois pode ser que não haja regras
+          }
+        }
       } catch (error) {
         console.error("Erro ao carregar produto:", error);
         toast.error("Erro ao carregar produto");
@@ -179,32 +256,55 @@ const ClientProductPage = ({ id }: { id: string }) => {
 
     fetchProduct();
     fetchAdditionals();
-  }, [id, getProduct, getAdditionalsByProduct]);
-
-  useEffect(() => {
-    fetchAvailableCustomizations();
-  }, [fetchAvailableCustomizations]);
-
-  useEffect(() => {
-    if (missingRequiredFields.length > 0) {
-      const { missingFields } = validateRequired();
-      const normalizedMissing = missingFields ?? [];
-      if (
-        normalizedMissing.length !== missingRequiredFields.length ||
-        normalizedMissing.some(
-          (title) => !missingRequiredFields.includes(title)
-        )
-      ) {
-        setMissingRequiredFields(normalizedMissing);
-      }
-    }
-  }, [customizationValues, missingRequiredFields, validateRequired]);
+  }, [id, getProduct, getAdditionalsByProduct, getProductRulesByType]);
 
   const sortedCustomizationRules = useMemo(() => {
-    return [...availableCustomizations].sort(
+    return [...productRules].sort(
       (a, b) => (a.display_order ?? 0) - (b.display_order ?? 0)
     );
-  }, [availableCustomizations]);
+  }, [productRules]);
+
+  useEffect(() => {
+    // Validar regras obrigatórias
+    const missingFields: string[] = [];
+    sortedCustomizationRules.forEach((rule) => {
+      if (!rule.required) return;
+
+      const value = ruleValues.find((v) => v.rule_id === rule.id);
+      if (!value) {
+        missingFields.push(rule.title);
+        return;
+      }
+
+      let isFilled = false;
+      switch (rule.rule_type) {
+        case "PHOTO_UPLOAD":
+          isFilled = (value.photos?.length ?? 0) > 0;
+          break;
+        case "TEXT_INPUT":
+          isFilled = !!value.text?.trim();
+          break;
+        case "OPTION_SELECT":
+          isFilled = !!value.selected_option;
+          break;
+        case "LAYOUT_PRESET":
+          isFilled = !!value.selected_layout;
+          break;
+        case "LAYOUT_WITH_PHOTOS":
+          isFilled = !!value.selected_layout && (value.photos?.length ?? 0) > 0;
+          break;
+        case "ITEM_SUBSTITUTION":
+          isFilled = !!value.selected_item;
+          break;
+      }
+
+      if (!isFilled) {
+        missingFields.push(rule.title);
+      }
+    });
+
+    setMissingRequiredFields(missingFields);
+  }, [ruleValues, sortedCustomizationRules]);
 
   const cartCustomizations = useMemo(() => {
     if (sortedCustomizationRules.length === 0) return [];
@@ -212,9 +312,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
     const result: CartCustomization[] = [];
 
     sortedCustomizationRules.forEach((rule) => {
-      const value = customizationValues.find(
-        (c) => c.customization_id === rule.id
-      );
+      const value = ruleValues.find((c) => c.rule_id === rule.id);
       if (!value) return;
 
       let isFilled = false;
@@ -227,7 +325,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
         position: index,
       }));
 
-      switch (rule.customization_type) {
+      switch (rule.rule_type) {
         case "PHOTO_UPLOAD": {
           if (normalizedPhotos.length > 0) {
             isFilled = true;
@@ -240,16 +338,45 @@ const ClientProductPage = ({ id }: { id: string }) => {
           }
           break;
         }
-        case "MULTIPLE_CHOICE": {
+        case "OPTION_SELECT": {
           if (value.selected_option) {
             isFilled = true;
-            if (Array.isArray(rule.available_options)) {
-              const option = rule.available_options.find(
-                (opt) => opt.value === value.selected_option
+            if (isSelectOptions(rule.available_options)) {
+              const opt = rule.available_options.find(
+                (o) => o.value === value.selected_option
               );
-              if (option) {
-                priceAdjustment = option.price_adjustment || 0;
-                selectedOptionLabel = option.label;
+              if (opt) {
+                priceAdjustment = opt.price_adjustment || 0;
+                selectedOptionLabel = opt.label;
+              }
+            }
+          }
+          break;
+        }
+        case "LAYOUT_PRESET": {
+          if (value.selected_layout) {
+            isFilled = true;
+            if (isLayoutPresetOptions(rule.available_options)) {
+              const layout = rule.available_options.find(
+                (l) => l.id === value.selected_layout
+              );
+              if (layout) {
+                priceAdjustment = layout.price_adjustment || 0;
+                selectedOptionLabel = layout.name;
+              }
+            }
+          }
+          break;
+        }
+        case "LAYOUT_WITH_PHOTOS": {
+          if (value.selected_layout && normalizedPhotos.length > 0) {
+            isFilled = true;
+            if (isLayoutWithPhotosOptions(rule.available_options)) {
+              const layout = rule.available_options.find(
+                (l) => l.id === value.selected_layout
+              );
+              if (layout) {
+                priceAdjustment = layout.price_adjustment || 0;
               }
             }
           }
@@ -271,20 +398,30 @@ const ClientProductPage = ({ id }: { id: string }) => {
         return;
       }
 
-      result.push({
-        ...value,
+      const customizationEntry: CartCustomization = {
+        customization_id: rule.id,
         photos: normalizedPhotos,
+        text: value.text,
+        selected_option: value.selected_option,
+        selected_item: value.selected_item,
         title: rule.title || "Personalização",
-        customization_type: rule.customization_type,
-        is_required: rule.is_required,
+        customization_type: mapRuleTypeToLegacy(rule.rule_type),
+        is_required: rule.required,
         price_adjustment: priceAdjustment,
         selected_option_label: selectedOptionLabel,
         selected_item_label: selectedItemLabel,
-      });
+      };
+
+      // Ajustes para LAYOUT_PRESET: reutilizar campos de opção para exibição
+      if (rule.rule_type === "LAYOUT_PRESET" && value.selected_layout) {
+        customizationEntry.selected_option = value.selected_layout;
+      }
+
+      result.push(customizationEntry);
     });
 
     return result;
-  }, [customizationValues, sortedCustomizationRules]);
+  }, [ruleValues, sortedCustomizationRules]);
 
   const customizationTotal = useMemo(
     () =>
@@ -294,6 +431,27 @@ const ClientProductPage = ({ id }: { id: string }) => {
       ),
     [cartCustomizations]
   );
+
+  // Funções para gerenciar valores das regras
+  const updateRuleValue = useCallback(
+    (ruleId: string, updates: Partial<RuleValue>) => {
+      setRuleValues((prev) => {
+        const existing = prev.find((v) => v.rule_id === ruleId);
+        if (existing) {
+          return prev.map((v) =>
+            v.rule_id === ruleId ? { ...v, ...updates } : v
+          );
+        } else {
+          return [...prev, { rule_id: ruleId, ...updates }];
+        }
+      });
+    },
+    []
+  );
+
+  const removeRuleValue = useCallback((ruleId: string) => {
+    setRuleValues((prev) => prev.filter((v) => v.rule_id !== ruleId));
+  }, []);
 
   const basePrice = useMemo(() => {
     if (!product.price) return 0;
@@ -336,7 +494,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
 
   const handlePhotoUpload = async (
     customizationId: string,
-    rule: CustomizationType,
+    rule: ProductRule,
     files: FileList | File[]
   ) => {
     const filesArray = Array.from(files || []);
@@ -344,15 +502,11 @@ const ClientProductPage = ({ id }: { id: string }) => {
       return;
     }
 
-    const currentValue = customizationValues.find(
-      (c) => c.customization_id === customizationId
-    );
+    const currentValue = ruleValues.find((c) => c.rule_id === customizationId);
     const existingPhotos = currentValue?.photos || [];
 
     const maxFilesFromRule =
-      typeof rule.max_files === "number" && rule.max_files > 0
-        ? rule.max_files
-        : typeof rule.max_items === "number" && rule.max_items > 0
+      typeof rule.max_items === "number" && rule.max_items > 0
         ? rule.max_items
         : undefined;
 
@@ -397,7 +551,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
             position: index,
           })
         );
-        updateCustomization(customizationId, { photos: updatedPhotos });
+        updateRuleValue(customizationId, { photos: updatedPhotos });
         toast.success("Foto(s) adicionada(s) com sucesso!");
       }
     } catch (error) {
@@ -423,17 +577,15 @@ const ClientProductPage = ({ id }: { id: string }) => {
       setUploadingMap((prev) => ({ ...prev, [customizationId]: false }));
     }
 
-    const currentValue = customizationValues.find(
-      (c) => c.customization_id === customizationId
-    );
+    const currentValue = ruleValues.find((c) => c.rule_id === customizationId);
     const remainingPhotos = (currentValue?.photos || []).filter(
       (photo) => photo.temp_file_id !== tempFileId
     );
 
     if (remainingPhotos.length === 0) {
-      removeCustomization(customizationId);
+      removeRuleValue(customizationId);
     } else {
-      updateCustomization(customizationId, {
+      updateRuleValue(customizationId, {
         photos: remainingPhotos.map((photo, index) => ({
           ...photo,
           position: index,
@@ -445,16 +597,16 @@ const ClientProductPage = ({ id }: { id: string }) => {
   const handleAddToCart = async () => {
     if (!product.id) return;
 
-    if (loadingCustomizations || isUploading) {
+    if (isUploading) {
       toast.info("Aguarde finalizar o carregamento das personalizações.");
       return;
     }
 
-    const { isValid, missingFields } = validateRequired();
-    if (!isValid) {
-      setMissingRequiredFields(missingFields);
+    if (missingRequiredFields.length > 0) {
       toast.error(
-        `Complete as personalizações obrigatórias: ${missingFields.join(", ")}`
+        `Complete as personalizações obrigatórias: ${missingRequiredFields.join(
+          ", "
+        )}`
       );
       return;
     }
@@ -508,9 +660,16 @@ const ClientProductPage = ({ id }: { id: string }) => {
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-7xl mx-auto px-4 py-8">
         <nav className="text-sm text-gray-600 mb-6">
-          <span>Início</span>
+          <Link href="/" className="hover:underline">
+            Início
+          </Link>
           <span className="mx-2">›</span>
-          <span>{product.categories?.[0]?.name || "Produtos"}</span>
+          <Link
+            href={`/categoria/${product.categories?.[0]?.id}`}
+            className="hover:underline"
+          >
+            {product.categories?.[0]?.name || "Produtos"}
+          </Link>
           <span className="mx-2">›</span>
           <span className="text-gray-900 font-medium">{product.name}</span>
         </nav>
@@ -692,47 +851,26 @@ const ClientProductPage = ({ id }: { id: string }) => {
                 <h2 className="text-lg font-semibold text-gray-900">
                   Personalize seu pedido
                 </h2>
-                {loadingCustomizations && (
-                  <Loader2 className="h-4 w-4 animate-spin text-gray-500" />
-                )}
+                {/* Loader de customização removido (não aplicável ao novo fluxo) */}
               </div>
 
-              {customizationError && (
-                <div className="flex items-start gap-2 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
-                  <AlertCircle className="h-4 w-4 mt-0.5" />
-                  <span>
-                    Não foi possível carregar as personalizações:{" "}
-                    {customizationError}
-                  </span>
-                </div>
-              )}
-
-              {sortedCustomizationRules.length === 0 &&
-              !loadingCustomizations ? (
+              {sortedCustomizationRules.length === 0 && true ? (
                 <p className="text-sm text-muted-foreground">
                   Este produto não possui personalizações configuradas.
                 </p>
               ) : (
                 <div className="space-y-5">
                   {sortedCustomizationRules.map((rule) => {
-                    const value = customizationValues.find(
-                      (c) => c.customization_id === rule.id
-                    );
+                    const value = ruleValues.find((v) => v.rule_id === rule.id);
                     const cartCustomization = cartCustomizations.find(
                       (c) => c.customization_id === rule.id
                     );
                     const currentPhotos = value?.photos || [];
                     const isMissing = missingRequiredFields.includes(
-                      rule.title || ""
+                      rule.title
                     );
 
-                    const maxAllowed =
-                      typeof rule.max_files === "number" && rule.max_files > 0
-                        ? rule.max_files
-                        : typeof rule.max_items === "number" &&
-                          rule.max_items > 0
-                        ? rule.max_items
-                        : undefined;
+                    const maxAllowed = rule.max_items || 10; // default fallback
 
                     const remainingPhotos = maxAllowed
                       ? Math.max(maxAllowed - currentPhotos.length, 0)
@@ -753,7 +891,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
                               <h3 className="text-sm font-semibold text-foreground">
                                 {rule.title}
                               </h3>
-                              {rule.is_required && (
+                              {rule.required && (
                                 <Badge
                                   variant="destructive"
                                   className="text-[10px] uppercase"
@@ -787,7 +925,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
                         </div>
 
                         {(() => {
-                          switch (rule.customization_type) {
+                          switch (rule.rule_type) {
                             case "PHOTO_UPLOAD":
                               return (
                                 <div className="space-y-3">
@@ -888,7 +1026,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
                                     placeholder="Digite aqui sua mensagem"
                                     value={value?.text || ""}
                                     onChange={(event) =>
-                                      updateCustomization(rule.id, {
+                                      updateRuleValue(rule.id, {
                                         text: event.target.value,
                                       })
                                     }
@@ -896,7 +1034,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
                                 </div>
                               );
 
-                            case "MULTIPLE_CHOICE":
+                            case "OPTION_SELECT":
                               return (
                                 <div className="space-y-2">
                                   <span className="text-xs text-muted-foreground">
@@ -905,7 +1043,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
                                   <Select
                                     value={value?.selected_option || ""}
                                     onValueChange={(selectedValue) =>
-                                      updateCustomization(rule.id, {
+                                      updateRuleValue(rule.id, {
                                         selected_option: selectedValue,
                                       })
                                     }
@@ -914,7 +1052,9 @@ const ClientProductPage = ({ id }: { id: string }) => {
                                       <SelectValue placeholder="Selecione uma opção" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                      {Array.isArray(rule.available_options) ? (
+                                      {isSelectOptions(
+                                        rule.available_options
+                                      ) ? (
                                         rule.available_options.map((option) => (
                                           <SelectItem
                                             key={option.value}
@@ -934,9 +1074,9 @@ const ClientProductPage = ({ id }: { id: string }) => {
                                           </SelectItem>
                                         ))
                                       ) : (
-                                        <SelectItem value="" disabled>
+                                        <div className="px-2 py-2 text-xs text-muted-foreground">
                                           Nenhuma opção configurada
-                                        </SelectItem>
+                                        </div>
                                       )}
                                     </SelectContent>
                                   </Select>
@@ -978,7 +1118,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
                                       const option = substitutionOptions.find(
                                         (opt) => opt.value === selectedValue
                                       );
-                                      updateCustomization(rule.id, {
+                                      updateRuleValue(rule.id, {
                                         selected_item: {
                                           original_item: originalItem,
                                           selected_item: selectedItem,
@@ -1014,9 +1154,9 @@ const ClientProductPage = ({ id }: { id: string }) => {
                                           </SelectItem>
                                         ))
                                       ) : (
-                                        <SelectItem value="" disabled>
+                                        <div className="px-2 py-2 text-xs text-muted-foreground">
                                           Nenhuma substituição disponível
-                                        </SelectItem>
+                                        </div>
                                       )}
                                     </SelectContent>
                                   </Select>
@@ -1024,6 +1164,213 @@ const ClientProductPage = ({ id }: { id: string }) => {
                               );
                             }
 
+                            case "LAYOUT_PRESET": {
+                              const layoutOptions = isLayoutPresetOptions(
+                                rule.available_options
+                              )
+                                ? rule.available_options
+                                : [];
+
+                              return (
+                                <div className="space-y-2">
+                                  <span className="text-xs text-muted-foreground">
+                                    Selecione um layout pronto para seu produto.
+                                  </span>
+                                  <Select
+                                    value={value?.selected_layout || ""}
+                                    onValueChange={(selectedLayoutId) =>
+                                      updateRuleValue(rule.id, {
+                                        selected_layout: selectedLayoutId,
+                                      })
+                                    }
+                                  >
+                                    <SelectTrigger>
+                                      <SelectValue placeholder="Selecione um layout" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      {layoutOptions.length > 0 ? (
+                                        layoutOptions.map((layout) => (
+                                          <SelectItem
+                                            key={layout.id}
+                                            value={layout.id}
+                                          >
+                                            <div className="flex items-center justify-between gap-2">
+                                              <span className="truncate">
+                                                {layout.name}
+                                              </span>
+                                              {layout.price_adjustment ? (
+                                                <span className="text-xs text-emerald-600 font-semibold">
+                                                  +
+                                                  {formatCurrency(
+                                                    layout.price_adjustment
+                                                  )}
+                                                </span>
+                                              ) : null}
+                                            </div>
+                                          </SelectItem>
+                                        ))
+                                      ) : (
+                                        <div className="px-2 py-2 text-xs text-muted-foreground">
+                                          Nenhum layout disponível
+                                        </div>
+                                      )}
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                              );
+                            }
+
+                            case "LAYOUT_WITH_PHOTOS": {
+                              const layoutOptions = isLayoutWithPhotosOptions(
+                                rule.available_options
+                              )
+                                ? rule.available_options
+                                : [];
+                              const selectedLayout = layoutOptions.find(
+                                (l) => l.id === value?.selected_layout
+                              );
+                              const maxSlots =
+                                selectedLayout?.photo_slots ||
+                                rule.max_items ||
+                                undefined;
+                              const currentPhotos = value?.photos || [];
+                              const remainingSlots = maxSlots
+                                ? Math.max(maxSlots - currentPhotos.length, 0)
+                                : undefined;
+
+                              return (
+                                <div className="space-y-3">
+                                  <div className="space-y-2">
+                                    <span className="text-xs text-muted-foreground">
+                                      Escolha um layout com fotos e envie as
+                                      imagens.
+                                    </span>
+                                    <Select
+                                      value={value?.selected_layout || ""}
+                                      onValueChange={(selectedLayoutId) =>
+                                        updateRuleValue(rule.id, {
+                                          selected_layout: selectedLayoutId,
+                                          photos: [], // resetar fotos ao trocar de layout
+                                        })
+                                      }
+                                    >
+                                      <SelectTrigger>
+                                        <SelectValue placeholder="Selecione um layout" />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        {layoutOptions.length > 0 ? (
+                                          layoutOptions.map((layout) => (
+                                            <SelectItem
+                                              key={layout.id}
+                                              value={layout.id}
+                                            >
+                                              <div className="flex items-center justify-between gap-2">
+                                                <span className="truncate">
+                                                  {layout.name}
+                                                </span>
+                                                <span className="text-[10px] text-muted-foreground">
+                                                  {layout.photo_slots} foto(s)
+                                                </span>
+                                              </div>
+                                            </SelectItem>
+                                          ))
+                                        ) : (
+                                          <div className="px-2 py-2 text-xs text-muted-foreground">
+                                            Nenhum layout disponível
+                                          </div>
+                                        )}
+                                      </SelectContent>
+                                    </Select>
+                                  </div>
+
+                                  <div className="flex flex-col gap-2 rounded-md border-2 border-dashed border-border/60 bg-white p-4 text-sm text-muted-foreground">
+                                    <div className="flex items-center gap-2 text-foreground">
+                                      <Images className="h-5 w-5" />
+                                      <span>
+                                        Envie fotos para preencher o layout
+                                        selecionado
+                                      </span>
+                                    </div>
+                                    {maxSlots ? (
+                                      <span className="text-xs text-muted-foreground">
+                                        Slots: {currentPhotos.length}/{maxSlots}
+                                      </span>
+                                    ) : (
+                                      <span className="text-xs text-muted-foreground">
+                                        Selecione um layout para ver o limite de
+                                        fotos.
+                                      </span>
+                                    )}
+                                    <label className="inline-flex items-center gap-2 rounded-md bg-blue-50 px-3 py-2 text-xs font-medium text-blue-700 hover:bg-blue-100 cursor-pointer w-fit">
+                                      <UploadCloud className="h-4 w-4" />
+                                      Selecionar arquivos
+                                      <input
+                                        type="file"
+                                        accept="image/*"
+                                        multiple
+                                        className="hidden"
+                                        onChange={(event) => {
+                                          if (!event.target.files) return;
+                                          handlePhotoUpload(
+                                            rule.id,
+                                            rule,
+                                            event.target.files
+                                          );
+                                          event.target.value = "";
+                                        }}
+                                        disabled={
+                                          isUploading ||
+                                          !value?.selected_layout ||
+                                          (remainingSlots !== undefined &&
+                                            remainingSlots === 0)
+                                        }
+                                      />
+                                    </label>
+                                  </div>
+
+                                  {currentPhotos.length > 0 ? (
+                                    <ul className="space-y-2 text-xs">
+                                      {currentPhotos.map((photo) => (
+                                        <li
+                                          key={photo.temp_file_id}
+                                          className="flex items-center justify-between rounded-md border border-border bg-white px-3 py-2"
+                                        >
+                                          <div className="flex items-center gap-2">
+                                            <Images className="h-4 w-4 text-muted-foreground" />
+                                            <span
+                                              className="truncate max-w-[200px]"
+                                              title={photo.original_name}
+                                            >
+                                              {photo.original_name}
+                                            </span>
+                                          </div>
+                                          <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={() =>
+                                              handleRemovePhoto(
+                                                rule.id,
+                                                photo.temp_file_id!
+                                              )
+                                            }
+                                            className="text-destructive hover:bg-destructive/10"
+                                          >
+                                            <Trash2 className="h-4 w-4" />
+                                          </Button>
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  ) : (
+                                    <p className="text-xs text-muted-foreground italic">
+                                      Nenhuma foto enviada ainda.
+                                    </p>
+                                  )}
+                                </div>
+                              );
+                            }
+
+                            // TODO: Implementar UI para LAYOUT_PRESET e LAYOUT_WITH_PHOTOS
+                            // Por enquanto, não renderiza nada para esses tipos
                             default:
                               return null;
                           }

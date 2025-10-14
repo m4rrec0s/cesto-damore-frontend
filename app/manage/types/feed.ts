@@ -30,7 +30,6 @@ export interface FeedSection {
   section_type: FeedSectionType;
   is_visible: boolean;
   display_order: number;
-  max_items: number;
   created_at: string;
   updated_at: string;
   items?: FeedSectionItem[];

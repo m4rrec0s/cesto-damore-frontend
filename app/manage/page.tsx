@@ -317,6 +317,7 @@ export default function EstoquePage() {
         )}
         {activeTab === "customizations" && (
           <CustomizationManager
+            productTypes={data.types}
             products={data.products}
             additionals={data.additionals}
           />

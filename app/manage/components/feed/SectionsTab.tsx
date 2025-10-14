@@ -54,7 +54,6 @@ interface SectionFormData {
   title: string;
   section_type: FeedSectionType;
   is_visible: boolean;
-  max_items: number;
 }
 
 export default function SectionsTab({
@@ -73,7 +72,6 @@ export default function SectionsTab({
     title: "",
     section_type: FeedSectionType.RECOMMENDED_PRODUCTS,
     is_visible: true,
-    max_items: 6,
   });
 
   const resetForm = () => {
@@ -81,7 +79,6 @@ export default function SectionsTab({
       title: "",
       section_type: FeedSectionType.RECOMMENDED_PRODUCTS,
       is_visible: true,
-      max_items: 6,
     });
     setEditingSection(null);
     setShowForm(false);
@@ -92,7 +89,6 @@ export default function SectionsTab({
       title: section.title,
       section_type: section.section_type,
       is_visible: section.is_visible,
-      max_items: section.max_items || 6,
     });
     setEditingSection(section);
     setShowForm(true);
@@ -114,7 +110,6 @@ export default function SectionsTab({
           title: formData.title,
           section_type: formData.section_type,
           is_visible: formData.is_visible,
-          max_items: formData.max_items,
         } as UpdateFeedSectionInput);
         alert("Seção atualizada com sucesso!");
       } else {
@@ -124,7 +119,6 @@ export default function SectionsTab({
           section_type: formData.section_type,
           is_visible: formData.is_visible,
           display_order: sections.length,
-          max_items: formData.max_items,
         } as CreateFeedSectionInput);
         alert("Seção criada com sucesso!");
       }
@@ -416,29 +410,6 @@ export default function SectionsTab({
               />
               <p className="text-xs text-gray-500">
                 Este título aparecerá acima da seção na página inicial
-              </p>
-            </div>
-
-            {/* Máximo de Itens */}
-            <div className="space-y-2">
-              <label className="block text-sm font-medium">
-                Máximo de Itens
-              </label>
-              <Input
-                type="number"
-                min="1"
-                max="20"
-                value={formData.max_items}
-                onChange={(e) =>
-                  setFormData((prev) => ({
-                    ...prev,
-                    max_items: parseInt(e.target.value) || 6,
-                  }))
-                }
-                className="w-full"
-              />
-              <p className="text-xs text-gray-500">
-                Quantidade máxima de itens a serem exibidos nesta seção (1-20)
               </p>
             </div>
 
