@@ -191,14 +191,14 @@ export function AdditionalManager({
             placeholder="Buscar adicionais..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent"
             aria-label="Buscar adicionais"
           />
         </div>
 
         <Button
           onClick={() => handleOpenModal()}
-          className="bg-orange-500 hover:bg-orange-600 text-white"
+          className="bg-rose-500 hover:bg-rose-600 text-white"
         >
           <Plus className="h-4 w-4 mr-2" />
           Novo Adicional
@@ -357,7 +357,7 @@ export function AdditionalManager({
           </p>
           <Button
             onClick={() => handleOpenModal()}
-            className="bg-orange-500 hover:bg-orange-600 text-white"
+            className="bg-rose-500 hover:bg-rose-600 text-white"
           >
             <Plus className="h-4 w-4 mr-2" />
             Novo Adicional
@@ -369,11 +369,11 @@ export function AdditionalManager({
       {showModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
-            <div className="bg-gradient-to-r from-orange-500 to-orange-600 px-6 py-4">
+            <div className="bg-gradient-to-r from-rose-500 to-rose-600 px-6 py-4">
               <h2 className="text-xl font-bold text-white">
                 {editingAdditional ? "Editar Adicional" : "Novo Adicional"}
               </h2>
-              <p className="text-orange-100 text-sm mt-1">
+              <p className="text-rose-100 text-sm mt-1">
                 {editingAdditional
                   ? "Atualize as informações do adicional"
                   : "Preencha os dados para criar um novo adicional"}
@@ -387,7 +387,7 @@ export function AdditionalManager({
               {/* Seção Principal */}
               <div className="bg-gray-50 rounded-xl p-4">
                 <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
-                  <div className="w-2 h-2 bg-orange-500 rounded-full mr-3"></div>
+                  <div className="w-2 h-2 bg-rose-500 rounded-full mr-3"></div>
                   Informações Principais
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -405,7 +405,7 @@ export function AdditionalManager({
                           name: e.target.value,
                         }))
                       }
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all"
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent transition-all"
                       placeholder="Digite o nome do adicional"
                       aria-label="Nome do adicional"
                     />
@@ -738,7 +738,7 @@ export function AdditionalManager({
                 <Button
                   type="submit"
                   disabled={loading}
-                  className="flex-1 py-3 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white font-semibold shadow-lg hover:shadow-xl transition-all transform hover:scale-[1.02]"
+                  className="flex-1 py-3 bg-gradient-to-r from-rose-500 to-rose-600 hover:from-rose-600 hover:to-rose-700 text-white font-semibold shadow-lg hover:shadow-xl transition-all transform hover:scale-[1.02]"
                 >
                   {loading ? (
                     <div className="flex items-center justify-center">

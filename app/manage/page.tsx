@@ -10,44 +10,12 @@ import {
   FeedConfiguration,
 } from "../hooks/use-api";
 import { useAuth } from "../hooks/use-auth";
-import { ProductManager } from "./components/product-manager";
-import { CategoryManager } from "./components/category-manager";
-import { TypeManager } from "./components/type-manager";
-import { AdditionalManager } from "./components/additional-manager";
 import { StatsOverview } from "./components/stats-overview";
-import {
-  Package,
-  Tag,
-  Grid3X3,
-  Plus,
-  BarChart3,
-  Monitor,
-  Lock,
-  ChevronLeft,
-  Palette,
-  ClipboardList,
-  Wand2,
-} from "lucide-react";
-import { Button } from "../components/ui/button";
-import FeedManager from "./components/feed-manager";
-import { OrdersManager } from "./components/orders-manager";
-import { CustomizationManager } from "./components/customization-manager";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 
-export default function EstoquePage() {
+export default function DashboardPage() {
   const api = useApi();
   const { user, isLoading: authLoading } = useAuth();
-  const [activeTab, setActiveTab] = useState<
-    | "orders"
-    | "products"
-    | "categories"
-    | "types"
-    | "additionals"
-    | "stats"
-    | "feed"
-    | "customizations"
-  >("stats");
   const [data, setData] = useState({
     products: [] as Product[],
     categories: [] as Category[],
@@ -66,10 +34,6 @@ export default function EstoquePage() {
         `/login?redirect=${encodeURIComponent(window.location.pathname)}`
       );
       return;
-    }
-
-    if (!isAdmin) {
-      router.push("/");
     }
 
     const loadAllData = async () => {
@@ -113,95 +77,6 @@ export default function EstoquePage() {
     }
   }, [api, isAdmin, authLoading, user, router]);
 
-  const handleDataUpdate = () => {
-    api.invalidateCache();
-    const loadAllData = async () => {
-      try {
-        const [
-          productsResponse,
-          categories,
-          types,
-          additionals,
-          feedConfigurations,
-        ] = await Promise.all([
-          api.getProducts(),
-          api.getCategories(),
-          api.getTypes(),
-          api.getAdditionals(),
-          isAdmin
-            ? api.getFeedConfigurations().catch((error) => {
-                console.error("❌ Erro ao recarregar Feed configs:", error);
-                return [];
-              })
-            : Promise.resolve([]),
-        ]);
-
-        setData({
-          products: productsResponse.products,
-          categories,
-          types,
-          additionals,
-          feedConfigurations,
-        });
-      } catch (error) {
-        console.error("Erro ao recarregar dados:", error);
-      }
-    };
-
-    loadAllData();
-  };
-
-  const tabs = [
-    {
-      id: "stats" as const,
-      label: "Visão Geral",
-      icon: BarChart3,
-      count: null,
-    },
-    {
-      id: "orders" as const,
-      label: "Pedidos",
-      icon: ClipboardList,
-      count: null,
-    },
-    {
-      id: "customizations" as const,
-      label: "Customizações",
-      icon: Wand2,
-      count: null,
-    },
-    {
-      id: "products" as const,
-      label: "Produtos",
-      icon: Package,
-      count: data.products.length,
-    },
-    {
-      id: "categories" as const,
-      label: "Categorias",
-      icon: Tag,
-      count: data.categories.length,
-    },
-    {
-      id: "types" as const,
-      label: "Tipos",
-      icon: Grid3X3,
-      count: data.types.length,
-    },
-    {
-      id: "additionals" as const,
-      label: "Adicionais",
-      icon: Plus,
-      count: data.additionals.length,
-    },
-    {
-      id: "feed" as const,
-      label: "Feed",
-      icon: Monitor,
-      count: data.feedConfigurations.length,
-    },
-  ];
-
   if (authLoading || loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -210,7 +85,7 @@ export default function EstoquePage() {
           <p className="text-gray-600">
             {authLoading
               ? "Verificando autenticação..."
-              : "Carregando sistema de estoque..."}
+              : "Carregando dashboard..."}
           </p>
         </div>
       </div>
@@ -218,129 +93,8 @@ export default function EstoquePage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="bg-white border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 py-6">
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-3">
-              <Link href="/" className="p-2 rounded-md hover:bg-gray-100">
-                <ChevronLeft className="text-gray-600" />
-              </Link>
-              <h1 className="text-2xl font-bold text-gray-900">
-                Painel de Controle
-              </h1>
-            </div>
-            <div className="flex items-center gap-3">
-              <Link
-                href="/manage/relatorios/estoque"
-                className="px-4 py-2 bg-orange-100 text-orange-700 hover:bg-orange-200 rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
-              >
-                <BarChart3 className="h-4 w-4" />
-                Relatórios
-              </Link>
-              <Link
-                href="/manage/cores"
-                className="px-4 py-2 bg-purple-100 text-purple-700 hover:bg-purple-200 rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
-              >
-                <Palette className="h-4 w-4" />
-                Cores
-              </Link>
-              <span className="text-sm text-gray-600">Olá, {user?.name}</span>
-              {isAdmin && (
-                <span className="px-2 py-1 bg-orange-100 text-orange-800 text-xs rounded-full">
-                  Admin
-                </span>
-              )}
-            </div>
-          </div>
-
-          {/* Tabs Navigation */}
-          <nav className="flex space-x-1 bg-gray-100 p-1 rounded-lg">
-            {tabs.map((tab) => {
-              const Icon = tab.icon;
-              return (
-                <Button
-                  key={tab.id}
-                  variant="ghost"
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all ${
-                    activeTab === tab.id
-                      ? "bg-white text-orange-600 shadow-sm"
-                      : "text-gray-600 hover:text-gray-900 hover:bg-gray-50"
-                  }`}
-                >
-                  <Icon className="h-4 w-4" />
-                  {tab.label}
-                  {tab.count !== null && (
-                    <span
-                      className={`px-2 py-0.5 rounded-full text-xs ${
-                        activeTab === tab.id
-                          ? "bg-orange-100 text-orange-700"
-                          : "bg-gray-200 text-gray-600"
-                      }`}
-                    >
-                      {tab.count}
-                    </span>
-                  )}
-                </Button>
-              );
-            })}
-          </nav>
-        </div>
-      </div>
-
-      <div className="max-w-7xl mx-auto px-4 py-8">
-        {activeTab === "stats" && <StatsOverview data={data} />}
-        {activeTab === "orders" && <OrdersManager />}
-        {activeTab === "products" && (
-          <ProductManager
-            products={data.products}
-            categories={data.categories}
-            types={data.types}
-            onUpdate={handleDataUpdate}
-          />
-        )}
-        {activeTab === "categories" && (
-          <CategoryManager
-            categories={data.categories}
-            onUpdate={handleDataUpdate}
-          />
-        )}
-        {activeTab === "types" && (
-          <TypeManager types={data.types} onUpdate={handleDataUpdate} />
-        )}
-        {activeTab === "additionals" && (
-          <AdditionalManager
-            additionals={data.additionals}
-            onUpdate={handleDataUpdate}
-          />
-        )}
-        {activeTab === "customizations" && (
-          <CustomizationManager
-            productTypes={data.types}
-            products={data.products}
-            additionals={data.additionals}
-          />
-        )}
-        {activeTab === "feed" && isAdmin && (
-          <FeedManager
-            configurations={data.feedConfigurations}
-            onUpdate={handleDataUpdate}
-            api={api}
-          />
-        )}
-        {activeTab === "feed" && !isAdmin && (
-          <div className="text-center py-16">
-            <Lock className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-xl font-semibold text-gray-900 mb-2">
-              Acesso Restrito
-            </h3>
-            <p className="text-gray-600">
-              Apenas administradores podem acessar as configurações de Feed.
-            </p>
-          </div>
-        )}
-      </div>
+    <div className="p-5">
+      <StatsOverview data={data} />
     </div>
   );
 }

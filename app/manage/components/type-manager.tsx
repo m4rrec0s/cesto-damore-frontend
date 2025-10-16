@@ -95,14 +95,14 @@ export function TypeManager({ types, onUpdate }: TypeManagerProps) {
             placeholder="Buscar tipos..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent"
             aria-label="Buscar tipos"
           />
         </div>
 
         <Button
           onClick={() => handleOpenModal()}
-          className="bg-orange-500 hover:bg-orange-600 text-white"
+          className="bg-rose-500 hover:bg-rose-600 text-white"
         >
           <Plus className="h-4 w-4 mr-2" />
           Novo Tipo
@@ -161,7 +161,7 @@ export function TypeManager({ types, onUpdate }: TypeManagerProps) {
           </p>
           <Button
             onClick={() => handleOpenModal()}
-            className="bg-orange-500 hover:bg-orange-600 text-white"
+            className="bg-rose-500 hover:bg-rose-600 text-white"
           >
             <Plus className="h-4 w-4 mr-2" />
             Novo Tipo
@@ -191,7 +191,7 @@ export function TypeManager({ types, onUpdate }: TypeManagerProps) {
                   onChange={(e) =>
                     setFormData((prev) => ({ ...prev, name: e.target.value }))
                   }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-500"
                   placeholder="Nome do tipo"
                   aria-label="Nome do tipo"
                 />
@@ -210,7 +210,7 @@ export function TypeManager({ types, onUpdate }: TypeManagerProps) {
                 <Button
                   type="submit"
                   disabled={loading}
-                  className="flex-1 bg-orange-500 hover:bg-orange-600 text-white"
+                  className="flex-1 bg-rose-500 hover:bg-rose-600 text-white"
                 >
                   {loading
                     ? "Salvando..."

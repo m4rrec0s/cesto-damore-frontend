@@ -98,14 +98,14 @@ export function CategoryManager({
             placeholder="Buscar categorias..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent"
             aria-label="Buscar categorias"
           />
         </div>
 
         <Button
           onClick={() => handleOpenModal()}
-          className="bg-orange-500 hover:bg-orange-600 text-white"
+          className="bg-rose-500 hover:bg-rose-600 text-white"
         >
           <Plus className="h-4 w-4 mr-2" />
           Nova Categoria
@@ -169,7 +169,7 @@ export function CategoryManager({
           </p>
           <Button
             onClick={() => handleOpenModal()}
-            className="bg-orange-500 hover:bg-orange-600 text-white"
+            className="bg-rose-500 hover:bg-rose-600 text-white"
           >
             <Plus className="h-4 w-4 mr-2" />
             Nova Categoria
@@ -199,7 +199,7 @@ export function CategoryManager({
                   onChange={(e) =>
                     setFormData((prev) => ({ ...prev, name: e.target.value }))
                   }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-500"
                   placeholder="Nome da categoria"
                   aria-label="Nome da categoria"
                 />
@@ -218,7 +218,7 @@ export function CategoryManager({
                 <Button
                   type="submit"
                   disabled={loading}
-                  className="flex-1 bg-orange-500 hover:bg-orange-600 text-white"
+                  className="flex-1 bg-rose-500 hover:bg-rose-600 text-white"
                 >
                   {loading
                     ? "Salvando..."
