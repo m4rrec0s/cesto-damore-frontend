@@ -9,10 +9,11 @@ import {
   TabsList,
   TabsTrigger,
 } from "@/app/components/ui/tabs";
-import { Box, Layers, Link2 } from "lucide-react";
+import { Box, Layers, Link2, Palette } from "lucide-react";
 import { ProductsTab } from "@/app/manage/components/catalog/ProductsTab";
 import { ItemsTab } from "@/app/manage/components/catalog/ItemsTab";
 import { ConstraintsTab } from "@/app/manage/components/catalog/ConstraintsTab";
+import { CustomizationsTab } from "./CustomizationsTab";
 
 export default function CatalogPage() {
   const { user, isLoading: authLoading } = useAuth();
@@ -48,7 +49,7 @@ export default function CatalogPage() {
     <div className="p-6 bg-gray-50 min-h-screen">
       <div className="max-w-7xl mx-auto">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-3 mb-6">
+          <TabsList className="grid w-full grid-cols-4 mb-6">
             <TabsTrigger value="products" className="flex items-center gap-2">
               <Box className="w-4 h-4" />
               Produtos
@@ -56,6 +57,13 @@ export default function CatalogPage() {
             <TabsTrigger value="items" className="flex items-center gap-2">
               <Layers className="w-4 h-4" />
               Componentes
+            </TabsTrigger>
+            <TabsTrigger
+              value="customizations"
+              className="flex items-center gap-2"
+            >
+              <Palette className="w-4 h-4" />
+              Customizações
             </TabsTrigger>
             <TabsTrigger
               value="constraints"
@@ -72,6 +80,10 @@ export default function CatalogPage() {
 
           <TabsContent value="items">
             <ItemsTab />
+          </TabsContent>
+
+          <TabsContent value="customizations">
+            <CustomizationsTab />
           </TabsContent>
 
           <TabsContent value="constraints">
