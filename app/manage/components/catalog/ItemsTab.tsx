@@ -146,7 +146,8 @@ export function ItemsTab() {
     async (itemId: string) => {
       try {
         const data = await api.get(`/items/${itemId}/customizations`);
-        setCustomizations(data || []);
+        // Garantir que sempre seja um array
+        setCustomizations(Array.isArray(data) ? data : []);
       } catch (error) {
         console.error("Erro ao carregar customizações:", error);
         setCustomizations([]);
@@ -666,7 +667,14 @@ export function ItemsTab() {
                       </Button>
                     </div>
 
-                    {customizations.length === 0 ? (
+                    {loading && !customizations && (
+                      <div className="text-center py-12">
+                        <LoadingSpinner />
+                      </div>
+                    )}
+
+                    {Array.isArray(customizations) &&
+                    customizations.length === 0 ? (
                       <div className="text-center py-12 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
                         <Wand2 className="w-12 h-12 mx-auto mb-3 text-gray-400" />
                         <p className="text-gray-700 font-medium">
@@ -679,55 +687,56 @@ export function ItemsTab() {
                       </div>
                     ) : (
                       <div className="space-y-3">
-                        {customizations.map((custom) => (
-                          <div
-                            key={custom.id}
-                            className="border border-gray-200 rounded-lg p-4 hover:border-gray-300 transition-colors"
-                          >
-                            <div className="flex justify-between items-start">
-                              <div className="flex-1">
-                                <div className="flex items-center gap-2 mb-2">
-                                  <h4 className="font-semibold">
-                                    {custom.name}
-                                  </h4>
-                                  <Badge variant="outline">
-                                    {
-                                      CUSTOMIZATION_TYPES.find(
-                                        (t) => t.value === custom.type
-                                      )?.icon
-                                    }{" "}
-                                    {
-                                      CUSTOMIZATION_TYPES.find(
-                                        (t) => t.value === custom.type
-                                      )?.label
-                                    }
-                                  </Badge>
-                                  {custom.isRequired && (
-                                    <Badge variant="destructive">
-                                      Obrigatório
+                        {Array.isArray(customizations) &&
+                          customizations.map((custom) => (
+                            <div
+                              key={custom.id}
+                              className="border border-gray-200 rounded-lg p-4 hover:border-gray-300 transition-colors"
+                            >
+                              <div className="flex justify-between items-start">
+                                <div className="flex-1">
+                                  <div className="flex items-center gap-2 mb-2">
+                                    <h4 className="font-semibold">
+                                      {custom.name}
+                                    </h4>
+                                    <Badge variant="outline">
+                                      {
+                                        CUSTOMIZATION_TYPES.find(
+                                          (t) => t.value === custom.type
+                                        )?.icon
+                                      }{" "}
+                                      {
+                                        CUSTOMIZATION_TYPES.find(
+                                          (t) => t.value === custom.type
+                                        )?.label
+                                      }
                                     </Badge>
+                                    {custom.isRequired && (
+                                      <Badge variant="destructive">
+                                        Obrigatório
+                                      </Badge>
+                                    )}
+                                  </div>
+                                  {custom.description && (
+                                    <p className="text-sm text-gray-600">
+                                      {custom.description}
+                                    </p>
                                   )}
-                                </div>
-                                {custom.description && (
-                                  <p className="text-sm text-gray-600">
-                                    {custom.description}
+                                  <p className="text-sm text-green-600 font-medium mt-2">
+                                    + R$ {custom.price.toFixed(2)}
                                   </p>
-                                )}
-                                <p className="text-sm text-green-600 font-medium mt-2">
-                                  + R$ {custom.price.toFixed(2)}
-                                </p>
-                              </div>
-                              <div className="flex gap-2">
-                                <Button variant="outline" size="sm">
-                                  <Edit2 className="w-4 h-4" />
-                                </Button>
-                                <Button variant="destructive" size="sm">
-                                  <Trash2 className="w-4 h-4" />
-                                </Button>
+                                </div>
+                                <div className="flex gap-2">
+                                  <Button variant="outline" size="sm">
+                                    <Edit2 className="w-4 h-4" />
+                                  </Button>
+                                  <Button variant="destructive" size="sm">
+                                    <Trash2 className="w-4 h-4" />
+                                  </Button>
+                                </div>
                               </div>
                             </div>
-                          </div>
-                        ))}
+                          ))}
                       </div>
                     )}
                   </div>
