@@ -68,30 +68,47 @@ const getImageDimensions = (
   });
 };
 
-/**
- * Garante que a URL do Google Drive esteja no formato correto
- * Aceita vários formatos e normaliza para: https://drive.google.com/uc?id={FILE_ID}
- */
 export const getDirectImageUrl = (url: string): string => {
-  if (!url || !url.includes("drive.google.com")) {
-    return url; // URL local ou de outro serviço
+  if (!url) return url;
+
+  if (
+    !url.includes("drive.google.com") &&
+    !url.includes("drive.usercontent.google.com")
+  ) {
+    return url;
   }
 
-  // Se já estiver no formato correto, retornar
-  if (url.includes("/uc?id=")) {
-    return url.split("&")[0]; // Remove parâmetros extras como &export=download
-  }
+  let fileId = null;
 
-  // Extrair FILE_ID de diferentes formatos de URL do Google Drive
-  const match = url.match(/\/d\/([a-zA-Z0-9_-]+)|[?&]id=([a-zA-Z0-9_-]+)/);
+  // Formato 1: https://drive.google.com/file/d/FILE_ID/view
+  let match = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
   if (match) {
-    const fileId = match[1] || match[2];
-    if (fileId) {
-      return `https://drive.google.com/uc?id=${fileId}`;
+    fileId = match[1];
+  }
+
+  // Formato 2: https://drive.google.com/uc?id=FILE_ID
+  if (!fileId) {
+    match = url.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+    if (match) {
+      fileId = match[1];
     }
   }
 
-  return url; // Fallback para URL original
+  // Formato 3: https://drive.usercontent.google.com/download?id=FILE_ID
+  if (!fileId) {
+    match = url.match(/download\?id=([a-zA-Z0-9_-]+)/);
+    if (match) {
+      fileId = match[1];
+    }
+  }
+
+  // Se encontrou o FILE_ID, retornar URL padronizada para download direto
+  if (fileId) {
+    return `https://drive.google.com/uc?export=download&id=${fileId}`;
+  }
+
+  console.warn("⚠️ Não foi possível extrair FILE_ID do Google Drive:", url);
+  return url;
 };
 
 export default function LayoutBaseManager() {
@@ -102,7 +119,6 @@ export default function LayoutBaseManager() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingLayout, setEditingLayout] = useState<LayoutBase | null>(null);
 
-  // Form state
   const [formData, setFormData] = useState<CreateLayoutBaseInput>({
     name: "",
     item_type: "",
@@ -139,7 +155,6 @@ export default function LayoutBaseManager() {
       };
       reader.readAsDataURL(file);
 
-      // Obter dimensões da imagem
       try {
         const dimensions = await getImageDimensions(file);
         setFormData((prev) => ({
@@ -153,7 +168,6 @@ export default function LayoutBaseManager() {
       } catch (error) {
         console.error("❌ Erro ao obter dimensões da imagem:", error);
         toast.error("Não foi possível obter as dimensões da imagem");
-        // Manter dimensões padrão em caso de erro
         setFormData((prev) => ({
           ...prev,
           width: 1000,
@@ -182,9 +196,6 @@ export default function LayoutBaseManager() {
       toast.error("Selecione uma imagem");
       return;
     }
-
-    // Slots não são mais obrigatórios
-    // Alguns layouts podem não permitir customização
 
     try {
       if (editingLayout) {

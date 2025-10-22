@@ -236,9 +236,10 @@ export function CreditCardForm({
     // Validar nome do titular
     if (!cardholderName.trim()) {
       newErrors.cardholderName = "Nome do titular é obrigatório";
-    } else if (cardholderName.trim().split(" ").length < 2) {
-      newErrors.cardholderName = "Informe nome e sobrenome";
     }
+    // else if (cardholderName.trim().split(" ").length < 2) {
+    //   newErrors.cardholderName = "Informe nome e sobrenome";
+    // }
 
     // Validar mês de expiração
     if (!expirationMonth) {

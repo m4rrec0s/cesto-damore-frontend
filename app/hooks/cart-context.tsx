@@ -43,6 +43,7 @@ interface CartContextType {
       grandTotal?: number;
       deliveryCity?: string;
       deliveryState?: string;
+      recipientPhone?: string;
     }
   ) => Promise<unknown>;
   createOrderWithTransparentCheckout: (
@@ -55,6 +56,7 @@ interface CartContextType {
       grandTotal?: number;
       deliveryCity?: string;
       deliveryState?: string;
+      recipientPhone?: string;
     }
   ) => Promise<{
     order: { id: number; status: string; total: number };

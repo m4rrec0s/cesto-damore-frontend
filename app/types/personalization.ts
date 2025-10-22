@@ -44,34 +44,11 @@ export interface UpdateLayoutBaseInput {
   image?: File;
 }
 
-// ===== Temp Upload =====
-export interface TempUploadResponse {
-  tempId: string;
-  tempUrl: string;
-  width: number;
-  height: number;
-  originalName: string;
-}
-
-export interface TempFile {
-  id: string;
-  session_id: string;
-  slot_id?: string;
-  file_path: string;
-  mime_type: string;
-  original_name: string;
-  file_size: number;
-  width?: number;
-  height?: number;
-  created_at: string;
-  expires_at: string;
-}
-
 // ===== Image Data =====
 export interface ImageData {
   slotId: string;
-  tempId: string;
-  tempUrl: string;
+  imageBuffer: Buffer | Uint8Array; // Dados da imagem diretamente
+  mimeType: string;
   width: number;
   height: number;
   originalName: string;

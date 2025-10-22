@@ -965,6 +965,7 @@ class ApiService {
     shipping_price?: number | null;
     payment_method?: string | null;
     grand_total?: number | null;
+    recipient_phone?: string | null;
   }) => {
     console.log("📡 Enviando pedido para o backend:", payload);
     const res = await this.client.post("/orders", payload);
@@ -1553,8 +1554,10 @@ class ApiService {
     payerDocumentType: "CPF" | "CNPJ";
     paymentMethodId: "pix" | "credit_card" | "debit_card";
     cardToken?: string;
+    cardholderName?: string; // Nome do titular do cartão
     installments?: number;
     issuer_id?: string;
+    payment_method_id?: string; // payment_method_id específico do MP (master, visa, etc)
   }) => {
     const res = await this.client.post(
       "/payment/transparent-checkout",
@@ -1593,6 +1596,28 @@ class ApiService {
   // ===== Payment Methods =====
   getPaymentMethods = async () => {
     const res = await this.client.get("/payment-methods");
+    return res.data;
+  };
+
+  // ===== MercadoPago Token =====
+  createCardToken = async (payload: {
+    cardNumber: string;
+    securityCode: string;
+    expirationMonth: string;
+    expirationYear: string;
+    cardholderName: string;
+    identificationType: string;
+    identificationNumber: string;
+  }) => {
+    const res = await this.client.post("/mercadopago/create-token", payload);
+    return res.data;
+  };
+
+  getCardIssuers = async (payload: {
+    bin: string;
+    paymentMethodId?: string;
+  }) => {
+    const res = await this.client.post("/mercadopago/get-issuers", payload);
     return res.data;
   };
 

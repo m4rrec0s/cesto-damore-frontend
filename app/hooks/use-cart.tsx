@@ -419,6 +419,7 @@ export function useCart() {
         grandTotal?: number;
         deliveryCity?: string;
         deliveryState?: string;
+        recipientPhone?: string;
       }
     ) => {
       if (cart.items.length === 0) {
@@ -483,6 +484,7 @@ export function useCart() {
         delivery_city: deliveryCity,
         delivery_state: deliveryState,
         delivery_date: deliveryDate,
+        recipient_phone: options?.recipientPhone,
       });
 
       console.log("✅ Pedido criado com sucesso:", order);
@@ -990,10 +992,37 @@ export function useCart() {
       }
     ) => {
       try {
-        const response = await api.createTransparentPayment({
+        const payer = paymentData.payer || { email: "" };
+        type TransparentPayload = {
+          orderId: string;
+          payerEmail: string;
+          payerName: string;
+          payerDocument: string;
+          payerDocumentType: "CPF" | "CNPJ";
+          paymentMethodId: "pix" | "credit_card" | "debit_card";
+          cardToken?: string;
+          installments?: number;
+          issuer_id?: string;
+        };
+
+        const payload: TransparentPayload = {
           orderId,
-          ...paymentData,
-        });
+          payerEmail: payer.email,
+          payerName:
+            [payer.first_name, payer.last_name].filter(Boolean).join(" ") ||
+            payer.email,
+          payerDocument: payer.identification?.number || "",
+          payerDocumentType:
+            (payer.identification?.type as "CPF" | "CNPJ") || "CPF",
+          paymentMethodId: paymentData.payment_method_id,
+        };
+
+        if (paymentData.token) payload.cardToken = paymentData.token;
+        if (paymentData.installments)
+          payload.installments = paymentData.installments;
+        if (paymentData.issuer_id) payload.issuer_id = paymentData.issuer_id;
+
+        const response = await api.createTransparentPayment(payload);
 
         // Limpar carrinho apenas se pagamento foi iniciado com sucesso
         if (response.success) {

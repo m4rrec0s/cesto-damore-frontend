@@ -32,9 +32,8 @@ export default function VisualSlotEditor({
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
 
-  // Calcular zoom inicial para que a imagem caiba na visualização (max 500px de altura)
   const calculateInitialZoom = () => {
-    const maxDisplayHeight = 480; // um pouco menor que maxHeight do container (500px)
+    const maxDisplayHeight = 480;
     if (imageHeight > maxDisplayHeight) {
       return maxDisplayHeight / imageHeight;
     }
@@ -47,21 +46,15 @@ export default function VisualSlotEditor({
   const containerRef = useRef<HTMLDivElement>(null);
   const baseImageRef = useRef<HTMLImageElement | null>(null);
 
-  /**
-   * Garante que a URL do Google Drive esteja no formato correto
-   * Aceita vários formatos e normaliza para: https://drive.google.com/uc?id={FILE_ID}
-   */
   const getDirectImageUrl = (url: string): string => {
     if (!url || !url.includes("drive.google.com")) {
-      return url; // URL local ou de outro serviço
+      return url;
     }
 
-    // Se já estiver no formato correto, retornar
     if (url.includes("/uc?id=")) {
-      return url.split("&")[0]; // Remove parâmetros extras como &export=download
+      return url.split("&")[0];
     }
 
-    // Extrair FILE_ID de diferentes formatos de URL do Google Drive
     const match = url.match(/\/d\/([a-zA-Z0-9_-]+)|[?&]id=([a-zA-Z0-9_-]+)/);
     if (match) {
       const fileId = match[1] || match[2];
@@ -70,25 +63,21 @@ export default function VisualSlotEditor({
       }
     }
 
-    return url; // Fallback para URL original
+    return url;
   };
 
-  // Carregar imagem base
   useEffect(() => {
     const img = new Image();
 
-    // Google Drive requer crossOrigin
     if (imageUrl.includes("drive.google.com")) {
       img.crossOrigin = "anonymous";
     }
 
-    // Converter URL de visualização para URL de imagem direta
     const directImageUrl = getDirectImageUrl(imageUrl);
     img.src = directImageUrl;
 
     img.onload = () => {
       baseImageRef.current = img;
-      // Recalcular zoom quando a imagem carregar
       setZoom(calculateInitialZoom());
       drawCanvas();
     };
@@ -101,7 +90,6 @@ export default function VisualSlotEditor({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [imageUrl, imageHeight]);
 
-  // Redesenhar quando slots mudarem
   useEffect(() => {
     drawCanvas();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -114,17 +102,13 @@ export default function VisualSlotEditor({
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    // Configurar tamanho do canvas
     canvas.width = imageWidth * zoom;
     canvas.height = imageHeight * zoom;
 
-    // Limpar
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // Desenhar imagem base
     ctx.drawImage(baseImageRef.current, 0, 0, canvas.width, canvas.height);
 
-    // Desenhar slots
     slots.forEach((slot) => {
       const x = (slot.x / 100) * canvas.width;
       const y = (slot.y / 100) * canvas.height;
@@ -133,48 +117,40 @@ export default function VisualSlotEditor({
 
       const isSelected = slot.id === selectedSlot;
 
-      // Slot background
       ctx.fillStyle = isSelected
         ? "rgba(59, 130, 246, 0.3)"
         : "rgba(251, 146, 60, 0.3)";
       ctx.fillRect(x, y, w, h);
 
-      // Slot border
       ctx.strokeStyle = isSelected ? "#3b82f6" : "#fb923c";
       ctx.lineWidth = isSelected ? 3 : 2;
       ctx.strokeRect(x, y, w, h);
 
-      // Slot label
       ctx.fillStyle = "#000";
       ctx.font = `${14 * zoom}px sans-serif`;
       ctx.fillText(slot.id, x + 5, y + 20);
 
-      // Resize handles se selecionado
       if (isSelected) {
         ctx.fillStyle = "#3b82f6";
         const handleSize = 8 * zoom;
-        // Top-left
         ctx.fillRect(
           x - handleSize / 2,
           y - handleSize / 2,
           handleSize,
           handleSize
         );
-        // Top-right
         ctx.fillRect(
           x + w - handleSize / 2,
           y - handleSize / 2,
           handleSize,
           handleSize
         );
-        // Bottom-left
         ctx.fillRect(
           x - handleSize / 2,
           y + h - handleSize / 2,
           handleSize,
           handleSize
         );
-        // Bottom-right
         ctx.fillRect(
           x + w - handleSize / 2,
           y + h - handleSize / 2,
@@ -201,7 +177,6 @@ export default function VisualSlotEditor({
   const handleCanvasMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const coords = getCanvasCoordinates(e);
 
-    // Verificar se clicou em um slot
     for (const slot of slots) {
       const x =
         (slot.x / 100) * (canvasRef.current?.width || imageWidth * zoom);
@@ -225,7 +200,6 @@ export default function VisualSlotEditor({
       }
     }
 
-    // Se não clicou em nenhum slot, desselecionar
     setSelectedSlot(null);
   };
 
@@ -347,7 +321,6 @@ export default function VisualSlotEditor({
               </p>
             </div>
 
-            {/* Controles do Slot Selecionado */}
             <div className="space-y-4">
               {selectedSlotData ? (
                 <Card>
@@ -473,7 +446,6 @@ export default function VisualSlotEditor({
                 </Card>
               )}
 
-              {/* Lista de Slots */}
               <Card>
                 <CardHeader>
                   <CardTitle className="text-base">

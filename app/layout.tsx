@@ -40,6 +40,11 @@ export default function RootLayout({
           src="https://sdk.mercadopago.com/js/v2"
           strategy="beforeInteractive"
         />
+        {/* SDK v1 fallback para tokenização em ambientes onde o 'fields' v2 não esteja montado */}
+        <Script
+          src="https://secure.mlstatic.com/sdk/javascript/v1/mercadopago.js"
+          strategy="beforeInteractive"
+        />
         <AuthProvider>
           <CartProvider>
             <TokenExpiryWarning />

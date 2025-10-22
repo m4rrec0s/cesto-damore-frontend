@@ -10,7 +10,7 @@ import { Button } from "@/app/components/ui/button";
 import { Badge } from "@/app/components/ui/badge";
 import { Label } from "@/app/components/ui/label";
 import { Calendar } from "@/app/components/ui/calendar";
-import { Alert, AlertDescription } from "@/app/components/ui/alert";
+import { Alert, AlertDescription, AlertTitle } from "@/app/components/ui/alert";
 import {
   Popover,
   PopoverContent,
@@ -26,41 +26,19 @@ import {
   AlertCircle,
   Smartphone,
   MapPin,
-  ChevronRightIcon,
+  ChevronLeftIcon,
   CalendarIcon,
   ShoppingCart,
-  ChevronLeftIcon,
+  CheckCircle2,
+  ArrowRight,
+  ArrowLeft,
 } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import {
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/app/components/ui/dialog";
-// import {
-//   DropdownMenu,
-//   DropdownMenuContent,
-//   DropdownMenuTrigger,
-// } from "@/app/components/ui/dropdown-menu";
 import { toast } from "sonner";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/app/components/ui/collapsible";
-import { cn } from "@/app/lib/utils";
 import { QRCodePIX } from "@/app/components/QRCodePIX";
-import {
-  formatPhoneNumber,
-  isValidPhone,
-  unformatPhoneNumber,
-} from "@/app/lib/phoneMask";
+import { formatPhoneNumber, isValidPhone } from "@/app/lib/phoneMask";
 import {
   CreditCardForm,
   type CreditCardData,
@@ -93,6 +71,9 @@ const normalizeString = (value: string) =>
     : "";
 
 type PaymentStatusType = "" | "pending" | "success" | "failure";
+
+// Tipo para as etapas do checkout
+type CheckoutStep = 1 | 2 | 3;
 
 interface PixPaymentData {
   qr_code: string;
@@ -159,38 +140,38 @@ interface ProductCardProps {
   ) => void;
 }
 
-interface OrderSummaryCardProps {
-  originalTotal: number;
-  discountAmount: number;
-  cartTotal: number;
-}
+// interface OrderSummaryCardProps {
+//   originalTotal: number;
+//   discountAmount: number;
+//   cartTotal: number;
+// }
 
-interface CheckoutButtonProps {
-  handleFinalizePurchase: () => void;
-  isProcessing: boolean;
-  zipCode: string;
-  address: string;
-  houseNumber: string;
-  city: string;
-  state: string;
-  customerPhone: string;
-  selectedDate: Date | undefined;
-  selectedTime: string;
-  cartItems: CartItem[];
-  cartTotal: number;
-  user?: {
-    name: string;
-    email: string;
-  };
-  paymentMethod: "" | "pix" | "card";
-  shippingCost: number | null;
-  grandTotal: number;
-  isAddressServed: boolean;
-  paymentStatus: PaymentStatusType;
-  paymentError: string | null;
-  pixData: PixPaymentData | null;
-  onViewPix: () => void;
-}
+// interface CheckoutButtonProps {
+//   handleFinalizePurchase: () => void;
+//   isProcessing: boolean;
+//   zipCode: string;
+//   address: string;
+//   houseNumber: string;
+//   city: string;
+//   state: string;
+//   customerPhone: string;
+//   selectedDate: Date | undefined;
+//   selectedTime: string;
+//   cartItems: CartItem[];
+//   cartTotal: number;
+//   user?: {
+//     name: string;
+//     email: string;
+//   };
+//   paymentMethod: "" | "pix" | "card";
+//   shippingCost: number | null;
+//   grandTotal: number;
+//   isAddressServed: boolean;
+//   paymentStatus: PaymentStatusType;
+//   paymentError: string | null;
+//   pixData: PixPaymentData | null;
+//   onViewPix: () => void;
+// }
 
 const formatCustomizationValue = (custom: CartCustomization) => {
   switch (custom.customization_type) {
@@ -214,14 +195,71 @@ const formatCustomizationValue = (custom: CartCustomization) => {
   }
 };
 
+// Componente de Stepper
+const CheckoutStepper = ({ currentStep }: { currentStep: CheckoutStep }) => {
+  const steps = [
+    { number: 1, label: "Carrinho", icon: ShoppingCart },
+    { number: 2, label: "Entrega", icon: MapPin },
+    { number: 3, label: "Pagamento", icon: CreditCard },
+  ];
+
+  return (
+    <div className="mb-8">
+      <div className="flex items-center justify-between max-w-2xl mx-auto">
+        {steps.map((step, index) => {
+          const Icon = step.icon;
+          const isActive = currentStep === step.number;
+          const isCompleted = currentStep > step.number;
+
+          return (
+            <div key={step.number} className="flex items-center flex-1">
+              <div className="flex flex-col items-center flex-1">
+                <div
+                  className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${
+                    isCompleted
+                      ? "bg-green-500 text-white"
+                      : isActive
+                      ? "bg-rose-600 text-white shadow-lg"
+                      : "bg-gray-200 text-gray-500"
+                  }`}
+                >
+                  {isCompleted ? (
+                    <CheckCircle2 className="h-6 w-6" />
+                  ) : (
+                    <Icon className="h-6 w-6" />
+                  )}
+                </div>
+                <span
+                  className={`mt-2 text-xs font-semibold ${
+                    isActive ? "text-rose-600" : "text-gray-600"
+                  }`}
+                >
+                  {step.label}
+                </span>
+              </div>
+              {index < steps.length - 1 && (
+                <div
+                  className={`h-1 flex-1 mx-2 rounded transition-all ${
+                    currentStep > step.number ? "bg-green-500" : "bg-gray-200"
+                  }`}
+                />
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
 // Componentes funcionais para o layout responsivo
 const ProductCard = ({
   item,
   updateQuantity,
   removeFromCart,
 }: ProductCardProps) => (
-  <div className="flex gap-4 rounded-lg border border-border bg-background p-4 transition-colors hover:border-muted-foreground/20">
-    <div className="relative w-20 h-20 lg:w-24 lg:h-24 flex-shrink-0 rounded-md overflow-hidden">
+  <div className="flex gap-4 rounded-2xl bg-white p-5 shadow-sm border border-gray-100 transition-all hover:shadow-md">
+    <div className="relative w-20 h-20 lg:w-24 lg:h-24 flex-shrink-0 rounded-xl overflow-hidden bg-gray-50">
       <Image
         src={item.product.image_url || "/placeholder.svg"}
         alt={item.product.name}
@@ -232,10 +270,10 @@ const ProductCard = ({
 
     <div className="flex flex-1 flex-col justify-between min-w-0">
       <div>
-        <h3 className="font-medium text-base mb-1 line-clamp-2">
+        <h3 className="font-semibold text-base mb-1.5 line-clamp-2 text-gray-900">
           {item.product.name}
         </h3>
-        <p className="text-sm text-muted-foreground mb-2 line-clamp-2">
+        <p className="text-sm text-gray-500 mb-2 line-clamp-2">
           {item.product.description}
         </p>
 
@@ -252,7 +290,7 @@ const ProductCard = ({
                 <Badge
                   key={add.id}
                   variant="secondary"
-                  className="text-xs flex items-center gap-1"
+                  className="text-xs flex items-center gap-1 bg-rose-50 text-rose-700 border-rose-200 font-medium"
                 >
                   + {add.name} (+R$ {add.price.toFixed(2)})
                   {selectedColor && (
@@ -276,11 +314,11 @@ const ProductCard = ({
         )}
 
         {item.customizations && item.customizations.length > 0 && (
-          <div className="mb-2 space-y-1">
+          <div className="mb-2 space-y-1.5">
             {item.customizations.map((customization) => (
               <div
                 key={customization.customization_id}
-                className="flex items-start gap-2 rounded-md border border-dashed border-rose-200 bg-rose-50/70 px-2 py-1 text-xs"
+                className="flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50/50 px-3 py-2 text-xs"
               >
                 <span className="font-semibold text-rose-700">
                   {customization.title}:
@@ -300,7 +338,7 @@ const ProductCard = ({
       </div>
 
       <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2 rounded-md border border-border">
+        <div className="flex items-center gap-2 rounded-lg bg-gray-50 border border-gray-200">
           <Button
             variant="ghost"
             size="icon"
@@ -314,11 +352,11 @@ const ProductCard = ({
               )
             }
             disabled={item.quantity <= 1}
-            className="h-8 w-8"
+            className="h-9 w-9 hover:bg-gray-100 text-gray-700"
           >
             <Minus className="h-4 w-4" />
           </Button>
-          <span className="w-8 text-center text-sm font-medium">
+          <span className="w-10 text-center text-sm font-semibold text-gray-900">
             {item.quantity}
           </span>
           <Button
@@ -333,7 +371,7 @@ const ProductCard = ({
                 item.additional_colors
               )
             }
-            className="h-8 w-8"
+            className="h-9 w-9 hover:bg-gray-100 text-gray-700"
           >
             <Plus className="h-4 w-4" />
           </Button>
@@ -350,7 +388,7 @@ const ProductCard = ({
               item.additional_colors
             )
           }
-          className="h-8 w-8 text-destructive hover:text-destructive"
+          className="h-9 w-9 text-red-500 hover:text-red-600 hover:bg-red-50"
         >
           <Trash2 className="h-4 w-4" />
         </Button>
@@ -358,8 +396,8 @@ const ProductCard = ({
     </div>
     <div className="text-right flex flex-col justify-between">
       {item.discount && item.discount > 0 ? (
-        <div className="flex flex-col items-end">
-          <span className="text-xs text-muted-foreground line-through">
+        <div className="flex flex-col items-end gap-1">
+          <span className="text-xs text-gray-400 line-through">
             R${" "}
             {(
               item.price * item.quantity +
@@ -370,7 +408,7 @@ const ProductCard = ({
               ) || 0)
             ).toFixed(2)}
           </span>
-          <span className="font-semibold">
+          <span className="font-bold text-gray-900 text-lg">
             R${" "}
             {(
               (item.effectivePrice ?? item.price) * item.quantity +
@@ -382,7 +420,7 @@ const ProductCard = ({
           </span>
         </div>
       ) : (
-        <span className="font-semibold">
+        <span className="font-bold text-gray-900 text-lg">
           R${" "}
           {(
             (item.effectivePrice ?? item.price) * item.quantity +
@@ -397,512 +435,15 @@ const ProductCard = ({
   </div>
 );
 
-const OrderSummaryCard = ({
-  originalTotal,
-  discountAmount,
-  cartTotal,
-  selectedDate,
-  selectedTime,
-  calendarOpen,
-  setCalendarOpen,
-  setSelectedDate,
-  setSelectedTime,
-  isDateDisabled,
-  generateTimeSlots,
-  getMinPreparationHours,
-  address,
-  prepareAddressForEditing,
-  className,
-  paymentMethod,
-  setPaymentMethod,
-  shippingCost,
-  shippingOptions,
-  grandTotal,
-  isAddressServed,
-  addressWarning,
-  acceptedCities,
-}: OrderSummaryCardProps & {
-  selectedDate: Date | undefined;
-  selectedTime: string;
-  calendarOpen: boolean;
-  setCalendarOpen: (open: boolean) => void;
-  setSelectedDate: (date: Date | undefined) => void;
-  setSelectedTime: (time: string) => void;
-  isDateDisabled: (date: Date) => boolean;
-  generateTimeSlots: (date: Date) => Array<{ value: string; label: string }>;
-  getMinPreparationHours: () => number;
-  address: string;
-  prepareAddressForEditing: () => void;
-  className?: string;
-  paymentMethod: "" | "pix" | "card";
-  setPaymentMethod: (method: "pix" | "card") => void;
-  shippingCost: number | null;
-  shippingOptions: { pix: number | null; card: number | null };
-  grandTotal: number;
-  isAddressServed: boolean;
-  addressWarning?: string | null;
-  acceptedCities: string[];
-}) => (
-  <Card className={cn("p-6 lg:p-8", className)}>
-    <h3 className="text-xl font-semibold mb-6">Resumo do Pedido</h3>
-
-    {/* Resumo financeiro */}
-    <div className="space-y-3 text-sm mb-6">
-      <div className="flex justify-between">
-        <span className="text-muted-foreground">
-          {discountAmount > 0 ? "Subtotal dos produtos" : "Subtotal"}
-        </span>
-        <span className="font-medium">R$ {originalTotal.toFixed(2)}</span>
-      </div>
-      {discountAmount > 0 && (
-        <div className="flex justify-between">
-          <span className="text-green-600">Desconto aplicado</span>
-          <span className="text-green-600 font-medium">
-            - R$ {discountAmount.toFixed(2)}
-          </span>
-        </div>
-      )}
-      <div className="flex justify-between">
-        <span className="text-muted-foreground">Subtotal com descontos</span>
-        <span className="font-medium">R$ {cartTotal.toFixed(2)}</span>
-      </div>
-      <div className="flex justify-between">
-        <span className="text-muted-foreground">Taxa de entrega</span>
-        <span
-          className={cn(
-            "font-medium",
-            shippingCost === 0 ? "font-semibold text-green-600" : "",
-            !isAddressServed && address ? "text-red-600" : ""
-          )}
-        >
-          {!address
-            ? "Informe o endereço"
-            : !isAddressServed
-            ? "Indisponível"
-            : shippingCost === null
-            ? "Selecione o pagamento"
-            : shippingCost === 0
-            ? "GRÁTIS"
-            : `R$ ${shippingCost.toFixed(2)}`}
-        </span>
-      </div>
-      {paymentMethod && isAddressServed && shippingCost !== null && (
-        <p className="text-xs text-muted-foreground">
-          {paymentMethod === "pix"
-            ? "Pagamento via PIX"
-            : "Pagamento via Cartão de Crédito"}
-          {" · "}
-          {shippingCost === 0
-            ? "Frete gratuito para este endereço"
-            : `Frete de R$ ${shippingCost.toFixed(2)}`}
-        </p>
-      )}
-      <div className="border-t border-border pt-3">
-        <div className="flex justify-between text-base">
-          <span className="font-semibold">Total</span>
-          <span className="font-semibold">R$ {grandTotal.toFixed(2)}</span>
-        </div>
-      </div>
-    </div>
-
-    {addressWarning && (
-      <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-        <p>{addressWarning}</p>
-        <p className="mt-2 text-xs text-red-600">
-          Cidades atendidas: {acceptedCities.join(", ")} - PB.
-        </p>
-      </div>
-    )}
-
-    <div className="mb-6 space-y-4">
-      <h4 className="text-base font-semibold">Forma de Pagamento</h4>
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <Button
-          type="button"
-          variant={paymentMethod === "pix" ? "default" : "outline"}
-          className={cn(
-            "w-full justify-between gap-2 border px-3 py-2 text-sm transition",
-            paymentMethod === "pix"
-              ? "bg-rose-600 text-white hover:bg-rose-700"
-              : "border-border hover:border-muted-foreground/20"
-          )}
-          onClick={() => setPaymentMethod("pix")}
-          disabled={!isAddressServed}
-        >
-          <span>PIX</span>
-          <span
-            className={cn(
-              "text-xs sm:text-[11px]",
-              paymentMethod === "pix"
-                ? "text-white/80"
-                : "text-muted-foreground"
-            )}
-          >
-            {shippingOptions.pix === null
-              ? "--"
-              : shippingOptions.pix === 0
-              ? "Frete grátis"
-              : `Frete R$ ${shippingOptions.pix.toFixed(2)}`}
-          </span>
-        </Button>
-        <Button
-          type="button"
-          variant={paymentMethod === "card" ? "default" : "outline"}
-          className={cn(
-            "w-full justify-between gap-2 border px-3 py-2 text-sm transition",
-            paymentMethod === "card"
-              ? "bg-rose-600 text-white hover:bg-rose-700"
-              : "border-border hover:border-muted-foreground/20"
-          )}
-          onClick={() => setPaymentMethod("card")}
-          disabled={!isAddressServed}
-        >
-          <span>Cartão de Crédito</span>
-          <span
-            className={cn(
-              "text-xs sm:text-[11px]",
-              paymentMethod === "card"
-                ? "text-white/80"
-                : "text-muted-foreground"
-            )}
-          >
-            {shippingOptions.card === null
-              ? "--"
-              : shippingOptions.card === 0
-              ? "Frete grátis"
-              : `Frete R$ ${shippingOptions.card.toFixed(2)}`}
-          </span>
-        </Button>
-      </div>
-      {!isAddressServed && address && (
-        <p className="text-xs text-muted-foreground">
-          Informe um endereço atendido para habilitar as formas de pagamento.
-        </p>
-      )}
-    </div>
-
-    <Collapsible>
-      <CollapsibleTrigger className="group flex w-full items-center justify-between rounded-lg border border-border bg-muted/30 px-4 py-3 text-left text-sm font-medium transition-colors hover:bg-muted/50 data-[state=open]:bg-rose-50">
-        <span>Configurar Entrega e Agendamento</span>
-        <ChevronRightIcon className="h-4 w-4 text-muted-foreground transition-transform duration-200 group-data-[state=open]:rotate-90" />
-      </CollapsibleTrigger>
-
-      <CollapsibleContent className="mt-4 space-y-4">
-        <div className="border rounded-lg p-4">
-          <h4 className="text-sm font-semibold text-gray-900 flex items-center gap-2 mb-3">
-            <MapPin className="h-4 w-4" />
-            Informações de Entrega
-          </h4>
-          <div className="text-xs text-gray-500 mb-3">
-            {address ? (
-              <div>
-                {(() => {
-                  const parts = address.split(" - ");
-                  const streetPart = parts[0] || "";
-                  const neighborhoodPart = parts[1] || "";
-                  const cityStatePart = parts[2] || "";
-
-                  return (
-                    <div>
-                      <p>
-                        <strong>Endereço:</strong> {streetPart}
-                      </p>
-                      {neighborhoodPart && (
-                        <p>
-                          <strong>Bairro:</strong> {neighborhoodPart}
-                        </p>
-                      )}
-                      {cityStatePart && (
-                        <p>
-                          <strong>Cidade/Estado:</strong> {cityStatePart}
-                        </p>
-                      )}
-                    </div>
-                  );
-                })()}
-              </div>
-            ) : (
-              <p>Adicionar Endereço de Entrega</p>
-            )}
-          </div>
-          <Button
-            onClick={prepareAddressForEditing}
-            className="text-rose-500 hover:text-rose-600 bg-neutral-100 w-full"
-            variant="ghost"
-            size="sm"
-          >
-            {address ? "Editar Endereço" : "Adicionar Endereço"}
-            <ChevronRightIcon className="h-4 w-4 ml-2" />
-          </Button>
-        </div>
-
-        {/* Agendamento de Entrega */}
-        <div className="border rounded-lg p-4">
-          <h4 className="text-sm font-semibold text-gray-900 flex items-center gap-2 mb-3">
-            <CalendarIcon className="h-4 w-4" />
-            Agendamento de Entrega
-          </h4>
-
-          <div className="bg-blue-50 rounded-lg border border-blue-200 py-2 px-3 mb-4">
-            <div className="flex items-start gap-2">
-              <div className="flex-shrink-0 mt-0.5">
-                <svg
-                  className="h-4 w-4 text-blue-600"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                  />
-                </svg>
-              </div>
-              <div className="flex-1">
-                <h5 className="text-xs font-medium text-blue-900">
-                  ⏱️ Tempo de Preparo: {getMinPreparationHours()}h
-                  {getMinPreparationHours() === 1 ? "" : ""}
-                </h5>
-              </div>
-            </div>
-          </div>
-
-          <div className="space-y-3">
-            <div>
-              <Label
-                htmlFor="delivery-date"
-                className="block text-xs font-medium text-gray-700 mb-2"
-              >
-                Data de Entrega *
-              </Label>
-
-              <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant={"outline"}
-                    className={`w-full justify-start text-left font-normal text-xs ${
-                      !selectedDate && "text-muted-foreground"
-                    }`}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {selectedDate ? (
-                      selectedDate.toLocaleDateString("pt-BR")
-                    ) : (
-                      <span>Selecione uma data</span>
-                    )}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar
-                    mode="single"
-                    selected={selectedDate || undefined}
-                    onSelect={(date) => {
-                      if (!date) {
-                        setSelectedDate(undefined);
-                        setSelectedTime("");
-                        return;
-                      }
-
-                      const normalizedDate = new Date(date);
-                      normalizedDate.setHours(0, 0, 0, 0);
-                      const previousTime = selectedDate
-                        ? new Date(selectedDate).setHours(0, 0, 0, 0)
-                        : undefined;
-                      const normalizedTime = normalizedDate.getTime();
-                      const hasDateChanged =
-                        previousTime === undefined
-                          ? true
-                          : previousTime !== normalizedTime;
-
-                      setSelectedDate(normalizedDate);
-
-                      if (hasDateChanged) {
-                        setSelectedTime("");
-                      }
-
-                      setCalendarOpen(false);
-                    }}
-                    disabled={isDateDisabled}
-                    className="rounded-md border w-full min-w-[280px]"
-                    captionLayout="dropdown"
-                  />
-                </PopoverContent>
-              </Popover>
-            </div>
-
-            {selectedDate && (
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-2">
-                  Horário de Entrega *
-                </label>
-                <select
-                  value={selectedTime}
-                  onChange={(e) => setSelectedTime(e.target.value)}
-                  title="Selecione o horário de entrega"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-rose-500 text-xs"
-                >
-                  <option value="">Selecione um horário</option>
-                  {generateTimeSlots(selectedDate).map((slot) => (
-                    <option key={slot.value} value={slot.value}>
-                      {slot.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
-
-            <div className="text-xs text-gray-500 bg-gray-50 p-2 rounded-md">
-              <p>
-                <strong>Horários de funcionamento:</strong>
-              </p>
-              <p>• Segunda à Sexta: 7:30-12:00 e 14:00-17:00</p>
-              <p>• Sábados e Domingos: 8:00-11:00</p>
-            </div>
-          </div>
-        </div>
-      </CollapsibleContent>
-    </Collapsible>
-  </Card>
-);
-
-const CheckoutButton = ({
-  handleFinalizePurchase,
-  isProcessing,
-  zipCode,
-  address,
-  houseNumber,
-  city,
-  state,
-  customerPhone,
-  selectedDate,
-  selectedTime,
-  cartItems,
-  cartTotal,
-  user,
-  paymentMethod,
-  shippingCost,
-  grandTotal,
-  isAddressServed,
-  paymentStatus,
-  paymentError,
-  pixData,
-  onViewPix,
-}: CheckoutButtonProps) => {
-  const shippingLabel = (() => {
-    if (shippingCost === null) return "defina o pagamento";
-    if (shippingCost === 0) return "Grátis";
-    return `R$ ${shippingCost.toFixed(2)}`;
-  })();
-
-  const paymentLabel = (() => {
-    if (!paymentMethod) return "Não selecionado";
-    if (paymentMethod === "pix") return "Pix";
-    return "Cartão de crédito";
-  })();
-
-  const isDisabled =
-    isProcessing ||
-    !zipCode.trim() ||
-    !address.trim() ||
-    !houseNumber.trim() ||
-    !city.trim() ||
-    !state.trim() ||
-    !customerPhone.trim() ||
-    !isValidPhone(customerPhone) ||
-    !selectedDate ||
-    !selectedTime ||
-    cartItems.length === 0 ||
-    !paymentMethod ||
-    shippingCost === null ||
-    !isAddressServed;
-
-  return (
-    <div className="space-y-3">
-      {paymentError && (
-        <Alert className="border-red-200 bg-red-50">
-          <AlertCircle className="h-4 w-4 text-red-600" />
-          <AlertDescription className="text-red-700 text-xs lg:text-sm">
-            {paymentError}
-          </AlertDescription>
-        </Alert>
-      )}
-
-      {paymentStatus === "pending" && pixData && (
-        <Alert className="border-green-200 bg-green-50">
-          <Smartphone className="h-4 w-4 text-green-600" />
-          <AlertDescription className="text-green-800 text-xs lg:text-sm flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
-            <span>PIX gerado! Abra o QR Code para concluir o pagamento.</span>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={onViewPix}
-              className="border-green-300 text-green-700 hover:bg-green-100 bg-transparent"
-            >
-              Ver QR Code
-            </Button>
-          </AlertDescription>
-        </Alert>
-      )}
-
-      <div className="flex items-center justify-between gap-4">
-        <div>
-          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            Total do pedido
-          </p>
-          <p className="text-lg font-semibold">R$ {grandTotal.toFixed(2)}</p>
-          <p className="text-[11px] text-muted-foreground">
-            Subtotal: R$ {cartTotal.toFixed(2)} · Frete: {shippingLabel}
-          </p>
-          <p className="text-[11px] text-muted-foreground">
-            Pagamento: {paymentLabel}
-          </p>
-        </div>
-        <span className="text-xs font-medium text-muted-foreground">
-          {cartItems.length} {cartItems.length === 1 ? "item" : "itens"}
-        </span>
-      </div>
-
-      <Button
-        onClick={handleFinalizePurchase}
-        disabled={isDisabled}
-        className="w-full justify-center gap-2 bg-rose-600 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-60"
-        size="lg"
-      >
-        {isProcessing ? (
-          <>
-            <Loader2 className="h-4 w-4 animate-spin" />
-            Processando...
-          </>
-        ) : (
-          <>
-            <CreditCard className="h-4 w-4" />
-            Finalizar Compra
-          </>
-        )}
-      </Button>
-
-      <div className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs">
-        <p className="flex items-center gap-2 font-medium">
-          <User className="h-3 w-3" />
-          {user?.name || "Carregando..."}
-        </p>
-        {selectedDate && selectedTime && (
-          <p className="mt-1 text-muted-foreground">
-            Entrega em {selectedDate.toLocaleDateString("pt-BR")} às{" "}
-            {selectedTime}
-          </p>
-        )}
-      </div>
-    </div>
-  );
-};
-
 export default function CarrinhoPage() {
   const { user, isLoading, login } = useAuth();
-  const { getCepInfo, updateUser, getUser, createTransparentPayment } =
-    useApi();
+  const {
+    getCepInfo,
+    getUser,
+    createTransparentPayment,
+    createCardToken,
+    getCardIssuers,
+  } = useApi();
   const {
     cart,
     updateQuantity,
@@ -912,6 +453,9 @@ export default function CarrinhoPage() {
     generateTimeSlots,
     getDeliveryDateBounds,
   } = useCartContext();
+
+  // Estado da etapa do checkout
+  const [currentStep, setCurrentStep] = useState<CheckoutStep>(1);
 
   const [calendarOpen, setCalendarOpen] = useState(false);
 
@@ -946,15 +490,14 @@ export default function CarrinhoPage() {
   const [city, setCity] = useState("");
   const [state, setState] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
+  const [recipientPhone, setRecipientPhone] = useState("");
+  const [isSelfRecipient, setIsSelfRecipient] = useState(false);
   const [isLoadingCep, setIsLoadingCep] = useState(false);
-  const [isEditingAddress, setIsEditingAddress] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<"" | "pix" | "card">("");
   const [pixData, setPixData] = useState<PixPaymentData | null>(null);
   const [paymentStatus, setPaymentStatus] = useState<PaymentStatusType>("");
   const [paymentError, setPaymentError] = useState<string | null>(null);
-  const [isPixDialogOpen, setIsPixDialogOpen] = useState(false);
   const [currentOrderId, setCurrentOrderId] = useState<string | null>(null);
-  const [isCardDialogOpen, setIsCardDialogOpen] = useState(false);
 
   // Hook de polling de pagamento
   const { status: pollingStatus, attempts: pollingAttempts } =
@@ -966,6 +509,8 @@ export default function CarrinhoPage() {
       onSuccess: (order) => {
         console.log("✅ Pagamento confirmado pelo webhook!", order);
         setPaymentStatus("success");
+        // Limpar localStorage
+        localStorage.removeItem("pendingOrderId");
         toast.success("Pagamento confirmado! Pedido realizado com sucesso.");
         // Aguardar 2 segundos antes de redirecionar
         setTimeout(() => {
@@ -1050,20 +595,36 @@ export default function CarrinhoPage() {
     }
   }, [user?.id, isLoading, hasRefreshedUser, refreshUserData]);
 
+  // Sincronizar telefone do destinatário quando "eu vou receber" for marcado
   useEffect(() => {
-    if (user && !isEditingAddress) {
+    if (isSelfRecipient) {
+      setRecipientPhone(customerPhone);
+    }
+  }, [isSelfRecipient, customerPhone]);
+
+  useEffect(() => {
+    if (user) {
+      // Preencher CEP
       if (user.zip_code && !zipCode) {
         setZipCode(user.zip_code);
       }
 
+      // Preencher cidade
       if (user.city && !city) {
         setCity(user.city);
       }
 
+      // Preencher estado
       if (user.state && !state) {
         setState(user.state);
       }
 
+      // Preencher telefone formatado
+      if (user.phone && !customerPhone) {
+        setCustomerPhone(formatPhoneNumber(user.phone));
+      }
+
+      // Preencher endereço completo
       if (user.address && !address) {
         const addressStr = user.address;
 
@@ -1102,8 +663,10 @@ export default function CarrinhoPage() {
       setNeighborhood("");
       setCity("");
       setState("");
+      setCustomerPhone("");
     }
-  }, [user, zipCode, address, city, state, isEditingAddress]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
 
   const cartItems = Array.isArray(cart?.items) ? cart.items : [];
   const cartTotal = cart?.total || 0;
@@ -1156,15 +719,6 @@ export default function CarrinhoPage() {
       setPaymentMethod("");
     }
   }, [isAddressServed, paymentMethod]);
-
-  const handlePaymentMethodSelection = useCallback((method: "pix" | "card") => {
-    setPaymentMethod(method);
-    setPixData(null);
-    setPaymentStatus("");
-    setPaymentError(null);
-    setIsPixDialogOpen(false);
-    setCurrentOrderId(null);
-  }, []);
 
   const handleCepSearch = async (cep: string) => {
     if (!cep || cep.length !== 8) {
@@ -1219,21 +773,166 @@ export default function CarrinhoPage() {
   }
 
   const handleCardPayment = async (cardData: CreditCardData) => {
+    console.log("🔍 handleCardPayment iniciado");
+    console.log("📊 Estado atual antes do pagamento:", {
+      currentOrderId,
+      paymentMethod,
+      cartItemsCount: cartItems.length,
+      localStorageOrderId: localStorage.getItem("pendingOrderId"),
+    });
+
     setIsProcessing(true);
     setPaymentError(null);
 
     try {
-      if (!currentOrderId) {
-        throw new Error("Pedido não encontrado. Tente novamente.");
+      // Verificar múltiplas fontes possíveis do orderId
+      let orderId = currentOrderId;
+
+      console.log("🔍 Verificando currentOrderId:", orderId);
+
+      // Se não tiver currentOrderId, tentar obter do localStorage como fallback
+      if (!orderId) {
+        console.log(
+          "⚠️ currentOrderId está vazio, verificando localStorage..."
+        );
+        const storedOrderId = localStorage.getItem("pendingOrderId");
+        console.log("📦 localStorage pendingOrderId:", storedOrderId);
+
+        if (storedOrderId) {
+          orderId = storedOrderId;
+          setCurrentOrderId(storedOrderId);
+          console.log("✅ OrderId recuperado do localStorage:", orderId);
+        }
       }
 
+      if (!orderId) {
+        console.error("❌ OrderId não encontrado. Estado atual:", {
+          currentOrderId,
+          paymentMethod,
+          cartItems: cartItems.length,
+          localStorage: localStorage.getItem("pendingOrderId"),
+        });
+        throw new Error(
+          "Pedido não encontrado. Por favor, clique em 'Finalizar Compra' novamente antes de preencher os dados do cartão."
+        );
+      }
+
+      console.log("✅ OrderId confirmado:", orderId);
       console.log("💳 Processando pagamento com cartão...", {
-        orderId: currentOrderId,
+        orderId: orderId,
         installments: cardData.installments,
       });
 
+      // ============================================================
+      // Tokenização usando API do Mercado Pago via Backend
+      // Esta é a abordagem mais confiável para ambiente de produção
+      // ============================================================
+      let cardTokenId: string | undefined = undefined;
+
+      try {
+        console.log("💳 Criando token via backend do Mercado Pago...");
+        console.log("📋 Dados do cartão para tokenização:", {
+          cardNumberLength: cardData.cardNumber.replace(/\s/g, "").length,
+          hasSecurityCode: !!cardData.securityCode,
+          expirationMonth: cardData.expirationMonth,
+          expirationYear: cardData.expirationYear,
+          hasCardholderName: !!cardData.cardholderName,
+          identificationType: cardData.identificationType,
+          hasIdentificationNumber: !!cardData.identificationNumber,
+        });
+
+        // Criar token usando o método autenticado do useApi
+        const tokenData = await createCardToken({
+          cardNumber: cardData.cardNumber.replace(/\s/g, ""),
+          securityCode: cardData.securityCode.trim(),
+          expirationMonth: String(cardData.expirationMonth).padStart(2, "0"),
+          expirationYear: String(cardData.expirationYear),
+          cardholderName: cardData.cardholderName.trim(),
+          identificationType: cardData.identificationType,
+          identificationNumber: cardData.identificationNumber.replace(
+            /\D/g,
+            ""
+          ),
+        });
+
+        console.log("✅ Token criado via backend:", {
+          hasToken: !!tokenData.id,
+          tokenLength: tokenData.id?.length,
+          firstSixDigits: tokenData.first_six_digits,
+          lastFourDigits: tokenData.last_four_digits,
+        });
+
+        // Extrair token
+        cardTokenId = tokenData.id;
+        const bin = tokenData.first_six_digits;
+
+        console.log("🎟️ Token extraído:", {
+          cardTokenId,
+          bin: bin,
+          lastDigits: tokenData.last_four_digits,
+        });
+
+        if (!cardTokenId || !bin) {
+          throw new Error(
+            "Falha ao gerar token do cartão. Verifique os dados e tente novamente."
+          );
+        }
+
+        console.log("✅ Token gerado com sucesso:", cardTokenId);
+
+        // Buscar issuer_id usando o BIN
+        console.log("🏦 Buscando emissor do cartão...");
+        const issuerData = await getCardIssuers({
+          bin: bin,
+          paymentMethodId: "master",
+        });
+
+        console.log("✅ Emissor encontrado:", issuerData);
+
+        const issuerId = issuerData.issuer_id;
+        const paymentMethodId = issuerData.payment_method_id; // "master", "visa", etc.
+
+        if (!issuerId) {
+          console.warn("⚠️ Emissor não encontrado, continuando sem issuer_id");
+        }
+
+        // Salvar issuer_id e payment_method_id no estado
+        (
+          cardData as unknown as { issuerId?: string; paymentMethodId?: string }
+        ).issuerId = issuerId;
+        (
+          cardData as unknown as { issuerId?: string; paymentMethodId?: string }
+        ).paymentMethodId = paymentMethodId;
+      } catch (tokenError: unknown) {
+        console.error("Erro ao tokenizar cartão:", tokenError);
+        const getMessage = (err: unknown): string => {
+          if (!err || typeof err !== "object")
+            return "Erro ao tokenizar o cartão. Verifique os dados.";
+          const maybe = err as { message?: unknown };
+          if (maybe.message && typeof maybe.message === "string")
+            return maybe.message;
+          return "Erro ao tokenizar o cartão. Verifique os dados.";
+        };
+
+        throw new Error(getMessage(tokenError));
+      }
+
+      console.log("📤 Enviando pagamento com os seguintes dados:");
+      console.log("  - orderId:", orderId);
+      console.log("  - cardToken:", cardTokenId);
+      console.log("  - paymentMethodId: credit_card");
+      console.log(
+        "  - payment_method_id:",
+        (cardData as unknown as { paymentMethodId?: string }).paymentMethodId
+      );
+      console.log("  - installments:", cardData.installments);
+      console.log(
+        "  - issuerId:",
+        (cardData as unknown as { issuerId?: string }).issuerId
+      );
+
       const paymentResponse = await createTransparentPayment({
-        orderId: currentOrderId,
+        orderId: orderId,
         paymentMethodId: "credit_card",
         installments: cardData.installments,
         payerEmail: cardData.email,
@@ -1241,9 +940,11 @@ export default function CarrinhoPage() {
         payerDocument: cardData.identificationNumber,
         payerDocumentType:
           cardData.identificationType === "CPF" ? "CPF" : "CNPJ",
-        // TODO: Implementar geração de cardToken usando SDK do Mercado Pago
-        // cardToken: cardData.token,
-        // issuer_id: cardData.issuerId,
+        cardToken: cardTokenId,
+        cardholderName: cardData.cardholderName, // Nome do titular
+        issuer_id: (cardData as unknown as { issuerId?: string }).issuerId,
+        payment_method_id: (cardData as unknown as { paymentMethodId?: string })
+          .paymentMethodId,
       });
 
       console.log("📦 Resposta do pagamento:", paymentResponse);
@@ -1263,7 +964,8 @@ export default function CarrinhoPage() {
 
       if (normalizedStatus === "success") {
         toast.success("Pagamento aprovado! Pedido confirmado.");
-        setIsCardDialogOpen(false);
+        // Limpar localStorage
+        localStorage.removeItem("pendingOrderId");
         // Aguarda 1 segundo antes de redirecionar
         setTimeout(() => {
           router.push("/pedidos");
@@ -1272,7 +974,6 @@ export default function CarrinhoPage() {
         toast.info("Pagamento em análise. Aguardando confirmação...", {
           duration: 5000,
         });
-        setIsCardDialogOpen(false);
         // O hook de polling vai continuar verificando o status
       } else {
         throw new Error("Pagamento recusado. Verifique os dados do cartão.");
@@ -1282,6 +983,13 @@ export default function CarrinhoPage() {
       const errorMessage =
         error instanceof Error ? error.message : "Erro desconhecido";
       setPaymentError(errorMessage);
+
+      // Se o erro for relacionado ao pedido não encontrado, limpar o localStorage
+      if (errorMessage.includes("Pedido não encontrado")) {
+        localStorage.removeItem("pendingOrderId");
+        setCurrentOrderId(null);
+      }
+
       toast.error(`Erro no pagamento: ${errorMessage}`);
     } finally {
       setIsProcessing(false);
@@ -1307,6 +1015,16 @@ export default function CarrinhoPage() {
     }
     if (!state.trim()) {
       toast.error("Por favor, informe o estado");
+      return;
+    }
+    if (!recipientPhone.trim()) {
+      toast.error("Por favor, informe o número do destinatário");
+      return;
+    }
+    if (!isValidPhone(recipientPhone)) {
+      toast.error(
+        "Por favor, informe um número de telefone válido para o destinatário"
+      );
       return;
     }
     if (!selectedDate) {
@@ -1355,6 +1073,7 @@ export default function CarrinhoPage() {
           grandTotal,
           deliveryCity: city,
           deliveryState: state,
+          recipientPhone: recipientPhone.replace(/\D/g, ""), // Remove caracteres não numéricos
         }
       );
 
@@ -1379,11 +1098,29 @@ export default function CarrinhoPage() {
         throw new Error("Não foi possível identificar o pedido gerado.");
       }
 
+      console.log("📦 Pedido criado - OrderId:", createdOrderId);
+      console.log("💾 Salvando no localStorage e state...");
+
+      // Salvar orderId no localStorage para persistência
+      localStorage.setItem("pendingOrderId", createdOrderId);
+
+      // Definir no estado
       setCurrentOrderId(createdOrderId);
 
+      // Verificar se foi salvo corretamente
+      const savedOrderId = localStorage.getItem("pendingOrderId");
+      console.log("✅ Verificação - localStorage:", savedOrderId);
+      console.log("✅ Verificação - estado será:", createdOrderId);
+
       if (paymentMethod === "card") {
-        setIsCardDialogOpen(true);
+        console.log(
+          "💳 Método: Cartão - Aguardando preenchimento do formulário"
+        );
+        // Não precisa mais abrir dialog, o formulário já está na tela
         setIsProcessing(false);
+        toast.info(
+          "Preencha os dados do cartão abaixo para finalizar o pagamento."
+        );
         return;
       }
 
@@ -1448,9 +1185,13 @@ export default function CarrinhoPage() {
         });
 
         setPaymentStatus(normalizedStatus);
-        setIsPixDialogOpen(true);
+
+        // Salvar orderId no localStorage
+        localStorage.setItem("pendingOrderId", createdOrderId);
+
+        // Não precisa mais abrir dialog, o QR Code já está na tela
         toast.success(
-          "Pedido criado! Escaneie o QR Code para concluir o pagamento."
+          "Pedido criado! Escaneie o QR Code abaixo para concluir o pagamento."
         );
       }
     } catch (error) {
@@ -1460,112 +1201,15 @@ export default function CarrinhoPage() {
       setCurrentOrderId(null);
       setPixData(null);
       setPaymentStatus("");
-      setIsPixDialogOpen(false);
       setPaymentError(errorMessage);
+      // Limpar localStorage em caso de erro
+      localStorage.removeItem("pendingOrderId");
       toast.error(`Erro ao processar pedido: ${errorMessage}`);
     } finally {
       setIsProcessing(false);
     }
   };
 
-  const handleSaveAddress = async () => {
-    if (!zipCode.trim()) {
-      alert("Por favor, informe o CEP");
-      return;
-    }
-    if (!address.trim()) {
-      alert("Por favor, informe o endereço");
-      return;
-    }
-    if (!houseNumber.trim()) {
-      alert("Por favor, informe o número da casa");
-      return;
-    }
-    if (!city.trim()) {
-      alert("Por favor, informe a cidade");
-      return;
-    }
-    if (!state.trim()) {
-      alert("Por favor, informe o estado");
-      return;
-    }
-
-    const fullAddress = `${address}, ${houseNumber} - ${neighborhood}, ${city}/${state} - CEP: ${zipCode}`;
-
-    try {
-      const updatedUser = await updateUser(user.id, {
-        zip_code: zipCode,
-        address: fullAddress,
-        city,
-        state,
-        phone: unformatPhoneNumber(customerPhone), // Salva sem máscara
-      });
-
-      if (updatedUser) {
-        toast.success("Endereço e telefone salvos com sucesso!");
-      } else {
-        toast.error("Erro ao salvar informações. Tente novamente.");
-      }
-
-      await refreshUserData();
-
-      setIsEditingAddress(false);
-    } catch (error) {
-      console.error("Erro ao salvar endereço:", error);
-      alert("Erro ao salvar informações. Tente novamente.");
-    }
-  };
-
-  const prepareAddressForEditing = () => {
-    if (user) {
-      if (user.zip_code) {
-        setZipCode(user.zip_code);
-      }
-      if (user.city) {
-        setCity(user.city);
-      }
-      if (user.state) {
-        setState(user.state);
-      }
-      if (user.phone) {
-        setCustomerPhone(formatPhoneNumber(user.phone));
-      }
-
-      if (user.address) {
-        const addressStr = user.address;
-
-        if (!user.zip_code && !zipCode) {
-          const cepMatch = addressStr.match(/CEP:\s*(\d{8})/);
-          if (cepMatch) {
-            setZipCode(cepMatch[1]);
-          }
-        }
-
-        const streetMatch = addressStr.match(/^([^,]+),\s*(\w+)/);
-        if (streetMatch) {
-          setAddress(streetMatch[1].trim());
-          setHouseNumber(streetMatch[2].trim());
-        } else {
-          setAddress(addressStr);
-        }
-
-        const neighborhoodMatch = addressStr.match(/-\s*([^,]+),/);
-        if (neighborhoodMatch) {
-          setNeighborhood(neighborhoodMatch[1].trim());
-        }
-
-        if (!user.city || !user.state) {
-          const cityStateMatch = addressStr.match(/,\s*([^/]+)\/(\w{2})/);
-          if (cityStateMatch) {
-            if (!user.city) setCity(cityStateMatch[1].trim());
-            if (!user.state) setState(cityStateMatch[2].trim());
-          }
-        }
-      }
-    }
-
-    setIsEditingAddress(true);
-  };
   const originalTotal = cartItems.reduce((sum, item) => {
     const baseTotal = (item.effectivePrice ?? item.price) * item.quantity;
     const additionalsTotal =
@@ -1575,71 +1219,96 @@ export default function CarrinhoPage() {
   }, 0);
 
   const discountAmount = originalTotal - cartTotal;
-  const formattedAddress = `${address}${houseNumber ? `, ${houseNumber}` : ""}${
-    neighborhood ? ` - ${neighborhood}` : ""
-  }${city && state ? `, ${city}/${state}` : ""}${
-    zipCode ? ` - CEP: ${zipCode}` : ""
-  }`;
+
+  // Validação da etapa 1 (carrinho)
+  const canProceedToStep2 = cartItems.length > 0;
+
+  // Validação da etapa 2 (dados de entrega)
+  const canProceedToStep3 =
+    zipCode.trim().length === 8 &&
+    address.trim() !== "" &&
+    houseNumber.trim() !== "" &&
+    city.trim() !== "" &&
+    state.trim() !== "" &&
+    customerPhone.trim() !== "" &&
+    isValidPhone(customerPhone) &&
+    recipientPhone.trim() !== "" &&
+    isValidPhone(recipientPhone) &&
+    selectedDate !== undefined &&
+    selectedTime !== "" &&
+    isAddressServed;
+
+  const handleNextStep = () => {
+    if (currentStep === 1 && canProceedToStep2) {
+      setCurrentStep(2);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    } else if (currentStep === 2 && canProceedToStep3) {
+      setCurrentStep(3);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  };
+
+  const handlePreviousStep = () => {
+    if (currentStep > 1) {
+      setCurrentStep((prev) => (prev - 1) as CheckoutStep);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  };
 
   return (
-    <div className="min-h-screen bg-background ">
+    <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <header className="border-b border-border bg-card">
-        <div className="mx-auto max-w-7xl px-4 py-4 sm:px-6 lg:px-8">
+      <header className="border-b border-gray-200 bg-white shadow-sm">
+        <div className="mx-auto max-w-5xl px-4 py-5 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Link
-                href="/"
-                className="flex items-center gap-2 text-foreground hover:text-muted-foreground transition-colors"
-              >
-                <ChevronLeftIcon className="h-5 w-5" />
-                <h1 className="text-xl font-semibold">Carrinho</h1>
-              </Link>
-            </div>
-            <Button variant="ghost" size="sm" asChild>
+            <Link
+              href="/"
+              className="flex items-center gap-2 text-gray-700 hover:text-rose-600 transition-colors font-medium"
+            >
+              <ChevronLeftIcon className="h-5 w-5" />
+              <h1 className="text-xl font-bold">Finalizar Compra</h1>
+            </Link>
+            <Button
+              variant="ghost"
+              size="sm"
+              asChild
+              className="text-rose-600 hover:text-rose-700 hover:bg-rose-50 font-semibold"
+            >
               <Link href="/">Continuar Comprando</Link>
             </Button>
           </div>
         </div>
       </header>
 
-      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        <div className="grid gap-8 lg:grid-cols-3">
-          {cartItems.length === 0 ? (
-            <div className="lg:col-span-3">
-              <Card className="border-border bg-card p-8 text-center">
-                <div className="text-muted-foreground mb-4">
-                  <ShoppingCart className="h-16 w-16 mx-auto mb-4" />
-                </div>
-                <h2 className="text-xl font-semibold mb-2">
-                  Seu carrinho está vazio
-                </h2>
-                <p className="text-muted-foreground mb-6">
-                  Adicione alguns produtos deliciosos do nosso catálogo!
-                </p>
-                <Button
-                  onClick={() => router.push("/")}
-                  className="bg-rose-600 hover:bg-rose-700"
-                >
-                  Continuar Comprando
-                </Button>
-              </Card>
-            </div>
-          ) : (
-            <>
-              {/* Main Content - Cart Items */}
-              <div className="lg:col-span-2 space-y-6">
-                {/* Step 1: Review Cart */}
-                <Card className="border-border bg-card p-6">
-                  <div className="mb-6 flex items-center gap-3">
-                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground text-sm font-semibold">
-                      1
-                    </div>
-                    <h2 className="text-xl font-semibold">
-                      Revise seu carrinho
-                    </h2>
-                  </div>
+      <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
+        {cartItems.length === 0 ? (
+          <Card className="border-gray-100 bg-white p-12 text-center shadow-sm rounded-2xl">
+            <ShoppingCart className="h-20 w-20 mx-auto mb-4 text-gray-300" />
+            <h2 className="text-2xl font-bold mb-2 text-gray-900">
+              Seu carrinho está vazio
+            </h2>
+            <p className="text-gray-600 mb-6">
+              Adicione alguns produtos deliciosos do nosso catálogo!
+            </p>
+            <Button
+              onClick={() => router.push("/")}
+              className="bg-rose-600 hover:bg-rose-700 text-white px-8 py-3 rounded-xl font-bold"
+            >
+              Ver Produtos
+            </Button>
+          </Card>
+        ) : (
+          <>
+            {/* Stepper */}
+            <CheckoutStepper currentStep={currentStep} />
 
+            {/* Etapa 1: Revisão do Carrinho */}
+            {currentStep === 1 && (
+              <div className="space-y-6 animate-in fade-in duration-300">
+                <Card className="bg-white p-6 lg:p-8 rounded-2xl shadow-sm border-gray-100">
+                  <h2 className="text-2xl font-bold mb-6 text-gray-900">
+                    Seus Produtos
+                  </h2>
                   <div className="space-y-4">
                     {cartItems.map((item, index) => (
                       <ProductCard
@@ -1652,408 +1321,676 @@ export default function CarrinhoPage() {
                   </div>
                 </Card>
 
-                {/* Step 2: Delivery Information - Only visible on mobile */}
-                <div className="lg:hidden">
-                  <Card className="border-border bg-card p-6">
-                    <div className="mb-6 flex items-center gap-3">
-                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground text-sm font-semibold">
-                        2
+                {/* Resumo Financeiro */}
+                <Card className="bg-white p-6 lg:p-8 rounded-2xl shadow-sm border-gray-100">
+                  <h3 className="text-xl font-bold mb-4 text-gray-900">
+                    Resumo do Pedido
+                  </h3>
+                  <div className="space-y-3 text-sm">
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-600">
+                        {discountAmount > 0
+                          ? "Subtotal dos produtos"
+                          : "Subtotal"}
+                      </span>
+                      <span className="font-semibold text-gray-900">
+                        R$ {originalTotal.toFixed(2)}
+                      </span>
+                    </div>
+                    {discountAmount > 0 && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-green-600 font-medium">
+                          Desconto aplicado
+                        </span>
+                        <span className="text-green-600 font-semibold">
+                          - R$ {discountAmount.toFixed(2)}
+                        </span>
                       </div>
-                      <h2 className="text-xl font-semibold">
-                        Entrega e Pagamento
-                      </h2>
+                    )}
+                    <div className="border-t border-gray-200 pt-3 mt-3">
+                      <div className="flex justify-between items-center">
+                        <span className="font-bold text-gray-900 text-lg">
+                          Total
+                        </span>
+                        <span className="font-bold text-rose-600 text-2xl">
+                          R$ {cartTotal.toFixed(2)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </Card>
+
+                {/* Botão Próxima Etapa */}
+                <div className="flex justify-end">
+                  <Button
+                    onClick={handleNextStep}
+                    disabled={!canProceedToStep2}
+                    className="bg-rose-600 hover:bg-rose-700 text-white px-8 py-6 rounded-xl font-bold text-base shadow-lg hover:shadow-xl transition-all"
+                  >
+                    Prosseguir para Entrega
+                    <ArrowRight className="ml-2 h-5 w-5" />
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* Etapa 2: Dados de Localização */}
+            {currentStep === 2 && (
+              <div className="space-y-6 animate-in fade-in duration-300">
+                <Card className="bg-white p-6 lg:p-8 rounded-2xl shadow-sm border-gray-100">
+                  <h2 className="text-2xl font-bold mb-6 text-gray-900 flex items-center gap-2">
+                    <MapPin className="h-6 w-6 text-rose-600" />
+                    Dados de Entrega
+                  </h2>
+
+                  <div className="space-y-5">
+                    {/* Telefone */}
+                    <div>
+                      <label className="block text-sm font-bold text-gray-900 mb-2">
+                        📱 Seu Telefone (WhatsApp) *
+                      </label>
+                      <input
+                        type="tel"
+                        value={customerPhone}
+                        onChange={(e) => {
+                          const formatted = formatPhoneNumber(e.target.value);
+                          setCustomerPhone(formatted);
+                        }}
+                        placeholder="+55 (XX) XXXXX-XXXX"
+                        className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent transition-all"
+                      />
+                      {customerPhone.length > 0 &&
+                        !isValidPhone(customerPhone) && (
+                          <p className="text-xs text-red-600 mt-2 font-medium">
+                            ⚠️ Telefone incompleto
+                          </p>
+                        )}
                     </div>
 
-                    <OrderSummaryCard
-                      originalTotal={originalTotal}
-                      discountAmount={discountAmount}
-                      cartTotal={cartTotal}
-                      selectedDate={selectedDate}
-                      selectedTime={selectedTime}
-                      calendarOpen={calendarOpen}
-                      setCalendarOpen={setCalendarOpen}
-                      setSelectedDate={setSelectedDate}
-                      setSelectedTime={setSelectedTime}
-                      isDateDisabled={isDateDisabled}
-                      generateTimeSlots={generateTimeSlots}
-                      getMinPreparationHours={getMinPreparationHours}
-                      address={formattedAddress}
-                      prepareAddressForEditing={prepareAddressForEditing}
-                      className="border-0 p-0 shadow-none"
-                      paymentMethod={paymentMethod}
-                      setPaymentMethod={handlePaymentMethodSelection}
-                      shippingCost={shippingCost}
-                      shippingOptions={shippingOptions}
-                      grandTotal={grandTotal}
-                      isAddressServed={isAddressServed}
-                      addressWarning={addressWarning}
-                      acceptedCities={acceptedCities}
+                    {/* Telefone do Destinatário */}
+                    <div>
+                      <label className="block text-sm font-bold text-gray-900 mb-2">
+                        🎁 Telefone do Destinatário *
+                      </label>
+                      <div className="mb-3">
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={isSelfRecipient}
+                            onChange={(e) => {
+                              setIsSelfRecipient(e.target.checked);
+                              if (e.target.checked) {
+                                setRecipientPhone(customerPhone);
+                              }
+                            }}
+                            className="w-4 h-4 text-rose-600 border-gray-300 rounded focus:ring-rose-500"
+                          />
+                          <span className="text-sm text-gray-700">
+                            Eu vou receber
+                          </span>
+                        </label>
+                      </div>
+                      {!isSelfRecipient && (
+                        <>
+                          <input
+                            type="tel"
+                            value={recipientPhone}
+                            onChange={(e) => {
+                              const formatted = formatPhoneNumber(
+                                e.target.value
+                              );
+                              setRecipientPhone(formatted);
+                            }}
+                            placeholder="+55 (XX) XXXXX-XXXX"
+                            className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent transition-all"
+                          />
+                          {recipientPhone.length > 0 &&
+                            !isValidPhone(recipientPhone) && (
+                              <p className="text-xs text-red-600 mt-2 font-medium">
+                                ⚠️ Telefone incompleto
+                              </p>
+                            )}
+                        </>
+                      )}
+                    </div>
+
+                    {/* CEP */}
+                    <div>
+                      <label className="block text-sm font-bold text-gray-900 mb-2">
+                        📮 CEP *
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="text"
+                          value={zipCode}
+                          onChange={(e) => {
+                            const value = e.target.value.replace(/\D/g, "");
+                            if (value.length <= 8) {
+                              setZipCode(value);
+                              if (value.length === 8) {
+                                handleCepSearch(value);
+                              } else {
+                                setAddress("");
+                                setNeighborhood("");
+                                setCity("");
+                                setState("");
+                              }
+                            }
+                          }}
+                          placeholder="00000000"
+                          className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent pr-10 transition-all"
+                          maxLength={8}
+                        />
+                        {isLoadingCep && (
+                          <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                            <Loader2 className="h-5 w-5 animate-spin text-rose-500" />
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Endereço e Número */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="md:col-span-2">
+                        <label className="block text-sm font-bold text-gray-900 mb-2">
+                          🏠 Endereço *
+                        </label>
+                        <input
+                          type="text"
+                          value={address}
+                          onChange={(e) => setAddress(e.target.value)}
+                          placeholder="Rua, Avenida..."
+                          className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent transition-all"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-bold text-gray-900 mb-2">
+                          Número *
+                        </label>
+                        <input
+                          type="text"
+                          value={houseNumber}
+                          onChange={(e) => setHouseNumber(e.target.value)}
+                          placeholder="123"
+                          className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent transition-all"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Bairro */}
+                    <div>
+                      <label className="block text-sm font-bold text-gray-900 mb-2">
+                        🏘️ Bairro
+                      </label>
+                      <input
+                        type="text"
+                        value={neighborhood}
+                        onChange={(e) => setNeighborhood(e.target.value)}
+                        placeholder="Nome do bairro"
+                        className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent transition-all"
+                      />
+                    </div>
+
+                    {/* Cidade e Estado */}
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                      <div className="md:col-span-3">
+                        <label className="block text-sm font-bold text-gray-900 mb-2">
+                          🏙️ Cidade *
+                        </label>
+                        <input
+                          type="text"
+                          value={city}
+                          onChange={(e) => setCity(e.target.value)}
+                          placeholder="Cidade"
+                          className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent transition-all"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-bold text-gray-900 mb-2">
+                          Estado *
+                        </label>
+                        <input
+                          type="text"
+                          value={state}
+                          onChange={(e) =>
+                            setState(e.target.value.toUpperCase())
+                          }
+                          placeholder="UF"
+                          maxLength={2}
+                          className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent uppercase transition-all"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Aviso de endereço */}
+                    {addressWarning && (
+                      <Alert className="border-red-200 bg-red-50">
+                        <AlertCircle className="h-4 w-4 text-red-600" />
+                        <AlertDescription className="text-red-700 text-sm">
+                          {addressWarning}
+                        </AlertDescription>
+                      </Alert>
+                    )}
+
+                    {/* Agendamento */}
+                    <div className="pt-4 border-t border-gray-200">
+                      <h3 className="text-lg font-bold mb-4 text-gray-900 flex items-center gap-2">
+                        <CalendarIcon className="h-5 w-5 text-rose-600" />
+                        Agendar Entrega
+                      </h3>
+
+                      <div className="bg-blue-50 rounded-xl border border-blue-200 p-4 mb-4">
+                        <p className="text-xs text-blue-800">
+                          ⏱️ <strong>Tempo de preparo:</strong>{" "}
+                          {getMinPreparationHours()}h
+                        </p>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <Label className="block text-sm font-bold text-gray-900 mb-2">
+                            Data *
+                          </Label>
+                          <Popover
+                            open={calendarOpen}
+                            onOpenChange={setCalendarOpen}
+                          >
+                            <PopoverTrigger asChild>
+                              <Button
+                                variant="outline"
+                                className="w-full justify-start text-left border-2 border-gray-200 hover:border-rose-300 rounded-xl py-6"
+                              >
+                                <CalendarIcon className="mr-2 h-4 w-4" />
+                                {selectedDate
+                                  ? selectedDate.toLocaleDateString("pt-BR")
+                                  : "Selecione uma data"}
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent
+                              className="w-auto p-0"
+                              align="start"
+                            >
+                              <Calendar
+                                mode="single"
+                                selected={selectedDate}
+                                onSelect={(date) => {
+                                  if (date) {
+                                    setSelectedDate(date);
+                                    setSelectedTime("");
+                                  }
+                                  setCalendarOpen(false);
+                                }}
+                                disabled={isDateDisabled}
+                                className="rounded-md border"
+                              />
+                            </PopoverContent>
+                          </Popover>
+                        </div>
+
+                        {selectedDate && (
+                          <div>
+                            <Label className="block text-sm font-bold text-gray-900 mb-2">
+                              Horário *
+                            </Label>
+                            <select
+                              value={selectedTime}
+                              onChange={(e) => setSelectedTime(e.target.value)}
+                              title="Selecione o horário de entrega"
+                              aria-label="Horário de entrega"
+                              className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent transition-all"
+                            >
+                              <option value="">Selecione um horário</option>
+                              {generateTimeSlots(selectedDate).map((slot) => (
+                                <option key={slot.value} value={slot.value}>
+                                  {slot.label}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </Card>
+
+                {/* Resumo com frete */}
+                <Card className="bg-white p-6 rounded-2xl shadow-sm border-gray-100">
+                  <h3 className="text-lg font-bold mb-4 text-gray-900">
+                    Resumo do Pedido
+                  </h3>
+                  <div className="space-y-3 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">
+                        Subtotal dos produtos
+                      </span>
+                      <span className="font-semibold">
+                        R$ {cartTotal.toFixed(2)}
+                      </span>
+                    </div>
+
+                    {/* Mostrar opções de frete se endereço for válido */}
+                    {isAddressServed && shippingRule ? (
+                      <div className="border-t border-gray-200 pt-3 mt-3 space-y-2">
+                        <p className="text-xs font-bold text-gray-700 mb-2">
+                          📦 Taxa de entrega por forma de pagamento:
+                        </p>
+                        <div className="bg-green-50 rounded-lg p-3 border border-green-200">
+                          <div className="flex justify-between items-center">
+                            <span className="text-green-800 font-medium flex items-center gap-1">
+                              💳 PIX
+                            </span>
+                            <span className="font-bold text-green-700">
+                              {shippingRule.pix === 0
+                                ? "GRÁTIS 🎉"
+                                : `R$ ${shippingRule.pix.toFixed(2)}`}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="bg-blue-50 rounded-lg p-3 border border-blue-200">
+                          <div className="flex justify-between items-center">
+                            <span className="text-blue-800 font-medium flex items-center gap-1">
+                              💳 Cartão de Crédito
+                            </span>
+                            <span className="font-bold text-blue-700">
+                              {shippingRule.card === 0
+                                ? "GRÁTIS 🎉"
+                                : `R$ ${shippingRule.card.toFixed(2)}`}
+                            </span>
+                          </div>
+                        </div>
+                        <p className="text-xs text-gray-500 mt-2 bg-gray-50 rounded-lg p-2">
+                          ℹ️ O valor final será calculado após selecionar a
+                          forma de pagamento na próxima etapa
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="border-t border-gray-200 pt-3 mt-3">
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Taxa de entrega</span>
+                          <span className="font-semibold text-orange-600">
+                            Informe o endereço
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </Card>
+
+                {/* Botões de Navegação */}
+                <div className="flex justify-between gap-4">
+                  <Button
+                    onClick={handlePreviousStep}
+                    variant="outline"
+                    className="px-6 py-6 rounded-xl font-bold border-2"
+                  >
+                    <ArrowLeft className="mr-2 h-5 w-5" />
+                    Voltar
+                  </Button>
+                  <Button
+                    onClick={handleNextStep}
+                    disabled={!canProceedToStep3}
+                    className="bg-rose-600 hover:bg-rose-700 text-white px-8 py-6 rounded-xl font-bold shadow-lg hover:shadow-xl transition-all"
+                  >
+                    Prosseguir para Pagamento
+                    <ArrowRight className="ml-2 h-5 w-5" />
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* Etapa 3: Pagamento */}
+            {currentStep === 3 && (
+              <div className="space-y-6 animate-in fade-in duration-300">
+                {/* Seleção de Método de Pagamento */}
+                <Card className="bg-white p-6 lg:p-8 rounded-2xl shadow-sm border-gray-100">
+                  <h2 className="text-2xl font-bold mb-6 text-gray-900 flex items-center gap-2">
+                    <CreditCard className="h-6 w-6 text-rose-600" />
+                    Forma de Pagamento
+                  </h2>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <Button
+                      type="button"
+                      variant={paymentMethod === "pix" ? "default" : "outline"}
+                      className={`py-8 text-base font-bold transition-all rounded-xl ${
+                        paymentMethod === "pix"
+                          ? "bg-rose-600 text-white hover:bg-rose-700 shadow-md border-0"
+                          : "border-2 border-gray-200 hover:border-rose-300 bg-white text-gray-700"
+                      }`}
+                      onClick={() => {
+                        setPaymentMethod("pix");
+                        setPaymentError(null);
+                      }}
+                    >
+                      <div className="flex flex-col items-center gap-2">
+                        <Smartphone className="h-8 w-8" />
+                        <span>PIX</span>
+                        {shippingOptions.pix !== null && (
+                          <span className="text-xs opacity-80">
+                            {shippingOptions.pix === 0
+                              ? "Frete GRÁTIS 🎉"
+                              : `Frete: R$ ${shippingOptions.pix.toFixed(2)}`}
+                          </span>
+                        )}
+                      </div>
+                    </Button>
+
+                    <Button
+                      type="button"
+                      variant={paymentMethod === "card" ? "default" : "outline"}
+                      className={`py-8 text-base font-bold transition-all rounded-xl ${
+                        paymentMethod === "card"
+                          ? "bg-rose-600 text-white hover:bg-rose-700 shadow-md border-0"
+                          : "border-2 border-gray-200 hover:border-rose-300 bg-white text-gray-700"
+                      }`}
+                      onClick={() => {
+                        setPaymentMethod("card");
+                        setPaymentError(null);
+                      }}
+                    >
+                      <div className="flex flex-col items-center gap-2">
+                        <CreditCard className="h-8 w-8" />
+                        <span>Cartão de Crédito</span>
+                        {shippingOptions.card !== null && (
+                          <span className="text-xs opacity-80">
+                            {shippingOptions.card === 0
+                              ? "Frete GRÁTIS 🎉"
+                              : `Frete: R$ ${shippingOptions.card.toFixed(2)}`}
+                          </span>
+                        )}
+                      </div>
+                    </Button>
+                  </div>
+
+                  {paymentError && (
+                    <Alert className="border-red-200 bg-red-50 mt-6">
+                      <AlertCircle className="h-4 w-4 text-red-600" />
+                      <AlertDescription className="text-red-700">
+                        {paymentError}
+                      </AlertDescription>
+                    </Alert>
+                  )}
+                </Card>
+
+                {/* Mostrar QR Code PIX se PIX foi selecionado E já gerado */}
+                {paymentMethod === "pix" && pixData && (
+                  <Card className="bg-white p-6 rounded-2xl shadow-sm border-gray-100">
+                    {/* Indicador de polling */}
+                    {paymentStatus === "pending" &&
+                      pollingStatus === "polling" && (
+                        <Alert className="border-blue-200 bg-blue-50 mb-6">
+                          <Loader2 className="h-4 w-4 text-blue-600 animate-spin" />
+                          <AlertDescription className="text-blue-800 text-sm">
+                            <div className="flex flex-col gap-1">
+                              <span className="font-medium">
+                                Aguardando confirmação do pagamento...
+                              </span>
+                              <span className="text-xs">
+                                Verificação {pollingAttempts} de 60 • Isso pode
+                                levar alguns minutos
+                              </span>
+                            </div>
+                          </AlertDescription>
+                        </Alert>
+                      )}
+
+                    {paymentStatus === "success" && (
+                      <Alert className="border-green-200 bg-green-50 mb-6">
+                        <CheckCircle2 className="h-4 w-4 text-green-600" />
+                        <AlertDescription className="text-green-800 text-sm font-medium">
+                          ✅ Pagamento confirmado! Redirecionando...
+                        </AlertDescription>
+                      </Alert>
+                    )}
+
+                    {currentOrderId && (
+                      <div className="text-sm text-gray-600 bg-gray-50 p-3 rounded-xl mb-4">
+                        <span className="font-medium text-gray-700">
+                          🆔 Código do pedido:
+                        </span>{" "}
+                        {currentOrderId}
+                      </div>
+                    )}
+
+                    <QRCodePIX
+                      pixData={{
+                        ...pixData,
+                        payer_info: {
+                          id: pixData.payer_info.id || "",
+                          email: pixData.payer_info.email || "",
+                          first_name: pixData.payer_info.first_name,
+                          last_name: pixData.payer_info.last_name,
+                        },
+                      }}
                     />
                   </Card>
-                </div>
-              </div>
-
-              {/* Order Summary Sidebar - Desktop Only */}
-              <div className="lg:col-span-1">
-                <div className="sticky top-8 hidden lg:block">
-                  <OrderSummaryCard
-                    originalTotal={originalTotal}
-                    discountAmount={discountAmount}
-                    cartTotal={cartTotal}
-                    selectedDate={selectedDate}
-                    selectedTime={selectedTime}
-                    calendarOpen={calendarOpen}
-                    setCalendarOpen={setCalendarOpen}
-                    setSelectedDate={setSelectedDate}
-                    setSelectedTime={setSelectedTime}
-                    isDateDisabled={isDateDisabled}
-                    generateTimeSlots={generateTimeSlots}
-                    getMinPreparationHours={getMinPreparationHours}
-                    address={formattedAddress}
-                    prepareAddressForEditing={prepareAddressForEditing}
-                    className="border-border bg-card"
-                    paymentMethod={paymentMethod}
-                    setPaymentMethod={handlePaymentMethodSelection}
-                    shippingCost={shippingCost}
-                    shippingOptions={shippingOptions}
-                    grandTotal={grandTotal}
-                    isAddressServed={isAddressServed}
-                    addressWarning={addressWarning}
-                    acceptedCities={acceptedCities}
-                  />
-                </div>
-              </div>
-            </>
-          )}
-        </div>
-      </div>
-
-      {cartItems.length > 0 && (
-        <div className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/75 shadow-lg">
-          <div className="mx-auto w-full max-w-7xl px-4 py-4 sm:px-6 lg:px-8">
-            <CheckoutButton
-              handleFinalizePurchase={handleFinalizePurchase}
-              isProcessing={isProcessing}
-              zipCode={zipCode}
-              address={address}
-              houseNumber={houseNumber}
-              city={city}
-              state={state}
-              customerPhone={customerPhone}
-              selectedDate={selectedDate}
-              selectedTime={selectedTime}
-              cartItems={cartItems}
-              cartTotal={cartTotal}
-              user={user}
-              paymentMethod={paymentMethod}
-              shippingCost={shippingCost}
-              grandTotal={grandTotal}
-              isAddressServed={isAddressServed}
-              paymentStatus={paymentStatus}
-              paymentError={paymentError}
-              pixData={pixData}
-              onViewPix={() => setIsPixDialogOpen(true)}
-            />
-          </div>
-        </div>
-      )}
-
-      <Dialog open={isEditingAddress} onOpenChange={setIsEditingAddress}>
-        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="text-xl font-semibold">
-              Endereço de Entrega
-            </DialogTitle>
-            <DialogDescription className="text-base">
-              Informe o endereço para entrega dos produtos
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-6 py-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Telefone (WhatsApp) *
-              </label>
-              <input
-                type="tel"
-                value={customerPhone}
-                onChange={(e) => {
-                  const formatted = formatPhoneNumber(e.target.value);
-                  setCustomerPhone(formatted);
-                }}
-                placeholder="+55 (XX) XXXXX-XXXX"
-                className="w-full px-3 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-rose-500"
-              />
-              <p className="text-xs text-gray-500 mt-1">
-                Enviaremos confirmações e atualizações do pedido via WhatsApp
-              </p>
-              {customerPhone.length > 0 && !isValidPhone(customerPhone) && (
-                <p className="text-xs text-red-500 mt-1">Telefone incompleto</p>
-              )}
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                CEP *
-              </label>
-              <div className="relative">
-                <input
-                  type="text"
-                  value={zipCode}
-                  onChange={(e) => {
-                    const value = e.target.value.replace(/\D/g, "");
-                    if (value.length <= 8) {
-                      setZipCode(value);
-                      if (value.length === 8) {
-                        handleCepSearch(value);
-                      } else {
-                        setAddress("");
-                        setNeighborhood("");
-                        setCity("");
-                        setState("");
-                      }
-                    }
-                  }}
-                  placeholder="00000000"
-                  className="w-full px-3 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-rose-500 pr-10"
-                  maxLength={8}
-                />
-                {isLoadingCep && (
-                  <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                    <Loader2 className="h-4 w-4 animate-spin text-rose-500" />
-                  </div>
                 )}
-              </div>
-              {zipCode.length > 0 && zipCode.length < 8 && (
-                <p className="text-xs text-gray-500 mt-1">
-                  Digite {8 - zipCode.length} dígitos restantes
-                </p>
-              )}
-            </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Endereço *
-              </label>
-              <input
-                type="text"
-                value={address}
-                onChange={(e) => setAddress(e.target.value)}
-                placeholder="Digite o endereço ou será preenchido após buscar o CEP"
-                className="w-full px-3 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-rose-500"
-              />
-            </div>
+                {/* Mostrar Formulário de Cartão se CARD foi selecionado */}
+                {paymentMethod === "card" && !pixData && (
+                  <Card className="bg-white p-6 rounded-2xl shadow-sm border-gray-100">
+                    {/* Aviso se o pedido não foi criado ainda */}
+                    {!currentOrderId &&
+                      !localStorage.getItem("pendingOrderId") && (
+                        <Alert className="border-amber-200 bg-amber-50 mb-6">
+                          <AlertCircle className="h-4 w-4 text-amber-600" />
+                          <AlertTitle className="text-amber-900">
+                            Atenção
+                          </AlertTitle>
+                          <AlertDescription className="text-amber-800 text-sm">
+                            Clique em &ldquo;Finalizar Compra&rdquo; primeiro
+                            para criar seu pedido antes de preencher os dados do
+                            cartão.
+                          </AlertDescription>
+                        </Alert>
+                      )}
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Número *
-              </label>
-              <input
-                type="text"
-                value={houseNumber}
-                onChange={(e) => setHouseNumber(e.target.value)}
-                placeholder="Ex: 123, 45A, S/N"
-                className="w-full px-3 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-rose-500"
-              />
-            </div>
+                    {paymentStatus === "pending" &&
+                      pollingStatus === "polling" && (
+                        <Alert className="border-blue-200 bg-blue-50 mb-6">
+                          <Loader2 className="h-4 w-4 text-blue-600 animate-spin" />
+                          <AlertDescription className="text-blue-800 text-sm">
+                            <div className="flex flex-col gap-1">
+                              <span className="font-medium">
+                                Aguardando confirmação do pagamento...
+                              </span>
+                              <span className="text-xs">
+                                Verificação {pollingAttempts} de 60 • Não feche
+                                esta página
+                              </span>
+                            </div>
+                          </AlertDescription>
+                        </Alert>
+                      )}
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Bairro
-              </label>
-              <input
-                type="text"
-                value={neighborhood}
-                onChange={(e) => setNeighborhood(e.target.value)}
-                placeholder="Digite o bairro ou será preenchido após buscar o CEP"
-                className="w-full px-3 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-rose-500"
-              />
-            </div>
+                    <CreditCardForm
+                      onSubmit={handleCardPayment}
+                      isProcessing={isProcessing}
+                      defaultEmail={user?.email}
+                      defaultName={user?.name}
+                    />
+                  </Card>
+                )}
 
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Cidade *
-                </label>
-                <input
-                  type="text"
-                  value={city}
-                  onChange={(e) => setCity(e.target.value)}
-                  placeholder="Digite a cidade ou será preenchida automaticamente"
-                  className="w-full px-3 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-rose-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Estado *
-                </label>
-                <input
-                  type="text"
-                  value={state}
-                  onChange={(e) => setState(e.target.value)}
-                  placeholder="UF"
-                  className="w-full px-3 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-rose-500"
-                  maxLength={2}
-                />
-              </div>
-            </div>
-          </div>
-          <DialogFooter className="mt-6">
-            <DialogClose asChild onClick={() => setIsEditingAddress(false)}>
-              <Button variant="outline">Cancelar</Button>
-            </DialogClose>
-            <Button
-              className="bg-rose-600 hover:bg-rose-700 text-white"
-              onClick={() => {
-                handleSaveAddress();
-              }}
-            >
-              Salvar Endereço
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+                {/* Resumo Final */}
+                <Card className="bg-gradient-to-br from-rose-50 to-pink-50 p-6 rounded-2xl shadow-sm border-rose-200">
+                  <h3 className="font-bold text-lg mb-4 text-gray-900">
+                    Resumo do Pedido
+                  </h3>
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span>Subtotal</span>
+                      <span className="font-semibold">
+                        R$ {cartTotal.toFixed(2)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Taxa de entrega</span>
+                      <span className="font-semibold">
+                        {shippingCost === 0
+                          ? "GRÁTIS"
+                          : `R$ ${shippingCost?.toFixed(2)}`}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Forma de pagamento</span>
+                      <span className="font-semibold">
+                        {paymentMethod === "pix"
+                          ? "PIX"
+                          : paymentMethod === "card"
+                          ? "Cartão de Crédito"
+                          : "Não selecionado"}
+                      </span>
+                    </div>
+                    <div className="border-t border-rose-300 pt-3 mt-3">
+                      <div className="flex justify-between items-center">
+                        <span className="font-bold text-xl">Total</span>
+                        <span className="font-bold text-rose-600 text-3xl">
+                          R$ {grandTotal.toFixed(2)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </Card>
 
-      <Dialog open={isPixDialogOpen} onOpenChange={setIsPixDialogOpen}>
-        <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="text-xl font-semibold">
-              Pagamento via PIX
-            </DialogTitle>
-            <DialogDescription className="text-base">
-              Escaneie o QR Code para concluir o pagamento do pedido
-              {currentOrderId ? ` ${currentOrderId}` : ""}.
-            </DialogDescription>
-          </DialogHeader>
+                {/* Botões Finais */}
+                <div className="flex justify-between gap-4">
+                  <Button
+                    onClick={handlePreviousStep}
+                    variant="outline"
+                    className="px-6 py-6 rounded-xl font-bold border-2"
+                    disabled={isProcessing || paymentStatus === "pending"}
+                  >
+                    <ArrowLeft className="mr-2 h-5 w-5" />
+                    Voltar
+                  </Button>
 
-          {/* Indicador de polling de pagamento */}
-          {paymentStatus === "pending" && pollingStatus === "polling" && (
-            <Alert className="border-blue-200 bg-blue-50">
-              <Loader2 className="h-4 w-4 text-blue-600 animate-spin" />
-              <AlertDescription className="text-blue-800 text-sm">
-                <div className="flex flex-col gap-1">
-                  <span className="font-medium">
-                    Aguardando confirmação do pagamento...
-                  </span>
-                  <span className="text-xs">
-                    Verificação {pollingAttempts} de 60 • Isso pode levar alguns
-                    minutos
-                  </span>
+                  {/* Só mostrar botão de pagamento se ainda não tiver gerado */}
+                  {!pixData && !currentOrderId && (
+                    <Button
+                      onClick={handleFinalizePurchase}
+                      disabled={isProcessing || !paymentMethod}
+                      className="bg-rose-600 hover:bg-rose-700 text-white px-12 py-6 rounded-xl font-bold text-lg shadow-lg hover:shadow-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {isProcessing ? (
+                        <>
+                          <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                          Processando...
+                        </>
+                      ) : (
+                        <>
+                          Gerar Pagamento
+                          <CheckCircle2 className="ml-2 h-5 w-5" />
+                        </>
+                      )}
+                    </Button>
+                  )}
                 </div>
-              </AlertDescription>
-            </Alert>
-          )}
-
-          {/* Pagamento confirmado */}
-          {paymentStatus === "success" && (
-            <Alert className="border-green-200 bg-green-50">
-              <AlertCircle className="h-4 w-4 text-green-600" />
-              <AlertDescription className="text-green-800 text-sm font-medium">
-                ✅ Pagamento confirmado! Redirecionando...
-              </AlertDescription>
-            </Alert>
-          )}
-
-          {/* Pagamento rejeitado */}
-          {paymentStatus === "failure" && (
-            <Alert className="border-red-200 bg-red-50">
-              <AlertCircle className="h-4 w-4 text-red-600" />
-              <AlertDescription className="text-red-800 text-sm font-medium">
-                ❌ Pagamento não foi aprovado. Tente outro método de pagamento.
-              </AlertDescription>
-            </Alert>
-          )}
-
-          {pixData ? (
-            <div className="space-y-6">
-              {currentOrderId && (
-                <div className="text-sm text-gray-600 bg-gray-50 p-3 rounded-md">
-                  <span className="font-medium text-gray-700">
-                    Código do pedido:
-                  </span>{" "}
-                  {currentOrderId}
-                </div>
-              )}
-              <QRCodePIX
-                pixData={{
-                  ...pixData,
-                  payer_info: {
-                    id: pixData.payer_info.id || "",
-                    email: pixData.payer_info.email || "",
-                    first_name: pixData.payer_info.first_name,
-                    last_name: pixData.payer_info.last_name,
-                  },
-                }}
-              />
-            </div>
-          ) : (
-            <Alert className="border-red-200 bg-red-50">
-              <AlertCircle className="h-4 w-4 text-red-600" />
-              <AlertDescription className="text-red-700 text-sm">
-                Não encontramos informações do PIX. Gere um novo pagamento.
-              </AlertDescription>
-            </Alert>
-          )}
-
-          <DialogFooter className="mt-6">
-            <Button variant="outline" onClick={() => setIsPixDialogOpen(false)}>
-              Fechar
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={isCardDialogOpen} onOpenChange={setIsCardDialogOpen}>
-        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="text-xl font-semibold">
-              Pagamento com Cartão de Crédito
-            </DialogTitle>
-            <DialogDescription className="text-base">
-              Preencha os dados do cartão para finalizar o pagamento
-              {currentOrderId ? ` do pedido ${currentOrderId}` : ""}.
-            </DialogDescription>
-          </DialogHeader>
-
-          {/* Indicador de polling de pagamento */}
-          {paymentStatus === "pending" && pollingStatus === "polling" && (
-            <Alert className="border-blue-200 bg-blue-50 mb-4">
-              <Loader2 className="h-4 w-4 text-blue-600 animate-spin" />
-              <AlertDescription className="text-blue-800 text-sm">
-                <div className="flex flex-col gap-1">
-                  <span className="font-medium">
-                    Aguardando confirmação do pagamento...
-                  </span>
-                  <span className="text-xs">
-                    Verificação {pollingAttempts} de 60 • Não feche esta janela
-                  </span>
-                </div>
-              </AlertDescription>
-            </Alert>
-          )}
-
-          <div className="py-4">
-            <CreditCardForm
-              onSubmit={handleCardPayment}
-              isProcessing={isProcessing}
-              defaultEmail={user?.email}
-              defaultName={user?.name}
-            />
-          </div>
-
-          <DialogFooter className="mt-6">
-            <Button
-              variant="outline"
-              onClick={() => {
-                setIsCardDialogOpen(false);
-                setCurrentOrderId(null);
-              }}
-              disabled={isProcessing}
-            >
-              Cancelar
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+              </div>
+            )}
+          </>
+        )}
+      </div>
     </div>
   );
 }

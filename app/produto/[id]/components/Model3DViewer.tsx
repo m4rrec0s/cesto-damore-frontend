@@ -2,7 +2,12 @@
 
 import React, { Suspense, useEffect, useMemo, useRef } from "react";
 import { Canvas, useFrame, useLoader } from "@react-three/fiber";
-import { OrbitControls, PerspectiveCamera, Html } from "@react-three/drei";
+import {
+  OrbitControls,
+  PerspectiveCamera,
+  Html,
+  Environment,
+} from "@react-three/drei";
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { Loader2 } from "lucide-react";
@@ -107,6 +112,9 @@ function Model({
 
           if (original) {
             mesh.material = original;
+            // Disable shadows to keep the product surface uniformly lit
+            mesh.castShadow = false;
+            mesh.receiveShadow = false;
           }
         }
       });
@@ -116,20 +124,53 @@ function Model({
     const color = new THREE.Color(materialColor);
 
     const tintMaterial = (material: THREE.Material) => {
-      // Converter para MeshBasicMaterial para evitar sombreamento
-      const basicMaterial = new THREE.MeshBasicMaterial({
+      // Use MeshPhysicalMaterial (PBR) for more advanced parameters like clearcoat
+      const standard = new THREE.MeshPhysicalMaterial({
         color: color.clone(),
-        transparent: material.transparent,
-        opacity: material.opacity,
-        side: material.side,
+        roughness: 0.28,
+        metalness: 0.08,
+        envMapIntensity: 1.4,
+        clearcoat: 0.12,
+        clearcoatRoughness: 0.15,
       });
+
+      // Tentar preservar propriedades quando disponíveis (sem usar any)
+      const matProps = material as unknown as {
+        transparent?: boolean;
+        opacity?: number;
+        side?: number;
+      };
+
+      if (typeof matProps.transparent === "boolean") {
+        standard.transparent = matProps.transparent;
+      }
+      if (typeof matProps.opacity === "number") {
+        standard.opacity = matProps.opacity;
+      }
+      if (typeof matProps.side === "number") {
+        // Assign only known side constants to satisfy TS
+        if (
+          matProps.side === THREE.FrontSide ||
+          matProps.side === THREE.BackSide ||
+          matProps.side === THREE.DoubleSide
+        ) {
+          standard.side = matProps.side as THREE.Side;
+        }
+      }
 
       // Preservar textura se existir
       if ("map" in material && (material as THREE.MeshStandardMaterial).map) {
-        basicMaterial.map = (material as THREE.MeshStandardMaterial).map;
+        const map = (material as THREE.MeshStandardMaterial).map;
+        if (map) {
+          // Não forçar encoding por causa de diferenças nas defs do projeto
+          // Ajustar flipY para true para imagens vindas de canvas/dataURL
+          map.flipY = true;
+          standard.map = map;
+          standard.needsUpdate = true;
+        }
       }
 
-      return basicMaterial;
+      return standard;
     };
 
     meshRef.current.traverse((child) => {
@@ -144,6 +185,11 @@ function Model({
         } else {
           mesh.material = tintMaterial(original);
         }
+
+        // Disable shadows on cloned meshes so the result is cleaner and more
+        // reflective; rely on IBL/environment for realism
+        mesh.castShadow = false;
+        mesh.receiveShadow = false;
       }
     });
   }, [materialColor, scene]);
@@ -171,20 +217,32 @@ function ImageTexture({
 }) {
   const texture = useLoader(THREE.TextureLoader, imageUrl);
 
+  useEffect(() => {
+    // Ajustes para texturas provenientes de canvas/dataURL
+    texture.flipY = true;
+    texture.needsUpdate = true;
+  }, [texture]);
+
   return (
     <mesh
       position={[position.x, position.y, position.z]}
       rotation={rotation ? [rotation.x, rotation.y, rotation.z] : undefined}
+      // No shadows for decals/textures to keep them bright and even
+      castShadow={false}
+      receiveShadow={false}
     >
       <planeGeometry args={[dimensions.width, dimensions.height]} />
-      <meshStandardMaterial
+      <meshPhysicalMaterial
         map={texture}
         transparent
         side={THREE.DoubleSide}
         toneMapped={false}
         color="#ffffff"
-        roughness={0.4}
-        metalness={0.1}
+        roughness={0.45}
+        metalness={0.06}
+        envMapIntensity={0.7}
+        clearcoat={0.06}
+        clearcoatRoughness={0.25}
       />
     </mesh>
   );
@@ -205,13 +263,29 @@ function CylinderImageTexture({
 }) {
   const texture = useLoader(THREE.TextureLoader, imageUrl);
   const meshRef = useRef<THREE.Mesh>(null);
+  const [roughnessTexture, setRoughnessTexture] =
+    React.useState<THREE.CanvasTexture | null>(null);
+  const roughnessRef = useRef<THREE.CanvasTexture | null>(null);
   const {
     radius,
     height,
     segments = 128,
-    thetaStart = 0,
-    thetaLength = Math.PI / 2,
+    thetaStart: rawThetaStart,
+    thetaLength: rawThetaLength,
   } = cylinder;
+
+  // Defaults em radianos (110deg e 313deg)
+  const DEFAULT_THETA_START = (116 * Math.PI) / 180;
+  const DEFAULT_THETA_LENGTH = (310 * Math.PI) / 180;
+
+  const thetaStart =
+    typeof rawThetaStart === "number" && isFinite(rawThetaStart)
+      ? rawThetaStart
+      : DEFAULT_THETA_START;
+  const thetaLength =
+    typeof rawThetaLength === "number" && isFinite(rawThetaLength)
+      ? rawThetaLength
+      : DEFAULT_THETA_LENGTH;
 
   const geometry = useMemo(
     () =>
@@ -237,7 +311,79 @@ function CylinderImageTexture({
   useEffect(() => {
     texture.wrapS = THREE.ClampToEdgeWrapping;
     texture.wrapT = THREE.ClampToEdgeWrapping;
+    // Não forçar encoding por compatibilidade com tipos
+    texture.flipY = true;
     texture.needsUpdate = true;
+    // Generate roughness map to attenuate bright highlights
+    try {
+      const img = texture.image as
+        | HTMLImageElement
+        | HTMLCanvasElement
+        | undefined;
+      if (img) {
+        const w = Math.max(
+          256,
+          img instanceof HTMLImageElement
+            ? img.naturalWidth || 512
+            : (img as HTMLCanvasElement).width || 512
+        );
+        const h = Math.max(
+          64,
+          img instanceof HTMLImageElement
+            ? img.naturalHeight || 256
+            : (img as HTMLCanvasElement).height || 256
+        );
+        const c = document.createElement("canvas");
+        c.width = w;
+        c.height = h;
+        const ctx = c.getContext("2d");
+        if (ctx) {
+          // Dispose previous roughness texture if present
+          if (roughnessRef.current) {
+            roughnessRef.current.dispose();
+            roughnessRef.current = null;
+          }
+          // drawImage can accept both HTMLImageElement and HTMLCanvasElement
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          ctx.drawImage(img as any, 0, 0, w, h);
+          const data = ctx.getImageData(0, 0, w, h).data;
+          const out = ctx.createImageData(w, h);
+          for (let i = 0; i < data.length; i += 4) {
+            const r = data[i];
+            const g = data[i + 1];
+            const b = data[i + 2];
+            const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+            // Normalize luminance to [0,1]
+            const norm = Math.min(1, Math.max(0, lum / 255));
+            // Map brightness to roughness aggressively: dark areas slightly rough, bright areas fully rough
+            // So highlights are removed in the bright segments
+            const roughnessFactor = 0.65 + 0.35 * norm; // 0.65..1.0
+            const roughVal = Math.round(255 * roughnessFactor);
+            out.data[i] = roughVal;
+            out.data[i + 1] = roughVal;
+            out.data[i + 2] = roughVal;
+            out.data[i + 3] = 255;
+          }
+          ctx.putImageData(out, 0, 0);
+          const rTex = new THREE.CanvasTexture(c);
+          rTex.flipY = true;
+          rTex.needsUpdate = true;
+          roughnessRef.current = rTex;
+          setRoughnessTexture(rTex);
+        }
+      }
+    } catch (err) {
+      // Ignore cross-origin or other errors
+      void err;
+    }
+    return () => {
+      if (roughnessRef.current) {
+        roughnessRef.current.dispose();
+        roughnessRef.current = null;
+      }
+      // Ensure state cleared to avoid holding disposed texture
+      setRoughnessTexture(null);
+    };
   }, [texture]);
 
   useFrame((_, delta) => {
@@ -247,16 +393,30 @@ function CylinderImageTexture({
   });
 
   return (
-    <mesh ref={meshRef} position={[position.x, position.y, position.z]}>
+    <mesh
+      ref={meshRef}
+      position={[position.x, position.y, position.z]}
+      castShadow={false}
+      receiveShadow={false}
+    >
       <primitive object={geometry} attach="geometry" />
-      <meshStandardMaterial
-        map={texture}
+      <meshPhysicalMaterial
+        // Show artwork as emissive so scene lighting does not brighten hotspots
+        emissiveMap={texture}
+        emissive={new THREE.Color(0xffffff)}
+        emissiveIntensity={1.0}
+        map={undefined}
         transparent
         side={THREE.DoubleSide}
         toneMapped={false}
-        color="#ffffff"
-        roughness={0.4}
-        metalness={0.1}
+        color="#000000"
+        // Use very high base roughness, modulated by roughnessMap
+        roughness={1.0}
+        metalness={1.0}
+        envMapIntensity={0.4}
+        clearcoat={0.0}
+        clearcoatRoughness={1.0}
+        roughnessMap={roughnessTexture ?? undefined}
       />
     </mesh>
   );
@@ -363,6 +523,7 @@ function TextTexture({
       });
 
       const canvasTexture = new THREE.CanvasTexture(canvas);
+      canvasTexture.flipY = true;
       canvasTexture.needsUpdate = true;
       setTexture(canvasTexture);
     }
@@ -460,12 +621,34 @@ export function Model3DViewer({
     <div
       className={`relative overflow-hidden rounded-lg bg-gradient-to-br from-slate-900 to-slate-800 ${className}`}
     >
-      <Canvas className="h-full w-full">
+      <Canvas
+        className="h-full w-full"
+        // Disable default shadow map rendering and use physically correct lights
+        shadows={false}
+        dpr={[1, 1.7]}
+        gl={{ antialias: true }}
+        onCreated={(state) => {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const gl = state.gl as any;
+          gl.physicallyCorrectLights = true;
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          gl.outputEncoding = (THREE as any).sRGBEncoding;
+          gl.toneMappingExposure = 1.0;
+        }}
+      >
         {/* Câmera */}
         <PerspectiveCamera makeDefault position={[0, 0.35, 3.1]} fov={40} />
 
-        {/* Luz ambiente uniforme sem sombreamento */}
-        <ambientLight intensity={2.5} color="#ffffff" />
+        {/* Iluminação ambiente muito reduzida — priorizar IBL (Environment) para reflexos */}
+        <hemisphereLight intensity={0.05} groundColor={0x333333} />
+        <ambientLight intensity={0.01} color="#ffffff" />
+
+        {/* Direcional praticamente desativado para evitar hotspots locais */}
+        <directionalLight
+          castShadow={false}
+          intensity={0.0}
+          position={[5, 8, 5]}
+        />
 
         {/* Controles de órbita */}
         <OrbitControls
@@ -487,6 +670,10 @@ export function Model3DViewer({
             rotateSpeed={rotateSpeed}
             baseScale={baseScale}
           />
+
+          {/* IBL environment para reflexos sutis */}
+          {/* Ambiente IBL — mantém background=false para não alterar a cena */}
+          <Environment preset="studio" background={false} />
 
           {/* Aplicar texturas customizadas */}
           {textures.map((textureConfig, index) => {
@@ -538,6 +725,8 @@ export function Model3DViewer({
 
             return null;
           })}
+
+          {/* Ground plane removed to eliminate shadow contact and darkening */}
         </Suspense>
       </Canvas>
 

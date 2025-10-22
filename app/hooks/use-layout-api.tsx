@@ -4,20 +4,12 @@ import type {
   CreateLayoutBaseInput,
 } from "../types/personalization";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api";
+const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
-/**
- * Hook para gerenciar APIs de Layout Base
- * Separação de lógica de API com autenticação via token
- */
 export function useLayoutApi() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  /**
-   * Obter token de autenticação do localStorage
-   * Busca por 'token' ou 'appToken' (retrocompatibilidade)
-   */
   const getAuthHeaders = useCallback(() => {
     const token =
       localStorage.getItem("token") || localStorage.getItem("appToken");
@@ -32,9 +24,6 @@ export function useLayoutApi() {
     };
   }, []);
 
-  /**
-   * Obter headers para FormData (sem Content-Type)
-   */
   const getAuthHeadersForFormData = useCallback(() => {
     const token =
       localStorage.getItem("token") || localStorage.getItem("appToken");
@@ -48,9 +37,6 @@ export function useLayoutApi() {
     };
   }, []);
 
-  /**
-   * Buscar todos os layouts base
-   */
   const fetchLayouts = useCallback(async (): Promise<LayoutBase[]> => {
     setLoading(true);
     setError(null);
@@ -80,9 +66,6 @@ export function useLayoutApi() {
     }
   }, [getAuthHeaders]);
 
-  /**
-   * Buscar layout por ID
-   */
   const fetchLayoutById = useCallback(
     async (id: string): Promise<LayoutBase> => {
       setLoading(true);
@@ -115,9 +98,6 @@ export function useLayoutApi() {
     [getAuthHeaders]
   );
 
-  /**
-   * Criar novo layout base
-   */
   const createLayout = useCallback(
     async (
       layoutData: CreateLayoutBaseInput,
@@ -144,7 +124,6 @@ export function useLayoutApi() {
         });
 
         if (!response.ok) {
-          // Tratar erros específicos
           if (response.status === 401) {
             throw new Error("Sessão expirada. Faça login novamente.");
           }
@@ -172,9 +151,6 @@ export function useLayoutApi() {
     [getAuthHeadersForFormData]
   );
 
-  /**
-   * Atualizar layout existente
-   */
   const updateLayout = useCallback(
     async (
       id: string,
@@ -234,9 +210,6 @@ export function useLayoutApi() {
     [getAuthHeadersForFormData]
   );
 
-  /**
-   * Deletar layout
-   */
   const deleteLayout = useCallback(
     async (id: string): Promise<void> => {
       setLoading(true);
@@ -276,9 +249,6 @@ export function useLayoutApi() {
     [getAuthHeaders]
   );
 
-  /**
-   * Upload de imagem isolado (caso necessário)
-   */
   const uploadImage = useCallback(
     async (file: File): Promise<{ url: string }> => {
       setLoading(true);
