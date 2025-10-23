@@ -192,14 +192,6 @@ export interface Additional {
   discount?: number;
   image_url?: string;
   stock_quantity?: number;
-  colors?: AdditionalColor[];
-}
-
-export interface AdditionalColor {
-  color_id: string;
-  color_name: string;
-  color_hex_code: string;
-  stock_quantity: number;
 }
 
 export interface Color {
@@ -405,7 +397,6 @@ interface CacheShape {
   categories: unknown | null;
   additionals: unknown | null;
   types: unknown | null;
-  colors: unknown | null;
   orders: unknown | null;
   feedConfigurations: unknown | null;
   [key: string]: unknown | null;
@@ -418,7 +409,6 @@ class ApiService {
     categories: null,
     additionals: null,
     types: null,
-    colors: null,
     orders: null,
     feedConfigurations: null,
   };
@@ -694,37 +684,6 @@ class ApiService {
     return res.data;
   };
 
-  // ===== Colors =====
-  getColors = async (): Promise<Color[]> => {
-    if (ApiService.cache.colors) return ApiService.cache.colors as Color[];
-    const res = await this.client.get("/colors");
-    ApiService.cache.colors = res.data;
-    return res.data;
-  };
-  getColor = async (id: string): Promise<Color> =>
-    (await this.client.get(`/colors/${id}`)).data;
-  createColor = async (payload: {
-    name: string;
-    hex_code: string;
-  }): Promise<Color> => {
-    const res = await this.client.post("/colors", payload);
-    this.clearCache("colors");
-    return res.data;
-  };
-  updateColor = async (
-    id: string,
-    payload: Partial<{ name: string; hex_code: string }>
-  ): Promise<Color> => {
-    const res = await this.client.put(`/colors/${id}`, payload);
-    this.clearCache("colors");
-    return res.data;
-  };
-  deleteColor = async (id: string) => {
-    const res = await this.client.delete(`/colors/${id}`);
-    this.clearCache("colors");
-    return res.data;
-  };
-
   // ===== Additionals =====
   getAdditionals = async () => {
     if (ApiService.cache.additionals) return ApiService.cache.additionals;
@@ -770,9 +729,7 @@ class ApiService {
   };
   updateAdditional = async (
     id: string,
-    payload: Partial<Additional> & {
-      colors?: Array<{ color_id: string; stock_quantity: number }>;
-    },
+    payload: Partial<Additional>,
     imageFile?: File
   ): Promise<Additional> => {
     if (imageFile) {
@@ -787,8 +744,6 @@ class ApiService {
         formData.append("discount", payload.discount.toString());
       if (payload.stock_quantity !== undefined)
         formData.append("stock_quantity", payload.stock_quantity.toString());
-      if (payload.colors)
-        formData.append("colors", JSON.stringify(payload.colors));
       formData.append("image", imageFile);
 
       const res = await this.client.put(`/additional/${id}`, formData, {

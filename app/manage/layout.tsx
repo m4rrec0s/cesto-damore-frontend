@@ -45,7 +45,6 @@ export default function ManageLayout({
     { name: "Adicionais", href: "/manage/additionals", icon: Plus },
     { name: "Categorias", href: "/manage/categories", icon: Tag },
     { name: "Tipos", href: "/manage/types", icon: Grid3X3 },
-    { name: "Cores", href: "/manage/cores", icon: Tag },
     { name: "Feed", href: "/manage/feed", icon: PackageCheckIcon },
   ];
 
@@ -56,7 +55,10 @@ export default function ManageLayout({
           isOpen ? "translate-x-0" : "-translate-x-full"
         } transition-transform duration-300 ease-in-out md:block z-30 overflow-y-auto`}
       >
-        <div className="flex flex-col items-center p-6 border-b border-rose-200 bg-white/50">
+        <Link
+          href="/"
+          className="flex flex-col items-center p-6 border-b border-rose-200 bg-white/50"
+        >
           <Image
             src="/logo.png"
             alt="Cesto D'Amore Logo"
@@ -66,7 +68,7 @@ export default function ManageLayout({
             style={{ filter: "invert(1)" }}
           />
           <h2 className="text-lg font-bold text-rose-900">Painel Admin</h2>
-        </div>
+        </Link>
 
         {/* Navigation */}
         <nav className="p-4">
