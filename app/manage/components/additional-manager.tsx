@@ -2,16 +2,11 @@
 import { Additional, Color, useApi } from "../../hooks/use-api";
 import { Button } from "../../components/ui/button";
 import { ImageUpload } from "../../components/ui/image-upload";
-import {
-  Plus,
-  Search,
-  Edit2,
-  Trash2,
-  Upload,
-  Palette,
-  X,
-  Package,
-} from "lucide-react";
+import { Input } from "../../components/ui/input";
+import { Label } from "../../components/ui/label";
+import { Textarea } from "../../components/ui/textarea";
+import { Badge } from "../../components/ui/badge";
+import { Plus, Search, Edit2, Trash2, Upload, Palette, X } from "lucide-react";
 import Image from "next/image";
 import { useState, useEffect } from "react";
 import {
@@ -367,98 +362,84 @@ export function AdditionalManager({
 
       {/* Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
-            <div className="bg-gradient-to-r from-rose-500 to-rose-600 px-6 py-4">
-              <h2 className="text-xl font-bold text-white">
-                {editingAdditional ? "Editar Adicional" : "Novo Adicional"}
-              </h2>
-              <p className="text-rose-100 text-sm mt-1">
-                {editingAdditional
-                  ? "Atualize as informações do adicional"
-                  : "Preencha os dados para criar um novo adicional"}
-              </p>
-            </div>
-
-            <form
-              onSubmit={handleSubmit}
-              className="p-6 space-y-6 overflow-y-auto max-h-[calc(90vh-120px)]"
-            >
-              {/* Seção Principal */}
-              <div className="bg-gray-50 rounded-xl p-4">
-                <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
-                  <div className="w-2 h-2 bg-rose-500 rounded-full mr-3"></div>
-                  Informações Principais
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <label className="block text-sm font-medium text-gray-700">
-                      Nome do Adicional *
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={formData.name}
-                      onChange={(e) =>
-                        setFormData((prev) => ({
-                          ...prev,
-                          name: e.target.value,
-                        }))
-                      }
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent transition-all"
-                      placeholder="Digite o nome do adicional"
-                      aria-label="Nome do adicional"
-                    />
-                  </div>
-                </div>
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-2xl font-bold">
+                  {editingAdditional ? "Editar Adicional" : "Novo Adicional"}
+                </h2>
+                <Button variant="ghost" size="sm" onClick={handleCloseModal}>
+                  <X className="w-5 h-5" />
+                </Button>
               </div>
 
-              {/* Seção de Preços */}
-              <div className="bg-green-50 rounded-xl p-4">
-                <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
-                  <div className="w-2 h-2 bg-green-500 rounded-full mr-3"></div>
-                  Preços e Descontos
-                </h3>
+              <form onSubmit={handleSubmit} className="space-y-6">
+                {/* Informações Principais */}
+                <div className="space-y-2">
+                  <Label htmlFor="name">Nome do Adicional *</Label>
+                  <Input
+                    id="name"
+                    type="text"
+                    required
+                    value={formData.name}
+                    onChange={(e) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        name: e.target.value,
+                      }))
+                    }
+                    placeholder="Digite o nome do adicional"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="description">Descrição</Label>
+                  <Textarea
+                    id="description"
+                    value={formData.description}
+                    onChange={(e) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        description: e.target.value,
+                      }))
+                    }
+                    rows={3}
+                    placeholder="Descreva o adicional detalhadamente..."
+                  />
+                </div>
+
+                {/* Preços e Descontos */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <label className="block text-sm font-medium text-gray-700">
-                      Preço Original (R$) *
-                    </label>
-                    <input
+                    <Label htmlFor="price">Preço (R$) *</Label>
+                    <Input
+                      id="price"
                       type="number"
                       step="0.01"
                       min="0"
                       required
-                      value={formData.price === 0 ? "" : String(formData.price)}
+                      value={formData.price === 0 ? "" : formData.price}
                       onChange={(e) => {
-                        const raw = e.target.value;
-                        const cleaned =
-                          raw.startsWith("0") && !raw.startsWith("0.")
-                            ? raw.replace(/^0+/, "")
-                            : raw;
+                        const value = parseFloat(e.target.value) || 0;
                         setFormData((prev) => ({
                           ...prev,
-                          price: cleaned === "" ? 0 : parseFloat(cleaned),
+                          price: value,
                         }));
                       }}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all"
                       placeholder="0.00"
-                      aria-label="Preço do adicional"
                     />
                   </div>
 
                   <div className="space-y-2">
-                    <label className="block text-sm font-medium text-gray-700">
-                      Desconto (%)
-                    </label>
-                    <input
+                    <Label htmlFor="discount">Desconto (%)</Label>
+                    <Input
+                      id="discount"
                       type="number"
                       step="0.01"
                       min="0"
                       max="100"
-                      value={
-                        formData.discount === 0 ? "" : String(formData.discount)
-                      }
+                      value={formData.discount === 0 ? "" : formData.discount}
                       onChange={(e) => {
                         const value = parseFloat(e.target.value) || 0;
                         setFormData((prev) => ({
@@ -466,80 +447,96 @@ export function AdditionalManager({
                           discount: Math.min(100, Math.max(0, value)),
                         }));
                       }}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all"
                       placeholder="0.00"
-                      aria-label="Desconto do adicional"
                     />
-                    {formData.discount > 0 && (
-                      <div className="bg-white rounded-lg p-3 border border-green-200 mt-2">
-                        <div className="flex justify-between items-center text-sm">
-                          <span className="text-gray-600">Preço final:</span>
-                          <span className="font-bold text-green-600">
-                            {getFinalPrice(
-                              formData.price,
-                              formData.discount
-                            ).toLocaleString("pt-BR", {
-                              style: "currency",
-                              currency: "BRL",
-                            })}
-                          </span>
+                  </div>
+                </div>
+
+                {/* Visualização do Preço Final */}
+                {formData.price > 0 && (
+                  <div className="bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-200 rounded-lg p-4">
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-1">
+                        <p className="text-sm font-medium text-gray-600">
+                          Visualização do Preço
+                        </p>
+                        <div className="flex items-center gap-3">
+                          {formData.discount > 0 ? (
+                            <>
+                              <span className="text-lg text-gray-500 line-through">
+                                R$ {formData.price.toFixed(2)}
+                              </span>
+                              <Badge variant="destructive" className="text-xs">
+                                -{formData.discount}%
+                              </Badge>
+                              <span className="text-2xl font-bold text-green-600">
+                                R${" "}
+                                {getFinalPrice(
+                                  formData.price,
+                                  formData.discount
+                                ).toFixed(2)}
+                              </span>
+                            </>
+                          ) : (
+                            <span className="text-2xl font-bold text-gray-900">
+                              R$ {formData.price.toFixed(2)}
+                            </span>
+                          )}
                         </div>
-                        <div className="flex justify-between items-center text-sm mt-1">
-                          <span className="text-gray-600">Economia:</span>
-                          <span className="font-medium text-red-500">
-                            -
+                        {formData.discount > 0 && (
+                          <p className="text-xs text-green-700 mt-1">
+                            💰 Economia de R${" "}
                             {getDiscountAmount(
                               formData.price,
                               formData.discount
-                            ).toLocaleString("pt-BR", {
-                              style: "currency",
-                              currency: "BRL",
-                            })}
-                          </span>
-                        </div>
+                            ).toFixed(2)}
+                          </p>
+                        )}
                       </div>
-                    )}
+                      {formData.discount > 0 && (
+                        <div className="text-right">
+                          <p className="text-xs text-gray-500">Preço Final</p>
+                          <p className="text-3xl font-bold text-green-600">
+                            R${" "}
+                            {getFinalPrice(
+                              formData.price,
+                              formData.discount
+                            ).toFixed(2)}
+                          </p>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
-              </div>
+                )}
 
-              {/* Seção de Imagem */}
-              <div className="bg-blue-50 rounded-xl p-4">
-                <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
-                  <div className="w-2 h-2 bg-blue-500 rounded-full mr-3"></div>
-                  Imagem do Adicional
-                </h3>
-                <ImageUpload
-                  value={formData.image_url}
-                  onChange={(url, file) =>
-                    setFormData((prev) => ({
-                      ...prev,
-                      image_url: url,
-                      imageFile: file,
-                    }))
-                  }
-                  onRemove={() =>
-                    setFormData((prev) => ({
-                      ...prev,
-                      image_url: "",
-                      imageFile: undefined,
-                    }))
-                  }
-                  className="w-full"
-                />
-              </div>
-
-              {/* Seção de Estoque */}
-              <div className="bg-indigo-50 rounded-xl p-4">
-                <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
-                  <Package className="h-5 w-5 text-indigo-500 mr-2" />
-                  Controle de Estoque
-                </h3>
+                {/* Imagem */}
                 <div className="space-y-2">
-                  <label className="block text-sm font-medium text-gray-700">
-                    Estoque Total
-                  </label>
-                  <input
+                  <Label htmlFor="image">Imagem</Label>
+                  <ImageUpload
+                    value={formData.image_url}
+                    onChange={(url, file) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        image_url: url,
+                        imageFile: file,
+                      }))
+                    }
+                    onRemove={() =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        image_url: "",
+                        imageFile: undefined,
+                      }))
+                    }
+                    className="w-full"
+                  />
+                </div>
+
+                {/* Estoque */}
+                <div className="space-y-2">
+                  <Label htmlFor="stock">Estoque Total</Label>
+                  <Input
+                    id="stock"
                     type="number"
                     min="0"
                     value={formData.stock_quantity}
@@ -549,7 +546,6 @@ export function AdditionalManager({
                         stock_quantity: parseInt(e.target.value) || 0,
                       }))
                     }
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
                     placeholder="Quantidade em estoque"
                   />
                   <p className="text-xs text-gray-500 mt-1">
@@ -557,204 +553,173 @@ export function AdditionalManager({
                     individualmente por cor.
                   </p>
                 </div>
-              </div>
 
-              {/* Seção de Cores */}
-              <div className="bg-pink-50 rounded-xl p-4">
-                <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
-                  <Palette className="h-5 w-5 text-pink-500 mr-2" />
-                  Cores Disponíveis (Opcional)
-                </h3>
-
-                {loadingColors ? (
-                  <div className="text-center py-4">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-pink-500 mx-auto"></div>
-                    <p className="text-sm text-gray-600 mt-2">
-                      Carregando cores...
-                    </p>
+                {/* Cores Disponíveis */}
+                <div className="space-y-4 border-t pt-4">
+                  <div className="flex items-center gap-2">
+                    <Palette className="h-5 w-5 text-gray-600" />
+                    <Label className="text-lg font-semibold">
+                      Cores Disponíveis (Opcional)
+                    </Label>
                   </div>
-                ) : (
-                  <div className="space-y-4">
-                    {/* Lista de cores selecionadas */}
-                    {formData.colors.length > 0 && (
-                      <div className="bg-white rounded-lg border border-pink-200 p-3 space-y-2">
-                        <p className="text-sm font-medium text-gray-700 mb-2">
-                          Cores Selecionadas:
-                        </p>
-                        {formData.colors.map((colorItem, index) => (
-                          <div
-                            key={colorItem.color_id}
-                            className="flex items-center gap-3 bg-gray-50 rounded-lg p-2"
-                          >
-                            <div
-                              className="w-8 h-8 rounded-full border-2 border-gray-300 flex-shrink-0"
-                              style={{
-                                backgroundColor: colorItem.color_hex_code,
-                              }}
-                            />
-                            <div className="flex-1">
-                              <p className="text-sm font-medium text-gray-800">
-                                {colorItem.color_name}
-                              </p>
-                              <p className="text-xs text-gray-500">
-                                {colorItem.color_hex_code}
-                              </p>
-                            </div>
-                            <input
-                              type="number"
-                              min="0"
-                              value={colorItem.stock_quantity}
-                              onChange={(e) => {
-                                const newColors = [...formData.colors];
-                                newColors[index].stock_quantity =
-                                  parseInt(e.target.value) || 0;
-                                setFormData((prev) => ({
-                                  ...prev,
-                                  colors: newColors,
-                                }));
-                              }}
-                              className="w-24 px-2 py-1 border border-gray-300 rounded text-sm"
-                              placeholder="Estoque"
-                            />
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const newColors = formData.colors.filter(
-                                  (_, i) => i !== index
-                                );
-                                setFormData((prev) => ({
-                                  ...prev,
-                                  colors: newColors,
-                                }));
-                              }}
-                              className="p-1 text-red-500 hover:bg-red-50 rounded"
-                              title="Remover cor"
-                              aria-label="Remover cor"
-                            >
-                              <X className="h-4 w-4" />
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
 
-                    {/* Seletor de novas cores */}
-                    <div className="space-y-2">
-                      <label className="block text-sm font-medium text-gray-700">
-                        Adicionar Cor:
-                      </label>
-                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
-                        {availableColors
-                          .filter(
+                  {loadingColors ? (
+                    <div className="text-center py-4">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-600 mx-auto"></div>
+                      <p className="text-sm text-gray-600 mt-2">
+                        Carregando cores...
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {/* Lista de cores selecionadas */}
+                      {formData.colors.length > 0 && (
+                        <div className="bg-gray-50 rounded-lg border border-gray-200 p-3 space-y-2">
+                          <p className="text-sm font-medium text-gray-700 mb-2">
+                            Cores Selecionadas:
+                          </p>
+                          {formData.colors.map((colorItem, index) => (
+                            <div
+                              key={colorItem.color_id}
+                              className="flex items-center gap-3 bg-gray-50 rounded-lg p-2"
+                            >
+                              <div
+                                className="w-8 h-8 rounded-full border-2 border-gray-300 flex-shrink-0"
+                                style={{
+                                  backgroundColor: colorItem.color_hex_code,
+                                }}
+                              />
+                              <div className="flex-1">
+                                <p className="text-sm font-medium text-gray-800">
+                                  {colorItem.color_name}
+                                </p>
+                                <p className="text-xs text-gray-500">
+                                  {colorItem.color_hex_code}
+                                </p>
+                              </div>
+                              <input
+                                type="number"
+                                min="0"
+                                value={colorItem.stock_quantity}
+                                onChange={(e) => {
+                                  const newColors = [...formData.colors];
+                                  newColors[index].stock_quantity =
+                                    parseInt(e.target.value) || 0;
+                                  setFormData((prev) => ({
+                                    ...prev,
+                                    colors: newColors,
+                                  }));
+                                }}
+                                className="w-24 px-2 py-1 border border-gray-300 rounded text-sm"
+                                placeholder="Estoque"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const newColors = formData.colors.filter(
+                                    (_, i) => i !== index
+                                  );
+                                  setFormData((prev) => ({
+                                    ...prev,
+                                    colors: newColors,
+                                  }));
+                                }}
+                                className="p-1 text-red-500 hover:bg-red-50 rounded"
+                                title="Remover cor"
+                                aria-label="Remover cor"
+                              >
+                                <X className="h-4 w-4" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Seletor de novas cores */}
+                      <div className="space-y-2">
+                        <Label className="text-sm font-medium">
+                          Adicionar Cor:
+                        </Label>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                          {availableColors
+                            .filter(
+                              (color) =>
+                                !formData.colors.some(
+                                  (c) => c.color_id === color.id
+                                )
+                            )
+                            .map((color) => (
+                              <button
+                                key={color.id}
+                                type="button"
+                                onClick={() => {
+                                  setFormData((prev) => ({
+                                    ...prev,
+                                    colors: [
+                                      ...prev.colors,
+                                      {
+                                        color_id: color.id,
+                                        color_name: color.name,
+                                        color_hex_code: color.hex_code,
+                                        stock_quantity: 0,
+                                      },
+                                    ],
+                                  }));
+                                }}
+                                className="flex items-center gap-2 p-2 border border-gray-300 rounded-lg hover:border-gray-400 hover:bg-gray-50 transition-all"
+                              >
+                                <div
+                                  className="w-6 h-6 rounded-full border-2 border-gray-300"
+                                  style={{ backgroundColor: color.hex_code }}
+                                />
+                                <span className="text-sm text-gray-700">
+                                  {color.name}
+                                </span>
+                              </button>
+                            ))}
+                        </div>
+                        {availableColors.length === 0 ? (
+                          <p className="text-sm text-gray-500 text-center py-2">
+                            Nenhuma cor cadastrada no sistema. Crie cores
+                            primeiro na página de gerenciamento.
+                          </p>
+                        ) : (
+                          availableColors.filter(
                             (color) =>
                               !formData.colors.some(
                                 (c) => c.color_id === color.id
                               )
+                          ).length === 0 && (
+                            <p className="text-sm text-gray-500 text-center py-2">
+                              Todas as cores disponíveis foram adicionadas.
+                            </p>
                           )
-                          .map((color) => (
-                            <button
-                              key={color.id}
-                              type="button"
-                              onClick={() => {
-                                setFormData((prev) => ({
-                                  ...prev,
-                                  colors: [
-                                    ...prev.colors,
-                                    {
-                                      color_id: color.id,
-                                      color_name: color.name,
-                                      color_hex_code: color.hex_code,
-                                      stock_quantity: 0,
-                                    },
-                                  ],
-                                }));
-                              }}
-                              className="flex items-center gap-2 p-2 border border-gray-300 rounded-lg hover:border-pink-400 hover:bg-pink-50 transition-all"
-                            >
-                              <div
-                                className="w-6 h-6 rounded-full border-2 border-gray-300"
-                                style={{ backgroundColor: color.hex_code }}
-                              />
-                              <span className="text-sm text-gray-700">
-                                {color.name}
-                              </span>
-                            </button>
-                          ))}
+                        )}
                       </div>
-                      {availableColors.length === 0 ? (
-                        <p className="text-sm text-gray-500 text-center py-2">
-                          Nenhuma cor cadastrada no sistema. Crie cores primeiro
-                          na página de gerenciamento.
-                        </p>
-                      ) : (
-                        availableColors.filter(
-                          (color) =>
-                            !formData.colors.some(
-                              (c) => c.color_id === color.id
-                            )
-                        ).length === 0 && (
-                          <p className="text-sm text-gray-500 text-center py-2">
-                            Todas as cores disponíveis foram adicionadas.
-                          </p>
-                        )
-                      )}
                     </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Seção de Descrição */}
-              <div className="bg-purple-50 rounded-xl p-4">
-                <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
-                  <div className="w-2 h-2 bg-purple-500 rounded-full mr-3"></div>
-                  Descrição
-                </h3>
-                <textarea
-                  rows={4}
-                  value={formData.description}
-                  onChange={(e) =>
-                    setFormData((prev) => ({
-                      ...prev,
-                      description: e.target.value,
-                    }))
-                  }
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all resize-none"
-                  placeholder="Descreva o adicional detalhadamente..."
-                  aria-label="Descrição do adicional"
-                />
-              </div>
-
-              {/* Botões de Ação */}
-              <div className="flex gap-4 pt-6 border-t border-gray-200">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={handleCloseModal}
-                  disabled={loading}
-                  className="flex-1 py-3 border-2 border-gray-300 hover:border-gray-400 hover:bg-gray-50 transition-all"
-                >
-                  Cancelar
-                </Button>
-                <Button
-                  type="submit"
-                  disabled={loading}
-                  className="flex-1 py-3 bg-gradient-to-r from-rose-500 to-rose-600 hover:from-rose-600 hover:to-rose-700 text-white font-semibold shadow-lg hover:shadow-xl transition-all transform hover:scale-[1.02]"
-                >
-                  {loading ? (
-                    <div className="flex items-center justify-center">
-                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
-                      Salvando...
-                    </div>
-                  ) : (
-                    <>
-                      {editingAdditional
-                        ? "Atualizar Adicional"
-                        : "Criar Adicional"}
-                    </>
                   )}
-                </Button>
-              </div>
-            </form>
+                </div>
+
+                {/* Botões de Ação */}
+                <div className="flex justify-end gap-3 pt-4 border-t">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleCloseModal}
+                    disabled={loading}
+                  >
+                    Cancelar
+                  </Button>
+                  <Button type="submit" disabled={loading}>
+                    {loading
+                      ? "Salvando..."
+                      : editingAdditional
+                      ? "Atualizar Adicional"
+                      : "Salvar Adicional"}
+                  </Button>
+                </div>
+              </form>
+            </div>
           </div>
         </div>
       )}

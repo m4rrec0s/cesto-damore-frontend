@@ -467,7 +467,7 @@ export function ProductsTab() {
         </div>
 
         {showModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
             <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
               <div className="p-6">
                 <div className="flex justify-between items-center mb-6">
@@ -554,6 +554,8 @@ export function ProductsTab() {
                         id="discount"
                         type="number"
                         step="0.01"
+                        min="0"
+                        max="100"
                         value={formData.discount}
                         onChange={(e) =>
                           setFormData({
@@ -564,6 +566,66 @@ export function ProductsTab() {
                       />
                     </div>
                   </div>
+
+                  {/* Visualização do Preço Final */}
+                  {formData.price > 0 && (
+                    <div className="bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-200 rounded-lg p-4">
+                      <div className="flex items-center justify-between">
+                        <div className="space-y-1">
+                          <p className="text-sm font-medium text-gray-600">
+                            Visualização do Preço
+                          </p>
+                          <div className="flex items-center gap-3">
+                            {formData.discount > 0 ? (
+                              <>
+                                <span className="text-lg text-gray-500 line-through">
+                                  R$ {formData.price.toFixed(2)}
+                                </span>
+                                <Badge
+                                  variant="destructive"
+                                  className="text-xs"
+                                >
+                                  -{formData.discount}%
+                                </Badge>
+                                <span className="text-2xl font-bold text-green-600">
+                                  R${" "}
+                                  {(
+                                    formData.price -
+                                    (formData.price * formData.discount) / 100
+                                  ).toFixed(2)}
+                                </span>
+                              </>
+                            ) : (
+                              <span className="text-2xl font-bold text-gray-900">
+                                R$ {formData.price.toFixed(2)}
+                              </span>
+                            )}
+                          </div>
+                          {formData.discount > 0 && (
+                            <p className="text-xs text-green-700 mt-1">
+                              Economia de R${" "}
+                              {(
+                                (formData.price * formData.discount) /
+                                100
+                              ).toFixed(2)}
+                            </p>
+                          )}
+                        </div>
+                        {formData.discount > 0 && (
+                          <div className="text-right">
+                            <p className="text-xs text-gray-500">Preço Final</p>
+                            <p className="text-3xl font-bold text-green-600">
+                              R${" "}
+                              {(
+                                formData.price -
+                                (formData.price * formData.discount) / 100
+                              ).toFixed(2)}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
 
                   <div className="space-y-2">
                     <Label>Categorias</Label>
