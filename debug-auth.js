@@ -38,7 +38,7 @@ if (!token) {
             }
         }
     } catch (err) {
-        console.warn("⚠️ Não foi possível decodificar o token (pode não ser JWT)");
+        console.warn("⚠️ Não foi possível decodificar o token (pode não ser JWT)", err);
     }
 }// 2. Verificar Usuário
 console.log("\n2️⃣ Verificando dados do usuário...");

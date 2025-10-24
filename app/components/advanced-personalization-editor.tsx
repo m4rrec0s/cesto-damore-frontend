@@ -15,37 +15,10 @@ import { Model3DViewer } from "../produto/[id]/components/Model3DViewer";
 import { toast } from "sonner";
 import { usePersonalization } from "../hooks/use-personalization";
 import type { LayoutBase, ImageData, SlotDef } from "../types/personalization";
-
-const normalizeGoogleDriveUrl = (url: string): string => {
-  if (!url) return url;
-
-  if (
-    !url.includes("drive.google.com") &&
-    !url.includes("drive.usercontent.google.com")
-  ) {
-    return url;
-  }
-
-  // Extrair FILE_ID de diferentes formatos
-  let fileId = null;
-
-  // Formato: /file/d/FILE_ID/view
-  let match = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
-  if (match) fileId = match[1];
-
-  // Formato: ?id=FILE_ID ou &id=FILE_ID
-  if (!fileId) {
-    match = url.match(/[?&]id=([a-zA-Z0-9_-]+)/);
-    if (match) fileId = match[1];
-  }
-
-  // Se encontrou FILE_ID, retornar URL de download direto
-  if (fileId) {
-    return `https://drive.google.com/uc?export=download&id=${fileId}`;
-  }
-
-  return url;
-};
+import {
+  getDirectImageUrl,
+  normalizeGoogleDriveUrl,
+} from "../helpers/drive-normalize";
 
 interface AdvancedPersonalizationEditorProps {
   layoutBase: LayoutBase;
@@ -60,18 +33,144 @@ export default function AdvancedPersonalizationEditor({
   onCancel,
   showCanvasPreview = true,
 }: AdvancedPersonalizationEditorProps) {
-  const {
-    loading,
-    error,
-    generateSessionId,
-    uploadTempImage,
-    deleteTempImage,
-  } = usePersonalization();
+  const { loading, error, fileToImageData } = usePersonalization();
 
-  const [sessionId] = useState(() => generateSessionId());
-  const [uploadedImages, setUploadedImages] = useState<Map<string, ImageData>>(
-    new Map()
-  );
+  // Items (para associar customizações). Carregado via API /items.
+  const [items, setItems] = useState<Array<{ id: string; name: string }>>([]);
+  const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
+
+  // MULTIPLE_CHOICE options (local management + upload support)
+  const [multipleChoiceOptions, setMultipleChoiceOptions] = useState<
+    Array<{
+      id: string;
+      label: string;
+      imageUrl?: string | null;
+      filename?: string | null;
+      uploading?: boolean;
+    }>
+  >([]);
+
+  useEffect(() => {
+    const fetchItems = async () => {
+      try {
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/items`);
+        if (!res.ok) throw new Error("Erro ao buscar items");
+        const data = (await res.json()) as Array<{
+          id?: string;
+          name?: string;
+        }>;
+        // Map minimal shape
+        const mapped = (data || []).map((it) => ({
+          id: it.id || "",
+          name: it.name || "(sem nome)",
+        }));
+        setItems(mapped);
+      } catch (err) {
+        console.warn("Não foi possível carregar items para associação:", err);
+      }
+    };
+
+    fetchItems();
+  }, []);
+
+  // Upload de imagem para opção MULTIPLE_CHOICE
+  const uploadOptionImage = async (file: File, optionId: string) => {
+    try {
+      setMultipleChoiceOptions((prev) =>
+        prev.map((o) => (o.id === optionId ? { ...o, uploading: true } : o))
+      );
+
+      const token =
+        typeof window !== "undefined"
+          ? localStorage.getItem("appToken") || localStorage.getItem("token")
+          : null;
+      const form = new FormData();
+      form.append("image", file);
+
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/customization/upload-image`,
+        {
+          method: "POST",
+          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+          body: form,
+        }
+      );
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err?.error || "Erro ao enviar imagem");
+      }
+
+      const data = await res.json();
+
+      setMultipleChoiceOptions((prev) =>
+        prev.map((o) =>
+          o.id === optionId
+            ? {
+                ...o,
+                imageUrl: data.imageUrl || data.imageUrl || data.imageUrl,
+                filename: data.filename || data.filename,
+                uploading: false,
+              }
+            : o
+        )
+      );
+
+      toast.success("Imagem carregada para opção");
+    } catch (err) {
+      console.error("Erro upload option image:", err);
+      toast.error((err as Error).message || "Erro ao enviar imagem");
+      setMultipleChoiceOptions((prev) =>
+        prev.map((o) => (o.id === optionId ? { ...o, uploading: false } : o))
+      );
+    }
+  };
+
+  const deleteOptionImage = async (optionId: string) => {
+    try {
+      const opt = multipleChoiceOptions.find((o) => o.id === optionId);
+      if (!opt?.filename) {
+        setMultipleChoiceOptions((prev) =>
+          prev.map((o) =>
+            o.id === optionId ? { ...o, imageUrl: null, filename: null } : o
+          )
+        );
+        return;
+      }
+
+      const token =
+        typeof window !== "undefined"
+          ? localStorage.getItem("appToken") || localStorage.getItem("token")
+          : null;
+      const res = await fetch(
+        `${
+          process.env.NEXT_PUBLIC_API_URL
+        }/customization/image/${encodeURIComponent(opt.filename)}`,
+        {
+          method: "DELETE",
+          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        }
+      );
+
+      if (!res.ok) throw new Error("Erro ao deletar imagem");
+
+      setMultipleChoiceOptions((prev) =>
+        prev.map((o) =>
+          o.id === optionId
+            ? { ...o, imageUrl: undefined, filename: undefined }
+            : o
+        )
+      );
+      toast.success("Imagem removida");
+    } catch (err) {
+      console.error(err);
+      toast.error("Erro ao remover imagem");
+    }
+  };
+
+  const [uploadedImages, setUploadedImages] = useState<
+    Map<string, ImageData & { previewUrl?: string }>
+  >(new Map());
   const [baseImageLoaded, setBaseImageLoaded] = useState(false);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -84,11 +183,9 @@ export default function AdvancedPersonalizationEditor({
     }
   }, [error]);
 
-  // Carregar imagem base (Google Drive requer proxy/fetch)
   useEffect(() => {
     const loadBaseImage = async () => {
       try {
-        // Se a URL já for base64, usar diretamente
         if (layoutBase.image_url.startsWith("data:")) {
           const img = new Image();
           img.onload = () => {
@@ -103,11 +200,8 @@ export default function AdvancedPersonalizationEditor({
           return;
         }
 
-        // Para URLs do Google Drive, fazer fetch e converter para base64
-        // Normalizar URL do Google Drive para formato de download direto
         const normalizedUrl = normalizeGoogleDriveUrl(layoutBase.image_url);
 
-        // Usar Next.js Image Proxy para contornar CORS
         const proxyUrl = `/api/proxy-image?url=${encodeURIComponent(
           normalizedUrl
         )}`;
@@ -121,7 +215,6 @@ export default function AdvancedPersonalizationEditor({
 
         const blob = await response.blob();
 
-        // Verificar se o blob é uma imagem válida
         if (!blob.type.startsWith("image/")) {
           toast.error(
             "Erro: Imagem do Google Drive não acessível. Por favor, faça upload da imagem novamente.",
@@ -160,7 +253,6 @@ export default function AdvancedPersonalizationEditor({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [layoutBase.image_url]);
 
-  // Atualizar canvas preview quando imagens mudarem
   useEffect(() => {
     if (showCanvasPreview) {
       updateCanvasPreview();
@@ -205,12 +297,10 @@ export default function AdvancedPersonalizationEditor({
         ctx.translate(-(slotX + slotWidth / 2), -(slotY + slotHeight / 2));
       }
 
-      // Clip para o slot (respeita rotação)
       ctx.beginPath();
       ctx.rect(slotX, slotY, slotWidth, slotHeight);
       ctx.clip();
 
-      // Sem imagem: desenhar placeholder (bg-gray-800) com texto centralizado
       if (!imageData) {
         ctx.fillStyle = "#1f2937"; // tailwind bg-gray-800
         ctx.fillRect(slotX, slotY, slotWidth, slotHeight);
@@ -226,11 +316,9 @@ export default function AdvancedPersonalizationEditor({
           slotY + slotHeight / 2
         );
       } else if (!img || !img.complete) {
-        // Caso a imagem exista mas não esteja pronta, desenhar placeholder simples
         ctx.fillStyle = "#1f2937";
         ctx.fillRect(slotX, slotY, slotWidth, slotHeight);
       } else {
-        // Desenhar imagem do slot
         const imgRatio = img.naturalWidth / img.naturalHeight;
         const slotRatio = slotWidth / slotHeight;
         let drawWidth, drawHeight, offsetX, offsetY;
@@ -272,11 +360,12 @@ export default function AdvancedPersonalizationEditor({
         return;
       }
 
-      const result = await uploadTempImage(file, slotId, sessionId);
+      const imageData = await fileToImageData(file, slotId);
 
+      const previewUrl = URL.createObjectURL(file);
       const img = new Image();
       img.crossOrigin = "anonymous";
-      img.src = result.tempUrl;
+      img.src = previewUrl;
       img.onload = () => {
         slotImagesRef.current.set(slotId, img);
         updateCanvasPreview();
@@ -284,18 +373,11 @@ export default function AdvancedPersonalizationEditor({
 
       setUploadedImages((prev) => {
         const newMap = new Map(prev);
-        newMap.set(slotId, {
-          slotId,
-          tempId: result.tempId,
-          tempUrl: result.tempUrl,
-          width: result.width,
-          height: result.height,
-          originalName: result.originalName,
-        });
+        newMap.set(slotId, { ...imageData, previewUrl });
         return newMap;
       });
 
-      toast.success("Imagem enviada com sucesso!");
+      toast.success("Imagem carregada para preview");
     } catch (err) {
       console.error("Erro no upload:", err);
     }
@@ -306,7 +388,7 @@ export default function AdvancedPersonalizationEditor({
     if (!imageData) return;
 
     try {
-      await deleteTempImage(imageData.tempId);
+      if (imageData.previewUrl) URL.revokeObjectURL(imageData.previewUrl);
       setUploadedImages((prev) => {
         const newMap = new Map(prev);
         newMap.delete(slotId);
@@ -333,25 +415,20 @@ export default function AdvancedPersonalizationEditor({
     }
   }, []);
 
-  // 3D preview state
   const [viewMode, setViewMode] = useState<"2d" | "3d">("2d");
   const [previewTextureUrl, setPreviewTextureUrl] = useState<string | null>(
     null
   );
 
-  // Gerar textura a partir do canvas **antes** de entrar no modo 3D
   const handleSwitchTo3D = async () => {
     if (!canvasRef.current) {
       toast.error("Canvas não disponível para gerar preview 3D.");
       return;
     }
 
-    // Forçar redraw e esperar um pequeno intervalo para garantir que o canvas esteja pronto
     try {
       updateCanvasPreview();
-    } catch {
-      /* ignore */
-    }
+    } catch {}
 
     await new Promise((r) => setTimeout(r, 80));
 
@@ -425,7 +502,7 @@ export default function AdvancedPersonalizationEditor({
           <div className="space-y-2">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src={imageData.tempUrl}
+              src={imageData.previewUrl || ""}
               alt={imageData.originalName}
               className="object-cover rounded w-[150px] h-[150px]"
             />
@@ -451,7 +528,6 @@ export default function AdvancedPersonalizationEditor({
               id={`upload-${slot.id}`}
             />
 
-            {/* Placeholder visual para slots vazios */}
             <Label
               htmlFor={`upload-${slot.id}`}
               className="cursor-pointer flex flex-col items-center justify-center p-6 text-center text-muted-foreground text-xs"
@@ -632,10 +708,124 @@ export default function AdvancedPersonalizationEditor({
                   {canvasRef.current?.height || 0}
                 </p>
                 <p className="text-blue-600">
-                  URL: {layoutBase.image_url.substring(0, 50)}...
+                  URL:{" "}
+                  {getDirectImageUrl(layoutBase.image_url).substring(0, 50)}...
                 </p>
               </div>
             )}
+
+            {/* Associe esta customização a um item (opcional) */}
+            <div className="mt-4">
+              <Label>Associar a Item (opcional)</Label>
+              {items.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  Nenhum item disponível
+                </p>
+              ) : (
+                <select
+                  aria-label="Associar item"
+                  value={selectedItemId || ""}
+                  onChange={(e) => setSelectedItemId(e.target.value || null)}
+                  className="mt-2 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                >
+                  <option value="">-- Não associar --</option>
+                  {items.map((it) => (
+                    <option key={it.id} value={it.id}>
+                      {it.name}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+
+            {/* MULTIPLE_CHOICE: gerenciar opções com imagens */}
+            <div className="mt-4 border-t pt-4">
+              <div className="flex items-center justify-between">
+                <Label>Opções (Multiple Choice)</Label>
+                <Button
+                  size="sm"
+                  onClick={() =>
+                    setMultipleChoiceOptions((prev) => [
+                      ...prev,
+                      {
+                        id: `opt-${Date.now()}-${Math.floor(
+                          Math.random() * 1000
+                        )}`,
+                        label: `Opção ${prev.length + 1}`,
+                      },
+                    ])
+                  }
+                >
+                  + Adicionar opção
+                </Button>
+              </div>
+
+              <div className="mt-3 space-y-3">
+                {multipleChoiceOptions.length === 0 && (
+                  <p className="text-sm text-muted-foreground">
+                    Nenhuma opção adicionada
+                  </p>
+                )}
+
+                {multipleChoiceOptions.map((opt) => (
+                  <div key={opt.id} className="flex items-center gap-3">
+                    <Input
+                      value={opt.label}
+                      onChange={(e) =>
+                        setMultipleChoiceOptions((prev) =>
+                          prev.map((o) =>
+                            o.id === opt.id
+                              ? { ...o, label: e.target.value }
+                              : o
+                          )
+                        )
+                      }
+                      className="flex-1"
+                    />
+
+                    <input
+                      aria-label={`Enviar imagem para ${opt.label}`}
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) uploadOptionImage(file, opt.id);
+                      }}
+                    />
+
+                    {opt.imageUrl && (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={opt.imageUrl}
+                        alt={opt.label}
+                        className="h-10 w-10 object-cover rounded"
+                      />
+                    )}
+
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={() =>
+                        setMultipleChoiceOptions((prev) =>
+                          prev.filter((o) => o.id !== opt.id)
+                        )
+                      }
+                    >
+                      Remover
+                    </Button>
+                    {opt.filename && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => deleteOptionImage(opt.id)}
+                      >
+                        Remover imagem
+                      </Button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
 
           <div className="space-y-2 pt-4 border-t">

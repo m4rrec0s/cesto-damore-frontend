@@ -194,6 +194,19 @@ export interface Additional {
   stock_quantity?: number;
 }
 
+// Unified Item type (backend now exposes a single Item model)
+export interface Item {
+  id: string;
+  name: string;
+  description?: string | null;
+  base_price?: number | null;
+  price?: number | null; // legacy clients might expect `price`
+  discount?: number | null;
+  image_url?: string | null;
+  stock_quantity?: number | null;
+  type?: "PRODUCT" | "ADDITIONAL" | string | null;
+}
+
 export interface Color {
   id: string;
   name: string;
@@ -691,6 +704,14 @@ class ApiService {
     ApiService.cache.additionals = res.data;
     return res.data;
   };
+  /**
+   * Lista items unificados (novo endpoint)
+   * GET /items
+   */
+  getItems = async (): Promise<Item[]> => {
+    const res = await this.client.get("/items");
+    return res.data;
+  };
   getAdditional = async (id: string) =>
     (await this.client.get(`/additional/${id}`)).data;
   createAdditional = async (
@@ -1076,61 +1097,8 @@ class ApiService {
   };
 
   // ===== Temporary File Upload (for customizations) =====
-
-  /**
-   * Faz upload de arquivo temporário para customização
-   */
-  uploadTemporaryFile = async (
-    sessionId: string,
-    file: File
-  ): Promise<{
-    id: string;
-    original_name: string;
-    size: number;
-    mime_type: string;
-    expires_at: string;
-  }> => {
-    const formData = new FormData();
-    formData.append("file", file);
-    formData.append("sessionId", sessionId);
-
-    const res = await this.client.post("/customization/upload-temp", formData, {
-      headers: {
-        "Content-Type": "multipart/form-data",
-      },
-    });
-    return res.data;
-  };
-
-  /**
-   * Busca arquivos temporários de uma sessão
-   */
-  getSessionFiles = async (
-    sessionId: string
-  ): Promise<{
-    files: Array<{
-      id: string;
-      original_name: string;
-      size: number;
-      mime_type: string;
-      expires_at: string;
-    }>;
-  }> => {
-    const res = await this.client.get(
-      `/customization/session/${sessionId}/files`
-    );
-    return res.data;
-  };
-
-  /**
-   * Deleta arquivo temporário
-   */
-  deleteTemporaryFile = async (
-    fileId: string
-  ): Promise<{ message: string }> => {
-    const res = await this.client.delete(`/customization/temp-file/${fileId}`);
-    return res.data;
-  };
+  // NOTE: temporary file upload endpoints were removed from the backend.
+  // We no longer expose uploadTemporaryFile/getSessionFiles/deleteTemporaryFile.
 
   /**
    * Valida customizações de um produto

@@ -157,11 +157,76 @@ export function usePersonalization() {
     []
   );
 
+  /**
+   * Gera preview no backend a partir das imagens (envia buffers serializados)
+   */
+  const generatePreview = useCallback(
+    async (
+      layoutBaseId: string,
+      images: Array<{
+        slotId: string;
+        imageBuffer: Uint8Array | Buffer;
+        mimeType: string;
+        width: number;
+        height: number;
+        originalName: string;
+      }>,
+      width: number = 800
+    ): Promise<string> => {
+      try {
+        setLoading(true);
+        setError(null);
+
+        const token =
+          localStorage.getItem("token") || localStorage.getItem("appToken");
+
+        const serializedImages = images.map((img) => ({
+          slotId: img.slotId,
+          imageBuffer: Array.from(img.imageBuffer as Uint8Array),
+          mimeType: img.mimeType,
+          width: img.width,
+          height: img.height,
+          originalName: img.originalName,
+        }));
+
+        const response = await fetch(`${API_URL}/customizations/preview`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            layoutBaseId,
+            images: serializedImages,
+            width,
+          }),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || "Erro ao gerar preview");
+        }
+
+        const data = await response.json();
+        return data.previewUrl as string;
+      } catch (err) {
+        const message =
+          err instanceof Error ? err.message : "Erro ao gerar preview";
+        setError(message);
+        throw err;
+      } finally {
+        setLoading(false);
+      }
+    },
+    []
+  );
+
   return {
     loading,
     error,
     fetchLayoutBases,
     fileToImageData,
     commitPersonalization,
+    generatePreview,
   };
 }

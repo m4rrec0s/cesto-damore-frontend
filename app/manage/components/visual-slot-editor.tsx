@@ -69,12 +69,14 @@ export default function VisualSlotEditor({
   useEffect(() => {
     const img = new Image();
 
-    if (imageUrl.includes("drive.google.com")) {
-      img.crossOrigin = "anonymous";
-    }
-
     const directImageUrl = getDirectImageUrl(imageUrl);
-    img.src = directImageUrl;
+
+    // If the image is hosted on Google Drive, use the local proxy to avoid CORS
+    const finalUrl = directImageUrl.includes("drive.google.com")
+      ? `/api/proxy-image?url=${encodeURIComponent(directImageUrl)}`
+      : directImageUrl;
+
+    img.src = finalUrl;
 
     img.onload = () => {
       baseImageRef.current = img;

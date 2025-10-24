@@ -1,6 +1,6 @@
 "use client";
 
-import LayoutBaseManager from "../components/layout-base-manager";
+// import LayoutBaseManager from "../components/layout-base-manager";
 
 export default function LayoutsBasePage() {
   return (
@@ -11,7 +11,7 @@ export default function LayoutsBasePage() {
           Gerencie os layouts base para personalização de itens
         </p>
       </div>
-      <LayoutBaseManager />
+      {/* <LayoutBaseManager /> */}
     </div>
   );
 }

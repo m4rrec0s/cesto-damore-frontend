@@ -14,7 +14,7 @@ import AdvancedPersonalizationEditor from "../components/advanced-personalizatio
 import { usePersonalization } from "../hooks/use-personalization";
 import type { LayoutBase, ImageData } from "../types/personalization";
 import Image from "next/image";
-import { getDirectImageUrl } from "../manage/components/layout-base-manager";
+import { getDirectImageUrl } from "../helpers/drive-normalize";
 
 export default function TestePersonalizacaoPage() {
   const { loading, fetchLayoutBases } = usePersonalization();
@@ -159,7 +159,6 @@ export default function TestePersonalizacaoPage() {
                     layoutName: selectedLayout.name,
                     images: personalizedImages.map((img) => ({
                       slotId: img.slotId,
-                      tempId: img.tempId,
                       originalName: img.originalName,
                       dimensions: `${img.width}x${img.height}`,
                     })),

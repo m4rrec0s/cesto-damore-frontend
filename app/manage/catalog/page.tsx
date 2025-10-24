@@ -13,7 +13,7 @@ import { Box, Layers, Link2, Palette } from "lucide-react";
 import { ProductsTab } from "@/app/manage/components/catalog/ProductsTab";
 import { ItemsTab } from "@/app/manage/components/catalog/ItemsTab";
 import { ConstraintsTab } from "@/app/manage/components/catalog/ConstraintsTab";
-import { CustomizationsTab } from "./CustomizationsTab";
+import { CustomizationsTab } from "../components/catalog/CustomizationsTab";
 
 export default function CatalogPage() {
   const { user, isLoading: authLoading } = useAuth();

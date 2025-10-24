@@ -10,6 +10,7 @@ import {
   ProductsResponse,
   useApi,
   Additional,
+  Item,
 } from "../../hooks/use-api";
 import { Button } from "../../components/ui/button";
 import { ImageUpload } from "../../components/ui/image-upload";
@@ -91,9 +92,7 @@ export function ProductManager({
       perPage: 15,
     },
   });
-  const [availableAdditionals, setAvailableAdditionals] = useState<
-    Additional[]
-  >([]);
+  const [availableAdditionals, setAvailableAdditionals] = useState<Item[]>([]);
   const [selectedAdditionalId, setSelectedAdditionalId] = useState<string>("");
   const [customPrice, setCustomPrice] = useState<string>("");
   const [originalFormData, setOriginalFormData] = useState<ProductForm | null>(
@@ -138,13 +137,35 @@ export function ProductManager({
     loadProducts(1);
   }, [loadProducts]);
 
-  // Load available additionals
+  // Load available items (additionals/components)
   const loadAvailableAdditionals = useCallback(async () => {
     try {
-      const additionals = await api.getAdditionals();
-      setAvailableAdditionals(additionals);
+      // Prefer the unified items endpoint when available
+      const items = await api.getItems();
+      setAvailableAdditionals(items || []);
     } catch (error) {
-      console.error("Erro ao carregar adicionais:", error);
+      console.error(
+        "Erro ao carregar itens (fallback para adicionais):",
+        error
+      );
+      // fallback to legacy additionals endpoint if needed
+      try {
+        const additionals = await api.getAdditionals();
+        setAvailableAdditionals(
+          (additionals || []).map((a: Additional) => ({
+            id: a.id,
+            name: a.name,
+            description: a.description,
+            price: a.price,
+            discount: a.discount,
+            image_url: a.image_url,
+            stock_quantity: a.stock_quantity,
+            type: "ADDITIONAL",
+          }))
+        );
+      } catch (err2) {
+        console.error("Fallback também falhou:", err2);
+      }
     }
   }, [api]);
 
@@ -251,7 +272,9 @@ export function ProductManager({
     const newLink: ProductAdditionalLink = {
       additional_id: additional.id,
       additional_name: additional.name,
-      additional_price: additional.price,
+      // Items may expose base_price or price depending on backend shape
+      additional_price:
+        (additional as Item).base_price ?? (additional as Item).price ?? 0,
       custom_price: customPriceValue,
     };
 
@@ -1147,7 +1170,12 @@ export function ProductManager({
                         <option value="">Selecione um adicional</option>
                         {getAvailableAdditionals().map((additional) => (
                           <option key={additional.id} value={additional.id}>
-                            {additional.name} - R$ {additional.price.toFixed(2)}
+                            {additional.name} - R${" "}
+                            {(
+                              (additional as Item).base_price ??
+                              (additional as Item).price ??
+                              0
+                            ).toFixed(2)}
                           </option>
                         ))}
                       </select>

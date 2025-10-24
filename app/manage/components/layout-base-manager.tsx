@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import {
   Card,
   CardContent,
@@ -33,7 +33,6 @@ import {
 } from "../../components/ui/tabs";
 import { Plus, Edit, Trash2, Loader2, Eye, Layout } from "lucide-react";
 import { toast } from "sonner";
-import { useLayoutApi } from "../../hooks/use-layout-api";
 import VisualSlotEditor from "./visual-slot-editor";
 import type {
   LayoutBase,
@@ -41,81 +40,33 @@ import type {
   CreateLayoutBaseInput,
 } from "../../types/personalization";
 import Image from "next/image";
+import {
+  getDirectImageUrl,
+  getImageDimensions,
+} from "@/app/helpers/drive-normalize";
 
-/**
- * Obter dimensões de uma imagem de forma assíncrona
- */
-const getImageDimensions = (
-  file: File
-): Promise<{ width: number; height: number }> => {
-  return new Promise((resolve, reject) => {
-    const img = new window.Image();
+interface LayoutBaseManagerProps {
+  layouts: LayoutBase[];
+  onLayoutSelect: (layout: LayoutBase) => void;
+  updateLayout: (
+    id: string,
+    data: CreateLayoutBaseInput,
+    imageFile?: File
+  ) => Promise<void>;
+  createLayout: (data: CreateLayoutBaseInput, imageFile: File) => Promise<void>;
+  deleteLayout: (id: string) => Promise<void>;
+  loadLayouts: () => Promise<void>;
+  loading: boolean;
+}
 
-    img.onload = () => {
-      resolve({
-        width: img.naturalWidth,
-        height: img.naturalHeight,
-      });
-      URL.revokeObjectURL(img.src);
-    };
-
-    img.onerror = () => {
-      reject(new Error("Falha ao carregar imagem"));
-      URL.revokeObjectURL(img.src);
-    };
-
-    img.src = URL.createObjectURL(file);
-  });
-};
-
-export const getDirectImageUrl = (url: string): string => {
-  if (!url) return url;
-
-  if (
-    !url.includes("drive.google.com") &&
-    !url.includes("drive.usercontent.google.com")
-  ) {
-    return url;
-  }
-
-  let fileId = null;
-
-  // Formato 1: https://drive.google.com/file/d/FILE_ID/view
-  let match = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
-  if (match) {
-    fileId = match[1];
-  }
-
-  // Formato 2: https://drive.google.com/uc?id=FILE_ID
-  if (!fileId) {
-    match = url.match(/[?&]id=([a-zA-Z0-9_-]+)/);
-    if (match) {
-      fileId = match[1];
-    }
-  }
-
-  // Formato 3: https://drive.usercontent.google.com/download?id=FILE_ID
-  if (!fileId) {
-    match = url.match(/download\?id=([a-zA-Z0-9_-]+)/);
-    if (match) {
-      fileId = match[1];
-    }
-  }
-
-  // Se encontrou o FILE_ID, retornar URL padronizada para download direto
-  if (fileId) {
-    return `https://drive.google.com/uc?export=download&id=${fileId}`;
-  }
-
-  console.warn("⚠️ Não foi possível extrair FILE_ID do Google Drive:", url);
-  return url;
-};
-
-export default function LayoutBaseManager() {
-  const { loading, fetchLayouts, createLayout, updateLayout, deleteLayout } =
-    useLayoutApi();
-
-  const [layouts, setLayouts] = useState<LayoutBase[]>([]);
+export default function LayoutBaseManager({
+  layouts,
+  updateLayout,
+  createLayout,
+  deleteLayout,
+  loadLayouts,
+  loading,
+}: LayoutBaseManagerProps) {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingLayout, setEditingLayout] = useState<LayoutBase | null>(null);
 
@@ -129,21 +80,6 @@ export default function LayoutBaseManager() {
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string>("");
   const [editorTab, setEditorTab] = useState<"visual" | "manual">("visual");
-
-  useEffect(() => {
-    loadLayouts();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const loadLayouts = async () => {
-    try {
-      const data = await fetchLayouts();
-      setLayouts(data);
-    } catch (error) {
-      console.error("Erro ao buscar layouts:", error);
-      toast.error("Erro ao buscar layouts");
-    }
-  };
 
   const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -245,7 +181,8 @@ export default function LayoutBaseManager() {
       height: layout.height,
       slots: layout.slots,
     });
-    setImagePreview(layout.image_url);
+    // Normalizar possíveis URLs do Google Drive para download direto
+    setImagePreview(getDirectImageUrl(layout.image_url));
     setIsDialogOpen(true);
   };
 

@@ -41,15 +41,18 @@ import {
   TabsList,
   TabsTrigger,
 } from "@/app/components/ui/tabs";
-import { Plus, Edit, Trash2, Save, X, Upload, Loader2 } from "lucide-react";
+import { Plus, Edit, Trash2, Save, X, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { getAuthToken } from "@/app/lib/auth-utils";
+import type { LayoutBase } from "@/app/types/personalization";
 
 // Importar os formulários específicos
-import TextCustomizationForm from "../components/customizations/TextCustomizationForm";
-import ImageCustomizationForm from "../components/customizations/ImageCustomizationForm";
-import MultipleChoiceCustomizationForm from "../components/customizations/MultipleChoiceCustomizationForm";
-import BaseLayoutCustomizationForm from "../components/customizations/BaseLayoutCustomizationForm";
+import TextCustomizationForm from "../customizations/TextCustomizationForm";
+import ImageCustomizationForm from "../customizations/ImageCustomizationForm";
+import MultipleChoiceCustomizationForm from "../customizations/MultipleChoiceCustomizationForm";
+import BaseLayoutCustomizationForm from "../customizations/BaseLayoutCustomizationForm";
+import LayoutBaseManager from "../layout-base-manager";
+import { useLayoutApi } from "@/app/hooks/use-layout-api";
 
 interface Customization {
   id: string;
@@ -62,24 +65,24 @@ interface Customization {
   price: number;
 }
 
-interface Layout {
-  id: string;
-  item_id: string;
-  name: string;
-  image_url: string;
-  layout_data: {
-    model_url: string;
-    print_areas?: PrintArea[];
-  };
-}
+// interface Layout {
+//   id: string;
+//   item_id: string;
+//   name: string;
+//   image_url: string;
+//   layout_data: {
+//     model_url: string;
+//     print_areas?: PrintArea[];
+//   };
+// }
 
-interface PrintArea {
-  id: string;
-  name: string;
-  position: { x: number; y: number; z: number };
-  rotation: { x: number; y: number; z: number };
-  scale: { width: number; height: number };
-}
+// interface PrintArea {
+//   id: string;
+//   name: string;
+//   position: { x: number; y: number; z: number };
+//   rotation: { x: number; y: number; z: number };
+//   scale: { width: number; height: number };
+// }
 
 interface Item {
   id: string;
@@ -91,18 +94,25 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
 export function CustomizationsTab() {
   const [customizations, setCustomizations] = useState<Customization[]>([]);
-  const [layouts, setLayouts] = useState<Layout[]>([]);
   const [items, setItems] = useState<Item[]>([]);
   const [selectedItem, setSelectedItem] = useState<string>("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [isLayoutDialogOpen, setIsLayoutDialogOpen] = useState(false);
   const [editingCustomization, setEditingCustomization] =
     useState<Customization | null>(null);
   const [loading, setLoading] = useState(false);
-  const [uploading, setUploading] = useState(false);
   const [activeTab, setActiveTab] = useState<"customizations" | "layouts">(
     "customizations"
   );
+
+  const {
+    loading: layoutApiLoading,
+    fetchLayouts,
+    createLayout,
+    updateLayout,
+    deleteLayout,
+  } = useLayoutApi();
+
+  const [layouts, setLayouts] = useState<LayoutBase[]>([]);
 
   // Form state para customizações
   const [formData, setFormData] = useState({
@@ -115,18 +125,32 @@ export function CustomizationsTab() {
     customization_data: {} as Record<string, unknown>,
   });
 
-  // Form state para layouts 3D
-  const [layoutFormData, setLayoutFormData] = useState({
-    item_id: "",
-    name: "",
-    model_url: "",
-  });
-
   useEffect(() => {
     fetchItems();
     fetchCustomizations();
-    fetchLayouts();
-  }, []);
+    // carregar layouts e armazenar localmente
+    (async () => {
+      try {
+        const data = await fetchLayouts();
+        setLayouts(data || []);
+      } catch (err) {
+        console.warn("Erro ao carregar layouts:", err);
+      }
+    })();
+  }, [fetchLayouts]);
+
+  const handleLayoutSelect = (layout: LayoutBase) => {
+    // Preencher formulário para criar uma customização do tipo BASE_LAYOUT associada ao layout selecionado
+    setFormData((prev) => ({
+      ...prev,
+      type: "BASE_LAYOUT",
+      customization_data: {
+        ...(prev.customization_data || {}),
+        base_layout_id: layout.id,
+      },
+    }));
+    setIsDialogOpen(true);
+  };
 
   const fetchItems = async () => {
     try {
@@ -176,26 +200,6 @@ export function CustomizationsTab() {
       toast.error("Erro ao buscar customizações");
     } finally {
       setLoading(false);
-    }
-  };
-
-  const fetchLayouts = async () => {
-    try {
-      const token = getAuthToken();
-      if (!token) return;
-
-      const response = await fetch(`${API_URL}/layouts`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setLayouts(data);
-      }
-    } catch (error) {
-      console.error("Erro ao buscar layouts:", error);
     }
   };
 
@@ -321,132 +325,6 @@ export function CustomizationsTab() {
     );
   };
 
-  // Handlers para Layouts 3D
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    if (!file.name.endsWith(".glb") && !file.name.endsWith(".gltf")) {
-      toast.error("Apenas arquivos .glb e .gltf são permitidos");
-      return;
-    }
-
-    try {
-      setUploading(true);
-      const token = getAuthToken();
-      if (!token) {
-        setUploading(false);
-        return;
-      }
-
-      const formData = new FormData();
-      formData.append("model", file);
-
-      const response = await fetch(`${API_URL}/layouts/upload-3d`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-        body: formData,
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setLayoutFormData((prev) => ({ ...prev, model_url: data.url }));
-        toast.success("Modelo 3D enviado com sucesso!");
-      } else {
-        const error = await response.json();
-        toast.error(error.error || "Erro ao enviar modelo 3D");
-      }
-    } catch (error) {
-      console.error("Erro ao fazer upload:", error);
-      toast.error("Erro ao fazer upload do modelo 3D");
-    } finally {
-      setUploading(false);
-    }
-  };
-
-  const handleLayoutSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (!layoutFormData.model_url) {
-      toast.error("Faça upload de um modelo 3D primeiro");
-      return;
-    }
-
-    try {
-      const token = getAuthToken();
-      if (!token) return;
-
-      const payload = {
-        item_id: layoutFormData.item_id,
-        name: layoutFormData.name,
-        layout_data: {
-          model_url: layoutFormData.model_url,
-          print_areas: [],
-          camera_position: { x: 0, y: 5, z: 10 },
-          camera_target: { x: 0, y: 0, z: 0 },
-        },
-      };
-
-      const response = await fetch(`${API_URL}/layouts`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(payload),
-      });
-
-      if (response.ok) {
-        toast.success("Layout 3D criado com sucesso!");
-        setIsLayoutDialogOpen(false);
-        resetLayoutForm();
-        fetchLayouts();
-      } else {
-        const error = await response.json();
-        toast.error(error.error || "Erro ao criar layout");
-      }
-    } catch (error) {
-      console.error("Erro ao criar layout:", error);
-      toast.error("Erro ao criar layout");
-    }
-  };
-
-  const handleDeleteLayout = async (id: string) => {
-    if (!confirm("Tem certeza que deseja deletar este layout?")) return;
-
-    try {
-      const token = getAuthToken();
-      if (!token) return;
-
-      const response = await fetch(`${API_URL}/layouts/${id}`, {
-        method: "DELETE",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      if (response.ok) {
-        toast.success("Layout deletado com sucesso!");
-        fetchLayouts();
-      } else {
-        toast.error("Erro ao deletar layout");
-      }
-    } catch (error) {
-      console.error("Erro ao deletar layout:", error);
-      toast.error("Erro ao deletar layout");
-    }
-  };
-
-  const resetLayoutForm = () => {
-    setLayoutFormData({
-      item_id: "",
-      name: "",
-      model_url: "",
-    });
-  };
-
   const getItemName = (itemId: string) => {
     const item = items.find((i) => i.id === itemId);
     return item?.name || "Item não encontrado";
@@ -516,7 +394,7 @@ export function CustomizationsTab() {
       >
         <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="customizations">Customizações</TabsTrigger>
-          <TabsTrigger value="layouts">Layouts 3D</TabsTrigger>
+          <TabsTrigger value="layouts">Layouts</TabsTrigger>
         </TabsList>
 
         {/* Tab de Customizações */}
@@ -769,149 +647,22 @@ export function CustomizationsTab() {
           </Card>
         </TabsContent>
 
-        {/* Tab de Layouts 3D */}
         <TabsContent value="layouts">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center justify-between">
-                <span>Gerenciar Layouts 3D</span>
-                <Dialog
-                  open={isLayoutDialogOpen}
-                  onOpenChange={setIsLayoutDialogOpen}
-                >
-                  <DialogTrigger asChild>
-                    <Button onClick={resetLayoutForm}>
-                      <Plus className="mr-2 h-4 w-4" />
-                      Novo Layout 3D
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent className="max-w-2xl">
-                    <DialogHeader>
-                      <DialogTitle>Criar Novo Layout 3D</DialogTitle>
-                    </DialogHeader>
-                    <form onSubmit={handleLayoutSubmit} className="space-y-4">
-                      <div className="space-y-2">
-                        <Label>Item</Label>
-                        <Select
-                          value={layoutFormData.item_id}
-                          onValueChange={(value) =>
-                            setLayoutFormData({
-                              ...layoutFormData,
-                              item_id: value,
-                            })
-                          }
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Selecione um item" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {items
-                              .filter((item) => item.allows_customization)
-                              .map((item) => (
-                                <SelectItem key={item.id} value={item.id}>
-                                  {item.name}
-                                </SelectItem>
-                              ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label>Nome do Layout</Label>
-                        <Input
-                          value={layoutFormData.name}
-                          onChange={(e) =>
-                            setLayoutFormData({
-                              ...layoutFormData,
-                              name: e.target.value,
-                            })
-                          }
-                          placeholder="Ex: Layout Caneca Clássica"
-                          required
-                        />
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label>Modelo 3D (.glb ou .gltf)</Label>
-                        <div className="flex items-center space-x-2">
-                          <Input
-                            type="file"
-                            accept=".glb,.gltf"
-                            onChange={handleFileUpload}
-                            disabled={uploading}
-                          />
-                          {uploading && (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          )}
-                        </div>
-                        {layoutFormData.model_url && (
-                          <p className="text-sm text-green-600">
-                            ✓ Modelo enviado: {layoutFormData.model_url}
-                          </p>
-                        )}
-                      </div>
-
-                      <div className="flex justify-end space-x-2 pt-4">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          onClick={() => setIsLayoutDialogOpen(false)}
-                        >
-                          Cancelar
-                        </Button>
-                        <Button type="submit" disabled={uploading}>
-                          <Upload className="mr-2 h-4 w-4" />
-                          Criar Layout
-                        </Button>
-                      </div>
-                    </form>
-                  </DialogContent>
-                </Dialog>
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Nome</TableHead>
-                    <TableHead>Item</TableHead>
-                    <TableHead>Modelo 3D</TableHead>
-                    <TableHead className="text-right">Ações</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {layouts.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={4} className="text-center">
-                        Nenhum layout encontrado
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    layouts.map((layout) => (
-                      <TableRow key={layout.id}>
-                        <TableCell className="font-medium">
-                          {layout.name}
-                        </TableCell>
-                        <TableCell>{getItemName(layout.item_id)}</TableCell>
-                        <TableCell className="text-sm text-muted-foreground">
-                          {layout.layout_data.model_url.split("/").pop()}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <Button
-                            variant="destructive"
-                            size="sm"
-                            onClick={() => handleDeleteLayout(layout.id)}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
+          <LayoutBaseManager
+            layouts={layouts}
+            createLayout={async (data, imageFile) => {
+              await createLayout(data, imageFile);
+            }}
+            deleteLayout={deleteLayout}
+            loadLayouts={async () => {
+              await fetchLayouts();
+            }}
+            loading={layoutApiLoading}
+            onLayoutSelect={handleLayoutSelect}
+            updateLayout={async (id, data, imageFile) => {
+              await updateLayout(id, data, imageFile);
+            }}
+          />
         </TabsContent>
       </Tabs>
     </div>

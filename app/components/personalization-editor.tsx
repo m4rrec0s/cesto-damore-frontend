@@ -26,19 +26,12 @@ export default function PersonalizationEditor({
   onComplete,
   onCancel,
 }: PersonalizationEditorProps) {
-  const {
-    loading,
-    error,
-    generateSessionId,
-    uploadTempImage,
-    deleteTempImage,
-    generatePreview,
-  } = usePersonalization();
+  const { loading, error, fileToImageData, generatePreview } =
+    usePersonalization();
 
-  const [sessionId] = useState(() => generateSessionId());
-  const [uploadedImages, setUploadedImages] = useState<Map<string, ImageData>>(
-    new Map()
-  );
+  const [uploadedImages, setUploadedImages] = useState<
+    Map<string, ImageData & { previewUrl?: string }>
+  >(new Map());
   const [previewUrl, setPreviewUrl] = useState<string>("");
   const [generatingPreview, setGeneratingPreview] = useState(false);
 
@@ -62,22 +55,15 @@ export default function PersonalizationEditor({
         return;
       }
 
-      const result = await uploadTempImage(file, slotId, sessionId);
-
+      const imageData = await fileToImageData(file, slotId);
+      const previewUrl = URL.createObjectURL(file);
       setUploadedImages((prev) => {
         const newMap = new Map(prev);
-        newMap.set(slotId, {
-          slotId,
-          tempId: result.tempId,
-          tempUrl: result.tempUrl,
-          width: result.width,
-          height: result.height,
-          originalName: result.originalName,
-        });
+        newMap.set(slotId, { ...imageData, previewUrl });
         return newMap;
       });
 
-      toast.success("Imagem enviada com sucesso!");
+      toast.success("Imagem carregada para preview");
 
       // Gerar preview automaticamente
       await handleGeneratePreview();
@@ -91,7 +77,7 @@ export default function PersonalizationEditor({
     if (!imageData) return;
 
     try {
-      await deleteTempImage(imageData.tempId);
+      if (imageData.previewUrl) URL.revokeObjectURL(imageData.previewUrl);
       setUploadedImages((prev) => {
         const newMap = new Map(prev);
         newMap.delete(slotId);
@@ -114,7 +100,14 @@ export default function PersonalizationEditor({
 
     try {
       setGeneratingPreview(true);
-      const images = Array.from(uploadedImages.values());
+      const images = Array.from(uploadedImages.values()).map((img) => ({
+        slotId: img.slotId,
+        imageBuffer: img.imageBuffer,
+        mimeType: img.mimeType,
+        width: img.width,
+        height: img.height,
+        originalName: img.originalName,
+      }));
       const preview = await generatePreview(layoutBase.id, images, 800);
       setPreviewUrl(preview);
     } catch (err) {
@@ -157,7 +150,7 @@ export default function PersonalizationEditor({
           <div className="space-y-2">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src={imageData.tempUrl}
+              src={(imageData as ImageData).previewUrl || ""}
               alt={imageData.originalName}
               className="w-full h-32 object-cover rounded"
             />

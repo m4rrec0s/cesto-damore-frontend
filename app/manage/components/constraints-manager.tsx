@@ -95,20 +95,43 @@ export function ConstraintsManager({
       }
 
       try {
-        const data = await api.get(
-          `/admin/constraints/search?q=${encodeURIComponent(query)}`
-        );
+        type SearchResponse = {
+          items?: { id: string; name: string; type?: string }[];
+          products?: { id: string; name: string }[];
+          additionals?: { id: string; name: string }[];
+        };
 
-        const combined = [
-          ...data.products.map((p: { id: string; name: string }) => ({
-            ...p,
-            type: "PRODUCT" as const,
-          })),
-          ...data.additionals.map((a: { id: string; name: string }) => ({
-            ...a,
-            type: "ADDITIONAL" as const,
-          })),
-        ];
+        const data = (await api.get(
+          `/admin/constraints/search?q=${encodeURIComponent(query)}`
+        )) as SearchResponse;
+
+        // API may return { products, additionals } or a unified { items }
+        let combined: SearchableItem[] = [];
+        if (Array.isArray(data.items)) {
+          combined = data.items.map((it) => ({
+            id: it.id,
+            name: it.name,
+            type: (it.type as ItemType) || "ADDITIONAL",
+          }));
+        } else {
+          combined = [
+            ...(Array.isArray(data.products)
+              ? data.products.map((p) => ({
+                  id: p.id,
+                  name: p.name,
+                  type: "PRODUCT" as const,
+                }))
+              : []),
+            ...(Array.isArray(data.additionals)
+              ? data.additionals.map((a) => ({
+                  id: a.id,
+                  name: a.name,
+                  type: "ADDITIONAL" as const,
+                }))
+              : []),
+          ];
+        }
+
         setSearchResults(combined);
       } catch (error) {
         console.error("Erro ao buscar itens:", error);
@@ -250,7 +273,8 @@ export function ConstraintsManager({
   };
 
   const getItemTypeLabel = (type: ItemType) => {
-    return type === "PRODUCT" ? "Produto" : "Adicional";
+    // Backend now unifies additional -> item; show a generic label
+    return type === "PRODUCT" ? "Produto" : "Item";
   };
 
   return (

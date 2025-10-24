@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { toast } from "sonner";
+import useApi from "@/app/hooks/use-api";
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
@@ -12,6 +14,9 @@ interface MultipleChoiceOption {
   label: string;
   description?: string;
   price_modifier: number;
+  // optional image metadata (admin can attach an image to an option)
+  image_url?: string;
+  image_filename?: string;
 }
 
 interface MultipleChoiceData {
@@ -32,6 +37,7 @@ export default function MultipleChoiceCustomizationForm({
   const [options, setOptions] = useState<MultipleChoiceOption[]>(
     data.options || []
   );
+  const api = useApi();
   const [minSelection, setMinSelection] = useState(data.min_selection || 1);
   const [maxSelection, setMaxSelection] = useState(
     data.max_selection || options.length || 1
@@ -48,6 +54,52 @@ export default function MultipleChoiceCustomizationForm({
     const updatedOptions = [...options, newOption];
     setOptions(updatedOptions);
     updateData(updatedOptions, minSelection, maxSelection);
+  };
+
+  const uploadOptionImage = async (index: number, file: File | null) => {
+    if (!file) return;
+    try {
+      toast.info("Enviando imagem...");
+      const res = await api.uploadCustomizationImage(file);
+      const updated = options.map((opt, i) =>
+        i === index
+          ? {
+              ...opt,
+              image_url: res.imageUrl,
+              image_filename: res.filename,
+            }
+          : opt
+      );
+      setOptions(updated);
+      updateData(updated, minSelection, maxSelection);
+      toast.success("Imagem enviada");
+    } catch (err) {
+      console.error("Erro ao enviar imagem da opção:", err);
+      toast.error("Falha ao enviar imagem");
+    }
+  };
+
+  const removeOptionImage = async (index: number) => {
+    const opt = options[index];
+    if (!opt) return;
+    const filename = opt.image_filename;
+    try {
+      if (filename) {
+        await api.deleteCustomizationImage(filename);
+      }
+    } catch (err) {
+      console.warn("Falha ao deletar imagem no servidor:", err);
+      // continue to remove locally anyway
+    }
+
+    const updated = options.map((o, i) =>
+      i === index
+        ? { ...o, image_url: undefined, image_filename: undefined }
+        : o
+    );
+    setOptions(updated);
+    updateData(updated, minSelection, maxSelection);
+    toast.success("Imagem removida");
   };
 
   const updateOption = (
@@ -187,6 +239,44 @@ export default function MultipleChoiceCustomizationForm({
                     }
                     placeholder="Informação adicional sobre a opção..."
                   />
+                </div>
+                {/* Image for option */}
+                <div className="space-y-1">
+                  <Label className="text-xs">Imagem (opcional)</Label>
+                  <div className="flex items-center space-x-3">
+                    {option.image_url ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={option.image_url}
+                        alt={`Preview da opção ${index + 1}`}
+                        className="h-16 w-16 rounded object-cover border"
+                      />
+                    ) : (
+                      <div className="h-16 w-16 rounded border bg-muted" />
+                    )}
+
+                    <div className="flex items-center space-x-2">
+                      <input
+                        aria-label={`Enviar imagem para a opção ${index + 1}`}
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) =>
+                          uploadOptionImage(index, e.target.files?.[0] ?? null)
+                        }
+                      />
+
+                      {option.image_url && (
+                        <Button
+                          type="button"
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => removeOptionImage(index)}
+                        >
+                          Remover
+                        </Button>
+                      )}
+                    </div>
+                  </div>
                 </div>
               </div>
             </Card>
