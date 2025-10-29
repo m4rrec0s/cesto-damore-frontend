@@ -10,17 +10,16 @@ import {
   Star,
   Minus,
   Plus,
-  Check,
   UploadCloud,
   Trash2,
   AlertCircle,
   Images,
   FileText,
+  ChevronLeft,
 } from "lucide-react";
 
 import { Button } from "@/app/components/ui/button";
 import { Badge } from "@/app/components/ui/badge";
-import { Card } from "@/app/components/ui/card";
 import {
   Select,
   SelectContent,
@@ -29,21 +28,14 @@ import {
   SelectValue,
 } from "@/app/components/ui/select";
 import { cn } from "@/app/lib/utils";
-import useApi, { Additional, Product } from "@/app/hooks/use-api";
+import useApi, { Additional, Item, Product } from "@/app/hooks/use-api";
 import { useCartContext } from "@/app/hooks/cart-context";
 import {
   useCustomization,
   PhotoUploadData,
 } from "@/app/hooks/use-customization";
 import type { CartCustomization } from "@/app/hooks/use-cart";
-import type {
-  ProductRule,
-  RuleAvailableOptions,
-  SelectOption,
-  LayoutPreset,
-  LayoutWithPhotos,
-  RuleType,
-} from "@/app/types/customization";
+import { Model3DViewer } from "./Model3DViewer";
 
 interface RuleValue {
   rule_id: string;
@@ -60,52 +52,62 @@ interface RuleValue {
 
 import AdditionalCard from "./additional-card";
 import Link from "next/link";
+import {
+  LayoutPreset,
+  LayoutWithPhotos,
+  ProductRule,
+  RuleAvailableOptions,
+  RuleType,
+  SelectOption,
+} from "@/app/types/customization";
+import { ProductCard } from "@/app/components/layout/product-card";
+import { useRouter } from "next/navigation";
 
 const formatCurrency = (value: number) =>
   value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
-const serializeAdditionals = (additionals?: string[]) => {
-  if (!additionals || additionals.length === 0) return "[]";
-  return JSON.stringify([...additionals].sort());
-};
+// const serializeAdditionals = (additionals?: string[]) => {
+//   if (!additionals || additionals.length === 0) return "[]";
+//   return JSON.stringify([...additionals].sort());
+// };
 
-const serializeAdditionalColors = (colors?: Record<string, string>) => {
-  if (!colors) return "{}";
-  const normalized = Object.entries(colors).sort(([idA], [idB]) =>
-    idA.localeCompare(idB)
-  );
-  return JSON.stringify(normalized);
-};
+// const serializeAdditionalColors = (colors?: Record<string, string>) => {
+//   if (!colors) return "{}";
+//   const normalized = Object.entries(colors).sort(([idA], [idB]) =>
+//     idA.localeCompare(idB)
+//   );
+//   return JSON.stringify(normalized);
+// };
 
-const serializeCustomizationsSignature = (
-  customizations?: CartCustomization[]
-) => {
-  if (!customizations || customizations.length === 0) return "[]";
+// const serializeCustomizationsSignature = (
+//   customizations?: CartCustomization[]
+// ) => {
+//   if (!customizations || customizations.length === 0) return "[]";
 
-  const normalized = customizations.map((customization) => ({
-    customization_id: customization.customization_id,
-    price_adjustment: customization.price_adjustment || 0,
-    text: customization.text?.trim() || null,
-    selected_option: customization.selected_option || null,
-    selected_item: customization.selected_item
-      ? {
-          original_item: customization.selected_item.original_item,
-          selected_item: customization.selected_item.selected_item,
-        }
-      : null,
-    photos:
-      customization.photos?.map(
-        (photo) =>
-          photo.temp_file_id || photo.preview_url || photo.original_name
-      ) || [],
-  }));
+//   const normalized = customizations.map((customization) => ({
+//     customization_id: customization.customization_id,
+//     price_adjustment: customization.price_adjustment || 0,
+//     text: customization.text?.trim() || null,
+//     selected_option: customization.selected_option || null,
+//     selected_item: customization.selected_item
+//       ? {
+//           original_item: customization.selected_item.original_item,
+//           selected_item: customization.selected_item.selected_item,
+//         }
+//       : null,
+//     photos:
+//       customization.photos?.map(
+//         (photo) =>
+//           photo.temp_file_id || photo.preview_url || photo.original_name
+//       ) || [],
+//   }));
 
-  normalized.sort((a, b) =>
-    a.customization_id.localeCompare(b.customization_id)
-  );
+//   normalized.sort((a, b) =>
+//     a.customization_id.localeCompare(b.customization_id)
+//   );
 
-  return JSON.stringify(normalized);
-};
+//   return JSON.stringify(normalized);
+// };
 
 const formatCustomizationValue = (custom: CartCustomization) => {
   switch (custom.customization_type) {
@@ -203,9 +205,13 @@ const mapRuleTypeToLegacy = (
 };
 
 const ClientProductPage = ({ id }: { id: string }) => {
-  const { getProduct, getAdditionalsByProduct, getProductRulesByType } =
-    useApi();
-  const { cart, addToCart } = useCartContext();
+  const {
+    getProduct,
+    getAdditionalsByProduct,
+    getProductRulesByType,
+    getItemsByProduct,
+  } = useApi();
+  const { addToCart } = useCartContext();
 
   const [product, setProduct] = useState<Product>({} as Product);
   const [loadingProduct, setLoadingProduct] = useState(true);
@@ -218,15 +224,18 @@ const ClientProductPage = ({ id }: { id: string }) => {
   );
   const [productRules, setProductRules] = useState<ProductRule[]>([]);
   const [ruleValues, setRuleValues] = useState<RuleValue[]>([]);
+  const [components, setComponents] = useState<Item[]>([]);
+  const [selectedComponent, setSelectedComponent] = useState<Item | null>(null);
 
   const { uploadFile, deleteFile } = useCustomization(id, "product");
+
+  const router = useRouter();
 
   useEffect(() => {
     const fetchProduct = async () => {
       try {
         const data = await getProduct(id);
         setProduct(data);
-        // Buscar regras de customização do tipo do produto
         if (data.type_id) {
           try {
             const rules = await getProductRulesByType(data.type_id);
@@ -235,6 +244,21 @@ const ClientProductPage = ({ id }: { id: string }) => {
             console.error("Erro ao carregar regras de customização:", error);
             // Não mostrar toast para erro de regras, pois pode ser que não haja regras
           }
+        }
+        // Se o produto já vier com componentes (novo formato), use-os
+        if (
+          data.components &&
+          Array.isArray(data.components) &&
+          data.components.length > 0
+        ) {
+          // cada entry tem shape { id, product_id, item_id, quantity, item }
+          const itemsFromProduct = data.components
+            .map((c: { item?: Item | null }) => c.item)
+            .filter(Boolean) as Item[];
+          setComponents(itemsFromProduct);
+        } else {
+          // caso não venha com components embutidos, buscar via endpoint
+          await fetchComponents();
         }
       } catch (error) {
         console.error("Erro ao carregar produto:", error);
@@ -254,9 +278,29 @@ const ClientProductPage = ({ id }: { id: string }) => {
       }
     };
 
-    fetchProduct();
-    fetchAdditionals();
-  }, [id, getProduct, getAdditionalsByProduct, getProductRulesByType]);
+    const fetchComponents = async () => {
+      try {
+        const data = await getItemsByProduct(id);
+        setComponents(data || []);
+      } catch (error) {
+        console.error("Erro ao carregar componentes:", error);
+        toast.error("Erro ao carregar componentes");
+      }
+    };
+
+    const run = async () => {
+      await fetchProduct();
+      fetchAdditionals();
+    };
+
+    run();
+  }, [
+    id,
+    getProduct,
+    getAdditionalsByProduct,
+    getProductRulesByType,
+    getItemsByProduct,
+  ]);
 
   const sortedCustomizationRules = useMemo(() => {
     return [...productRules].sort(
@@ -474,23 +518,30 @@ const ClientProductPage = ({ id }: { id: string }) => {
     [uploadingMap]
   );
 
-  const currentConfigSignature = useMemo(
-    () => serializeCustomizationsSignature(cartCustomizations),
-    [cartCustomizations]
-  );
+  // const currentConfigSignature = useMemo(
+  //   () => serializeCustomizationsSignature(cartCustomizations),
+  //   [cartCustomizations]
+  // );
 
-  const isCurrentConfigInCart = useMemo(() => {
-    if (!product.id || !cart?.items?.length) return false;
+  const currentImageUrl =
+    selectedComponent?.image_url || product.image_url || "/placeholder.svg";
+  const currentName = selectedComponent?.name || product.name;
 
-    return cart.items.some(
-      (item) =>
-        item.product_id === product.id &&
-        serializeAdditionals(item.additional_ids) === "[]" &&
-        serializeAdditionalColors(item.additional_colors) === "{}" &&
-        serializeCustomizationsSignature(item.customizations) ===
-          currentConfigSignature
+  const shouldShow3D = useMemo(() => {
+    if (!selectedComponent) return false;
+    if (!selectedComponent.allows_customization) return false;
+    if (
+      selectedComponent.type !== "caneca" &&
+      selectedComponent.type !== "quadro"
+    )
+      return false;
+    // Verificar se há regras de layout
+    return productRules.some(
+      (rule) =>
+        rule.rule_type === "LAYOUT_PRESET" ||
+        rule.rule_type === "LAYOUT_WITH_PHOTOS"
     );
-  }, [cart?.items, product.id, currentConfigSignature]);
+  }, [selectedComponent, productRules]);
 
   const handlePhotoUpload = async (
     customizationId: string,
@@ -676,165 +727,177 @@ const ClientProductPage = ({ id }: { id: string }) => {
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           <div className="space-y-4">
-            <Card className="p-4">
-              <div className="relative aspect-square w-full max-w-md mx-auto">
+            <div className="relative aspect-square w-full max-w-md mx-auto">
+              <Button
+                variant={"ghost"}
+                onClick={() => router.back()}
+                className="absolute text-white hover:text-neutral-100 top-3 left-3 z-10 bg-black/30 hover:bg-black/50 backdrop-blur-lg px-0 py-0 p-0 rounded-full shadow-sm cursor-pointer border"
+              >
+                <ChevronLeft size={24} />
+              </Button>
+
+              {shouldShow3D ? (
+                <Model3DViewer
+                  modelUrl={
+                    selectedComponent?.layout_base_id
+                      ? `/api/models/${selectedComponent.layout_base_id}`
+                      : undefined
+                  }
+                  className="w-full h-full"
+                  autoRotate={true}
+                  rotateSpeed={0.3}
+                  baseScale={6}
+                />
+              ) : (
                 <Image
-                  src={product.image_url || "/placeholder.svg"}
-                  alt={product.name}
+                  src={currentImageUrl}
+                  alt={currentName}
                   fill
                   className="object-cover rounded-lg"
                   priority
                 />
-                {hasDiscount && (
-                  <Badge className="absolute top-3 left-3 bg-red-500 hover:bg-red-600">
-                    -{product.discount}%
-                  </Badge>
-                )}
-              </div>
-            </Card>
+              )}
+              {hasDiscount && (
+                <Badge className="absolute top-3 left-3 bg-red-500 hover:bg-red-600">
+                  -{product.discount}%
+                </Badge>
+              )}
+            </div>
 
+            <h2 className="font-semibold text-lg">Componentes</h2>
             <div className="flex gap-2 overflow-x-auto">
-              <div className="w-16 h-16 bg-gray-200 rounded border-2 border-gray-300 flex-shrink-0" />
-              <div className="w-16 h-16 bg-gray-200 rounded border-2 border-gray-300 flex-shrink-0" />
-              <div className="w-16 h-16 bg-gray-200 rounded border-2 border-gray-300 flex-shrink-0" />
+              <>
+                <div
+                  key="product-default"
+                  className={cn(
+                    "relative w-[100px] h-[100px] bg-gray-200 rounded-lg border-2 flex-shrink-0 cursor-pointer",
+                    selectedComponent === null
+                      ? "border-blue-500 ring-2 ring-blue-100"
+                      : "border-gray-300"
+                  )}
+                  title="Imagem padrão do produto"
+                >
+                  <Button
+                    asChild
+                    className="w-full h-full p-0 rounded-lg overflow-hidden"
+                    onClick={() => setSelectedComponent(null)}
+                    aria-label="Selecionar imagem do produto"
+                  >
+                    <Image
+                      src={product.image_url || "/placeholder.svg"}
+                      alt={product.name || "Produto"}
+                      fill
+                      className="object-cover rounded-lg"
+                      priority
+                    />
+                  </Button>
+                </div>
+
+                {components &&
+                  components.length > 0 &&
+                  components.map((component) => (
+                    <div
+                      key={component.id}
+                      className={cn(
+                        "relative w-[100px] h-[100px] bg-gray-200 rounded-lg border-2 flex-shrink-0 cursor-pointer",
+                        selectedComponent?.id === component.id
+                          ? "border-blue-500 ring-2 ring-blue-100"
+                          : "border-gray-300"
+                      )}
+                      title={component.name}
+                    >
+                      <Button
+                        asChild
+                        className="w-full h-full p-0 rounded-lg overflow-hidden"
+                        onClick={() => setSelectedComponent(component)}
+                        aria-label={`Selecionar componente ${component.name}`}
+                      >
+                        <Image
+                          src={component.image_url || "/placeholder.svg"}
+                          alt={component.name}
+                          fill
+                          className="object-cover rounded-lg"
+                          priority
+                        />
+                      </Button>
+                    </div>
+                  ))}
+              </>
             </div>
           </div>
 
           <div className="space-y-6">
-            <div>
-              <h1 className="text-2xl lg:text-3xl font-bold text-gray-900 mb-2">
-                {product.name}
-              </h1>
-              <div className="flex items-center gap-2 mb-4">
-                <div className="flex items-center text-yellow-400">
-                  {[...Array(5)].map((_, i) => (
-                    <Star key={i} className="w-4 h-4 fill-current" />
-                  ))}
+            <h1 className="text-lg lg:text-2xl font-bold text-gray-900 mb-2 tracking-tight">
+              {product.name}
+            </h1>
+
+            <div className="space-y-2">
+              {hasDiscount ? (
+                <div className="flex flex-col gap-1">
+                  <div className="flex items-center gap-3">
+                    <span className="text-3xl font-base text-gray-900">
+                      {formatCurrency(basePrice)}
+                    </span>
+                    <span className="text-lg text-gray-500 line-through">
+                      {formatCurrency(product.price)}
+                    </span>
+                    <Badge variant="destructive">-{product.discount}%</Badge>
+                  </div>
+                  <p className="text-sm text-green-600 font-medium">
+                    Você economiza {formatCurrency(product.price - basePrice)}
+                  </p>
                 </div>
-                <span className="text-sm text-gray-600">(0 avaliações)</span>
+              ) : (
+                <span className="text-3xl font-base text-gray-900">
+                  {formatCurrency(product.price || 0)}
+                </span>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Quantidade
+              </label>
+              <div className="flex items-center gap-3">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setQuantity(Math.max(1, quantity - 1))}
+                  disabled={quantity <= 1}
+                >
+                  <Minus className="w-4 h-4" />
+                </Button>
+                <span className="w-12 text-center font-medium">{quantity}</span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setQuantity(quantity + 1)}
+                >
+                  <Plus className="w-4 h-4" />
+                </Button>
               </div>
             </div>
 
-            <Card className="p-6 space-y-4">
-              <div className="space-y-2">
-                {hasDiscount ? (
-                  <div className="flex flex-col gap-1">
-                    <div className="flex items-center gap-3">
-                      <span className="text-3xl font-bold text-gray-900">
-                        {formatCurrency(basePrice)}
-                      </span>
-                      <span className="text-lg text-gray-500 line-through">
-                        {formatCurrency(product.price)}
-                      </span>
-                      <Badge variant="destructive">-{product.discount}%</Badge>
-                    </div>
-                    <p className="text-sm text-green-600 font-medium">
-                      Você economiza {formatCurrency(product.price - basePrice)}
-                    </p>
-                  </div>
-                ) : (
-                  <span className="text-3xl font-bold text-gray-900">
-                    {formatCurrency(product.price || 0)}
-                  </span>
-                )}
-              </div>
+            <Button
+              onClick={handleAddToCart}
+              disabled={addingToCart || isUploading}
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 text-lg font-medium"
+              size="lg"
+            >
+              {addingToCart ? (
+                <>
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2" />
+                  Adicionando...
+                </>
+              ) : (
+                <>
+                  <ShoppingCart className="w-5 h-5 mr-2" />
+                  Adicionar por {formatCurrency(totalPriceForQuantity)}
+                </>
+              )}
+            </Button>
 
-              <div className="rounded-md border border-orange-200 bg-orange-50 p-4 space-y-2">
-                <div className="flex items-center justify-between text-sm text-orange-900">
-                  <span>Personalizações</span>
-                  <span>{formatCurrency(customizationTotal)}</span>
-                </div>
-                {cartCustomizations.length > 0 && (
-                  <ul className="space-y-1 text-xs text-orange-900/80">
-                    {cartCustomizations.map((customization) => (
-                      <li
-                        key={customization.customization_id}
-                        className="flex items-start gap-2"
-                      >
-                        <span className="font-medium text-orange-950">
-                          {customization.title}:
-                        </span>
-                        <span className="flex-1">
-                          {formatCustomizationValue(customization)}
-                          {customization.price_adjustment ? (
-                            <span className="ml-1 font-semibold">
-                              ({formatCurrency(customization.price_adjustment)})
-                            </span>
-                          ) : null}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-
-              <div className="flex items-center justify-between pt-3 border-t">
-                <span className="text-lg font-semibold text-gray-900">
-                  Total por unidade
-                </span>
-                <span className="text-2xl font-bold text-gray-900">
-                  {formatCurrency(unitPriceWithCustomizations)}
-                </span>
-              </div>
-            </Card>
-
-            <Card className="p-6 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Quantidade
-                </label>
-                <div className="flex items-center gap-3">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                    disabled={quantity <= 1}
-                  >
-                    <Minus className="w-4 h-4" />
-                  </Button>
-                  <span className="w-12 text-center font-medium">
-                    {quantity}
-                  </span>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setQuantity(quantity + 1)}
-                  >
-                    <Plus className="w-4 h-4" />
-                  </Button>
-                </div>
-              </div>
-
-              <Button
-                onClick={handleAddToCart}
-                disabled={addingToCart || isUploading}
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 text-lg font-medium"
-                size="lg"
-              >
-                {addingToCart ? (
-                  <>
-                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2" />
-                    Adicionando...
-                  </>
-                ) : isCurrentConfigInCart ? (
-                  <>
-                    <Check className="w-5 h-5 mr-2" />
-                    Configuração no carrinho
-                  </>
-                ) : (
-                  <>
-                    <ShoppingCart className="w-5 h-5 mr-2" />
-                    Adicionar por {formatCurrency(totalPriceForQuantity)}
-                  </>
-                )}
-              </Button>
-
-              <div className="text-xs text-gray-600 text-center">
-                Valor total inclui {formatCurrency(customizationTotal)} em
-                personalizações.
-              </div>
-
-              <div className="flex gap-3 pt-2">
+            {/* <div className="flex gap-3 pt-2">
                 <Button variant="outline" className="flex-1">
                   <Heart className="w-4 h-4 mr-2" />
                   Favoritar
@@ -843,344 +906,411 @@ const ClientProductPage = ({ id }: { id: string }) => {
                   <Share2 className="w-4 h-4 mr-2" />
                   Compartilhar
                 </Button>
-              </div>
-            </Card>
+              </div> */}
 
-            <Card className="p-6 space-y-4">
-              <div className="flex items-center gap-2">
-                <h2 className="text-lg font-semibold text-gray-900">
-                  Personalize seu pedido
-                </h2>
-                {/* Loader de customização removido (não aplicável ao novo fluxo) */}
-              </div>
+            {/* {sortedCustomizationRules.length === 0 && true ? (
+              <p className="text-sm text-muted-foreground">
+                Este produto não possui personalizações configuradas.
+              </p>
+            ) : (
+              <div className="space-y-5">
+                {sortedCustomizationRules.map((rule) => {
+                  const value = ruleValues.find((v) => v.rule_id === rule.id);
+                  const cartCustomization = cartCustomizations.find(
+                    (c) => c.customization_id === rule.id
+                  );
+                  const currentPhotos = value?.photos || [];
+                  const isMissing = missingRequiredFields.includes(rule.title);
 
-              {sortedCustomizationRules.length === 0 && true ? (
-                <p className="text-sm text-muted-foreground">
-                  Este produto não possui personalizações configuradas.
-                </p>
-              ) : (
-                <div className="space-y-5">
-                  {sortedCustomizationRules.map((rule) => {
-                    const value = ruleValues.find((v) => v.rule_id === rule.id);
-                    const cartCustomization = cartCustomizations.find(
-                      (c) => c.customization_id === rule.id
-                    );
-                    const currentPhotos = value?.photos || [];
-                    const isMissing = missingRequiredFields.includes(
-                      rule.title
-                    );
+                  const maxAllowed = rule.max_items || 10; // default fallback
 
-                    const maxAllowed = rule.max_items || 10; // default fallback
+                  const remainingPhotos = maxAllowed
+                    ? Math.max(maxAllowed - currentPhotos.length, 0)
+                    : undefined;
 
-                    const remainingPhotos = maxAllowed
-                      ? Math.max(maxAllowed - currentPhotos.length, 0)
-                      : undefined;
-
-                    return (
-                      <div
-                        key={rule.id}
-                        className={cn(
-                          "rounded-lg border border-border bg-muted/40 p-4 space-y-3",
-                          isMissing &&
-                            "border-destructive/60 bg-red-50/60 ring-1 ring-destructive/30"
-                        )}
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="space-y-1">
-                            <div className="flex items-center gap-2">
-                              <h3 className="text-sm font-semibold text-foreground">
-                                {rule.title}
-                              </h3>
-                              {rule.required && (
-                                <Badge
-                                  variant="destructive"
-                                  className="text-[10px] uppercase"
-                                >
-                                  Obrigatório
-                                </Badge>
-                              )}
-                              {cartCustomization?.price_adjustment ? (
-                                <Badge
-                                  variant="outline"
-                                  className="text-[10px]"
-                                >
-                                  +
-                                  {formatCurrency(
-                                    cartCustomization.price_adjustment
-                                  )}
-                                </Badge>
-                              ) : null}
-                            </div>
-                            {rule.description && (
-                              <p className="text-xs text-muted-foreground">
-                                {rule.description}
-                              </p>
+                  return (
+                    <div
+                      key={rule.id}
+                      className={cn(
+                        "rounded-lg border border-border bg-muted/40 p-4 space-y-3",
+                        isMissing &&
+                          "border-destructive/60 bg-red-50/60 ring-1 ring-destructive/30"
+                      )}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            <h3 className="text-sm font-semibold text-foreground">
+                              {rule.title}
+                            </h3>
+                            {rule.required && (
+                              <Badge
+                                variant="destructive"
+                                className="text-[10px] uppercase"
+                              >
+                                Obrigatório
+                              </Badge>
                             )}
+                            {cartCustomization?.price_adjustment ? (
+                              <Badge variant="outline" className="text-[10px]">
+                                +
+                                {formatCurrency(
+                                  cartCustomization.price_adjustment
+                                )}
+                              </Badge>
+                            ) : null}
                           </div>
-                          {isMissing && (
-                            <span className="inline-flex items-center gap-1 rounded-full bg-destructive/10 px-2 py-1 text-[11px] font-medium text-destructive">
-                              <AlertCircle className="h-3 w-3" /> Necessário
-                            </span>
+                          {rule.description && (
+                            <p className="text-xs text-muted-foreground">
+                              {rule.description}
+                            </p>
                           )}
                         </div>
+                        {isMissing && (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-destructive/10 px-2 py-1 text-[11px] font-medium text-destructive">
+                            <AlertCircle className="h-3 w-3" /> Necessário
+                          </span>
+                        )}
+                      </div>
 
-                        {(() => {
-                          switch (rule.rule_type) {
-                            case "PHOTO_UPLOAD":
-                              return (
-                                <div className="space-y-3">
-                                  <div className="flex flex-col gap-2 rounded-md border-2 border-dashed border-border/60 bg-white p-4 text-sm text-muted-foreground">
-                                    <div className="flex items-center gap-2 text-foreground">
-                                      <Images className="h-5 w-5" />
-                                      <span>
-                                        Envie fotos para personalizar seu pedido
-                                      </span>
-                                    </div>
-                                    {maxAllowed ? (
-                                      <span className="text-xs text-muted-foreground">
-                                        Você pode enviar até {maxAllowed}{" "}
-                                        foto(s). Restam {remainingPhotos}.
-                                      </span>
-                                    ) : (
-                                      <span className="text-xs text-muted-foreground">
-                                        Você pode enviar múltiplas fotos (limite
-                                        dinâmico).
-                                      </span>
-                                    )}
-                                    <label className="inline-flex items-center gap-2 rounded-md bg-blue-50 px-3 py-2 text-xs font-medium text-blue-700 hover:bg-blue-100 cursor-pointer w-fit">
-                                      <UploadCloud className="h-4 w-4" />
-                                      Selecionar arquivos
-                                      <input
-                                        type="file"
-                                        accept="image/*"
-                                        multiple
-                                        className="hidden"
-                                        onChange={(event) => {
-                                          if (!event.target.files) return;
-                                          handlePhotoUpload(
-                                            rule.id,
-                                            rule,
-                                            event.target.files
-                                          );
-                                          event.target.value = "";
-                                        }}
-                                        disabled={
-                                          isUploading ||
-                                          (maxAllowed
-                                            ? remainingPhotos === 0
-                                            : false)
-                                        }
-                                      />
-                                    </label>
+                      {(() => {
+                        switch (rule.rule_type) {
+                          case "IMAGES":
+                            return (
+                              <div className="space-y-3">
+                                <div className="flex flex-col gap-2 rounded-md border-2 border-dashed border-border/60 bg-white p-4 text-sm text-muted-foreground">
+                                  <div className="flex items-center gap-2 text-foreground">
+                                    <Images className="h-5 w-5" />
+                                    <span>
+                                      Envie fotos para personalizar seu pedido
+                                    </span>
                                   </div>
-
-                                  {currentPhotos.length > 0 ? (
-                                    <ul className="space-y-2 text-xs">
-                                      {currentPhotos.map((photo) => (
-                                        <li
-                                          key={photo.temp_file_id}
-                                          className="flex items-center justify-between rounded-md border border-border bg-white px-3 py-2"
-                                        >
-                                          <div className="flex items-center gap-2">
-                                            <Images className="h-4 w-4 text-muted-foreground" />
-                                            <span
-                                              className="truncate max-w-[200px]"
-                                              title={photo.original_name}
-                                            >
-                                              {photo.original_name}
-                                            </span>
-                                          </div>
-                                          <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            onClick={() =>
-                                              handleRemovePhoto(
-                                                rule.id,
-                                                photo.temp_file_id
-                                              )
-                                            }
-                                            className="text-destructive hover:bg-destructive/10"
-                                          >
-                                            <Trash2 className="h-4 w-4" />
-                                          </Button>
-                                        </li>
-                                      ))}
-                                    </ul>
+                                  {maxAllowed ? (
+                                    <span className="text-xs text-muted-foreground">
+                                      Você pode enviar até {maxAllowed} foto(s).
+                                      Restam {remainingPhotos}.
+                                    </span>
                                   ) : (
-                                    <p className="text-xs text-muted-foreground italic">
-                                      Nenhuma foto enviada ainda.
-                                    </p>
+                                    <span className="text-xs text-muted-foreground">
+                                      Você pode enviar múltiplas fotos (limite
+                                      dinâmico).
+                                    </span>
                                   )}
+                                  <label className="inline-flex items-center gap-2 rounded-md bg-blue-50 px-3 py-2 text-xs font-medium text-blue-700 hover:bg-blue-100 cursor-pointer w-fit">
+                                    <UploadCloud className="h-4 w-4" />
+                                    Selecionar arquivos
+                                    <input
+                                      type="file"
+                                      accept="image/*"
+                                      multiple
+                                      className="hidden"
+                                      onChange={(event) => {
+                                        if (!event.target.files) return;
+                                        handlePhotoUpload(
+                                          rule.id,
+                                          rule,
+                                          event.target.files
+                                        );
+                                        event.target.value = "";
+                                      }}
+                                      disabled={
+                                        isUploading ||
+                                        (maxAllowed
+                                          ? remainingPhotos === 0
+                                          : false)
+                                      }
+                                    />
+                                  </label>
                                 </div>
-                              );
 
-                            case "TEXT_INPUT":
-                              return (
-                                <div className="space-y-2">
-                                  <div className="flex items-center gap-2 text-muted-foreground text-xs">
-                                    <FileText className="h-4 w-4" />
-                                    Escreva uma mensagem personalizada
-                                  </div>
-                                  <textarea
-                                    className="w-full min-h-[120px] resize-none rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                                    placeholder="Digite aqui sua mensagem"
-                                    value={value?.text || ""}
-                                    onChange={(event) =>
-                                      updateRuleValue(rule.id, {
-                                        text: event.target.value,
-                                      })
-                                    }
-                                  />
-                                </div>
-                              );
-
-                            case "OPTION_SELECT":
-                              return (
-                                <div className="space-y-2">
-                                  <span className="text-xs text-muted-foreground">
-                                    Escolha uma das opções disponíveis.
-                                  </span>
-                                  <Select
-                                    value={value?.selected_option || ""}
-                                    onValueChange={(selectedValue) =>
-                                      updateRuleValue(rule.id, {
-                                        selected_option: selectedValue,
-                                      })
-                                    }
-                                  >
-                                    <SelectTrigger>
-                                      <SelectValue placeholder="Selecione uma opção" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      {isSelectOptions(
-                                        rule.available_options
-                                      ) ? (
-                                        rule.available_options.map((option) => (
-                                          <SelectItem
-                                            key={option.value}
-                                            value={option.value}
+                                {currentPhotos.length > 0 ? (
+                                  <ul className="space-y-2 text-xs">
+                                    {currentPhotos.map((photo) => (
+                                      <li
+                                        key={photo.temp_file_id}
+                                        className="flex items-center justify-between rounded-md border border-border bg-white px-3 py-2"
+                                      >
+                                        <div className="flex items-center gap-2">
+                                          <Images className="h-4 w-4 text-muted-foreground" />
+                                          <span
+                                            className="truncate max-w-[200px]"
+                                            title={photo.original_name}
                                           >
-                                            <div className="flex items-center justify-between gap-2">
-                                              <span>{option.label}</span>
-                                              {option.price_adjustment ? (
-                                                <span className="text-xs text-emerald-600 font-semibold">
-                                                  +
-                                                  {formatCurrency(
-                                                    option.price_adjustment
-                                                  )}
-                                                </span>
-                                              ) : null}
-                                            </div>
-                                          </SelectItem>
-                                        ))
-                                      ) : (
+                                            {photo.original_name}
+                                          </span>
+                                        </div>
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          onClick={() =>
+                                            handleRemovePhoto(
+                                              rule.id,
+                                              photo.temp_file_id
+                                            )
+                                          }
+                                          className="text-destructive hover:bg-destructive/10"
+                                        >
+                                          <Trash2 className="h-4 w-4" />
+                                        </Button>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                ) : (
+                                  <p className="text-xs text-muted-foreground italic">
+                                    Nenhuma foto enviada ainda.
+                                  </p>
+                                )}
+                              </div>
+                            );
+
+                          case "TEXT":
+                            return (
+                              <div className="space-y-2">
+                                <div className="flex items-center gap-2 text-muted-foreground text-xs">
+                                  <FileText className="h-4 w-4" />
+                                  Escreva uma mensagem personalizada
+                                </div>
+                                <textarea
+                                  className="w-full min-h-[120px] resize-none rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                                  placeholder="Digite aqui sua mensagem"
+                                  value={value?.text || ""}
+                                  onChange={(event) =>
+                                    updateRuleValue(rule.id, {
+                                      text: event.target.value,
+                                    })
+                                  }
+                                />
+                              </div>
+                            );
+
+                          case "OPTION_SELECT":
+                            return (
+                              <div className="space-y-2">
+                                <span className="text-xs text-muted-foreground">
+                                  Escolha uma das opções disponíveis.
+                                </span>
+                                <Select
+                                  value={value?.selected_option || ""}
+                                  onValueChange={(selectedValue) =>
+                                    updateRuleValue(rule.id, {
+                                      selected_option: selectedValue,
+                                    })
+                                  }
+                                >
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="Selecione uma opção" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {(() => {
+                                      if (
+                                        isSelectOptions(rule.available_options)
+                                      ) {
+                                        return rule.available_options.map(
+                                          (option) => (
+                                            <SelectItem
+                                              key={option.value}
+                                              value={option.value}
+                                            >
+                                              <div className="flex items-center justify-between gap-2">
+                                                <span>{option.label}</span>
+                                                {option.price_adjustment ? (
+                                                  <span className="text-xs text-emerald-600 font-semibold">
+                                                    +
+                                                    {formatCurrency(
+                                                      option.price_adjustment
+                                                    )}
+                                                  </span>
+                                                ) : null}
+                                              </div>
+                                            </SelectItem>
+                                          )
+                                        );
+                                      }
+                                      return (
                                         <div className="px-2 py-2 text-xs text-muted-foreground">
                                           Nenhuma opção configurada
                                         </div>
-                                      )}
-                                    </SelectContent>
-                                  </Select>
-                                </div>
-                              );
-
-                            case "ITEM_SUBSTITUTION": {
-                              const substitutionOptions = isSubstitutionOptions(
-                                rule.available_options
-                              )
-                                ? rule.available_options.items.flatMap((item) =>
-                                    item.available_substitutes.map(
-                                      (substitute) => ({
-                                        value: `${item.original_item}__${substitute.item}`,
-                                        label: `${item.original_item} → ${substitute.item}`,
-                                        price_adjustment:
-                                          substitute.price_adjustment,
-                                        original_item: item.original_item,
-                                        selected_item: substitute.item,
-                                      })
-                                    )
-                                  )
-                                : [];
-
-                              return (
-                                <div className="space-y-2">
-                                  <span className="text-xs text-muted-foreground">
-                                    Escolha qual item deseja substituir.
-                                  </span>
-                                  <Select
-                                    value={
-                                      value?.selected_item
-                                        ? `${value.selected_item.original_item}__${value.selected_item.selected_item}`
-                                        : ""
-                                    }
-                                    onValueChange={(selectedValue) => {
-                                      const [originalItem, selectedItem] =
-                                        selectedValue.split("__");
-                                      const option = substitutionOptions.find(
-                                        (opt) => opt.value === selectedValue
                                       );
-                                      updateRuleValue(rule.id, {
-                                        selected_item: {
-                                          original_item: originalItem,
-                                          selected_item: selectedItem,
-                                          price_adjustment:
-                                            option?.price_adjustment || 0,
-                                        },
-                                      });
-                                    }}
-                                  >
-                                    <SelectTrigger>
-                                      <SelectValue placeholder="Selecione a substituição" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      {substitutionOptions.length > 0 ? (
-                                        substitutionOptions.map((option) => (
-                                          <SelectItem
-                                            key={option.value}
-                                            value={option.value}
-                                          >
-                                            <div className="flex items-center justify-between gap-2">
-                                              <span className="truncate">
-                                                {option.label}
-                                              </span>
-                                              {option.price_adjustment ? (
-                                                <span className="text-xs text-emerald-600 font-semibold">
-                                                  +
-                                                  {formatCurrency(
-                                                    option.price_adjustment
-                                                  )}
-                                                </span>
-                                              ) : null}
-                                            </div>
-                                          </SelectItem>
-                                        ))
-                                      ) : (
-                                        <div className="px-2 py-2 text-xs text-muted-foreground">
-                                          Nenhuma substituição disponível
-                                        </div>
-                                      )}
-                                    </SelectContent>
-                                  </Select>
-                                </div>
-                              );
+                                    })()}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                            );
+
+                          case "ITEM_SUBSTITUTION": {
+                            let substitutionOptions: Array<{
+                              value: string;
+                              label: string;
+                              price_adjustment: number;
+                              original_item: string;
+                              selected_item: string;
+                            }> = [];
+                            if (isSubstitutionOptions(rule.available_options)) {
+                              substitutionOptions =
+                                rule.available_options.items.flatMap((item) =>
+                                  item.available_substitutes.map(
+                                    (substitute) => ({
+                                      value: `${item.original_item}__${substitute.item}`,
+                                      label: `${item.original_item} → ${substitute.item}`,
+                                      price_adjustment:
+                                        substitute.price_adjustment,
+                                      original_item: item.original_item,
+                                      selected_item: substitute.item,
+                                    })
+                                  )
+                                );
                             }
 
-                            case "LAYOUT_PRESET": {
-                              const layoutOptions = isLayoutPresetOptions(
-                                rule.available_options
-                              )
-                                ? rule.available_options
-                                : [];
+                            return (
+                              <div className="space-y-2">
+                                <span className="text-xs text-muted-foreground">
+                                  Escolha qual item deseja substituir.
+                                </span>
+                                <Select
+                                  value={
+                                    value?.selected_item
+                                      ? `${value.selected_item.original_item}__${value.selected_item.selected_item}`
+                                      : ""
+                                  }
+                                  onValueChange={(selectedValue) => {
+                                    const [originalItem, selectedItem] =
+                                      selectedValue.split("__");
+                                    const option = substitutionOptions.find(
+                                      (opt) => opt.value === selectedValue
+                                    );
+                                    updateRuleValue(rule.id, {
+                                      selected_item: {
+                                        original_item: originalItem,
+                                        selected_item: selectedItem,
+                                        price_adjustment:
+                                          option?.price_adjustment || 0,
+                                      },
+                                    });
+                                  }}
+                                >
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="Selecione a substituição" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {substitutionOptions.length > 0 ? (
+                                      substitutionOptions.map((option) => (
+                                        <SelectItem
+                                          key={option.value}
+                                          value={option.value}
+                                        >
+                                          <div className="flex items-center justify-between gap-2">
+                                            <span className="truncate">
+                                              {option.label}
+                                            </span>
+                                            {option.price_adjustment ? (
+                                              <span className="text-xs text-emerald-600 font-semibold">
+                                                +
+                                                {formatCurrency(
+                                                  option.price_adjustment
+                                                )}
+                                              </span>
+                                            ) : null}
+                                          </div>
+                                        </SelectItem>
+                                      ))
+                                    ) : (
+                                      <div className="px-2 py-2 text-xs text-muted-foreground">
+                                        Nenhuma substituição disponível
+                                      </div>
+                                    )}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                            );
+                          }
 
-                              return (
+                          case "LAYOUT_PRESET": {
+                            let layoutOptions: LayoutPreset[] = [];
+                            if (isLayoutPresetOptions(rule.available_options)) {
+                              layoutOptions = rule.available_options;
+                            }
+
+                            return (
+                              <div className="space-y-2">
+                                <span className="text-xs text-muted-foreground">
+                                  Selecione um layout pronto para seu produto.
+                                </span>
+                                <Select
+                                  value={value?.selected_layout || ""}
+                                  onValueChange={(selectedLayoutId) =>
+                                    updateRuleValue(rule.id, {
+                                      selected_layout: selectedLayoutId,
+                                    })
+                                  }
+                                >
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="Selecione um layout" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {layoutOptions.length > 0 ? (
+                                      layoutOptions.map((layout) => (
+                                        <SelectItem
+                                          key={layout.id}
+                                          value={layout.id}
+                                        >
+                                          <div className="flex items-center justify-between gap-2">
+                                            <span className="truncate">
+                                              {layout.name}
+                                            </span>
+                                            {layout.price_adjustment ? (
+                                              <span className="text-xs text-emerald-600 font-semibold">
+                                                +
+                                                {formatCurrency(
+                                                  layout.price_adjustment
+                                                )}
+                                              </span>
+                                            ) : null}
+                                          </div>
+                                        </SelectItem>
+                                      ))
+                                    ) : (
+                                      <div className="px-2 py-2 text-xs text-muted-foreground">
+                                        Nenhum layout disponível
+                                      </div>
+                                    )}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                            );
+                          }
+
+                          case "LAYOUT_WITH_PHOTOS": {
+                            let layoutOptions: LayoutWithPhotos[] = [];
+                            if (
+                              isLayoutWithPhotosOptions(rule.available_options)
+                            ) {
+                              layoutOptions = rule.available_options;
+                            }
+                            const selectedLayout = layoutOptions.find(
+                              (l) => l.id === value?.selected_layout
+                            );
+                            const maxSlots =
+                              selectedLayout?.photo_slots ||
+                              rule.max_items ||
+                              undefined;
+                            const currentPhotos = value?.photos || [];
+                            const remainingSlots = maxSlots
+                              ? Math.max(maxSlots - currentPhotos.length, 0)
+                              : undefined;
+
+                            return (
+                              <div className="space-y-3">
                                 <div className="space-y-2">
                                   <span className="text-xs text-muted-foreground">
-                                    Selecione um layout pronto para seu produto.
+                                    Escolha um layout com fotos e envie as
+                                    imagens.
                                   </span>
                                   <Select
                                     value={value?.selected_layout || ""}
                                     onValueChange={(selectedLayoutId) =>
                                       updateRuleValue(rule.id, {
                                         selected_layout: selectedLayoutId,
+                                        photos: [], // resetar fotos ao trocar de layout
                                       })
                                     }
                                   >
@@ -1198,14 +1328,9 @@ const ClientProductPage = ({ id }: { id: string }) => {
                                               <span className="truncate">
                                                 {layout.name}
                                               </span>
-                                              {layout.price_adjustment ? (
-                                                <span className="text-xs text-emerald-600 font-semibold">
-                                                  +
-                                                  {formatCurrency(
-                                                    layout.price_adjustment
-                                                  )}
-                                                </span>
-                                              ) : null}
+                                              <span className="text-[10px] text-muted-foreground">
+                                                {layout.photo_slots} foto(s)
+                                              </span>
                                             </div>
                                           </SelectItem>
                                         ))
@@ -1217,228 +1342,165 @@ const ClientProductPage = ({ id }: { id: string }) => {
                                     </SelectContent>
                                   </Select>
                                 </div>
-                              );
-                            }
 
-                            case "LAYOUT_WITH_PHOTOS": {
-                              const layoutOptions = isLayoutWithPhotosOptions(
-                                rule.available_options
-                              )
-                                ? rule.available_options
-                                : [];
-                              const selectedLayout = layoutOptions.find(
-                                (l) => l.id === value?.selected_layout
-                              );
-                              const maxSlots =
-                                selectedLayout?.photo_slots ||
-                                rule.max_items ||
-                                undefined;
-                              const currentPhotos = value?.photos || [];
-                              const remainingSlots = maxSlots
-                                ? Math.max(maxSlots - currentPhotos.length, 0)
-                                : undefined;
-
-                              return (
-                                <div className="space-y-3">
-                                  <div className="space-y-2">
-                                    <span className="text-xs text-muted-foreground">
-                                      Escolha um layout com fotos e envie as
-                                      imagens.
+                                <div className="flex flex-col gap-2 rounded-md border-2 border-dashed border-border/60 bg-white p-4 text-sm text-muted-foreground">
+                                  <div className="flex items-center gap-2 text-foreground">
+                                    <Images className="h-5 w-5" />
+                                    <span>
+                                      Envie fotos para preencher o layout
+                                      selecionado
                                     </span>
-                                    <Select
-                                      value={value?.selected_layout || ""}
-                                      onValueChange={(selectedLayoutId) =>
-                                        updateRuleValue(rule.id, {
-                                          selected_layout: selectedLayoutId,
-                                          photos: [], // resetar fotos ao trocar de layout
-                                        })
-                                      }
-                                    >
-                                      <SelectTrigger>
-                                        <SelectValue placeholder="Selecione um layout" />
-                                      </SelectTrigger>
-                                      <SelectContent>
-                                        {layoutOptions.length > 0 ? (
-                                          layoutOptions.map((layout) => (
-                                            <SelectItem
-                                              key={layout.id}
-                                              value={layout.id}
-                                            >
-                                              <div className="flex items-center justify-between gap-2">
-                                                <span className="truncate">
-                                                  {layout.name}
-                                                </span>
-                                                <span className="text-[10px] text-muted-foreground">
-                                                  {layout.photo_slots} foto(s)
-                                                </span>
-                                              </div>
-                                            </SelectItem>
-                                          ))
-                                        ) : (
-                                          <div className="px-2 py-2 text-xs text-muted-foreground">
-                                            Nenhum layout disponível
-                                          </div>
-                                        )}
-                                      </SelectContent>
-                                    </Select>
                                   </div>
-
-                                  <div className="flex flex-col gap-2 rounded-md border-2 border-dashed border-border/60 bg-white p-4 text-sm text-muted-foreground">
-                                    <div className="flex items-center gap-2 text-foreground">
-                                      <Images className="h-5 w-5" />
-                                      <span>
-                                        Envie fotos para preencher o layout
-                                        selecionado
-                                      </span>
-                                    </div>
-                                    {maxSlots ? (
-                                      <span className="text-xs text-muted-foreground">
-                                        Slots: {currentPhotos.length}/{maxSlots}
-                                      </span>
-                                    ) : (
-                                      <span className="text-xs text-muted-foreground">
-                                        Selecione um layout para ver o limite de
-                                        fotos.
-                                      </span>
-                                    )}
-                                    <label className="inline-flex items-center gap-2 rounded-md bg-blue-50 px-3 py-2 text-xs font-medium text-blue-700 hover:bg-blue-100 cursor-pointer w-fit">
-                                      <UploadCloud className="h-4 w-4" />
-                                      Selecionar arquivos
-                                      <input
-                                        type="file"
-                                        accept="image/*"
-                                        multiple
-                                        className="hidden"
-                                        onChange={(event) => {
-                                          if (!event.target.files) return;
-                                          handlePhotoUpload(
-                                            rule.id,
-                                            rule,
-                                            event.target.files
-                                          );
-                                          event.target.value = "";
-                                        }}
-                                        disabled={
-                                          isUploading ||
-                                          !value?.selected_layout ||
-                                          (remainingSlots !== undefined &&
-                                            remainingSlots === 0)
-                                        }
-                                      />
-                                    </label>
-                                  </div>
-
-                                  {currentPhotos.length > 0 ? (
-                                    <ul className="space-y-2 text-xs">
-                                      {currentPhotos.map((photo) => (
-                                        <li
-                                          key={photo.temp_file_id}
-                                          className="flex items-center justify-between rounded-md border border-border bg-white px-3 py-2"
-                                        >
-                                          <div className="flex items-center gap-2">
-                                            <Images className="h-4 w-4 text-muted-foreground" />
-                                            <span
-                                              className="truncate max-w-[200px]"
-                                              title={photo.original_name}
-                                            >
-                                              {photo.original_name}
-                                            </span>
-                                          </div>
-                                          <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            onClick={() =>
-                                              handleRemovePhoto(
-                                                rule.id,
-                                                photo.temp_file_id!
-                                              )
-                                            }
-                                            className="text-destructive hover:bg-destructive/10"
-                                          >
-                                            <Trash2 className="h-4 w-4" />
-                                          </Button>
-                                        </li>
-                                      ))}
-                                    </ul>
+                                  {maxSlots ? (
+                                    <span className="text-xs text-muted-foreground">
+                                      Slots: {currentPhotos.length}/{maxSlots}
+                                    </span>
                                   ) : (
-                                    <p className="text-xs text-muted-foreground italic">
-                                      Nenhuma foto enviada ainda.
-                                    </p>
+                                    <span className="text-xs text-muted-foreground">
+                                      Selecione um layout para ver o limite de
+                                      fotos.
+                                    </span>
                                   )}
+                                  <label className="inline-flex items-center gap-2 rounded-md bg-blue-50 px-3 py-2 text-xs font-medium text-blue-700 hover:bg-blue-100 cursor-pointer w-fit">
+                                    <UploadCloud className="h-4 w-4" />
+                                    Selecionar arquivos
+                                    <input
+                                      type="file"
+                                      accept="image/*"
+                                      multiple
+                                      className="hidden"
+                                      onChange={(event) => {
+                                        if (!event.target.files) return;
+                                        handlePhotoUpload(
+                                          rule.id,
+                                          rule,
+                                          event.target.files
+                                        );
+                                        event.target.value = "";
+                                      }}
+                                      disabled={
+                                        isUploading ||
+                                        !value?.selected_layout ||
+                                        (remainingSlots !== undefined &&
+                                          remainingSlots === 0)
+                                      }
+                                    />
+                                  </label>
                                 </div>
-                              );
-                            }
 
-                            // TODO: Implementar UI para LAYOUT_PRESET e LAYOUT_WITH_PHOTOS
-                            // Por enquanto, não renderiza nada para esses tipos
-                            default:
-                              return null;
+                                {currentPhotos.length > 0 ? (
+                                  <ul className="space-y-2 text-xs">
+                                    {currentPhotos.map((photo) => (
+                                      <li
+                                        key={photo.temp_file_id}
+                                        className="flex items-center justify-between rounded-md border border-border bg-white px-3 py-2"
+                                      >
+                                        <div className="flex items-center gap-2">
+                                          <Images className="h-4 w-4 text-muted-foreground" />
+                                          <span
+                                            className="truncate max-w-[200px]"
+                                            title={photo.original_name}
+                                          >
+                                            {photo.original_name}
+                                          </span>
+                                        </div>
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          onClick={() =>
+                                            handleRemovePhoto(
+                                              rule.id,
+                                              photo.temp_file_id!
+                                            )
+                                          }
+                                          className="text-destructive hover:bg-destructive/10"
+                                        >
+                                          <Trash2 className="h-4 w-4" />
+                                        </Button>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                ) : (
+                                  <p className="text-xs text-muted-foreground italic">
+                                    Nenhuma foto enviada ainda.
+                                  </p>
+                                )}
+                              </div>
+                            );
                           }
-                        })()}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </Card>
 
-            <Card className="p-4">
-              <h3 className="font-medium text-gray-900 mb-2">
-                Descrição do Produto
-              </h3>
-              <div className="prose">
-                {product.description ? (
-                  <p className="text-gray-700 leading-relaxed whitespace-pre-line">
-                    {product.description}
-                  </p>
-                ) : (
-                  <p className="text-gray-500 italic">
-                    Nenhuma descrição disponível para este produto.
-                  </p>
-                )}
+                          // TODO: Implementar UI para LAYOUT_PRESET e LAYOUT_WITH_PHOTOS
+                          // Por enquanto, não renderiza nada para esses tipos
+                          default:
+                            return null;
+                        }
+                      })()}
+                    </div>
+                  );
+                })}
               </div>
-            </Card>
+            )} */}
+
+            <h3 className="font-medium text-gray-900 mb-2">
+              Descrição do Produto
+            </h3>
+            <div className="prose">
+              {product.description ? (
+                <div
+                  dangerouslySetInnerHTML={{ __html: product.description }}
+                />
+              ) : (
+                <p className="text-gray-500 italic">Sem descrição.</p>
+              )}
+            </div>
+
+            <div className="mt-12">
+              <h2 className="text-xl font-bold text-gray-900 mb-4">
+                Adicionais
+              </h2>
+              {additionals.length > 0 ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                  {additionals.map((additional) => (
+                    <AdditionalCard
+                      key={additional.id}
+                      additional={additional}
+                      productId={product.id}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <p className="text-gray-500 italic">
+                  Nenhum adicional disponível para este produto.
+                </p>
+              )}
+            </div>
           </div>
         </div>
-
-        <div className="mt-12">
-          <Card className="p-6">
-            <h2 className="text-xl font-bold text-gray-900 mb-4">Adicionais</h2>
-            {additionals.length > 0 ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                {additionals.map((additional) => (
-                  <AdditionalCard
-                    key={additional.id}
-                    additional={additional}
-                    productId={product.id}
+        <div className="w-full mt-12">
+          <h2 className="text-xl font-bold text-gray-900 mb-6">
+            Produtos relacionados
+          </h2>
+          <div className="w-full text-center">
+            {product.related_products && product.related_products.length > 0 ? (
+              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                {product.related_products.map((relatedProduct) => (
+                  <ProductCard
+                    key={relatedProduct.id}
+                    props={{
+                      id: relatedProduct.id,
+                      name: relatedProduct.name,
+                      image_url: relatedProduct.image_url || "/placeholder.svg",
+                      price: relatedProduct.price,
+                      discount: relatedProduct.discount,
+                    }}
                   />
                 ))}
               </div>
             ) : (
-              <p className="text-gray-500 italic">
-                Nenhum adicional disponível para este produto.
+              <p className="text-gray-500 italic text-center">
+                Nenhum produto relacionado encontrado.
               </p>
             )}
-          </Card>
-        </div>
-
-        <div className="mt-12">
-          <h2 className="text-xl font-bold text-gray-900 mb-6">
-            Produtos relacionados
-          </h2>
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-            {[...Array(6)].map((_, i) => (
-              <Card
-                key={i}
-                className="p-3 hover:shadow-md transition-shadow cursor-pointer"
-              >
-                <div className="aspect-square bg-gray-200 rounded mb-2" />
-                <h3 className="text-sm font-medium text-gray-900 truncate">
-                  Produto {i + 1}
-                </h3>
-                <p className="text-sm font-bold text-gray-900">R$ 29,90</p>
-              </Card>
-            ))}
           </div>
         </div>
       </div>

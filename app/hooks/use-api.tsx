@@ -164,6 +164,17 @@ export interface Category {
   id: string;
   name: string;
 }
+
+export interface Components {
+  id: string;
+  product_id: string;
+  item_id: string;
+  quantity: number;
+  created_at: string;
+  updated_at: string;
+  item: Item;
+}
+
 export interface Product {
   id: string;
   name: string;
@@ -173,6 +184,8 @@ export interface Product {
   image_url?: string | null;
   categories: Category[];
   type_id: string;
+  components?: string[];
+  related_products?: Omit<Product, "components" | "related_products">[];
 }
 
 export interface ProductInput {
@@ -198,13 +211,18 @@ export interface Additional {
 export interface Item {
   id: string;
   name: string;
-  description?: string | null;
-  base_price?: number | null;
-  price?: number | null; // legacy clients might expect `price`
-  discount?: number | null;
-  image_url?: string | null;
-  stock_quantity?: number | null;
-  type?: "PRODUCT" | "ADDITIONAL" | string | null;
+  description?: string;
+  type: "caneca" | "quadro";
+  stock_quantity: number;
+  base_price: number;
+  discount: number;
+  image_url: string;
+  allows_customization: boolean;
+  layout_base_id: string | null;
+  created_at: string;
+  updated_at: string;
+  additionals: Additional[];
+  customizations: [];
 }
 
 export interface Color {
@@ -708,8 +726,12 @@ class ApiService {
    * Lista items unificados (novo endpoint)
    * GET /items
    */
-  getItems = async (): Promise<Item[]> => {
-    const res = await this.client.get("/items");
+  getItems = async (id?: string): Promise<Item[]> => {
+    const res = await this.client.get("/items", { params: { id } });
+    return res.data;
+  };
+  getItemsByProduct = async (productId: string): Promise<Item[]> => {
+    const res = await this.client.get("/items", { params: { productId } });
     return res.data;
   };
   getAdditional = async (id: string) =>
