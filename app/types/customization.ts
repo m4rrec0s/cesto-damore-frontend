@@ -10,14 +10,6 @@
  * - OPTION_SELECT: Escolha de opção (ex: cor, tamanho)
  * - ITEM_SUBSTITUTION: Substituição de item
  */
-export type RuleType =
-  | "PHOTO_UPLOAD"
-  | "LAYOUT_PRESET"
-  | "LAYOUT_WITH_PHOTOS"
-  | "TEXT_INPUT"
-  | "OPTION_SELECT"
-  | "ITEM_SUBSTITUTION";
-
 export type ConstraintType = "MUTUALLY_EXCLUSIVE" | "REQUIRES";
 
 export type ItemType = "PRODUCT" | "ADDITIONAL";
@@ -26,10 +18,10 @@ export type ItemType = "PRODUCT" | "ADDITIONAL";
  * CustomizationType enum do Prisma
  */
 export enum CustomizationType {
-  PHOTO_UPLOAD = "PHOTO_UPLOAD",
-  TEXT_INPUT = "TEXT_INPUT",
+  IMAGES = "IMAGES",
+  TEXT = "TEXT",
   MULTIPLE_CHOICE = "MULTIPLE_CHOICE",
-  ITEM_SUBSTITUTION = "ITEM_SUBSTITUTION",
+  LAYOUT_BASE = "LAYOUT_BASE",
 }
 
 /**
@@ -243,23 +235,6 @@ export interface ValidationResponse {
 
 // ================ Frontend State Types ================
 
-export interface ProductRule {
-  id: string;
-  product_type_id: string;
-  rule_type: RuleType;
-  title: string;
-  description?: string;
-  required: boolean;
-  max_items?: number | null;
-  conflict_with?: string[] | null;
-  dependencies?: string[] | null;
-  available_options?: RuleAvailableOptions;
-  preview_image_url?: string | null;
-  display_order: number;
-  created_at: string;
-  updated_at: string;
-}
-
 export interface ItemConstraint {
   id: string;
   target_item_id: string;
@@ -288,7 +263,6 @@ export interface ProductType {
  */
 export interface ProductRuleInput {
   product_type_id: string;
-  rule_type: RuleType;
   title: string;
   description?: string;
   required?: boolean;
@@ -339,10 +313,8 @@ export interface CustomizationData {
 
 export interface CustomizationState {
   productId: string;
-  rules: ProductRule[];
   data: Record<string, CustomizationData>;
   previewUrl?: string;
-  model3dUrl?: string;
 }
 
 export interface PreviewResponse {

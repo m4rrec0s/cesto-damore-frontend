@@ -207,6 +207,35 @@ export interface Additional {
   stock_quantity?: number;
 }
 
+export interface CustomizationOption {
+  id: string;
+  label: string;
+  image_url?: string;
+  description?: string;
+  image_filename?: string;
+  price_modifier: number;
+}
+
+export interface CustomizationDataMultipleChoice {
+  options: CustomizationOption[];
+  max_selection?: number;
+  min_selection?: number;
+  [key: string]: unknown;
+}
+
+export interface Customization {
+  id: string;
+  name: string;
+  description?: string;
+  item_id: string;
+  price: number;
+  isRequired: boolean;
+  type: CustomizationTypeValue; // reutiliza o tipo já existente
+  customization_data: CustomizationDataMultipleChoice | Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
 // Unified Item type (backend now exposes a single Item model)
 export interface Item {
   id: string;
@@ -222,7 +251,7 @@ export interface Item {
   created_at: string;
   updated_at: string;
   additionals: Additional[];
-  customizations: [];
+  customizations: Customization[];
 }
 
 export interface Color {
@@ -266,9 +295,9 @@ export type OrderStatus =
   | "CANCELED";
 
 export type CustomizationTypeValue =
-  | "PHOTO_UPLOAD"
-  | "ITEM_SUBSTITUTION"
-  | "TEXT_INPUT"
+  | "BASE_LAYOUT"
+  | "IMAGES"
+  | "TEXT"
   | "MULTIPLE_CHOICE";
 
 export type CustomizationAvailableOptions =
@@ -1072,56 +1101,6 @@ class ApiService {
     return res.data;
   };
 
-  // ===== Product Rules (New System) =====
-
-  /**
-   * Busca regras de customização por tipo de produto
-   */
-  getProductRulesByType = async (
-    productTypeId: string
-  ): Promise<import("../types/customization").ProductRule[]> => {
-    const res = await this.client.get(
-      `/admin/customization/rule/type/${productTypeId}`
-    );
-    return res.data;
-  };
-
-  /**
-   * Cria uma nova regra de customização (ProductRule)
-   */
-  createProductRule = async (
-    data: import("../types/customization").ProductRuleInput
-  ): Promise<import("../types/customization").ProductRule> => {
-    const res = await this.client.post(`/admin/customization/rule`, data);
-    return res.data;
-  };
-
-  /**
-   * Atualiza uma regra de customização existente
-   */
-  updateProductRule = async (
-    ruleId: string,
-    data: Partial<import("../types/customization").ProductRuleInput>
-  ): Promise<import("../types/customization").ProductRule> => {
-    const res = await this.client.put(
-      `/admin/customization/rule/${ruleId}`,
-      data
-    );
-    return res.data;
-  };
-
-  /**
-   * Deleta uma regra de customização
-   */
-  deleteProductRule = async (ruleId: string): Promise<{ message: string }> => {
-    const res = await this.client.delete(`/admin/customization/rule/${ruleId}`);
-    return res.data;
-  };
-
-  // ===== Temporary File Upload (for customizations) =====
-  // NOTE: temporary file upload endpoints were removed from the backend.
-  // We no longer expose uploadTemporaryFile/getSessionFiles/deleteTemporaryFile.
-
   /**
    * Valida customizações de um produto
    */
@@ -1161,13 +1140,16 @@ class ApiService {
 
   /**
    * Busca configuração de customização para um item (produto ou adicional)
-   * GET /customizations/:itemType/:itemId
+   * GET /items/:itemId/customizations (rota pública no backend)
    */
   getItemCustomizations = async (
     itemType: "PRODUCT" | "ADDITIONAL",
     itemId: string
   ): Promise<import("../types/customization").CustomizationConfigResponse> => {
-    const res = await this.client.get(`/customizations/${itemType}/${itemId}`);
+    // Note: backend exposes this endpoint as /items/:itemId/customizations (regardless of itemType)
+    const res = await this.client.get(`/items/${itemId}/customizations`, {
+      headers: { "ngrok-skip-browser-warning": "true" },
+    });
     return res.data;
   };
 

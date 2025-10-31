@@ -2,11 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 
 export interface CustomizationType {
   id: string;
-  customization_type:
-    | "PHOTO_UPLOAD"
-    | "ITEM_SUBSTITUTION"
-    | "TEXT_INPUT"
-    | "MULTIPLE_CHOICE";
+  customization_type: "IMAGES" | "TEXT" | "BASE_LAYOUT" | "MULTIPLE_CHOICE";
   label: string;
   title?: string;
   description?: string;
@@ -318,12 +314,12 @@ export function useCustomization(
 
       // Validar por tipo
       switch (custom.customization_type) {
-        case "PHOTO_UPLOAD":
+        case "IMAGES":
           if (!userValue.photos || userValue.photos.length === 0) {
             missingFields.push(custom.label);
           }
           break;
-        case "TEXT_INPUT":
+        case "TEXT":
           if (!userValue.text || userValue.text.trim() === "") {
             missingFields.push(custom.label);
           }
@@ -333,7 +329,7 @@ export function useCustomization(
             missingFields.push(custom.label);
           }
           break;
-        case "ITEM_SUBSTITUTION":
+        case "BASE_LAYOUT":
           if (!userValue.selected_item) {
             missingFields.push(custom.label);
           }

@@ -27,7 +27,7 @@ export function ProductGrid({
 }: ProductGridProps) {
   return (
     <section className="w-full scrollbar-hide">
-      <div className="mx-auto max-w-7xl px-4 bg-white text-left">
+      <div className="mx-auto max-w-none sm:max-w-[90%] px-4 py-2 bg-white text-left">
         {title && (
           <header className="w-full flex items-center justify-between mb-6 mt-10">
             {title && (

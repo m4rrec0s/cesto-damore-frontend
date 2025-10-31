@@ -3,214 +3,37 @@
 import Image from "next/image";
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { toast } from "sonner";
-import {
-  ShoppingCart,
-  Heart,
-  Share2,
-  Star,
-  Minus,
-  Plus,
-  UploadCloud,
-  Trash2,
-  AlertCircle,
-  Images,
-  FileText,
-  ChevronLeft,
-} from "lucide-react";
+import { ShoppingCart, Minus, Plus, ChevronLeft } from "lucide-react";
 
 import { Button } from "@/app/components/ui/button";
 import { Badge } from "@/app/components/ui/badge";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/app/components/ui/select";
 import { cn } from "@/app/lib/utils";
-import useApi, { Additional, Item, Product } from "@/app/hooks/use-api";
+import useApi, {
+  Additional,
+  Customization,
+  Item,
+  Product,
+} from "@/app/hooks/use-api";
 import { useCartContext } from "@/app/hooks/cart-context";
-import {
-  useCustomization,
-  PhotoUploadData,
-} from "@/app/hooks/use-customization";
 import type { CartCustomization } from "@/app/hooks/use-cart";
 import { Model3DViewer } from "./Model3DViewer";
-
-interface RuleValue {
-  rule_id: string;
-  photos?: PhotoUploadData[];
-  text?: string;
-  selected_option?: string;
-  selected_layout?: string;
-  selected_item?: {
-    original_item: string;
-    selected_item: string;
-    price_adjustment: number;
-  };
-}
-
 import AdditionalCard from "./additional-card";
 import Link from "next/link";
-import {
-  LayoutPreset,
-  LayoutWithPhotos,
-  ProductRule,
-  RuleAvailableOptions,
-  RuleType,
-  SelectOption,
-} from "@/app/types/customization";
 import { ProductCard } from "@/app/components/layout/product-card";
 import { useRouter } from "next/navigation";
+import { ClientCustomizationPanel } from "@/app/components/customization/ClientCustomizationPanel";
+import customizationClientService from "@/app/services/customization-client-service";
+import type {
+  SaveOrderItemCustomizationPayload,
+  CustomizationTypeValue,
+} from "@/app/types/customization";
+import { Separator } from "@/app/components/ui/separator";
 
 const formatCurrency = (value: number) =>
   value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
-// const serializeAdditionals = (additionals?: string[]) => {
-//   if (!additionals || additionals.length === 0) return "[]";
-//   return JSON.stringify([...additionals].sort());
-// };
-
-// const serializeAdditionalColors = (colors?: Record<string, string>) => {
-//   if (!colors) return "{}";
-//   const normalized = Object.entries(colors).sort(([idA], [idB]) =>
-//     idA.localeCompare(idB)
-//   );
-//   return JSON.stringify(normalized);
-// };
-
-// const serializeCustomizationsSignature = (
-//   customizations?: CartCustomization[]
-// ) => {
-//   if (!customizations || customizations.length === 0) return "[]";
-
-//   const normalized = customizations.map((customization) => ({
-//     customization_id: customization.customization_id,
-//     price_adjustment: customization.price_adjustment || 0,
-//     text: customization.text?.trim() || null,
-//     selected_option: customization.selected_option || null,
-//     selected_item: customization.selected_item
-//       ? {
-//           original_item: customization.selected_item.original_item,
-//           selected_item: customization.selected_item.selected_item,
-//         }
-//       : null,
-//     photos:
-//       customization.photos?.map(
-//         (photo) =>
-//           photo.temp_file_id || photo.preview_url || photo.original_name
-//       ) || [],
-//   }));
-
-//   normalized.sort((a, b) =>
-//     a.customization_id.localeCompare(b.customization_id)
-//   );
-
-//   return JSON.stringify(normalized);
-// };
-
-const formatCustomizationValue = (custom: CartCustomization) => {
-  switch (custom.customization_type) {
-    case "TEXT_INPUT":
-      return custom.text?.trim() || "Mensagem não informada";
-    case "MULTIPLE_CHOICE":
-      return (
-        custom.selected_option_label ||
-        custom.selected_option ||
-        "Opção não selecionada"
-      );
-    case "ITEM_SUBSTITUTION":
-      if (custom.selected_item) {
-        return `${custom.selected_item.original_item} → ${custom.selected_item.selected_item}`;
-      }
-      return "Substituição não definida";
-    case "PHOTO_UPLOAD":
-      return `${custom.photos?.length || 0} foto(s) enviada(s)`;
-    default:
-      return "Personalização";
-  }
-};
-
-const isSubstitutionOptions = (
-  options: RuleAvailableOptions | undefined
-): options is {
-  items: Array<{
-    original_item: string;
-    available_substitutes: Array<{
-      item: string;
-      price_adjustment: number;
-    }>;
-  }>;
-} => {
-  return Boolean(
-    options &&
-      !Array.isArray(options) &&
-      Array.isArray((options as { items?: unknown }).items)
-  );
-};
-
-// Type guards para opções específicas
-const isSelectOptions = (
-  options: RuleAvailableOptions | undefined
-): options is SelectOption[] => {
-  return (
-    Array.isArray(options) &&
-    options.every((o): o is SelectOption => {
-      const opt = o as Partial<SelectOption>;
-      return typeof opt.value === "string" && typeof opt.label === "string";
-    })
-  );
-};
-
-const isLayoutPresetOptions = (
-  options: RuleAvailableOptions | undefined
-): options is LayoutPreset[] => {
-  return (
-    Array.isArray(options) &&
-    options.every(
-      (o) => typeof (o as Partial<LayoutPreset>).preview_image_url === "string"
-    )
-  );
-};
-
-const isLayoutWithPhotosOptions = (
-  options: RuleAvailableOptions | undefined
-): options is LayoutWithPhotos[] => {
-  return (
-    Array.isArray(options) &&
-    options.every(
-      (o) => typeof (o as Partial<LayoutWithPhotos>).photo_slots === "number"
-    )
-  );
-};
-
-// Mapeia tipos novos para os tipos legados usados no carrinho
-const mapRuleTypeToLegacy = (
-  ruleType: RuleType
-): "PHOTO_UPLOAD" | "TEXT_INPUT" | "MULTIPLE_CHOICE" | "ITEM_SUBSTITUTION" => {
-  switch (ruleType) {
-    case "PHOTO_UPLOAD":
-      return "PHOTO_UPLOAD";
-    case "TEXT_INPUT":
-      return "TEXT_INPUT";
-    case "OPTION_SELECT":
-      return "MULTIPLE_CHOICE";
-    case "ITEM_SUBSTITUTION":
-      return "ITEM_SUBSTITUTION";
-    case "LAYOUT_PRESET":
-      return "MULTIPLE_CHOICE";
-    case "LAYOUT_WITH_PHOTOS":
-      return "PHOTO_UPLOAD";
-  }
-};
-
 const ClientProductPage = ({ id }: { id: string }) => {
-  const {
-    getProduct,
-    getAdditionalsByProduct,
-    getProductRulesByType,
-    getItemsByProduct,
-  } = useApi();
+  const { getProduct, getAdditionalsByProduct, getItemsByProduct } = useApi();
   const { addToCart } = useCartContext();
 
   const [product, setProduct] = useState<Product>({} as Product);
@@ -218,46 +41,77 @@ const ClientProductPage = ({ id }: { id: string }) => {
   const [quantity, setQuantity] = useState(1);
   const [addingToCart, setAddingToCart] = useState(false);
   const [additionals, setAdditionals] = useState<Additional[]>([]);
-  const [uploadingMap, setUploadingMap] = useState<Record<string, boolean>>({});
   const [missingRequiredFields, setMissingRequiredFields] = useState<string[]>(
     []
   );
-  const [productRules, setProductRules] = useState<ProductRule[]>([]);
-  const [ruleValues, setRuleValues] = useState<RuleValue[]>([]);
   const [components, setComponents] = useState<Item[]>([]);
   const [selectedComponent, setSelectedComponent] = useState<Item | null>(null);
+  const [itemCustomizationPayloads, setItemCustomizationPayloads] = useState<
+    Record<string, SaveOrderItemCustomizationPayload | undefined>
+  >({});
+  const isUploading = false;
 
-  const { uploadFile, deleteFile } = useCustomization(id, "product");
+  const handleCustomizationComplete = useCallback(
+    async (itemId: string, hasCustomizations: boolean) => {
+      try {
+        if (hasCustomizations) {
+          const payload =
+            await customizationClientService.buildOrderItemCustomizationPayload(
+              selectedComponent?.name || product.name || "Personalização"
+            );
+          setItemCustomizationPayloads((prev) => ({
+            ...prev,
+            [itemId]: payload,
+          }));
+          toast.success("Personalização salva para o item");
+        } else {
+          setItemCustomizationPayloads((prev) => {
+            const copy = { ...prev };
+            delete copy[itemId];
+            return copy;
+          });
+        }
+      } catch (err) {
+        console.error("Erro ao finalizar customização:", err);
+        toast.error("Falha ao salvar customização");
+      } finally {
+        try {
+          customizationClientService.clearSession();
+        } catch (e) {
+          console.error("Erro ao limpar sessão de customização:", e);
+        }
+      }
+    },
+    [product.name, selectedComponent?.name]
+  );
 
   const router = useRouter();
+
+  // Memoized wrapper to pass to ClientCustomizationPanel so the prop identity
+  // doesn't change on every render (prevents the child from re-running effects)
+  const onCustomizationComplete = useCallback(
+    (has: boolean) => {
+      if (!selectedComponent) return;
+      handleCustomizationComplete(selectedComponent.id, has);
+    },
+    [handleCustomizationComplete, selectedComponent]
+  );
 
   useEffect(() => {
     const fetchProduct = async () => {
       try {
         const data = await getProduct(id);
         setProduct(data);
-        if (data.type_id) {
-          try {
-            const rules = await getProductRulesByType(data.type_id);
-            setProductRules(rules);
-          } catch (error) {
-            console.error("Erro ao carregar regras de customização:", error);
-            // Não mostrar toast para erro de regras, pois pode ser que não haja regras
-          }
-        }
-        // Se o produto já vier com componentes (novo formato), use-os
         if (
           data.components &&
           Array.isArray(data.components) &&
           data.components.length > 0
         ) {
-          // cada entry tem shape { id, product_id, item_id, quantity, item }
           const itemsFromProduct = data.components
             .map((c: { item?: Item | null }) => c.item)
             .filter(Boolean) as Item[];
           setComponents(itemsFromProduct);
         } else {
-          // caso não venha com components embutidos, buscar via endpoint
           await fetchComponents();
         }
       } catch (error) {
@@ -294,208 +148,9 @@ const ClientProductPage = ({ id }: { id: string }) => {
     };
 
     run();
-  }, [
-    id,
-    getProduct,
-    getAdditionalsByProduct,
-    getProductRulesByType,
-    getItemsByProduct,
-  ]);
+  }, [id, getProduct, getAdditionalsByProduct, getItemsByProduct]);
 
-  const sortedCustomizationRules = useMemo(() => {
-    return [...productRules].sort(
-      (a, b) => (a.display_order ?? 0) - (b.display_order ?? 0)
-    );
-  }, [productRules]);
-
-  useEffect(() => {
-    // Validar regras obrigatórias
-    const missingFields: string[] = [];
-    sortedCustomizationRules.forEach((rule) => {
-      if (!rule.required) return;
-
-      const value = ruleValues.find((v) => v.rule_id === rule.id);
-      if (!value) {
-        missingFields.push(rule.title);
-        return;
-      }
-
-      let isFilled = false;
-      switch (rule.rule_type) {
-        case "PHOTO_UPLOAD":
-          isFilled = (value.photos?.length ?? 0) > 0;
-          break;
-        case "TEXT_INPUT":
-          isFilled = !!value.text?.trim();
-          break;
-        case "OPTION_SELECT":
-          isFilled = !!value.selected_option;
-          break;
-        case "LAYOUT_PRESET":
-          isFilled = !!value.selected_layout;
-          break;
-        case "LAYOUT_WITH_PHOTOS":
-          isFilled = !!value.selected_layout && (value.photos?.length ?? 0) > 0;
-          break;
-        case "ITEM_SUBSTITUTION":
-          isFilled = !!value.selected_item;
-          break;
-      }
-
-      if (!isFilled) {
-        missingFields.push(rule.title);
-      }
-    });
-
-    setMissingRequiredFields(missingFields);
-  }, [ruleValues, sortedCustomizationRules]);
-
-  const cartCustomizations = useMemo(() => {
-    if (sortedCustomizationRules.length === 0) return [];
-
-    const result: CartCustomization[] = [];
-
-    sortedCustomizationRules.forEach((rule) => {
-      const value = ruleValues.find((c) => c.rule_id === rule.id);
-      if (!value) return;
-
-      let isFilled = false;
-      let priceAdjustment = 0;
-      let selectedOptionLabel: string | undefined;
-      let selectedItemLabel: string | undefined;
-
-      const normalizedPhotos = (value.photos || []).map((photo, index) => ({
-        ...photo,
-        position: index,
-      }));
-
-      switch (rule.rule_type) {
-        case "PHOTO_UPLOAD": {
-          if (normalizedPhotos.length > 0) {
-            isFilled = true;
-          }
-          break;
-        }
-        case "TEXT_INPUT": {
-          if (value.text && value.text.trim() !== "") {
-            isFilled = true;
-          }
-          break;
-        }
-        case "OPTION_SELECT": {
-          if (value.selected_option) {
-            isFilled = true;
-            if (isSelectOptions(rule.available_options)) {
-              const opt = rule.available_options.find(
-                (o) => o.value === value.selected_option
-              );
-              if (opt) {
-                priceAdjustment = opt.price_adjustment || 0;
-                selectedOptionLabel = opt.label;
-              }
-            }
-          }
-          break;
-        }
-        case "LAYOUT_PRESET": {
-          if (value.selected_layout) {
-            isFilled = true;
-            if (isLayoutPresetOptions(rule.available_options)) {
-              const layout = rule.available_options.find(
-                (l) => l.id === value.selected_layout
-              );
-              if (layout) {
-                priceAdjustment = layout.price_adjustment || 0;
-                selectedOptionLabel = layout.name;
-              }
-            }
-          }
-          break;
-        }
-        case "LAYOUT_WITH_PHOTOS": {
-          if (value.selected_layout && normalizedPhotos.length > 0) {
-            isFilled = true;
-            if (isLayoutWithPhotosOptions(rule.available_options)) {
-              const layout = rule.available_options.find(
-                (l) => l.id === value.selected_layout
-              );
-              if (layout) {
-                priceAdjustment = layout.price_adjustment || 0;
-              }
-            }
-          }
-          break;
-        }
-        case "ITEM_SUBSTITUTION": {
-          if (value.selected_item) {
-            isFilled = true;
-            priceAdjustment = value.selected_item.price_adjustment || 0;
-            selectedItemLabel = `${value.selected_item.original_item} → ${value.selected_item.selected_item}`;
-          }
-          break;
-        }
-        default:
-          break;
-      }
-
-      if (!isFilled) {
-        return;
-      }
-
-      const customizationEntry: CartCustomization = {
-        customization_id: rule.id,
-        photos: normalizedPhotos,
-        text: value.text,
-        selected_option: value.selected_option,
-        selected_item: value.selected_item,
-        title: rule.title || "Personalização",
-        customization_type: mapRuleTypeToLegacy(rule.rule_type),
-        is_required: rule.required,
-        price_adjustment: priceAdjustment,
-        selected_option_label: selectedOptionLabel,
-        selected_item_label: selectedItemLabel,
-      };
-
-      // Ajustes para LAYOUT_PRESET: reutilizar campos de opção para exibição
-      if (rule.rule_type === "LAYOUT_PRESET" && value.selected_layout) {
-        customizationEntry.selected_option = value.selected_layout;
-      }
-
-      result.push(customizationEntry);
-    });
-
-    return result;
-  }, [ruleValues, sortedCustomizationRules]);
-
-  const customizationTotal = useMemo(
-    () =>
-      cartCustomizations.reduce(
-        (sum, customization) => sum + (customization.price_adjustment || 0),
-        0
-      ),
-    [cartCustomizations]
-  );
-
-  // Funções para gerenciar valores das regras
-  const updateRuleValue = useCallback(
-    (ruleId: string, updates: Partial<RuleValue>) => {
-      setRuleValues((prev) => {
-        const existing = prev.find((v) => v.rule_id === ruleId);
-        if (existing) {
-          return prev.map((v) =>
-            v.rule_id === ruleId ? { ...v, ...updates } : v
-          );
-        } else {
-          return [...prev, { rule_id: ruleId, ...updates }];
-        }
-      });
-    },
-    []
-  );
-
-  const removeRuleValue = useCallback((ruleId: string) => {
-    setRuleValues((prev) => prev.filter((v) => v.rule_id !== ruleId));
-  }, []);
+  const customizationTotal = useMemo(() => 0, []);
 
   const basePrice = useMemo(() => {
     if (!product.price) return 0;
@@ -511,11 +166,6 @@ const ClientProductPage = ({ id }: { id: string }) => {
   const totalPriceForQuantity = useMemo(
     () => unitPriceWithCustomizations * quantity,
     [unitPriceWithCustomizations, quantity]
-  );
-
-  const isUploading = useMemo(
-    () => Object.values(uploadingMap).some(Boolean),
-    [uploadingMap]
   );
 
   // const currentConfigSignature = useMemo(
@@ -535,115 +185,11 @@ const ClientProductPage = ({ id }: { id: string }) => {
       selectedComponent.type !== "quadro"
     )
       return false;
-    // Verificar se há regras de layout
-    return productRules.some(
-      (rule) =>
-        rule.rule_type === "LAYOUT_PRESET" ||
-        rule.rule_type === "LAYOUT_WITH_PHOTOS"
-    );
-  }, [selectedComponent, productRules]);
+    // Mostrar 3D se o componente tiver um layout base associado
+    return Boolean(selectedComponent.layout_base_id);
+  }, [selectedComponent]);
 
-  const handlePhotoUpload = async (
-    customizationId: string,
-    rule: ProductRule,
-    files: FileList | File[]
-  ) => {
-    const filesArray = Array.from(files || []);
-    if (filesArray.length === 0) {
-      return;
-    }
-
-    const currentValue = ruleValues.find((c) => c.rule_id === customizationId);
-    const existingPhotos = currentValue?.photos || [];
-
-    const maxFilesFromRule =
-      typeof rule.max_items === "number" && rule.max_items > 0
-        ? rule.max_items
-        : undefined;
-
-    if (maxFilesFromRule && existingPhotos.length >= maxFilesFromRule) {
-      toast.error(
-        `Você já enviou o máximo de ${maxFilesFromRule} foto(s) permitido(s).`
-      );
-      return;
-    }
-
-    const availableSlots = maxFilesFromRule
-      ? Math.max(maxFilesFromRule - existingPhotos.length, 0)
-      : filesArray.length;
-
-    if (availableSlots === 0) {
-      toast.error("Limite de fotos atingido.");
-      return;
-    }
-
-    const selectedFiles = filesArray.slice(0, availableSlots);
-
-    setUploadingMap((prev) => ({ ...prev, [customizationId]: true }));
-
-    try {
-      const uploadedPhotos: PhotoUploadData[] = [];
-
-      for (const file of selectedFiles) {
-        const result = await uploadFile(file);
-        if (result) {
-          uploadedPhotos.push({
-            temp_file_id: result.id,
-            original_name: result.original_name,
-            position: existingPhotos.length + uploadedPhotos.length,
-          });
-        }
-      }
-
-      if (uploadedPhotos.length > 0) {
-        const updatedPhotos = [...existingPhotos, ...uploadedPhotos].map(
-          (photo, index) => ({
-            ...photo,
-            position: index,
-          })
-        );
-        updateRuleValue(customizationId, { photos: updatedPhotos });
-        toast.success("Foto(s) adicionada(s) com sucesso!");
-      }
-    } catch (error) {
-      console.error("Erro ao enviar fotos:", error);
-      toast.error("Não foi possível enviar as fotos. Tente novamente.");
-    } finally {
-      setUploadingMap((prev) => ({ ...prev, [customizationId]: false }));
-    }
-  };
-
-  const handleRemovePhoto = async (
-    customizationId: string,
-    tempFileId: string
-  ) => {
-    setUploadingMap((prev) => ({ ...prev, [customizationId]: true }));
-
-    try {
-      await deleteFile(tempFileId);
-    } catch (error) {
-      console.error("Erro ao remover foto:", error);
-      toast.error("Não foi possível remover a foto.");
-    } finally {
-      setUploadingMap((prev) => ({ ...prev, [customizationId]: false }));
-    }
-
-    const currentValue = ruleValues.find((c) => c.rule_id === customizationId);
-    const remainingPhotos = (currentValue?.photos || []).filter(
-      (photo) => photo.temp_file_id !== tempFileId
-    );
-
-    if (remainingPhotos.length === 0) {
-      removeRuleValue(customizationId);
-    } else {
-      updateRuleValue(customizationId, {
-        photos: remainingPhotos.map((photo, index) => ({
-          ...photo,
-          position: index,
-        })),
-      });
-    }
-  };
+  // photo upload helpers removed (product-level rules deprecated)
 
   const handleAddToCart = async () => {
     if (!product.id) return;
@@ -666,6 +212,35 @@ const ClientProductPage = ({ id }: { id: string }) => {
     setAddingToCart(true);
 
     try {
+      // Converter payloads de item em customizações compatíveis com o carrinho
+      const cartCustomizations: CartCustomization[] = Object.entries(
+        itemCustomizationPayloads
+      )
+        .filter(([, v]) => Boolean(v))
+        .map(([itemId, payload]) => {
+          const customizationId =
+            (payload?.customizationRuleId as string) ||
+            (`item_${itemId}` as string);
+          const customizationType =
+            (payload?.customizationType as unknown as CustomizationTypeValue) ||
+            ("MULTIPLE_CHOICE" as CustomizationTypeValue);
+
+          return {
+            customization_id: customizationId,
+            title: payload?.title || `Personalização do item ${itemId}`,
+            customization_type: customizationType,
+            is_required: false,
+            price_adjustment: (payload?.data?.price_adjustment as number) || 0,
+            text: payload?.data?.text as string | undefined,
+            selected_option: payload?.data?.selected_option as
+              | string
+              | undefined,
+            selected_item: payload?.data
+              ?.selected_item as CartCustomization["selected_item"],
+            photos: undefined,
+          } as CartCustomization;
+        });
+
       await addToCart(
         product.id,
         quantity,
@@ -709,7 +284,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="max-w-7xl mx-auto px-4 py-8">
+      <div className="max-w-none sm:max-w-[90%] mx-auto px-4 py-8">
         <nav className="text-sm text-gray-600 mb-6">
           <Link href="/" className="hover:underline">
             Início
@@ -824,64 +399,197 @@ const ClientProductPage = ({ id }: { id: string }) => {
                   ))}
               </>
             </div>
+            {selectedComponent && selectedComponent.allows_customization && (
+              <div className="mt-4">
+                <h3 className="font-medium mb-2">
+                  Customizações do item: {selectedComponent.name}
+                </h3>
+                <ClientCustomizationPanel
+                  itemType="PRODUCT"
+                  itemId={selectedComponent.id}
+                  onComplete={onCustomizationComplete}
+                />
+              </div>
+            )}
           </div>
 
           <div className="space-y-6">
-            <h1 className="text-lg lg:text-2xl font-bold text-gray-900 mb-2 tracking-tight">
-              {product.name}
-            </h1>
-
-            <div className="space-y-2">
-              {hasDiscount ? (
-                <div className="flex flex-col gap-1">
-                  <div className="flex items-center gap-3">
-                    <span className="text-3xl font-base text-gray-900">
-                      {formatCurrency(basePrice)}
-                    </span>
-                    <span className="text-lg text-gray-500 line-through">
-                      {formatCurrency(product.price)}
-                    </span>
-                    <Badge variant="destructive">-{product.discount}%</Badge>
-                  </div>
-                  <p className="text-sm text-green-600 font-medium">
-                    Você economiza {formatCurrency(product.price - basePrice)}
-                  </p>
-                </div>
-              ) : (
-                <span className="text-3xl font-base text-gray-900">
-                  {formatCurrency(product.price || 0)}
+            <div className="space-y-1">
+              <div className="flex items-center space-x-2 h-6">
+                <span className="text-sm md:text-base text-gray-500">Novo</span>
+                <Separator orientation="vertical" />
+                <span className="text-sm md:text-base text-gray-500">
+                  +1000 Vendidos
                 </span>
-              )}
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Quantidade
-              </label>
-              <div className="flex items-center gap-3">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                  disabled={quantity <= 1}
-                >
-                  <Minus className="w-4 h-4" />
-                </Button>
-                <span className="w-12 text-center font-medium">{quantity}</span>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setQuantity(quantity + 1)}
-                >
-                  <Plus className="w-4 h-4" />
-                </Button>
+              </div>
+              <h1 className="text-xl lg:text-3xl font-bold text-gray-900 mb-2 tracking-tight">
+                {product.name}
+              </h1>
+              <div className="space-y-2">
+                {hasDiscount ? (
+                  <div className="flex flex-col gap-1">
+                    <div className="flex items-center gap-3">
+                      <span className="text-2xl lg:text-4xl font-light text-gray-900">
+                        {formatCurrency(basePrice)}
+                      </span>
+                      <span className="text-lg text-gray-500 line-through">
+                        {formatCurrency(product.price)}
+                      </span>
+                      <Badge variant="destructive">-{product.discount}%</Badge>
+                    </div>
+                    <p className="text-sm text-green-600 font-medium">
+                      Você economiza {formatCurrency(product.price - basePrice)}
+                    </p>
+                  </div>
+                ) : (
+                  <span className="text-2xl lg:text-4xl font-light text-gray-900">
+                    {formatCurrency(product.price || 0)}
+                  </span>
+                )}
               </div>
             </div>
 
+            <div>
+              {/* Seção: Personalizações dos Itens (agrupar por item) */}
+              <h3 className="font-medium text-gray-900 mb-2">
+                Personalizações dos Itens
+              </h3>
+              <div className="space-y-4 mb-6">
+                {components && components.length > 0 ? (
+                  components.map((item) => {
+                    const customizations = (item as Item).customizations || [];
+                    return (
+                      <div
+                        key={item.id}
+                        className="rounded-md bg-white p-3 border"
+                      >
+                        <div className="flex items-center justify-between">
+                          <h4 className="text-sm font-semibold text-gray-800">
+                            {item.name}
+                          </h4>
+                          <span className="text-xs text-muted-foreground">
+                            {item.allows_customization
+                              ? "Permite personalização"
+                              : "Sem personalização"}
+                          </span>
+                        </div>
+
+                        {customizations && customizations.length > 0 ? (
+                          <ul className="mt-3 space-y-2">
+                            {customizations.map((c: Customization) => {
+                              const map = (() => {
+                                switch (c.type) {
+                                  case "BASE_LAYOUT":
+                                    return {
+                                      label: "Layout 3D",
+                                      color: "bg-purple-500",
+                                    };
+                                  case "TEXT":
+                                    return {
+                                      label: "Texto",
+                                      color: "bg-blue-500",
+                                    };
+                                  case "IMAGES":
+                                    return {
+                                      label: "Imagens",
+                                      color: "bg-green-500",
+                                    };
+                                  case "MULTIPLE_CHOICE":
+                                    return {
+                                      label: "Múltipla Escolha",
+                                      color: "bg-yellow-500",
+                                    };
+                                  default:
+                                    return {
+                                      label: c.type || "Personalização",
+                                      color: "bg-gray-500",
+                                    };
+                                }
+                              })();
+
+                              return (
+                                <li
+                                  key={c.id}
+                                  className="flex items-start justify-between gap-4 p-3 rounded-md border border-border bg-muted/10"
+                                >
+                                  <div className="flex-1">
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-sm font-medium text-gray-900">
+                                        {c.name}
+                                        {c.isRequired && (
+                                          <span className="text-red-500 ml-1">
+                                            *
+                                          </span>
+                                        )}
+                                      </span>
+                                      <Badge className={map.color}>
+                                        {map.label}
+                                      </Badge>
+                                      {typeof c.price === "number" &&
+                                        c.price > 0 && (
+                                          <span className="text-xs text-emerald-600 font-medium ml-2">
+                                            +{formatCurrency(c.price)}
+                                          </span>
+                                        )}
+                                    </div>
+                                    {c.description && (
+                                      <p className="text-xs text-muted-foreground mt-1">
+                                        {c.description}
+                                      </p>
+                                    )}
+                                  </div>
+                                  <div className="text-xs text-muted-foreground">
+                                    Item: {item.name}
+                                  </div>
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        ) : (
+                          <p className="text-xs text-muted-foreground italic mt-2">
+                            Sem customizações disponíveis
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })
+                ) : (
+                  <p className="text-xs text-muted-foreground italic">
+                    Nenhum componente encontrado para este produto.
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Quantidade
+                </label>
+                <div className="flex items-center gap-3">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setQuantity(Math.max(1, quantity - 1))}
+                    disabled={quantity <= 1}
+                  >
+                    <Minus className="w-4 h-4" />
+                  </Button>
+                  <span className="w-12 text-center font-medium">
+                    {quantity}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setQuantity(quantity + 1)}
+                  >
+                    <Plus className="w-4 h-4" />
+                  </Button>
+                </div>
+              </div>
+            </div>
             <Button
               onClick={handleAddToCart}
               disabled={addingToCart || isUploading}
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 text-lg font-medium"
+              className="w-full bg-green-600 hover:bg-green-700 text-white py-3 text-lg font-medium"
               size="lg"
             >
               {addingToCart ? (
@@ -896,551 +604,9 @@ const ClientProductPage = ({ id }: { id: string }) => {
                 </>
               )}
             </Button>
+          </div>
 
-            {/* <div className="flex gap-3 pt-2">
-                <Button variant="outline" className="flex-1">
-                  <Heart className="w-4 h-4 mr-2" />
-                  Favoritar
-                </Button>
-                <Button variant="outline" className="flex-1">
-                  <Share2 className="w-4 h-4 mr-2" />
-                  Compartilhar
-                </Button>
-              </div> */}
-
-            {/* {sortedCustomizationRules.length === 0 && true ? (
-              <p className="text-sm text-muted-foreground">
-                Este produto não possui personalizações configuradas.
-              </p>
-            ) : (
-              <div className="space-y-5">
-                {sortedCustomizationRules.map((rule) => {
-                  const value = ruleValues.find((v) => v.rule_id === rule.id);
-                  const cartCustomization = cartCustomizations.find(
-                    (c) => c.customization_id === rule.id
-                  );
-                  const currentPhotos = value?.photos || [];
-                  const isMissing = missingRequiredFields.includes(rule.title);
-
-                  const maxAllowed = rule.max_items || 10; // default fallback
-
-                  const remainingPhotos = maxAllowed
-                    ? Math.max(maxAllowed - currentPhotos.length, 0)
-                    : undefined;
-
-                  return (
-                    <div
-                      key={rule.id}
-                      className={cn(
-                        "rounded-lg border border-border bg-muted/40 p-4 space-y-3",
-                        isMissing &&
-                          "border-destructive/60 bg-red-50/60 ring-1 ring-destructive/30"
-                      )}
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-2">
-                            <h3 className="text-sm font-semibold text-foreground">
-                              {rule.title}
-                            </h3>
-                            {rule.required && (
-                              <Badge
-                                variant="destructive"
-                                className="text-[10px] uppercase"
-                              >
-                                Obrigatório
-                              </Badge>
-                            )}
-                            {cartCustomization?.price_adjustment ? (
-                              <Badge variant="outline" className="text-[10px]">
-                                +
-                                {formatCurrency(
-                                  cartCustomization.price_adjustment
-                                )}
-                              </Badge>
-                            ) : null}
-                          </div>
-                          {rule.description && (
-                            <p className="text-xs text-muted-foreground">
-                              {rule.description}
-                            </p>
-                          )}
-                        </div>
-                        {isMissing && (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-destructive/10 px-2 py-1 text-[11px] font-medium text-destructive">
-                            <AlertCircle className="h-3 w-3" /> Necessário
-                          </span>
-                        )}
-                      </div>
-
-                      {(() => {
-                        switch (rule.rule_type) {
-                          case "IMAGES":
-                            return (
-                              <div className="space-y-3">
-                                <div className="flex flex-col gap-2 rounded-md border-2 border-dashed border-border/60 bg-white p-4 text-sm text-muted-foreground">
-                                  <div className="flex items-center gap-2 text-foreground">
-                                    <Images className="h-5 w-5" />
-                                    <span>
-                                      Envie fotos para personalizar seu pedido
-                                    </span>
-                                  </div>
-                                  {maxAllowed ? (
-                                    <span className="text-xs text-muted-foreground">
-                                      Você pode enviar até {maxAllowed} foto(s).
-                                      Restam {remainingPhotos}.
-                                    </span>
-                                  ) : (
-                                    <span className="text-xs text-muted-foreground">
-                                      Você pode enviar múltiplas fotos (limite
-                                      dinâmico).
-                                    </span>
-                                  )}
-                                  <label className="inline-flex items-center gap-2 rounded-md bg-blue-50 px-3 py-2 text-xs font-medium text-blue-700 hover:bg-blue-100 cursor-pointer w-fit">
-                                    <UploadCloud className="h-4 w-4" />
-                                    Selecionar arquivos
-                                    <input
-                                      type="file"
-                                      accept="image/*"
-                                      multiple
-                                      className="hidden"
-                                      onChange={(event) => {
-                                        if (!event.target.files) return;
-                                        handlePhotoUpload(
-                                          rule.id,
-                                          rule,
-                                          event.target.files
-                                        );
-                                        event.target.value = "";
-                                      }}
-                                      disabled={
-                                        isUploading ||
-                                        (maxAllowed
-                                          ? remainingPhotos === 0
-                                          : false)
-                                      }
-                                    />
-                                  </label>
-                                </div>
-
-                                {currentPhotos.length > 0 ? (
-                                  <ul className="space-y-2 text-xs">
-                                    {currentPhotos.map((photo) => (
-                                      <li
-                                        key={photo.temp_file_id}
-                                        className="flex items-center justify-between rounded-md border border-border bg-white px-3 py-2"
-                                      >
-                                        <div className="flex items-center gap-2">
-                                          <Images className="h-4 w-4 text-muted-foreground" />
-                                          <span
-                                            className="truncate max-w-[200px]"
-                                            title={photo.original_name}
-                                          >
-                                            {photo.original_name}
-                                          </span>
-                                        </div>
-                                        <Button
-                                          variant="ghost"
-                                          size="sm"
-                                          onClick={() =>
-                                            handleRemovePhoto(
-                                              rule.id,
-                                              photo.temp_file_id
-                                            )
-                                          }
-                                          className="text-destructive hover:bg-destructive/10"
-                                        >
-                                          <Trash2 className="h-4 w-4" />
-                                        </Button>
-                                      </li>
-                                    ))}
-                                  </ul>
-                                ) : (
-                                  <p className="text-xs text-muted-foreground italic">
-                                    Nenhuma foto enviada ainda.
-                                  </p>
-                                )}
-                              </div>
-                            );
-
-                          case "TEXT":
-                            return (
-                              <div className="space-y-2">
-                                <div className="flex items-center gap-2 text-muted-foreground text-xs">
-                                  <FileText className="h-4 w-4" />
-                                  Escreva uma mensagem personalizada
-                                </div>
-                                <textarea
-                                  className="w-full min-h-[120px] resize-none rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                                  placeholder="Digite aqui sua mensagem"
-                                  value={value?.text || ""}
-                                  onChange={(event) =>
-                                    updateRuleValue(rule.id, {
-                                      text: event.target.value,
-                                    })
-                                  }
-                                />
-                              </div>
-                            );
-
-                          case "OPTION_SELECT":
-                            return (
-                              <div className="space-y-2">
-                                <span className="text-xs text-muted-foreground">
-                                  Escolha uma das opções disponíveis.
-                                </span>
-                                <Select
-                                  value={value?.selected_option || ""}
-                                  onValueChange={(selectedValue) =>
-                                    updateRuleValue(rule.id, {
-                                      selected_option: selectedValue,
-                                    })
-                                  }
-                                >
-                                  <SelectTrigger>
-                                    <SelectValue placeholder="Selecione uma opção" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {(() => {
-                                      if (
-                                        isSelectOptions(rule.available_options)
-                                      ) {
-                                        return rule.available_options.map(
-                                          (option) => (
-                                            <SelectItem
-                                              key={option.value}
-                                              value={option.value}
-                                            >
-                                              <div className="flex items-center justify-between gap-2">
-                                                <span>{option.label}</span>
-                                                {option.price_adjustment ? (
-                                                  <span className="text-xs text-emerald-600 font-semibold">
-                                                    +
-                                                    {formatCurrency(
-                                                      option.price_adjustment
-                                                    )}
-                                                  </span>
-                                                ) : null}
-                                              </div>
-                                            </SelectItem>
-                                          )
-                                        );
-                                      }
-                                      return (
-                                        <div className="px-2 py-2 text-xs text-muted-foreground">
-                                          Nenhuma opção configurada
-                                        </div>
-                                      );
-                                    })()}
-                                  </SelectContent>
-                                </Select>
-                              </div>
-                            );
-
-                          case "ITEM_SUBSTITUTION": {
-                            let substitutionOptions: Array<{
-                              value: string;
-                              label: string;
-                              price_adjustment: number;
-                              original_item: string;
-                              selected_item: string;
-                            }> = [];
-                            if (isSubstitutionOptions(rule.available_options)) {
-                              substitutionOptions =
-                                rule.available_options.items.flatMap((item) =>
-                                  item.available_substitutes.map(
-                                    (substitute) => ({
-                                      value: `${item.original_item}__${substitute.item}`,
-                                      label: `${item.original_item} → ${substitute.item}`,
-                                      price_adjustment:
-                                        substitute.price_adjustment,
-                                      original_item: item.original_item,
-                                      selected_item: substitute.item,
-                                    })
-                                  )
-                                );
-                            }
-
-                            return (
-                              <div className="space-y-2">
-                                <span className="text-xs text-muted-foreground">
-                                  Escolha qual item deseja substituir.
-                                </span>
-                                <Select
-                                  value={
-                                    value?.selected_item
-                                      ? `${value.selected_item.original_item}__${value.selected_item.selected_item}`
-                                      : ""
-                                  }
-                                  onValueChange={(selectedValue) => {
-                                    const [originalItem, selectedItem] =
-                                      selectedValue.split("__");
-                                    const option = substitutionOptions.find(
-                                      (opt) => opt.value === selectedValue
-                                    );
-                                    updateRuleValue(rule.id, {
-                                      selected_item: {
-                                        original_item: originalItem,
-                                        selected_item: selectedItem,
-                                        price_adjustment:
-                                          option?.price_adjustment || 0,
-                                      },
-                                    });
-                                  }}
-                                >
-                                  <SelectTrigger>
-                                    <SelectValue placeholder="Selecione a substituição" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {substitutionOptions.length > 0 ? (
-                                      substitutionOptions.map((option) => (
-                                        <SelectItem
-                                          key={option.value}
-                                          value={option.value}
-                                        >
-                                          <div className="flex items-center justify-between gap-2">
-                                            <span className="truncate">
-                                              {option.label}
-                                            </span>
-                                            {option.price_adjustment ? (
-                                              <span className="text-xs text-emerald-600 font-semibold">
-                                                +
-                                                {formatCurrency(
-                                                  option.price_adjustment
-                                                )}
-                                              </span>
-                                            ) : null}
-                                          </div>
-                                        </SelectItem>
-                                      ))
-                                    ) : (
-                                      <div className="px-2 py-2 text-xs text-muted-foreground">
-                                        Nenhuma substituição disponível
-                                      </div>
-                                    )}
-                                  </SelectContent>
-                                </Select>
-                              </div>
-                            );
-                          }
-
-                          case "LAYOUT_PRESET": {
-                            let layoutOptions: LayoutPreset[] = [];
-                            if (isLayoutPresetOptions(rule.available_options)) {
-                              layoutOptions = rule.available_options;
-                            }
-
-                            return (
-                              <div className="space-y-2">
-                                <span className="text-xs text-muted-foreground">
-                                  Selecione um layout pronto para seu produto.
-                                </span>
-                                <Select
-                                  value={value?.selected_layout || ""}
-                                  onValueChange={(selectedLayoutId) =>
-                                    updateRuleValue(rule.id, {
-                                      selected_layout: selectedLayoutId,
-                                    })
-                                  }
-                                >
-                                  <SelectTrigger>
-                                    <SelectValue placeholder="Selecione um layout" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {layoutOptions.length > 0 ? (
-                                      layoutOptions.map((layout) => (
-                                        <SelectItem
-                                          key={layout.id}
-                                          value={layout.id}
-                                        >
-                                          <div className="flex items-center justify-between gap-2">
-                                            <span className="truncate">
-                                              {layout.name}
-                                            </span>
-                                            {layout.price_adjustment ? (
-                                              <span className="text-xs text-emerald-600 font-semibold">
-                                                +
-                                                {formatCurrency(
-                                                  layout.price_adjustment
-                                                )}
-                                              </span>
-                                            ) : null}
-                                          </div>
-                                        </SelectItem>
-                                      ))
-                                    ) : (
-                                      <div className="px-2 py-2 text-xs text-muted-foreground">
-                                        Nenhum layout disponível
-                                      </div>
-                                    )}
-                                  </SelectContent>
-                                </Select>
-                              </div>
-                            );
-                          }
-
-                          case "LAYOUT_WITH_PHOTOS": {
-                            let layoutOptions: LayoutWithPhotos[] = [];
-                            if (
-                              isLayoutWithPhotosOptions(rule.available_options)
-                            ) {
-                              layoutOptions = rule.available_options;
-                            }
-                            const selectedLayout = layoutOptions.find(
-                              (l) => l.id === value?.selected_layout
-                            );
-                            const maxSlots =
-                              selectedLayout?.photo_slots ||
-                              rule.max_items ||
-                              undefined;
-                            const currentPhotos = value?.photos || [];
-                            const remainingSlots = maxSlots
-                              ? Math.max(maxSlots - currentPhotos.length, 0)
-                              : undefined;
-
-                            return (
-                              <div className="space-y-3">
-                                <div className="space-y-2">
-                                  <span className="text-xs text-muted-foreground">
-                                    Escolha um layout com fotos e envie as
-                                    imagens.
-                                  </span>
-                                  <Select
-                                    value={value?.selected_layout || ""}
-                                    onValueChange={(selectedLayoutId) =>
-                                      updateRuleValue(rule.id, {
-                                        selected_layout: selectedLayoutId,
-                                        photos: [], // resetar fotos ao trocar de layout
-                                      })
-                                    }
-                                  >
-                                    <SelectTrigger>
-                                      <SelectValue placeholder="Selecione um layout" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      {layoutOptions.length > 0 ? (
-                                        layoutOptions.map((layout) => (
-                                          <SelectItem
-                                            key={layout.id}
-                                            value={layout.id}
-                                          >
-                                            <div className="flex items-center justify-between gap-2">
-                                              <span className="truncate">
-                                                {layout.name}
-                                              </span>
-                                              <span className="text-[10px] text-muted-foreground">
-                                                {layout.photo_slots} foto(s)
-                                              </span>
-                                            </div>
-                                          </SelectItem>
-                                        ))
-                                      ) : (
-                                        <div className="px-2 py-2 text-xs text-muted-foreground">
-                                          Nenhum layout disponível
-                                        </div>
-                                      )}
-                                    </SelectContent>
-                                  </Select>
-                                </div>
-
-                                <div className="flex flex-col gap-2 rounded-md border-2 border-dashed border-border/60 bg-white p-4 text-sm text-muted-foreground">
-                                  <div className="flex items-center gap-2 text-foreground">
-                                    <Images className="h-5 w-5" />
-                                    <span>
-                                      Envie fotos para preencher o layout
-                                      selecionado
-                                    </span>
-                                  </div>
-                                  {maxSlots ? (
-                                    <span className="text-xs text-muted-foreground">
-                                      Slots: {currentPhotos.length}/{maxSlots}
-                                    </span>
-                                  ) : (
-                                    <span className="text-xs text-muted-foreground">
-                                      Selecione um layout para ver o limite de
-                                      fotos.
-                                    </span>
-                                  )}
-                                  <label className="inline-flex items-center gap-2 rounded-md bg-blue-50 px-3 py-2 text-xs font-medium text-blue-700 hover:bg-blue-100 cursor-pointer w-fit">
-                                    <UploadCloud className="h-4 w-4" />
-                                    Selecionar arquivos
-                                    <input
-                                      type="file"
-                                      accept="image/*"
-                                      multiple
-                                      className="hidden"
-                                      onChange={(event) => {
-                                        if (!event.target.files) return;
-                                        handlePhotoUpload(
-                                          rule.id,
-                                          rule,
-                                          event.target.files
-                                        );
-                                        event.target.value = "";
-                                      }}
-                                      disabled={
-                                        isUploading ||
-                                        !value?.selected_layout ||
-                                        (remainingSlots !== undefined &&
-                                          remainingSlots === 0)
-                                      }
-                                    />
-                                  </label>
-                                </div>
-
-                                {currentPhotos.length > 0 ? (
-                                  <ul className="space-y-2 text-xs">
-                                    {currentPhotos.map((photo) => (
-                                      <li
-                                        key={photo.temp_file_id}
-                                        className="flex items-center justify-between rounded-md border border-border bg-white px-3 py-2"
-                                      >
-                                        <div className="flex items-center gap-2">
-                                          <Images className="h-4 w-4 text-muted-foreground" />
-                                          <span
-                                            className="truncate max-w-[200px]"
-                                            title={photo.original_name}
-                                          >
-                                            {photo.original_name}
-                                          </span>
-                                        </div>
-                                        <Button
-                                          variant="ghost"
-                                          size="sm"
-                                          onClick={() =>
-                                            handleRemovePhoto(
-                                              rule.id,
-                                              photo.temp_file_id!
-                                            )
-                                          }
-                                          className="text-destructive hover:bg-destructive/10"
-                                        >
-                                          <Trash2 className="h-4 w-4" />
-                                        </Button>
-                                      </li>
-                                    ))}
-                                  </ul>
-                                ) : (
-                                  <p className="text-xs text-muted-foreground italic">
-                                    Nenhuma foto enviada ainda.
-                                  </p>
-                                )}
-                              </div>
-                            );
-                          }
-
-                          // TODO: Implementar UI para LAYOUT_PRESET e LAYOUT_WITH_PHOTOS
-                          // Por enquanto, não renderiza nada para esses tipos
-                          default:
-                            return null;
-                        }
-                      })()}
-                    </div>
-                  );
-                })}
-              </div>
-            )} */}
-
+          <div>
             <h3 className="font-medium text-gray-900 mb-2">
               Descrição do Produto
             </h3>
@@ -1453,27 +619,25 @@ const ClientProductPage = ({ id }: { id: string }) => {
                 <p className="text-gray-500 italic">Sem descrição.</p>
               )}
             </div>
+          </div>
 
-            <div className="mt-12">
-              <h2 className="text-xl font-bold text-gray-900 mb-4">
-                Adicionais
-              </h2>
-              {additionals.length > 0 ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                  {additionals.map((additional) => (
-                    <AdditionalCard
-                      key={additional.id}
-                      additional={additional}
-                      productId={product.id}
-                    />
-                  ))}
-                </div>
-              ) : (
-                <p className="text-gray-500 italic">
-                  Nenhum adicional disponível para este produto.
-                </p>
-              )}
-            </div>
+          <div className="">
+            <h2 className="text-xl font-bold text-gray-900 mb-4">Adicionais</h2>
+            {additionals.length > 0 ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                {additionals.map((additional) => (
+                  <AdditionalCard
+                    key={additional.id}
+                    additional={additional}
+                    productId={product.id}
+                  />
+                ))}
+              </div>
+            ) : (
+              <p className="text-gray-500 italic">
+                Nenhum adicional disponível para este produto.
+              </p>
+            )}
           </div>
         </div>
         <div className="w-full mt-12">

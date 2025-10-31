@@ -3,7 +3,7 @@ import Image from "next/image";
 export function SiteFooter() {
   return (
     <footer className="bg-rose-300 text-white">
-      <div className="max-w-7xl mx-auto px-4 py-8 flex flex-col items-center gap-4">
+      <div className="max-w-none sm:max-w-[90%] mx-auto px-4 py-8 flex flex-col items-center gap-4">
         <div className="h-24 w-[250px] relative">
           <Image
             src="/logo.png"

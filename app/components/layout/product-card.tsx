@@ -48,7 +48,7 @@ export function ProductCard({ props }: ProductCardProps) {
   };
   return (
     <>
-      <div className="group flex flex-col justify-between relative w-full h-auto bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-xs transition-all duration-300 overflow-hidden">
+      <div className="group flex flex-col justify-between relative w-full h-auto bg-white rounded-2xl hover:shadow-xs overflow-hidden">
         <Link href={`/produto/${props.id}`} className="block">
           <div className="relative aspect-square overflow-hidden bg-gradient-to-br from-gray-50 to-gray-100 max-w-[300px] mx-auto">
             <Image

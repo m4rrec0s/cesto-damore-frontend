@@ -41,57 +41,59 @@ export default function FeedBannerCarousel({
   if (!banners.length) return null;
 
   return (
-    <section className="relative w-full h-64 md:h-80 lg:h-[500px] mb-8 overflow-hidden rounded-lg shadow-lg">
-      <div className="relative w-full h-full">
-        {banners.map((banner, index) => (
-          <div
-            key={banner.id}
-            className={cn(
-              "absolute inset-0 transition-opacity duration-500 ease-in-out",
-              index === currentIndex ? "opacity-100 z-10" : "opacity-0 z-0"
-            )}
-          >
-            {banner.image_url ? (
-              <div className="absolute inset-0">
-                <Image
-                  src={banner.image_url}
-                  alt={banner.title}
-                  fill
-                  className="object-cover"
-                  priority={index === 0}
-                  quality={90}
-                />
-                <div className="absolute inset-0 bg-gradient-to-b from-black/20 to-black/40"></div>
-              </div>
-            ) : (
-              <div className="absolute inset-0" />
-            )}
+    <section className="relative w-full mb-8 overflow-hidden shadow-lg">
+      {/* <div className="absolute w-full inset-0 h-[10%] bg-gradient-to-b from-rose-400 to-transparent z-50" /> */}
 
-            <div className="relative z-20 h-full flex items-end justify-start px-4">
-              <div className="text-left max-w-4xl p-6">
-                <h2
-                  className="text-xl md:text-2xl lg:text-3xl font-bold drop-shadow-lg"
-                  style={{
-                    color: banner.text_color || "white",
-                  }}
-                >
-                  {banner.title}
-                </h2>
+      <div className="w-full overflow-hidden max-h-[400px]">
+        <div className="relative w-full" style={{ aspectRatio: "835/271" }}>
+          {banners.map((banner, index) => (
+            <div
+              key={banner.id}
+              className={cn(
+                index === currentIndex ? "opacity-100 z-10" : "opacity-0 z-0"
+              )}
+            >
+              {banner.image_url ? (
+                <div className="absolute inset-0 flex items-center justify-center overflow-hidden max-h-[400px]">
+                  <Image
+                    src={banner.image_url}
+                    alt={banner.title}
+                    fill
+                    className="object-cover object-center"
+                    style={{ objectPosition: "center center" }}
+                    quality={100}
+                  />
+                </div>
+              ) : (
+                <div className="absolute inset-0" />
+              )}
 
-                {banner.subtitle && (
-                  <p
-                    className="text-base font-light md:text-lg lg:text-xl mb-6 drop-shadow-md"
+              <div className="relative z-20 h-full flex items-end justify-start px-4">
+                <div className="hidden text-left max-w-4xl p-6">
+                  <h2
+                    className="text-xl md:text-2xl lg:text-3xl font-bold drop-shadow-lg"
                     style={{
                       color: banner.text_color || "white",
                     }}
                   >
-                    {banner.subtitle}
-                  </p>
-                )}
+                    {banner.title}
+                  </h2>
+
+                  {banner.subtitle && (
+                    <p
+                      className="text-base font-light md:text-lg lg:text-xl mb-6 drop-shadow-md"
+                      style={{
+                        color: banner.text_color || "white",
+                      }}
+                    >
+                      {banner.subtitle}
+                    </p>
+                  )}
+                </div>
               </div>
             </div>
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
 
       {banners.length > 1 && (

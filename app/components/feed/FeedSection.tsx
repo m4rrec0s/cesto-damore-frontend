@@ -53,7 +53,7 @@ function FeedItemCard({ item }: FeedItemCardProps) {
 
   const renderCategoryCard = () => (
     <Link href={`/categoria/${categoryData.id}`}>
-      <div className="group bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden hover:shadow-lg transition-all duration-300 hover:scale-105 cursor-pointer p-6">
+      <div className="group bg-white rounded-lg overflow-hidden hover:shadow-lg transition-all duration-300 hover:scale-105 cursor-pointer p-6">
         <div className="text-center">
           <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform">
             <Tag className="h-8 w-8 text-white" />
@@ -151,7 +151,7 @@ export default function FeedSection({ section }: FeedSectionProps) {
 
   return (
     <section className="w-full">
-      <div className="mx-auto max-w-7xl px-4 bg-white text-left">
+      <div className="mx-auto max-w-none sm:max-w-[90%] py-2 px-4 bg-white text-left rounded">
         {section.title && (
           <header className="w-full flex items-center justify-between mb-6 mt-10">
             {section.title && (
@@ -171,14 +171,10 @@ export default function FeedSection({ section }: FeedSectionProps) {
           </header>
         )}
 
-        <div className="flex gap-6 w-full overflow-x-auto scrollbar-hide pb-4">
-          <div className="flex gap-6 min-w-max">
-            {displayItems.map((item: PublicFeedItem) => (
-              <div key={item.id} className="flex-shrink-0 w-40 sm:w-64">
-                <FeedItemCard item={item} />
-              </div>
-            ))}
-          </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2 w-full overflow-x-auto scrollbar-hide pb-4">
+          {displayItems.map((item: PublicFeedItem) => (
+            <FeedItemCard key={item.id} item={item} />
+          ))}
         </div>
 
         {displayItems.length > 0 && hasMoreItems && (
