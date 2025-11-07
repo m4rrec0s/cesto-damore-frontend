@@ -110,7 +110,7 @@ export function ImageUpload({
           relative border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors
           ${
             dragActive
-              ? "border-orange-500 bg-orange-50"
+              ? "border-rose-500 bg-rose-50"
               : "border-gray-300 hover:border-gray-400"
           }
         `}

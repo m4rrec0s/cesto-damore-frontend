@@ -63,7 +63,7 @@ export default function StockReportPage() {
 
   const getStatusColor = (stock: number): string => {
     if (stock === 0) return "bg-red-100 text-red-800 border-red-300";
-    if (stock <= 2) return "bg-orange-100 text-orange-800 border-orange-300";
+    if (stock <= 2) return "bg-rose-100 text-rose-800 border-rose-300";
     if (stock <= 5) return "bg-yellow-100 text-yellow-800 border-yellow-300";
     return "bg-green-100 text-green-800 border-green-300";
   };
@@ -133,7 +133,7 @@ export default function StockReportPage() {
             </button>
             <div>
               <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-2">
-                <TrendingDown className="w-8 h-8 text-orange-600" />
+                <TrendingDown className="w-8 h-8 text-rose-600" />
                 Relatório de Estoque
               </h1>
               <p className="text-gray-600 mt-1">
@@ -148,7 +148,7 @@ export default function StockReportPage() {
               <select
                 value={threshold}
                 onChange={(e) => setThreshold(Number(e.target.value))}
-                className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+                className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-500"
                 title="Selecionar limite de estoque"
                 aria-label="Selecionar limite de estoque para alertas"
               >
@@ -160,7 +160,7 @@ export default function StockReportPage() {
             </div>
             <button
               onClick={loadReport}
-              className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors flex items-center gap-2"
+              className="px-4 py-2 bg-rose-600 text-white rounded-lg hover:bg-rose-700 transition-colors flex items-center gap-2"
             >
               <RefreshCw className="w-4 h-4" />
               Atualizar
@@ -223,7 +223,7 @@ export default function StockReportPage() {
               onClick={() => setFilter("all")}
               className={`px-4 py-2 rounded-lg transition-colors ${
                 filter === "all"
-                  ? "bg-orange-600 text-white"
+                  ? "bg-rose-600 text-white"
                   : "bg-gray-100 text-gray-700 hover:bg-gray-200"
               }`}
             >
@@ -233,7 +233,7 @@ export default function StockReportPage() {
               onClick={() => setFilter("product")}
               className={`px-4 py-2 rounded-lg transition-colors ${
                 filter === "product"
-                  ? "bg-orange-600 text-white"
+                  ? "bg-rose-600 text-white"
                   : "bg-gray-100 text-gray-700 hover:bg-gray-200"
               }`}
             >
@@ -246,7 +246,7 @@ export default function StockReportPage() {
               onClick={() => setFilter("additional")}
               className={`px-4 py-2 rounded-lg transition-colors ${
                 filter === "additional"
-                  ? "bg-orange-600 text-white"
+                  ? "bg-rose-600 text-white"
                   : "bg-gray-100 text-gray-700 hover:bg-gray-200"
               }`}
             >
@@ -259,7 +259,7 @@ export default function StockReportPage() {
               onClick={() => setFilter("color")}
               className={`px-4 py-2 rounded-lg transition-colors ${
                 filter === "color"
-                  ? "bg-orange-600 text-white"
+                  ? "bg-rose-600 text-white"
                   : "bg-gray-100 text-gray-700 hover:bg-gray-200"
               }`}
             >
@@ -367,7 +367,7 @@ export default function StockReportPage() {
                               item.current_stock === 0
                                 ? "text-red-600"
                                 : item.current_stock <= 2
-                                ? "text-orange-600"
+                                ? "text-rose-600"
                                 : "text-yellow-600"
                             }`}
                           >
@@ -388,14 +388,14 @@ export default function StockReportPage() {
 
         {/* Alert Summary */}
         {filteredItems.length > 0 && (
-          <div className="mt-6 bg-orange-50 border border-orange-200 rounded-lg p-4">
+          <div className="mt-6 bg-rose-50 border border-rose-200 rounded-lg p-4">
             <div className="flex items-start gap-3">
-              <AlertTriangle className="w-5 h-5 text-orange-600 mt-0.5" />
+              <AlertTriangle className="w-5 h-5 text-rose-600 mt-0.5" />
               <div>
-                <h3 className="font-semibold text-orange-900 mb-1">
+                <h3 className="font-semibold text-rose-900 mb-1">
                   Atenção necessária
                 </h3>
-                <p className="text-sm text-orange-700">
+                <p className="text-sm text-rose-700">
                   {filteredItems.filter((i) => i.current_stock === 0).length}{" "}
                   item(ns) sem estoque e{" "}
                   {filteredItems.filter((i) => i.current_stock > 0).length} com

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { ProductGrid } from "./components/layout/product-grid";
 import {
   useApi,
@@ -11,7 +11,6 @@ import {
 import { Button } from "./components/ui/button";
 import { RefreshCw } from "lucide-react";
 import { DatabaseErrorFallback } from "./components/database-error-fallback";
-import { Badge } from "./components/ui/badge";
 import { cn } from "./lib/utils";
 import Link from "next/link";
 import FeedBannerCarousel from "./components/feed/FeedBannerCarousel";
@@ -27,44 +26,67 @@ interface GridProduct {
   categoryName?: string;
 }
 
+// Componente de Skeleton para loading
+function CategorySkeleton() {
+  return (
+    <div className="w-full h-9 bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 animate-pulse rounded-full" />
+  );
+}
+
 export default function Home() {
   const api = useApi();
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const [initialLoad, setInitialLoad] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [products, setProducts] = useState<GridProduct[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [feedData, setFeedData] = useState<PublicFeedResponse | null>(null);
   const [useFallback, setUseFallback] = useState(false);
 
+  // Usar cache imediatamente se disponível
+  const cachedData = useMemo(() => {
+    if (typeof window === "undefined") return null;
+    try {
+      // Acessar o cache estático da classe ApiService
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const ApiService = (api as any).constructor;
+      const cache = ApiService.getCache?.() || {};
+      return {
+        categories: cache.categories || null,
+        products: cache.products || null,
+      };
+    } catch (error) {
+      console.warn("Erro ao acessar cache:", error);
+      return null;
+    }
+  }, [api]);
+
   useEffect(() => {
     const loadData = async () => {
+      // Se tem cache, mostrar imediatamente
+      if (cachedData?.categories) {
+        setCategories(cachedData.categories);
+        setInitialLoad(false);
+      }
+
       setLoading(true);
       setError(null);
 
       try {
-        console.log("🔄 Iniciando carregamento de dados...");
-        console.log("📡 API URL:", process.env.NEXT_PUBLIC_API_URL);
-
         let feed = null;
         try {
-          console.log("🎯 Buscando feed público...");
           feed = await api.getPublicFeed();
           setFeedData(feed);
-          console.log("✅ Feed carregado com sucesso:", feed);
         } catch (feedError) {
           console.error("❌ Erro ao carregar feed:", feedError);
           console.warn("⚠️ Usando fallback devido ao erro:", feedError);
           setUseFallback(true);
         }
 
-        console.log("📦 Buscando produtos e categorias...");
         const [productsResponse, fetchedCategories] = await Promise.all([
           api.getProducts(),
           api.getCategories(),
         ]);
-
-        console.log("✅ Produtos recebidos:", productsResponse);
-        console.log("✅ Categorias recebidas:", fetchedCategories);
 
         setCategories(fetchedCategories);
 
@@ -94,13 +116,9 @@ export default function Home() {
         }
       } catch (err: unknown) {
         console.error("❌ Erro crítico ao carregar dados:", err);
-        console.error("Tipo do erro:", typeof err);
-        console.error("Erro completo:", JSON.stringify(err, null, 2));
 
         const errorMessage =
           err instanceof Error ? err.message : "Erro desconhecido";
-
-        console.error("Mensagem de erro:", errorMessage);
 
         if (
           errorMessage.includes("database") ||
@@ -116,11 +134,12 @@ export default function Home() {
         }
       } finally {
         setLoading(false);
+        setInitialLoad(false);
       }
     };
 
     loadData();
-  }, [api, useFallback]);
+  }, [api, useFallback, cachedData]);
 
   const handleRetry = () => {
     api.invalidateCache();
@@ -129,77 +148,108 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white">
+      {/* Banner Carousel */}
       {feedData &&
         !useFallback &&
         feedData.banners &&
         feedData.banners.length > 0 && (
-          <div className="w-full">
+          <div className="w-full animate-fadeIn">
             <FeedBannerCarousel banners={feedData.banners} />
           </div>
         )}
 
-      <section className="pb-5 w-full flex flex-col justify-center">
+      {/* Categories Section */}
+      <section className="py-8 w-full flex flex-col justify-center transition-all duration-300">
         <div className="mx-auto max-w-none sm:max-w-[90%] px-4">
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-6">
-            {Array.isArray(categories) &&
-              categories.slice(0, 6).map((category) => (
-                <Link
-                  key={category.id}
-                  href={`/category/${category.id}`}
-                  className="w-full"
-                >
-                  <Badge
-                    className={cn(
-                      "flex items-center justify-center w-full text-center text-base bg-neutral-100 text-neutral-800 border-neutral-200 hover:bg-neutral-200 hover:text-neutral-900 transition-colors shadow-sm",
-                      category.name === "Cesto Express" &&
-                        "bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 text-white hover:text-neutral-100"
-                    )}
-                  >
-                    {category.name}
-                  </Badge>
-                </Link>
+          {initialLoad ? (
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+              {[...Array(6)].map((_, i) => (
+                <CategorySkeleton key={i} />
               ))}
-          </div>
+            </div>
+          ) : (
+            <div className="w-full grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 animate-fadeIn">
+              {Array.isArray(categories) &&
+                categories.slice(0, 6).map((category, index) => (
+                  <Link
+                    key={category.id}
+                    href={`/category/${category.id}`}
+                    className="group relative overflow-hidden rounded-xl bg-rose-400 border border-gray-200 hover:border-gray-300 shadow-sm hover:shadow-lg transition-all duration-300 transform hover:-translate-y-1"
+                    style={{ animationDelay: `${index * 50}ms` }}
+                  >
+                    <div
+                      className={cn(
+                        "relative px-6 py-3 flex flex-col items-center justify-center",
+                        category.name === "Cesto Express" &&
+                          "bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500"
+                      )}
+                    >
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                      <span className="relative z-10 text-center font-semibold text-base text-white">
+                        {category.name}
+                      </span>
+                    </div>
+                  </Link>
+                ))}
+            </div>
+          )}
         </div>
       </section>
 
       {feedData && !useFallback ? (
-        <div className="bg-gray-50 space-y-8 py-8">
+        <div className="space-y-8 pb-12 animate-fadeIn">
           {feedData.sections &&
-            feedData.sections.map((section) => (
-              <FeedSection key={section.id} section={section} />
+            feedData.sections.map((section, index) => (
+              <div
+                key={section.id}
+                className="animate-slideUp"
+                style={{ animationDelay: `${index * 100}ms` }}
+              >
+                <FeedSection section={section} />
+              </div>
             ))}
         </div>
       ) : (
-        <section className="py-16 bg-gray-50">
+        <section className="py-12">
           <div className="mx-auto max-w-none sm:max-w-[90%] px-4">
             {error && (
-              <DatabaseErrorFallback error={error} onRetry={handleRetry} />
+              <div className="animate-fadeIn">
+                <DatabaseErrorFallback error={error} onRetry={handleRetry} />
+              </div>
             )}
 
-            {loading ? (
-              <div className="text-center py-20">
-                <div className="mx-auto relative w-36 h-36">
+            {loading && !initialLoad ? (
+              <div className="text-center py-16">
+                <div className="mx-auto relative w-32 h-32">
                   <div className="absolute inset-0 rounded-full bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 opacity-25 animate-pulse" />
                   <div className="absolute inset-0 flex items-center justify-center">
-                    <div className="w-28 h-28 bg-white rounded-full flex items-center justify-center shadow-lg">
+                    <div className="w-24 h-24 bg-black rounded-full flex items-center justify-center shadow-lg">
                       <Image
                         src="/logo.png"
                         alt="Cesto d'Amore"
-                        className="w-16 h-16 animate-spin"
-                        width={64}
-                        height={64}
+                        className="w-14 h-14 animate-spin"
+                        width={56}
+                        height={56}
                       />
                     </div>
                   </div>
                 </div>
               </div>
             ) : (
-              <ProductGrid products={products} title="Produtos em destaque" />
+              !loading &&
+              !error &&
+              products.length > 0 && (
+                <div className="animate-fadeIn">
+                  <ProductGrid
+                    products={products}
+                    title="Produtos em destaque"
+                  />
+                </div>
+              )
             )}
 
-            {!loading && !error && products.length === 0 && (
-              <div className="text-center py-20">
+            {!loading && !error && products.length === 0 && !initialLoad && (
+              <div className="text-center py-20 animate-fadeIn">
                 <div className="w-20 h-20 bg-gray-200 rounded-full mx-auto mb-6 flex items-center justify-center">
                   <svg
                     className="w-10 h-10 text-gray-400"
@@ -223,7 +273,7 @@ export default function Home() {
                 </p>
                 <Button
                   onClick={handleRetry}
-                  className="bg-orange-500 hover:bg-orange-600 text-white"
+                  className="bg-rose-500 hover:bg-rose-600 text-white"
                 >
                   <RefreshCw className="h-4 w-4 mr-2" />
                   Recarregar página

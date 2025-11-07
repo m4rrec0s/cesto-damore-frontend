@@ -25,7 +25,7 @@ export function DatabaseErrorFallback({
           {isConnectionError ? (
             <Database className="h-16 w-16 mx-auto text-red-500 mb-4" />
           ) : (
-            <Wifi className="h-16 w-16 mx-auto text-orange-500 mb-4" />
+            <Wifi className="h-16 w-16 mx-auto text-rose-500 mb-4" />
           )}
         </div>
 
@@ -63,7 +63,7 @@ export function DatabaseErrorFallback({
             {onRetry && (
               <Button
                 onClick={onRetry}
-                className="flex-1 bg-orange-600 hover:bg-orange-700 text-white"
+                className="flex-1 bg-rose-600 hover:bg-rose-700 text-white"
               >
                 <RefreshCw className="h-4 w-4 mr-2" />
                 Tentar Novamente

@@ -21,33 +21,15 @@ interface AdditionalCardProps {
 const AdditionalCard = ({ additional, productId }: AdditionalCardProps) => {
   const { cart, addToCart, removeFromCart } = useCartContext();
   const [isAddingToCart, setIsAddingToCart] = useState(false);
-  const [selectedColor, setSelectedColor] = useState<string | null>(null);
 
   // Verificar se adicional tem estoque disponível
   const hasStock = () => {
-    if (additional.colors && additional.colors.length > 0) {
-      // Se tem cores, verificar se alguma cor tem estoque
-      return additional.colors.some((color) => color.stock_quantity > 0);
-    }
-    // Se não tem cores, verificar estoque total
     return (additional.stock_quantity || 0) > 0;
   };
 
   // Obter estoque total disponível
   const getTotalStock = () => {
-    if (additional.colors && additional.colors.length > 0) {
-      return additional.colors.reduce(
-        (sum, color) => sum + color.stock_quantity,
-        0
-      );
-    }
     return additional.stock_quantity || 0;
-  };
-
-  // Obter cor selecionada
-  const getSelectedColorData = () => {
-    if (!selectedColor || !additional.colors) return null;
-    return additional.colors.find((c) => c.color_id === selectedColor);
   };
 
   const isInCart =
@@ -69,20 +51,6 @@ const AdditionalCard = ({ additional, productId }: AdditionalCardProps) => {
       return;
     }
 
-    // Se tem cores, validar se uma cor foi selecionada
-    if (additional.colors && additional.colors.length > 0) {
-      if (!selectedColor) {
-        toast.error("Por favor, selecione uma cor antes de adicionar");
-        return;
-      }
-
-      const colorData = getSelectedColorData();
-      if (!colorData || colorData.stock_quantity <= 0) {
-        toast.error("A cor selecionada está sem estoque");
-        return;
-      }
-    }
-
     if (isInCart) {
       toast.info("Este adicional já está no carrinho!");
       return;
@@ -94,22 +62,10 @@ const AdditionalCard = ({ additional, productId }: AdditionalCardProps) => {
         (item) => item.product_id === productId
       );
 
-      // Preparar mapeamento de cores se houver cor selecionada
-      const colorMapping: Record<string, string> = {};
-      if (selectedColor) {
-        colorMapping[additional.id] = selectedColor;
-      }
-
       if (existingProductItem) {
         // Se o produto já existe, precisamos remover o item antigo e adicionar um novo
         const currentAdditionals = existingProductItem.additional_ids || [];
         const newAdditionals = [...currentAdditionals, additional.id];
-
-        // Combinar cores existentes com a nova cor selecionada
-        const combinedColors = {
-          ...existingProductItem.additional_colors,
-          ...colorMapping,
-        };
 
         // Remover o item existente primeiro
         removeFromCart(
@@ -119,19 +75,19 @@ const AdditionalCard = ({ additional, productId }: AdditionalCardProps) => {
           existingProductItem.additional_colors
         );
 
-        // Adicionar o novo item com todos os adicionais e cores
+        // Adicionar o novo item com todos os adicionais
         await addToCart(
           productId,
           existingProductItem.quantity,
           newAdditionals,
-          combinedColors,
+          undefined,
           existingProductItem.customizations
         );
 
         toast.success(`${additional.name} adicionado ao produto no carrinho!`);
       } else {
         // Se o produto não existe no carrinho, adicionar normalmente
-        await addToCart(productId, 1, [additional.id], colorMapping);
+        await addToCart(productId, 1, [additional.id]);
         toast.success(`Produto com ${additional.name} adicionado ao carrinho!`);
       }
     } catch (error) {
@@ -146,7 +102,7 @@ const AdditionalCard = ({ additional, productId }: AdditionalCardProps) => {
   const totalStock = getTotalStock();
 
   return (
-    <div className="group flex flex-col justify-between relative bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-xs transition-all duration-300 overflow-hidden">
+    <div className="group flex flex-col max-w-[200px] justify-between relative bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-xs transition-all duration-300 overflow-hidden">
       {/* Badge de estoque */}
       {!stockAvailable && (
         <div className="absolute top-2 right-2 z-10 bg-red-500 text-white px-2 py-1 rounded-full text-xs font-semibold">
@@ -154,7 +110,7 @@ const AdditionalCard = ({ additional, productId }: AdditionalCardProps) => {
         </div>
       )}
       {stockAvailable && totalStock <= 5 && (
-        <div className="absolute top-2 right-2 z-10 bg-orange-500 text-white px-2 py-1 rounded-full text-xs font-semibold">
+        <div className="absolute top-2 right-2 z-10 bg-rose-500 text-white px-2 py-1 rounded-full text-xs font-semibold">
           Últimas {totalStock} unidades
         </div>
       )}
@@ -194,72 +150,6 @@ const AdditionalCard = ({ additional, productId }: AdditionalCardProps) => {
             </div>
           )}
         </div>
-
-        {/* Seletor de cores */}
-        {additional.colors && additional.colors.length > 0 && (
-          <div className="mt-3 space-y-2">
-            <p className="text-xs font-medium text-gray-700">
-              Selecione uma cor:
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {additional.colors.map((color) => {
-                const colorHasStock = color.stock_quantity > 0;
-                const isSelected = selectedColor === color.color_id;
-
-                return (
-                  <button
-                    key={color.color_id}
-                    onClick={() =>
-                      colorHasStock && setSelectedColor(color.color_id)
-                    }
-                    disabled={!colorHasStock}
-                    className={`relative group/color ${
-                      colorHasStock
-                        ? "cursor-pointer"
-                        : "cursor-not-allowed opacity-40"
-                    }`}
-                    title={`${color.color_name} - ${color.stock_quantity} disponível(is)`}
-                  >
-                    <div
-                      className={`w-8 h-8 rounded-full border-2 transition-all ${
-                        isSelected
-                          ? "border-orange-500 ring-2 ring-orange-200 scale-110"
-                          : colorHasStock
-                          ? "border-gray-300 hover:border-orange-400"
-                          : "border-gray-200"
-                      }`}
-                      style={{ backgroundColor: color.color_hex_code }}
-                    />
-                    {isSelected && (
-                      <div className="absolute inset-0 flex items-center justify-center">
-                        <Check className="h-4 w-4 text-white drop-shadow-lg" />
-                      </div>
-                    )}
-                    {!colorHasStock && (
-                      <div className="absolute inset-0 flex items-center justify-center">
-                        <div className="w-full h-0.5 bg-red-500 rotate-45" />
-                      </div>
-                    )}
-                    {/* Tooltip com nome da cor e estoque */}
-                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-gray-800 text-white text-xs rounded whitespace-nowrap opacity-0 group-hover/color:opacity-100 transition-opacity pointer-events-none">
-                      {color.color_name}
-                      <br />
-                      {color.stock_quantity} un.
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-            {selectedColor && (
-              <p className="text-xs text-gray-600">
-                Cor selecionada:{" "}
-                <span className="font-semibold">
-                  {getSelectedColorData()?.color_name}
-                </span>
-              </p>
-            )}
-          </div>
-        )}
 
         <div className="mt-4 w-full space-y-2">
           <Button

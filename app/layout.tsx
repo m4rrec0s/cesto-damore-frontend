@@ -2,12 +2,11 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import Script from "next/script";
 import "./globals.css";
+import "./animations.css";
 import { AuthProvider } from "./hooks/use-auth";
 import { CartProvider } from "./hooks/cart-context";
 import ClientLayout from "./components/layout/client-layout";
 import TokenMonitor from "./components/auth/token-monitor";
-import TokenExpiryWarning from "./components/auth/token-expiry-warning";
-import AuthStatusDebug from "./components/auth/auth-status-debug";
 import { Toaster } from "./components/ui/sonner";
 
 const geistSans = Geist({
@@ -40,15 +39,12 @@ export default function RootLayout({
           src="https://sdk.mercadopago.com/js/v2"
           strategy="beforeInteractive"
         />
-        {/* SDK v1 fallback para tokenização em ambientes onde o 'fields' v2 não esteja montado */}
         <Script
           src="https://secure.mlstatic.com/sdk/javascript/v1/mercadopago.js"
           strategy="beforeInteractive"
         />
         <AuthProvider>
           <CartProvider>
-            <TokenExpiryWarning />
-            <AuthStatusDebug />
             <TokenMonitor>
               <ClientLayout>{children}</ClientLayout>
             </TokenMonitor>

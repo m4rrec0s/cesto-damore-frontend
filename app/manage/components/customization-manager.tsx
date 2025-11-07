@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
@@ -38,6 +38,12 @@ import { Badge } from "@/app/components/ui/badge";
 import { Plus, Edit, Trash2, Save, X } from "lucide-react";
 import { toast } from "sonner";
 
+// Import customization forms
+import BaseLayoutCustomizationForm from "./customizations/BaseLayoutCustomizationForm";
+import TextCustomizationForm from "./customizations/TextCustomizationForm";
+import ImageCustomizationForm from "./customizations/ImageCustomizationForm";
+import MultipleChoiceCustomizationForm from "./customizations/MultipleChoiceCustomizationForm";
+
 interface Customization {
   id: string;
   item_id: string;
@@ -48,6 +54,49 @@ interface Customization {
   customization_data: Record<string, unknown>;
   price: number;
 }
+
+// Type-safe interfaces for customization data
+interface BaseLayoutData {
+  layouts: Array<{ id: string; name: string }>;
+}
+
+interface TextCustomizationData {
+  fields: Array<{
+    id: string;
+    label: string;
+    placeholder: string;
+    required: boolean;
+    max_length?: number;
+  }>;
+}
+
+interface ImageCustomizationData {
+  base_layout: {
+    max_images: number;
+    min_width?: number;
+    min_height?: number;
+    max_file_size_mb?: number;
+    accepted_formats?: string[];
+  };
+}
+
+interface MultipleChoiceData {
+  options: Array<{
+    id: string;
+    label: string;
+    description?: string;
+    price_modifier: number;
+    image_url?: string;
+  }>;
+  min_selection: number;
+  max_selection: number;
+}
+
+type CustomizationData =
+  | BaseLayoutData
+  | TextCustomizationData
+  | ImageCustomizationData
+  | MultipleChoiceData;
 
 interface Item {
   id: string;
@@ -215,9 +264,67 @@ export default function CustomizationManager() {
     });
   };
 
+  /**
+   * PRINCÍPIO ANTI-LOOP: Handler estável com comparação por conteúdo
+   */
+  const handleCustomizationDataChange = useCallback(
+    (newData: Record<string, unknown> | CustomizationData) => {
+      const newStr = JSON.stringify(newData);
+      const currentStr = JSON.stringify(formData.customization_data);
+
+      if (newStr !== currentStr) {
+        setFormData((prev) => ({
+          ...prev,
+          customization_data: newData as Record<string, unknown>,
+        }));
+      }
+    },
+    [formData.customization_data]
+  );
+
+  /**
+   * Conversão type-safe para cada tipo de customização
+   */
+  const handleBaseLayoutChange = useCallback(
+    (data: BaseLayoutData) => {
+      handleCustomizationDataChange(data as unknown as Record<string, unknown>);
+    },
+    [handleCustomizationDataChange]
+  );
+
+  const handleTextChange = useCallback(
+    (data: TextCustomizationData) => {
+      handleCustomizationDataChange(data as unknown as Record<string, unknown>);
+    },
+    [handleCustomizationDataChange]
+  );
+
+  const handleImageChange = useCallback(
+    (data: ImageCustomizationData) => {
+      handleCustomizationDataChange(data as unknown as Record<string, unknown>);
+    },
+    [handleCustomizationDataChange]
+  );
+
+  const handleMultipleChoiceChange = useCallback(
+    (data: MultipleChoiceData) => {
+      handleCustomizationDataChange(data as unknown as Record<string, unknown>);
+    },
+    [handleCustomizationDataChange]
+  );
+
+  /**
+   * Memoizar customization_data para evitar criar nova referência
+   */
+  const memoizedCustomizationData = useMemo(
+    () => formData.customization_data,
+    [formData.customization_data]
+  );
+
   const handleFilterByItem = (itemId: string) => {
-    setSelectedItem(itemId);
-    fetchCustomizations(itemId || undefined);
+    const actualItemId = itemId === "all" ? "" : itemId;
+    setSelectedItem(actualItemId);
+    fetchCustomizations(actualItemId || undefined);
   };
 
   const getTypeBadge = (type: string) => {
@@ -271,7 +378,11 @@ export default function CustomizationManager() {
                       </SelectTrigger>
                       <SelectContent>
                         {items.map((item) => (
-                          <SelectItem key={item.id} value={item.id}>
+                          <SelectItem
+                            key={item.id}
+                            value={item.id}
+                            title={item.name}
+                          >
                             {item.name}
                           </SelectItem>
                         ))}
@@ -357,12 +468,53 @@ export default function CustomizationManager() {
                     </div>
                   </div>
 
-                  {/* Formulário específico por tipo será implementado em componentes separados */}
+                  {/* Formulário específico por tipo de customização */}
                   <div className="border-t pt-4">
-                    <Label className="text-sm text-muted-foreground">
-                      Configurações específicas do tipo {formData.type} serão
-                      adicionadas aqui
-                    </Label>
+                    <div className="mb-4">
+                      <h4 className="font-semibold text-sm mb-2">
+                        Configurações Específicas - {formData.type}
+                      </h4>
+                    </div>
+
+                    {formData.type === "BASE_LAYOUT" && (
+                      <BaseLayoutCustomizationForm
+                        data={memoizedCustomizationData as BaseLayoutData}
+                        itemId={formData.item_id}
+                        onChange={handleBaseLayoutChange}
+                      />
+                    )}
+
+                    {formData.type === "TEXT" && (
+                      <TextCustomizationForm
+                        data={
+                          memoizedCustomizationData as TextCustomizationData
+                        }
+                        onChange={handleTextChange}
+                      />
+                    )}
+
+                    {formData.type === "IMAGES" && (
+                      <ImageCustomizationForm
+                        data={
+                          memoizedCustomizationData as ImageCustomizationData
+                        }
+                        onChange={handleImageChange}
+                      />
+                    )}
+
+                    {formData.type === "MULTIPLE_CHOICE" && (
+                      <MultipleChoiceCustomizationForm
+                        data={memoizedCustomizationData as MultipleChoiceData}
+                        onChange={handleMultipleChoiceChange}
+                      />
+                    )}
+
+                    {!formData.item_id && formData.type === "BASE_LAYOUT" && (
+                      <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4 text-sm text-yellow-800">
+                        ⚠️ <strong>Atenção:</strong> Selecione um item primeiro
+                        para configurar layouts.
+                      </div>
+                    )}
                   </div>
 
                   <div className="flex justify-end space-x-2">
@@ -387,12 +539,15 @@ export default function CustomizationManager() {
         <CardContent>
           <div className="mb-4">
             <Label>Filtrar por Item</Label>
-            <Select value={selectedItem} onValueChange={handleFilterByItem}>
+            <Select
+              value={selectedItem || "all"}
+              onValueChange={handleFilterByItem}
+            >
               <SelectTrigger>
                 <SelectValue placeholder="Todos os itens" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">Todos</SelectItem>
+                <SelectItem value="all">Todos</SelectItem>
                 {items.map((item) => (
                   <SelectItem key={item.id} value={item.id}>
                     {item.name}

@@ -187,9 +187,9 @@ export function QRCodePIX({ pixData, onCopyCode }: QRCodePIXProps) {
 
       {/* Timer de Expiração */}
       {timeLeft > 0 && (
-        <Alert className="border-orange-200 bg-orange-50">
-          <Clock className="h-4 w-4 text-orange-600" />
-          <AlertDescription className="text-orange-800">
+        <Alert className="border-rose-200 bg-rose-50">
+          <Clock className="h-4 w-4 text-rose-600" />
+          <AlertDescription className="text-rose-800">
             <div className="flex items-center justify-between">
               <span>⏰ Tempo restante para pagamento:</span>
               <span className="font-bold text-lg text-rose-600">

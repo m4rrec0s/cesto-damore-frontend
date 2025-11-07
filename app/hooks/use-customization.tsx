@@ -71,7 +71,7 @@ export function useCustomization(
   itemId: string,
   itemType: "product" | "additional"
 ) {
-  const baseURL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3333";
+  const baseURL = process.env.NEXT_PUBLIC_API_URL;
 
   const [sessionId, setSessionId] = useState<string>("");
   const [customizations, setCustomizations] = useState<CustomizationValue[]>(

@@ -131,9 +131,9 @@ export function StatsOverview({ data }: StatsOverviewProps) {
       title: "Adicionais",
       value: totalAdditionals,
       icon: Plus,
-      color: "bg-orange-500",
-      textColor: "text-orange-600",
-      bgColor: "bg-orange-50",
+      color: "bg-rose-500",
+      textColor: "text-rose-600",
+      bgColor: "bg-rose-50",
     },
     {
       title: "Itens com Promoção",

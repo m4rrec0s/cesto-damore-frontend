@@ -125,7 +125,6 @@ O **Cesto d'Amore** é uma plataforma e-commerce moderna e clean focada em produ
 
 ### Design System
 
-- **Cores primárias**: Orange (#FF9500), Gray scales
 - **Tipografia**: Sistema hierárquico com tamanhos responsivos
 - **Espaçamento**: Grid system de 4px
 - **Border radius**: Consistente (8px para cards, 4px para inputs)

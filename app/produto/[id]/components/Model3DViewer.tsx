@@ -619,7 +619,7 @@ export function Model3DViewer({
 
   return (
     <div
-      className={`relative overflow-hidden rounded-lg bg-gradient-to-br from-slate-900 to-slate-800 ${className}`}
+      className={`relative overflow-hidden rounded-lg bg-gradient-to-br from-gray-200 to-gray-100 ${className}`}
     >
       <Canvas
         className="h-full w-full"
@@ -659,6 +659,8 @@ export function Model3DViewer({
           target={[0, 0.3, 0]}
           autoRotate={autoRotate}
           autoRotateSpeed={rotateSpeed / 0.3}
+          minPolarAngle={Math.PI / 2}
+          maxPolarAngle={Math.PI / 2}
         />
 
         {/* Modelo 3D */}
@@ -729,14 +731,6 @@ export function Model3DViewer({
           {/* Ground plane removed to eliminate shadow contact and darkening */}
         </Suspense>
       </Canvas>
-
-      {/* Controles de ajuda */}
-      <div className="pointer-events-none absolute bottom-4 right-4 rounded-lg bg-black/50 px-3 py-2 text-xs text-white backdrop-blur-sm">
-        <p className="flex items-center gap-2">
-          <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-blue-400" />
-          Arraste para rotacionar • Scroll para zoom
-        </p>
-      </div>
     </div>
   );
 }

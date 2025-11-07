@@ -1,320 +1,351 @@
 "use client";
 
-import * as React from "react";
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Button } from "@/app/components/ui/button";
 import { Label } from "@/app/components/ui/label";
 import { Card } from "@/app/components/ui/card";
 import { Checkbox } from "@/app/components/ui/checkbox";
+import { Badge } from "@/app/components/ui/badge";
+import { AlertCircle, Check } from "lucide-react";
 import { toast } from "sonner";
-import { Loader2 } from "lucide-react";
-import { getAuthToken } from "@/app/lib/auth-utils";
+import Image from "next/image";
+import { LoadingSpinner } from "@/app/components/LoadingSpinner";
 
-interface PrintArea {
-  id: string;
-  name: string;
-  position: { x: number; y: number; z: number };
-  rotation: { x: number; y: number; z: number };
-  scale: { width: number; height: number };
-}
-
+/**
+ * Interface para Layout Base
+ */
 interface Layout {
   id: string;
   name: string;
-  image_url: string;
-  item_type?: string;
-  layout_data?: {
-    model_url?: string;
-    print_areas?: PrintArea[];
-  };
+  description?: string;
+  image_url?: string;
+  model_url?: string;
+  print_areas?: Array<{
+    id: string;
+    label: string;
+    width: number;
+    height: number;
+    x?: number;
+    y?: number;
+    z?: number;
+  }>;
 }
 
+/**
+ * Dados de customização BASE_LAYOUT
+ */
 interface BaseLayoutData {
   layouts: Array<{
     id: string;
     name: string;
-    model_url: string;
   }>;
 }
 
 interface Props {
   data: BaseLayoutData;
+  itemId: string;
   onChange: (data: BaseLayoutData) => void;
-  itemId?: string;
 }
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
-function BaseLayoutCustomizationForm({ data, onChange, itemId }: Props) {
-  const [selectionMode, setSelectionMode] = useState<"ALL" | "MANUAL">(
-    "MANUAL"
-  );
-  const [selectedType, setSelectedType] = useState<string>("ALL");
+/**
+ * Componente de formulário para customização BASE_LAYOUT
+ *
+ * ARQUITETURA ANTI-LOOP:
+ * 1. Estado local desacoplado (localSelectedIds)
+ * 2. Comparação por conteúdo (não referência)
+ * 3. Botão explícito de confirmação "Aplicar Seleção"
+ * 4. useCallback com deps vazias para handlers estáveis
+ * 5. useEffect com comparação profunda via JSON.stringify
+ */
+export default function BaseLayoutCustomizationForm({
+  data,
+  itemId,
+  onChange,
+}: Props) {
+  // ===== ESTADO LOCAL DESACOPLADO =====
+  const [localSelectedIds, setLocalSelectedIds] = useState<string[]>([]);
   const [availableLayouts, setAvailableLayouts] = useState<Layout[]>([]);
-  const [selectedLayouts, setSelectedLayouts] = useState<string[]>(
-    data.layouts?.map((l) => l.id) || []
-  );
   const [loading, setLoading] = useState(false);
+  const [hasChanges, setHasChanges] = useState(false);
 
-  // Ref para evitar loops infinitos
-  const onChangeRef = useRef(onChange);
-  const isInitialMount = useRef(true);
-  const lastSentData = useRef<string>("");
+  // Ref para armazenar último conteúdo recebido (evitar loops)
+  const lastDataContentRef = useRef<string>("");
 
-  // Atualizar ref quando onChange mudar (sem causar re-render)
+  /**
+   * PRINCÍPIO 1: Inicializar estado local APENAS quando data mudar de conteúdo
+   * Comparação por JSON.stringify, não por referência
+   */
   useEffect(() => {
-    onChangeRef.current = onChange;
-  }, [onChange]);
+    const incomingIds = data?.layouts?.map((l) => l.id).sort() || [];
+    const incomingContent = JSON.stringify(incomingIds);
 
-  // Fetch layouts quando itemId mudar
-  useEffect(() => {
-    if (itemId) {
-      fetchLayouts();
+    // Só atualiza se o CONTEÚDO realmente mudou
+    if (incomingContent !== lastDataContentRef.current) {
+      lastDataContentRef.current = incomingContent;
+      setLocalSelectedIds(incomingIds);
+      setHasChanges(false);
     }
-  }, []);
+  }, [data]);
 
-  // Sincronizar selectedLayouts com onChange - SOLUÇÃO DEFINITIVA
-  useEffect(() => {
-    // Pular na montagem inicial se já tem data
-    if (isInitialMount.current && data.layouts?.length > 0) {
-      isInitialMount.current = false;
-      const initialKey = JSON.stringify(data.layouts.map((l) => l.id).sort());
-      lastSentData.current = initialKey;
-      return;
-    }
-
-    isInitialMount.current = false;
-
-    if (availableLayouts.length === 0) return;
-
-    const layouts = availableLayouts
-      .filter((l) => selectedLayouts.includes(l.id))
-      .map((l) => ({
-        id: l.id,
-        name: l.name,
-        model_url: l.layout_data?.model_url || "",
-      }));
-
-    // Comparar apenas os IDs ordenados
-    const currentKey = JSON.stringify(layouts.map((l) => l.id).sort());
-
-    if (currentKey !== lastSentData.current) {
-      lastSentData.current = currentKey;
-      // Usar a ref para evitar dependência circular
-      onChangeRef.current({ layouts });
-    }
-  }, [selectedLayouts, availableLayouts, data.layouts]);
-
-  const fetchLayouts = async () => {
+  /**
+   * PRINCÍPIO 3: Função de busca estável (useCallback sem deps)
+   */
+  const fetchAvailableLayouts = useCallback(async () => {
+    setLoading(true);
     try {
-      setLoading(true);
-      const token = getAuthToken();
-      if (!token) {
-        setLoading(false);
-        return;
+      const token =
+        localStorage.getItem("token") || localStorage.getItem("appToken");
+
+      const response = await fetch(`${API_URL}/admin/layouts`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "ngrok-skip-browser-warning": "true",
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error("Erro ao buscar layouts");
       }
 
-      const response = await fetch(
-        `${API_URL}/admin/layouts?itemId=${itemId}`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-
-      if (response.ok) {
-        const layouts = await response.json();
-        setAvailableLayouts(layouts);
-      } else {
-        toast.error("Erro ao buscar layouts");
-      }
+      const layouts = await response.json();
+      setAvailableLayouts(Array.isArray(layouts) ? layouts : []);
     } catch (error) {
       console.error("Erro ao buscar layouts:", error);
-      toast.error("Erro ao buscar layouts");
+      toast.error("Erro ao carregar layouts disponíveis");
+      setAvailableLayouts([]);
     } finally {
       setLoading(false);
     }
-  };
-
-  const toggleLayout = useCallback((layoutId: string) => {
-    setSelectedLayouts((prev) => {
-      const isSelected = prev.includes(layoutId);
-      if (isSelected) {
-        return prev.filter((id) => id !== layoutId);
-      }
-      return [...prev, layoutId];
-    });
   }, []);
 
-  const handleSelectAllByType = useCallback(
-    (type: string) => {
-      const matched =
-        type === "ALL"
-          ? availableLayouts.map((l) => l.id)
-          : availableLayouts
-              .filter((l) => l.item_type === type)
-              .map((l) => l.id);
-
-      setSelectedLayouts((prev) => {
-        // Verificar se realmente mudou
-        const prevSorted = [...prev].sort().join(",");
-        const matchedSorted = [...matched].sort().join(",");
-
-        if (prevSorted === matchedSorted) {
-          return prev;
-        }
-
-        return matched;
-      });
-    },
-    [availableLayouts]
-  );
-
-  const handleSelectionModeChange = (mode: "ALL" | "MANUAL") => {
-    setSelectionMode(mode);
-    if (mode === "ALL") {
-      handleSelectAllByType(selectedType);
+  /**
+   * PRINCÍPIO 2: Buscar layouts disponíveis APENAS quando itemId mudar
+   */
+  useEffect(() => {
+    if (itemId) {
+      fetchAvailableLayouts();
     }
-  };
+  }, [itemId, fetchAvailableLayouts]);
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center p-8">
-        <Loader2 className="h-8 w-8 animate-spin" />
-      </div>
-    );
-  }
+  /**
+   * Detectar se há mudanças pendentes
+   */
+  useEffect(() => {
+    const currentIds = localSelectedIds.slice().sort();
+    const savedIds = (data?.layouts?.map((l) => l.id) || []).slice().sort();
+    const hasChanged = JSON.stringify(currentIds) !== JSON.stringify(savedIds);
+    setHasChanges(hasChanged);
+  }, [localSelectedIds, data]);
 
-  if (!itemId) {
-    return (
-      <Card className="p-6 text-center text-muted-foreground">
-        Selecione um item primeiro para carregar os layouts disponíveis
-      </Card>
+  /**
+   * PRINCÍPIO 4: Toggle de checkbox - altera APENAS estado local
+   * NÃO propaga para o pai automaticamente
+   */
+  const toggleLayout = useCallback((layoutId: string) => {
+    setLocalSelectedIds((prev) =>
+      prev.includes(layoutId)
+        ? prev.filter((id) => id !== layoutId)
+        : [...prev, layoutId]
     );
-  }
+  }, []);
 
-  if (availableLayouts.length === 0) {
-    return (
-      <Card className="p-6 text-center text-muted-foreground">
-        <p className="mb-4">Nenhum layout encontrado para este item.</p>
-        <p className="text-sm">
-          Crie layouts na página de gerenciamento de layouts primeiro.
-        </p>
-      </Card>
-    );
-  }
+  /**
+   * PRINCÍPIO 5: Botão explícito para aplicar mudanças
+   * Só então propaga para o pai via onChange
+   */
+  const applySelection = useCallback(() => {
+    const selectedLayouts = availableLayouts
+      .filter((layout) => localSelectedIds.includes(layout.id))
+      .map((layout) => ({
+        id: layout.id,
+        name: layout.name,
+      }));
+
+    // COMPARAÇÃO POR CONTEÚDO antes de chamar onChange
+    const newContent = JSON.stringify(selectedLayouts);
+    const currentContent = JSON.stringify(data?.layouts || []);
+
+    if (newContent !== currentContent) {
+      onChange({ layouts: selectedLayouts });
+      toast.success("Seleção de layouts atualizada!");
+    } else {
+      toast.info("Nenhuma alteração detectada");
+    }
+
+    setHasChanges(false);
+  }, [localSelectedIds, availableLayouts, onChange, data]);
+
+  /**
+   * Cancelar mudanças pendentes
+   */
+  const cancelChanges = useCallback(() => {
+    const savedIds = data?.layouts?.map((l) => l.id) || [];
+    setLocalSelectedIds(savedIds);
+    setHasChanges(false);
+    toast.info("Alterações canceladas");
+  }, [data]);
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center space-x-4">
-        <Label className="text-sm">Modo de seleção</Label>
-        <div className="flex items-center space-x-2">
-          <label className="flex items-center space-x-2">
-            <input
-              type="radio"
-              name="layoutSelectionMode"
-              checked={selectionMode === "MANUAL"}
-              onChange={() => handleSelectionModeChange("MANUAL")}
-            />
-            <span>Selecionar manualmente</span>
-          </label>
-
-          <label className="flex items-center space-x-2">
-            <input
-              type="radio"
-              name="layoutSelectionMode"
-              checked={selectionMode === "ALL"}
-              onChange={() => handleSelectionModeChange("ALL")}
-            />
-            <span>Selecionar por tipo</span>
-          </label>
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <Label className="text-base font-semibold">
+            🎨 Layouts Base Disponíveis
+          </Label>
+          <p className="text-sm text-gray-600 mt-1">
+            Selecione os layouts 3D que o cliente poderá escolher
+          </p>
         </div>
+        {localSelectedIds.length > 0 && (
+          <Badge variant="secondary">
+            {localSelectedIds.length} selecionado(s)
+          </Badge>
+        )}
       </div>
 
-      {selectionMode === "ALL" && (
-        <div className="flex items-center space-x-4">
-          <Label className="text-sm">Tipo</Label>
-          <select
-            value={selectedType}
-            onChange={(e) => {
-              const t = e.target.value;
-              setSelectedType(t);
-              handleSelectAllByType(t);
-            }}
-            className="border rounded px-2 py-1"
-            aria-label="Selecionar tipo de layout"
-          >
-            <option value="ALL">Todos os tipos</option>
-            {Array.from(
-              new Set(availableLayouts.map((l) => l.item_type).filter(Boolean))
-            ).map((t) => (
-              <option key={t} value={t!}>
-                {t}
-              </option>
-            ))}
-          </select>
-        </div>
+      {/* Loading State */}
+      {loading && (
+        <Card className="p-8 flex items-center justify-center">
+          <LoadingSpinner />
+        </Card>
       )}
 
-      <div className="flex items-center justify-between">
-        <Label className="text-base font-semibold">
-          Selecione os Layouts Disponíveis
-        </Label>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={fetchLayouts}
-        >
-          Atualizar
-        </Button>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {availableLayouts.map((layout) => (
-          <Card
-            key={layout.id}
-            className={`p-4 cursor-pointer transition-all ${
-              selectedLayouts.includes(layout.id)
-                ? "ring-2 ring-primary"
-                : "hover:bg-accent"
-            }`}
-            onClick={() => toggleLayout(layout.id)}
-          >
-            <div className="flex items-start space-x-3">
-              <Checkbox
-                checked={selectedLayouts.includes(layout.id)}
-                onCheckedChange={() => toggleLayout(layout.id)}
-              />
-              <div className="flex-1">
-                <h4 className="font-medium">{layout.name}</h4>
-                {layout.layout_data?.print_areas?.length ? (
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {layout.layout_data.print_areas.length} área(s) de impressão
-                  </p>
-                ) : null}
-                <p className="text-xs text-muted-foreground mt-1">
-                  Modelo:{" "}
-                  {layout.layout_data?.model_url
-                    ? layout.layout_data.model_url.split("/").pop()
-                    : "—"}
-                </p>
-              </div>
-            </div>
-          </Card>
-        ))}
-      </div>
-
-      {selectedLayouts.length > 0 && (
-        <Card className="p-4 bg-muted">
-          <p className="text-sm">
-            <strong>{selectedLayouts.length}</strong> layout(s) selecionado(s)
+      {/* Empty State */}
+      {!loading && availableLayouts.length === 0 && (
+        <Card className="p-8 text-center">
+          <AlertCircle className="w-12 h-12 mx-auto mb-3 text-gray-400" />
+          <p className="text-gray-700 font-medium">
+            Nenhum layout disponível para este item
+          </p>
+          <p className="text-sm text-gray-500 mt-1">
+            Crie layouts primeiro na seção de &quot;Layouts 3D&quot;
           </p>
         </Card>
+      )}
+
+      {/* Layouts Grid */}
+      {!loading && availableLayouts.length > 0 && (
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {availableLayouts.map((layout) => {
+              const isSelected = localSelectedIds.includes(layout.id);
+
+              return (
+                <Card
+                  key={layout.id}
+                  className={`p-4 cursor-pointer transition-all hover:shadow-md ${
+                    isSelected
+                      ? "border-purple-500 border-2 bg-purple-50"
+                      : "border-gray-200 hover:border-gray-300"
+                  }`}
+                  onClick={() => toggleLayout(layout.id)}
+                >
+                  {/* Preview Image */}
+                  <div className="relative w-full h-40 mb-3 rounded-md overflow-hidden bg-gray-100">
+                    {layout.image_url ? (
+                      <Image
+                        src={layout.image_url}
+                        alt={layout.name}
+                        fill
+                        className="object-cover"
+                      />
+                    ) : (
+                      <div className="flex items-center justify-center h-full text-gray-400">
+                        <span className="text-4xl">🎨</span>
+                      </div>
+                    )}
+                    {isSelected && (
+                      <div className="absolute top-2 right-2 bg-purple-600 text-white rounded-full p-1">
+                        <Check className="w-4 h-4" />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Layout Info */}
+                  <div className="space-y-2">
+                    <div
+                      className="flex items-center gap-2"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <Checkbox
+                        checked={isSelected}
+                        onCheckedChange={() => toggleLayout(layout.id)}
+                      />
+                      <Label className="font-semibold cursor-pointer flex-1">
+                        {layout.name}
+                      </Label>
+                    </div>
+
+                    {layout.description && (
+                      <p className="text-xs text-gray-600 line-clamp-2">
+                        {layout.description}
+                      </p>
+                    )}
+
+                    {layout.print_areas && layout.print_areas.length > 0 && (
+                      <div className="flex items-center gap-1 text-xs text-gray-500">
+                        <span>📐</span>
+                        <span>
+                          {layout.print_areas.length} área(s) de impressão
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </Card>
+              );
+            })}
+          </div>
+
+          {/* Action Buttons */}
+          {hasChanges && (
+            <Card className="p-4 bg-yellow-50 border-yellow-200">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-yellow-800">
+                  <AlertCircle className="w-5 h-5" />
+                  <p className="text-sm font-medium">
+                    Você tem alterações não salvas
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={cancelChanges}
+                  >
+                    Cancelar
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={applySelection}
+                    className="bg-purple-600 hover:bg-purple-700"
+                  >
+                    <Check className="w-4 h-4 mr-2" />
+                    Aplicar Seleção
+                  </Button>
+                </div>
+              </div>
+            </Card>
+          )}
+
+          {/* Info Card */}
+          {!hasChanges && localSelectedIds.length > 0 && (
+            <Card className="p-4 bg-green-50 border-green-200">
+              <div className="flex items-center gap-2 text-green-800">
+                <Check className="w-5 h-5" />
+                <p className="text-sm">
+                  <strong>{localSelectedIds.length} layout(s)</strong>{" "}
+                  configurado(s) para este item
+                </p>
+              </div>
+            </Card>
+          )}
+        </>
       )}
     </div>
   );
 }
-
-export default React.memo(BaseLayoutCustomizationForm);

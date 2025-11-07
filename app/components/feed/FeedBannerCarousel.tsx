@@ -44,17 +44,18 @@ export default function FeedBannerCarousel({
     <section className="relative w-full mb-8 overflow-hidden shadow-lg">
       {/* <div className="absolute w-full inset-0 h-[10%] bg-gradient-to-b from-rose-400 to-transparent z-50" /> */}
 
-      <div className="w-full overflow-hidden max-h-[400px]">
-        <div className="relative w-full" style={{ aspectRatio: "835/271" }}>
+      <div className="w-full overflow-hidden">
+        <div className="relative w-full h-[250px] sm:h-[300px] md:h-[350px] lg:h-[400px]">
           {banners.map((banner, index) => (
             <div
               key={banner.id}
               className={cn(
+                "absolute inset-0 transition-opacity duration-500",
                 index === currentIndex ? "opacity-100 z-10" : "opacity-0 z-0"
               )}
             >
               {banner.image_url ? (
-                <div className="absolute inset-0 flex items-center justify-center overflow-hidden max-h-[400px]">
+                <div className="absolute inset-0 flex items-center justify-center overflow-hidden">
                   <Image
                     src={banner.image_url}
                     alt={banner.title}
@@ -62,10 +63,13 @@ export default function FeedBannerCarousel({
                     className="object-cover object-center"
                     style={{ objectPosition: "center center" }}
                     quality={100}
+                    priority={index === 0}
+                    unoptimized
+                    sizes="100vw"
                   />
                 </div>
               ) : (
-                <div className="absolute inset-0" />
+                <div className="absolute inset-0 bg-gradient-to-r from-gray-100 to-gray-200" />
               )}
 
               <div className="relative z-20 h-full flex items-end justify-start px-4">
@@ -101,29 +105,29 @@ export default function FeedBannerCarousel({
           <Button
             onClick={goToPrev}
             aria-label="Banner anterior"
-            className="absolute left-4 top-1/2 transform -translate-y-1/2 bg-black bg-opacity-50 text-white p-2 rounded-full hover:bg-opacity-70 transition-all z-20"
+            className="absolute left-2 sm:left-4 top-1/2 transform -translate-y-1/2 bg-black bg-opacity-50 text-white p-1.5 sm:p-2 rounded-full hover:bg-opacity-70 transition-all z-20"
           >
-            <ChevronLeft className="h-6 w-6" />
+            <ChevronLeft className="h-5 w-5 sm:h-6 sm:w-6" />
           </Button>
           <Button
             onClick={goToNext}
             aria-label="Próximo banner"
-            className="absolute right-4 top-1/2 transform -translate-y-1/2 bg-black bg-opacity-50 text-white p-2 rounded-full hover:bg-opacity-70 transition-all z-20"
+            className="absolute right-2 sm:right-4 top-1/2 transform -translate-y-1/2 bg-black bg-opacity-50 text-white p-1.5 sm:p-2 rounded-full hover:bg-opacity-70 transition-all z-20"
           >
-            <ChevronRight className="h-6 w-6" />
+            <ChevronRight className="h-5 w-5 sm:h-6 sm:w-6" />
           </Button>
         </>
       )}
 
       {banners.length > 1 && (
-        <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex space-x-2 z-20">
+        <div className="absolute bottom-3 sm:bottom-4 left-1/2 transform -translate-x-1/2 flex space-x-2 z-20">
           {banners.map((_, index) => (
             <Button
               key={index}
               onClick={() => goToSlide(index)}
               aria-label={`Ir para banner ${index + 1}`}
               className={cn(
-                "w-3 h-3 rounded-full transition-all",
+                "w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full transition-all",
                 index === currentIndex
                   ? "bg-white scale-110"
                   : "bg-white bg-opacity-50 hover:bg-opacity-70"

@@ -587,7 +587,7 @@ export function ProductManager({
             placeholder="Buscar produtos..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent"
           />
         </div>
 
@@ -600,7 +600,7 @@ export function ProductManager({
                 : "Todas as categorias"
             }
             onChange={(e) => setSelectedCategory(e.target.value)}
-            className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+            className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-500"
           >
             <option value="">Todas as categorias</option>
             {categories.map((category) => (
@@ -618,7 +618,7 @@ export function ProductManager({
                 : "Todos os tipos"
             }
             onChange={(e) => setSelectedType(e.target.value)}
-            className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+            className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-500"
           >
             <option value="">Todos os tipos</option>
             {types.map((type) => (
@@ -630,7 +630,7 @@ export function ProductManager({
 
           <Button
             onClick={() => handleOpenModal()}
-            className="bg-orange-500 hover:bg-orange-600 text-white"
+            className="bg-rose-500 hover:bg-rose-600 text-white"
           >
             <Plus className="h-4 w-4 mr-2" />
             Novo Produto
@@ -826,7 +826,7 @@ export function ProductManager({
                       onClick={() => handlePageChange(page)}
                       className={`h-8 w-8 p-0 ${
                         productsData.pagination.page === page
-                          ? "bg-orange-500 hover:bg-orange-600"
+                          ? "bg-rose-500 hover:bg-rose-600"
                           : ""
                       }`}
                     >
@@ -868,7 +868,7 @@ export function ProductManager({
           </p>
           <Button
             onClick={() => handleOpenModal()}
-            className="bg-orange-500 hover:bg-orange-600 text-white"
+            className="bg-rose-500 hover:bg-rose-600 text-white"
           >
             <Plus className="h-4 w-4 mr-2" />
             Novo Produto
@@ -880,11 +880,11 @@ export function ProductManager({
       {showModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
-            <div className="bg-gradient-to-r from-orange-500 to-orange-600 px-6 py-4">
+            <div className="bg-gradient-to-r from-rose-500 to-rose-600 px-6 py-4">
               <h2 className="text-xl font-bold text-white">
                 {editingProduct ? "Editar Produto" : "Novo Produto"}
               </h2>
-              <p className="text-orange-100 text-sm mt-1">
+              <p className="text-rose-100 text-sm mt-1">
                 {editingProduct
                   ? "Atualize as informações do produto"
                   : "Preencha os dados para criar um novo produto"}
@@ -898,7 +898,7 @@ export function ProductManager({
               {/* Seção Principal */}
               <div className="bg-gray-50 rounded-xl p-4">
                 <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
-                  <div className="w-2 h-2 bg-orange-500 rounded-full mr-3"></div>
+                  <div className="w-2 h-2 bg-rose-500 rounded-full mr-3"></div>
                   Informações Principais
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -916,7 +916,7 @@ export function ProductManager({
                           name: e.target.value,
                         }))
                       }
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all"
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent transition-all"
                       placeholder="Digite o nome do produto"
                       aria-label="Nome do produto"
                     />
@@ -929,7 +929,7 @@ export function ProductManager({
                     <div className="space-y-3">
                       {/* Categorias selecionadas */}
                       {formData.categories.length > 0 && (
-                        <div className="flex flex-wrap gap-2 p-3 bg-orange-50 rounded-lg border border-orange-200">
+                        <div className="flex flex-wrap gap-2 p-3 bg-rose-50 rounded-lg border border-rose-200">
                           {formData.categories.map((categoryId) => {
                             const category = categories.find(
                               (c) => c.id === categoryId
@@ -937,7 +937,7 @@ export function ProductManager({
                             return (
                               <span
                                 key={categoryId}
-                                className="inline-flex items-center gap-1 px-3 py-1 bg-orange-100 text-orange-700 rounded-full text-sm font-medium"
+                                className="inline-flex items-center gap-1 px-3 py-1 bg-rose-100 text-rose-700 rounded-full text-sm font-medium"
                               >
                                 {category?.name}
                                 <button
@@ -950,7 +950,7 @@ export function ProductManager({
                                       ),
                                     }))
                                   }
-                                  className="ml-1 text-orange-500 hover:text-orange-700"
+                                  className="ml-1 text-rose-500 hover:text-rose-700"
                                 >
                                   ×
                                 </button>
@@ -975,7 +975,7 @@ export function ProductManager({
                             }));
                           }
                         }}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all bg-white"
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent transition-all bg-white"
                         aria-label="Adicionar categoria ao produto"
                       >
                         <option value="">Adicionar categoria...</option>
@@ -1012,7 +1012,7 @@ export function ProductManager({
                           type_id: e.target.value,
                         }))
                       }
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all bg-white"
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent transition-all bg-white"
                       aria-label="Tipo do produto"
                     >
                       <option value="">Selecione um tipo</option>
@@ -1299,7 +1299,7 @@ export function ProductManager({
                 <Button
                   type="submit"
                   disabled={loading}
-                  className="flex-1 py-3 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white font-semibold shadow-lg hover:shadow-xl transition-all transform hover:scale-[1.02]"
+                  className="flex-1 py-3 bg-gradient-to-r from-rose-500 to-rose-600 hover:from-rose-600 hover:to-rose-700 text-white font-semibold shadow-lg hover:shadow-xl transition-all transform hover:scale-[1.02]"
                 >
                   {loading ? (
                     <div className="flex items-center justify-center">

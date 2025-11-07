@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 // import Image from "next/image";
 import { Image as ImageIcon, Type, Check, Loader2 } from "lucide-react";
@@ -15,33 +15,19 @@ import {
   CardHeader,
   CardTitle,
 } from "@/app/components/ui/card";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/app/components/ui/select";
 import { Badge } from "@/app/components/ui/badge";
 import { useApi } from "@/app/hooks/use-api";
 import customizationClientService, {
   CustomizationStateData,
 } from "@/app/services/customization-client-service";
-import type {
-  CustomizationConfigResponse,
-  ProductRuleDTO,
-  LegacyCustomizationDTO,
-  LayoutDTO,
-} from "@/app/types/customization";
+import type { CustomizationConfigResponse } from "@/app/types/customization";
 
 interface ClientCustomizationPanelProps {
-  itemType: "PRODUCT" | "ADDITIONAL";
   itemId: string;
   onComplete?: (hasCustomizations: boolean) => void;
 }
 
 export function ClientCustomizationPanel({
-  itemType,
   itemId,
   onComplete,
 }: ClientCustomizationPanelProps) {
@@ -50,41 +36,49 @@ export function ClientCustomizationPanel({
   const [config, setConfig] = useState<CustomizationConfigResponse | null>(
     null
   );
+  const [customizations, setCustomizations] = useState<
+    Array<{
+      id: string;
+      type: string;
+      name: string;
+      description?: string;
+      isRequired: boolean;
+      customization_data: Record<string, unknown>;
+      price: number;
+    }>
+  >([]);
   const [currentRuleIndex, setCurrentRuleIndex] = useState(0);
 
-  const loadCustomizationConfig = useCallback(async () => {
-    try {
-      setLoading(true);
-      const data = await api.getItemCustomizations(itemType, itemId);
-      setConfig(data);
-
-      if (data.item.allowsCustomization) {
-        customizationClientService.initializeSession(itemType, itemId, data);
-      } else {
-        onComplete?.(false);
-      }
-    } catch (error) {
-      console.error("Erro ao carregar configuração:", error);
-      toast.error("Erro ao carregar opções de customização");
-      onComplete?.(false);
-    } finally {
-      setLoading(false);
-    }
-  }, [itemType, itemId, api, onComplete]);
-
   useEffect(() => {
+    const loadCustomizationConfig = async () => {
+      try {
+        setLoading(true);
+        const data = await api.getItemCustomizations(itemId);
+        setConfig(data);
+
+        if (data.item.allowsCustomization && data.customizations) {
+          setCustomizations(data.customizations);
+          customizationClientService.initializeSession(itemId, data);
+        } else {
+          onComplete?.(false);
+        }
+      } catch (error) {
+        console.error("Erro ao carregar configuração:", error);
+        toast.error("Erro ao carregar opções de customização");
+        onComplete?.(false);
+      } finally {
+        setLoading(false);
+      }
+    };
+
     loadCustomizationConfig();
-  }, [loadCustomizationConfig]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [itemId]);
 
-  const allRules = [
-    ...(config?.rules || []).map((r) => ({ ...r, isLegacy: false })),
-    ...(config?.legacyRules || []).map((r) => ({ ...r, isLegacy: true })),
-  ];
-
-  const currentRule = allRules[currentRuleIndex];
+  const currentCustomization = customizations[currentRuleIndex];
 
   const handleNext = () => {
-    if (currentRuleIndex < allRules.length - 1) {
+    if (currentRuleIndex < customizations.length - 1) {
       setCurrentRuleIndex(currentRuleIndex + 1);
     } else {
       handleComplete();
@@ -113,7 +107,6 @@ export function ClientCustomizationPanel({
     try {
       const inputs = customizationClientService.buildCustomizationInputs();
       const response = await api.validateCustomizationsV2({
-        itemType,
         itemId,
         inputs,
       });
@@ -146,7 +139,7 @@ export function ClientCustomizationPanel({
     return null;
   }
 
-  if (allRules.length === 0) {
+  if (customizations.length === 0) {
     return (
       <Card>
         <CardContent className="py-8 text-center text-muted-foreground">
@@ -161,10 +154,10 @@ export function ClientCustomizationPanel({
       {/* Progress indicator */}
       <div className="flex items-center justify-between">
         <div className="text-sm text-muted-foreground">
-          Passo {currentRuleIndex + 1} de {allRules.length}
+          Passo {currentRuleIndex + 1} de {customizations.length}
         </div>
         <div className="flex gap-2">
-          {allRules.map((_, index) => (
+          {customizations.map((_, index) => (
             <div
               key={index}
               className={`h-2 w-8 rounded-full ${
@@ -175,14 +168,15 @@ export function ClientCustomizationPanel({
         </div>
       </div>
 
-      {/* Current rule */}
-      {currentRule && (
+      {/* Current customization */}
+      {currentCustomization && (
         <CustomizationRuleStep
-          rule={currentRule}
-          layouts={config.layouts}
+          customization={currentCustomization}
           onUpdate={(data) => {
-            const ruleId = currentRule.id;
-            customizationClientService.updateCustomization(ruleId, data);
+            customizationClientService.updateCustomization(
+              currentCustomization.id,
+              data
+            );
           }}
         />
       )}
@@ -200,7 +194,7 @@ export function ClientCustomizationPanel({
           onClick={handleNext}
           className="bg-purple-600 hover:bg-purple-700"
         >
-          {currentRuleIndex === allRules.length - 1 ? (
+          {currentRuleIndex === customizations.length - 1 ? (
             <>
               <Check className="mr-2 h-4 w-4" />
               Concluir
@@ -215,14 +209,20 @@ export function ClientCustomizationPanel({
 }
 
 interface CustomizationRuleStepProps {
-  rule: (ProductRuleDTO | LegacyCustomizationDTO) & { isLegacy: boolean };
-  layouts: LayoutDTO[];
+  customization: {
+    id: string;
+    type: string;
+    name: string;
+    description?: string;
+    isRequired: boolean;
+    customization_data: Record<string, unknown>;
+    price: number;
+  };
   onUpdate: (data: CustomizationStateData) => void;
 }
 
 function CustomizationRuleStep({
-  rule,
-  layouts,
+  customization,
   onUpdate,
 }: CustomizationRuleStepProps) {
   const [data, setData] = useState<CustomizationStateData>({});
@@ -245,13 +245,14 @@ function CustomizationRuleStep({
     toast.success(`${files.length} foto(s) adicionada(s)`);
   };
 
-  const isRequired = rule.isLegacy
-    ? (rule as LegacyCustomizationDTO).isRequired
-    : (rule as ProductRuleDTO).required;
-
-  const ruleType = rule.isLegacy
-    ? (rule as LegacyCustomizationDTO).customizationType
-    : (rule as ProductRuleDTO).ruleType;
+  const options = customization.customization_data.options as
+    | Array<{
+        id: string;
+        label: string;
+        image_url?: string;
+        price_modifier?: number;
+      }>
+    | undefined;
 
   return (
     <Card>
@@ -259,24 +260,29 @@ function CustomizationRuleStep({
         <div className="flex items-start justify-between">
           <div>
             <CardTitle className="flex items-center gap-2">
-              {rule.title}
-              {isRequired && (
+              {customization.name}
+              {customization.isRequired && (
                 <Badge variant="destructive" className="text-xs">
                   Obrigatório
                 </Badge>
               )}
             </CardTitle>
-            {rule.description && (
+            {customization.description && (
               <CardDescription className="mt-2">
-                {rule.description}
+                {customization.description}
               </CardDescription>
+            )}
+            {customization.price > 0 && (
+              <p className="text-sm text-emerald-600 font-medium mt-2">
+                +R$ {customization.price.toFixed(2)}
+              </p>
             )}
           </div>
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
-        {/* PHOTO_UPLOAD */}
-        {(ruleType === "PHOTO_UPLOAD" || ruleType === "LAYOUT_WITH_PHOTOS") && (
+        {/* IMAGES */}
+        {customization.type === "IMAGES" && (
           <div className="space-y-4">
             <Label htmlFor="photo-upload" className="flex items-center gap-2">
               <ImageIcon className="h-4 w-4" />
@@ -307,8 +313,8 @@ function CustomizationRuleStep({
           </div>
         )}
 
-        {/* TEXT_INPUT */}
-        {ruleType === "TEXT_INPUT" && (
+        {/* TEXT */}
+        {customization.type === "TEXT" && (
           <div className="space-y-2">
             <Label htmlFor="text-input" className="flex items-center gap-2">
               <Type className="h-4 w-4" />
@@ -324,60 +330,51 @@ function CustomizationRuleStep({
           </div>
         )}
 
-        {/* LAYOUT_PRESET */}
-        {ruleType === "LAYOUT_PRESET" && (
-          <div className="space-y-2">
-            <Label>Escolha um Layout</Label>
-            <div className="grid grid-cols-2 gap-4">
-              {layouts.map((layout) => (
-                <Card
-                  key={layout.id}
-                  className={`cursor-pointer transition-all hover:border-purple-600 ${
-                    data.selectedLayoutId === layout.id
-                      ? "border-2 border-purple-600"
-                      : ""
-                  }`}
-                  onClick={() => updateData({ selectedLayoutId: layout.id })}
-                >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={layout.baseImageUrl}
-                    alt={layout.name}
-                    className="h-32 w-full rounded-t-lg object-cover"
-                  />
-                  <CardContent className="p-4">
-                    <p className="font-medium">{layout.name}</p>
-                    {layout.description && (
-                      <p className="text-sm text-muted-foreground">
-                        {layout.description}
-                      </p>
-                    )}
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* OPTION_SELECT / MULTIPLE_CHOICE */}
-        {(ruleType === "OPTION_SELECT" || ruleType === "MULTIPLE_CHOICE") && (
+        {/* MULTIPLE_CHOICE */}
+        {customization.type === "MULTIPLE_CHOICE" && options && (
           <div className="space-y-2">
             <Label>Escolha uma Opção</Label>
-            <Select
-              value={data.selectedOptions?.main || ""}
-              onValueChange={(value) =>
-                updateData({ selectedOptions: { main: value } })
-              }
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Selecione..." />
-              </SelectTrigger>
-              <SelectContent>
-                {/* Renderizar opções disponíveis */}
-                <SelectItem value="option1">Opção 1</SelectItem>
-                <SelectItem value="option2">Opção 2</SelectItem>
-              </SelectContent>
-            </Select>
+            <div className="grid grid-cols-2 gap-4">
+              {options.map((option) => {
+                const API_URL = process.env.NEXT_PUBLIC_API_URL;
+                const imageUrl = option.image_url
+                  ? option.image_url.startsWith("http")
+                    ? option.image_url
+                    : `${API_URL}${option.image_url}`
+                  : null;
+
+                return (
+                  <Card
+                    key={option.id}
+                    className={`cursor-pointer transition-all hover:border-purple-600 ${
+                      data.selectedOptions?.main === option.id
+                        ? "border-2 border-purple-600"
+                        : ""
+                    }`}
+                    onClick={() =>
+                      updateData({ selectedOptions: { main: option.id } })
+                    }
+                  >
+                    {imageUrl && (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={imageUrl}
+                        alt={option.label}
+                        className="h-32 w-full rounded-t-lg object-cover"
+                      />
+                    )}
+                    <CardContent className="p-4">
+                      <p className="font-medium">{option.label}</p>
+                      {option.price_modifier && option.price_modifier > 0 && (
+                        <p className="text-sm text-emerald-600 font-medium mt-1">
+                          +R$ {option.price_modifier.toFixed(2)}
+                        </p>
+                      )}
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
           </div>
         )}
       </CardContent>

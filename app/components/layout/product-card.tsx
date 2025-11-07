@@ -46,84 +46,83 @@ export function ProductCard({ props }: ProductCardProps) {
       toast.error("Erro ao adicionar produto ao carrinho");
     }
   };
+
+  const finalPrice = props.discount
+    ? props.price - (props.discount * props.price) / 100
+    : props.price;
+
   return (
     <>
-      <div className="group flex flex-col justify-between relative w-full h-auto bg-white rounded-2xl hover:shadow-xs overflow-hidden">
-        <Link href={`/produto/${props.id}`} className="block">
-          <div className="relative aspect-square overflow-hidden bg-gradient-to-br from-gray-50 to-gray-100 max-w-[300px] mx-auto">
+      <div className="group flex flex-col relative w-full h-full bg-white rounded-xl shadow-sm hover:shadow-xl overflow-hidden transition-all duration-300 hover:-translate-y-1 border border-gray-100">
+        <Link href={`/produto/${props.id}`} className="block flex-1">
+          <div className="relative aspect-square overflow-hidden bg-gradient-to-br from-gray-50 to-gray-100">
             <Image
               src={props.image_url || "/placeholder.svg"}
               alt={props.name}
               fill
-              className="object-cover"
+              className="object-cover group-hover:scale-110 transition-transform duration-500"
+              sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, (max-width: 1024px) 25vw, 16vw"
             />
 
+            {/* Discount Badge */}
+            {props.discount && props.discount > 0 ? (
+              <div className="absolute top-2 right-2 bg-gradient-to-r from-red-500 to-pink-500 text-white text-xs font-bold px-2.5 py-1 rounded-full shadow-lg">
+                -{props.discount.toFixed(0)}%
+              </div>
+            ) : null}
+
+            {/* Categories */}
             {props.categoryNames && props.categoryNames.length > 0 ? (
-              <div className="absolute top-3 left-3 gap-1 flex opacity-80">
+              <div className="absolute bottom-2 left-2 gap-1 flex">
                 {props.categoryNames[0] && (
-                  <div className="bg-white/90 backdrop-blur-sm px-3 py-1 rounded-full text-xs font-medium text-gray-700">
+                  <div className="bg-white/95 backdrop-blur-sm px-2.5 py-1 rounded-full text-xs font-medium text-gray-700 shadow-sm">
                     {props.categoryNames[0]}
                   </div>
                 )}
                 {props.categoryNames.length > 1 && (
-                  <div className="bg-white/90 backdrop-blur-sm px-2 py-1 rounded-full text-xs font-medium text-gray-700">
+                  <div className="bg-white/95 backdrop-blur-sm px-2 py-1 rounded-full text-xs font-medium text-gray-700 shadow-sm">
                     +{props.categoryNames.length - 1}
                   </div>
                 )}
               </div>
             ) : props.categoryName ? (
-              <div className="absolute top-3 left-3 bg-white/90 backdrop-blur-sm px-3 py-1 rounded-full text-xs font-medium text-gray-700">
+              <div className="absolute bottom-2 left-2 bg-white/95 backdrop-blur-sm px-2.5 py-1 rounded-full text-xs font-medium text-gray-700 shadow-sm">
                 {props.categoryName}
               </div>
             ) : null}
           </div>
 
-          <div className="p-4 space-y-3 flex flex-col overflow-hidden h-28">
-            <div>
-              <h3 className="text-sm font-medium text-gray-900 line-clamp-2 leading-tight group-hover:text-rose-600 transition-colors min-h-[2.5rem]">
-                {props.name}
-              </h3>
-            </div>
+          <div className="p-3 space-y-2">
+            <h3 className="text-sm font-semibold text-gray-900 line-clamp-2 leading-tight group-hover:text-rose-600 transition-colors min-h-[2.5rem]">
+              {props.name}
+            </h3>
 
-            <div className="flex items-center justify-between mt-auto">
+            <div className="flex items-center justify-between">
               <div className="flex flex-col">
-                <div className="text-sm text-gray-500 line-through">
-                  {props.discount
-                    ? props.price.toLocaleString("pt-BR", {
-                        style: "currency",
-                        currency: "BRL",
-                      })
-                    : null}
-                </div>
-                <div className="text-lg font-semibold text-gray-900">
-                  {props.discount
-                    ? (
-                        props.price -
-                        (props.discount * props.price) / 100
-                      ).toLocaleString("pt-BR", {
-                        style: "currency",
-                        currency: "BRL",
-                      })
-                    : props.price.toLocaleString("pt-BR", {
-                        style: "currency",
-                        currency: "BRL",
-                      })}
-                </div>
+                {props.discount && props.discount > 0 ? (
+                  <span className="text-xs text-gray-400 line-through">
+                    {props.price.toLocaleString("pt-BR", {
+                      style: "currency",
+                      currency: "BRL",
+                    })}
+                  </span>
+                ) : null}
+                <span className="text-lg font-bold text-gray-900">
+                  {finalPrice.toLocaleString("pt-BR", {
+                    style: "currency",
+                    currency: "BRL",
+                  })}
+                </span>
               </div>
-              {props.discount && props.discount > 0 ? (
-                <div className="text-xs text-green-500 px-2 py-1 rounded-full font-medium">
-                  {`${props.discount.toFixed(0)}% OFF`}
-                </div>
-              ) : null}
             </div>
           </div>
         </Link>
-        <div className="p-4 pt-0 mt-2">
+
+        <div className="p-3 pt-0">
           <Button
             size="sm"
-            className="w-full bg-rose-500 hover:bg-rose-600 text-white cursor-pointer"
+            className="w-full bg-gradient-to-r from-rose-500 to-rose-600 hover:from-rose-600 hover:to-rose-700 text-white font-medium shadow-md hover:shadow-lg transition-all duration-300"
             onClick={handleAddToCart}
-            title="Adicionar ao carrinho"
           >
             <ShoppingCart className="h-4 w-4 mr-2" />
             Adicionar

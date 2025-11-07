@@ -34,8 +34,25 @@ export default function MultipleChoiceCustomizationForm({
   data,
   onChange,
 }: Props) {
+  const API_URL = process.env.NEXT_PUBLIC_API_URL;
+
+  // Normalizar opções ao carregar - garantir que URLs tenham o prefixo correto
+  const normalizeOptions = (
+    opts: MultipleChoiceOption[]
+  ): MultipleChoiceOption[] => {
+    return opts.map((opt) => {
+      if (opt.image_url && !opt.image_url.startsWith("http")) {
+        return {
+          ...opt,
+          image_url: `${API_URL}${opt.image_url}`,
+        };
+      }
+      return opt;
+    });
+  };
+
   const [options, setOptions] = useState<MultipleChoiceOption[]>(
-    data.options || []
+    normalizeOptions(data.options || [])
   );
   const api = useApi();
   const [minSelection, setMinSelection] = useState(data.min_selection || 1);
@@ -61,11 +78,18 @@ export default function MultipleChoiceCustomizationForm({
     try {
       toast.info("Enviando imagem...");
       const res = await api.uploadCustomizationImage(file);
+
+      // Garantir que a URL está completa com API_URL
+      let fullImageUrl = res.imageUrl;
+      if (!fullImageUrl.startsWith("http")) {
+        fullImageUrl = `${API_URL}${fullImageUrl}`;
+      }
+
       const updated = options.map((opt, i) =>
         i === index
           ? {
               ...opt,
-              image_url: res.imageUrl,
+              image_url: fullImageUrl,
               image_filename: res.filename,
             }
           : opt

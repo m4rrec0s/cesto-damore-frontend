@@ -24,7 +24,6 @@ export interface CustomizationStateData {
 }
 
 export interface CustomizationSessionState {
-  itemType: "PRODUCT" | "ADDITIONAL";
   itemId: string;
   config: CustomizationConfigResponse | null;
   customizations: Map<string, CustomizationStateData>;
@@ -38,13 +37,8 @@ class CustomizationClientService {
   /**
    * Inicializa uma nova sessão de customização
    */
-  initializeSession(
-    itemType: "PRODUCT" | "ADDITIONAL",
-    itemId: string,
-    config: CustomizationConfigResponse
-  ): void {
+  initializeSession(itemId: string, config: CustomizationConfigResponse): void {
     this.sessionState = {
-      itemType,
       itemId,
       config,
       customizations: new Map(),
@@ -180,53 +174,20 @@ class CustomizationClientService {
 
     const inputs: CustomizationInput[] = [];
 
-    // Processar rules novas
-    this.sessionState.config.rules.forEach((rule) => {
-      const data = this.sessionState!.customizations.get(rule.id);
-      if (!data) return;
+    // Processar customizations
+    if (this.sessionState.config.customizations) {
+      this.sessionState.config.customizations.forEach((customization) => {
+        const data = this.sessionState!.customizations.get(customization.id);
+        if (!data) return;
 
-      let customizationType: CustomizationType;
-
-      // Mapear ruleType para CustomizationType
-      switch (rule.ruleType) {
-        case "PHOTO_UPLOAD":
-        case "LAYOUT_WITH_PHOTOS":
-          customizationType = CustomizationType.PHOTO_UPLOAD;
-          break;
-        case "TEXT_INPUT":
-          customizationType = CustomizationType.TEXT_INPUT;
-          break;
-        case "OPTION_SELECT":
-        case "LAYOUT_PRESET":
-          customizationType = CustomizationType.MULTIPLE_CHOICE;
-          break;
-        case "ITEM_SUBSTITUTION":
-          customizationType = CustomizationType.ITEM_SUBSTITUTION;
-          break;
-        default:
-          customizationType = CustomizationType.MULTIPLE_CHOICE;
-      }
-
-      inputs.push({
-        ruleId: rule.id,
-        customizationType,
-        data: data as Record<string, unknown>,
-        selectedLayoutId: data.selectedLayoutId,
+        inputs.push({
+          ruleId: customization.id,
+          customizationType: customization.type as CustomizationType,
+          data: data as Record<string, unknown>,
+          selectedLayoutId: data.selectedLayoutId,
+        });
       });
-    });
-
-    // Processar legacy rules
-    this.sessionState.config.legacyRules.forEach((rule) => {
-      const data = this.sessionState!.customizations.get(rule.id);
-      if (!data) return;
-
-      inputs.push({
-        customizationRuleId: rule.id,
-        customizationType: rule.customizationType,
-        data: data as Record<string, unknown>,
-        selectedLayoutId: rule.layoutId,
-      });
-    });
+    }
 
     return inputs;
   }
@@ -241,25 +202,17 @@ class CustomizationClientService {
 
     const missingRules: string[] = [];
 
-    // Validar rules novas
-    this.sessionState.config.rules.forEach((rule) => {
-      if (rule.required) {
-        const data = this.sessionState!.customizations.get(rule.id);
-        if (!data) {
-          missingRules.push(rule.title);
+    // Validar customizations obrigatórias
+    if (this.sessionState.config.customizations) {
+      this.sessionState.config.customizations.forEach((customization) => {
+        if (customization.isRequired) {
+          const data = this.sessionState!.customizations.get(customization.id);
+          if (!data) {
+            missingRules.push(customization.name);
+          }
         }
-      }
-    });
-
-    // Validar legacy rules
-    this.sessionState.config.legacyRules.forEach((rule) => {
-      if (rule.isRequired) {
-        const data = this.sessionState!.customizations.get(rule.id);
-        if (!data) {
-          missingRules.push(rule.title);
-        }
-      }
-    });
+      });
+    }
 
     return {
       valid: missingRules.length === 0,
@@ -336,7 +289,6 @@ class CustomizationClientService {
     });
 
     const state = {
-      itemType: this.sessionState.itemType,
       itemId: this.sessionState.itemId,
       customizations: customizationsObj,
       finalArtwork: this.sessionState.finalArtwork,
@@ -360,7 +312,6 @@ class CustomizationClientService {
       const state = JSON.parse(stored);
 
       this.sessionState = {
-        itemType: state.itemType,
         itemId: state.itemId,
         config,
         customizations: new Map(Object.entries(state.customizations || {})),

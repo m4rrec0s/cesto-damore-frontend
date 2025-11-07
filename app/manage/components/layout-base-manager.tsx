@@ -490,7 +490,7 @@ export default function LayoutBaseManager({
                       <span
                         className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${
                           layout.item_type === "CANECA"
-                            ? "bg-orange-100 text-orange-800"
+                            ? "bg-rose-100 text-rose-800"
                             : "bg-purple-100 text-purple-800"
                         }`}
                       >

@@ -205,6 +205,12 @@ export interface Additional {
   discount?: number;
   image_url?: string;
   stock_quantity?: number;
+  compatible_products?: Array<{
+    product_id: string;
+    product_name: string;
+    custom_price: number | null;
+    is_active: boolean;
+  }>;
 }
 
 export interface CustomizationOption {
@@ -861,6 +867,36 @@ class ApiService {
     return res.data;
   };
 
+  // ===== Product Components =====
+  addProductComponent = async (
+    productId: string,
+    component: { item_id: string; quantity: number }
+  ) => {
+    const res = await this.client.post(
+      `/products/${productId}/components`,
+      component
+    );
+    this.clearCache("products");
+    return res.data;
+  };
+  updateProductComponent = async (
+    componentId: string,
+    data: { quantity: number }
+  ) => {
+    const res = await this.client.put(`/components/${componentId}`, data);
+    this.clearCache("products");
+    return res.data;
+  };
+  removeProductComponent = async (componentId: string) => {
+    const res = await this.client.delete(`/components/${componentId}`);
+    this.clearCache("products");
+    return res.data;
+  };
+  getProductComponents = async (productId: string) => {
+    const res = await this.client.get(`/products/${productId}/components`);
+    return res.data;
+  };
+
   // ===== Products =====
   getProducts = async (params?: {
     page?: number;
@@ -881,7 +917,18 @@ class ApiService {
     const queryString = queryParams.toString();
     const url = `/products${queryString ? `?${queryString}` : ""}`;
 
+    // Se não tem parâmetros e tem cache, retornar do cache
+    if (!queryString && ApiService.cache.products) {
+      return ApiService.cache.products as ProductsResponse;
+    }
+
     const res = await this.client.get(url);
+
+    // Salvar no cache apenas se não tem parâmetros (página inicial)
+    if (!queryString) {
+      ApiService.cache.products = res.data;
+    }
+
     return res.data;
   };
   getProduct = async (id: string) =>
@@ -1143,10 +1190,8 @@ class ApiService {
    * GET /items/:itemId/customizations (rota pública no backend)
    */
   getItemCustomizations = async (
-    itemType: "PRODUCT" | "ADDITIONAL",
     itemId: string
   ): Promise<import("../types/customization").CustomizationConfigResponse> => {
-    // Note: backend exposes this endpoint as /items/:itemId/customizations (regardless of itemType)
     const res = await this.client.get(`/items/${itemId}/customizations`, {
       headers: { "ngrok-skip-browser-warning": "true" },
     });
@@ -1174,7 +1219,6 @@ class ApiService {
    * POST /customizations/validate
    */
   validateCustomizationsV2 = async (payload: {
-    itemType: "PRODUCT" | "ADDITIONAL";
     itemId: string;
     inputs: import("../types/customization").CustomizationInput[];
   }): Promise<import("../types/customization").ValidationResponse> => {
@@ -1191,6 +1235,35 @@ class ApiService {
     customizations: import("../types/customization").CustomizationInput[];
   }): Promise<import("../types/customization").PreviewPayload> => {
     const res = await this.client.post("/customizations/preview", payload);
+    return res.data;
+  };
+
+  /**
+   * Busca informações completas de um layout por ID
+   * GET /admin/layouts/:layoutId
+   */
+  getLayoutById = async (
+    layoutId: string
+  ): Promise<{
+    id: string;
+    name: string;
+    item_type: string;
+    image_url: string;
+    width: number;
+    height: number;
+    slots: Array<{
+      id: string;
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+      rotation?: number;
+      zIndex?: number;
+    }>;
+    created_at: string;
+    updated_at: string;
+  }> => {
+    const res = await this.client.get(`/layouts/${layoutId}`);
     return res.data;
   };
 
@@ -1700,8 +1773,20 @@ class ApiService {
 
   // ===== Public Feed =====
   getPublicFeed = async (configId?: string): Promise<PublicFeedResponse> => {
+    const cacheKey = `publicFeed_${configId || "default"}`;
+
+    // Retornar do cache se disponível
+    if (ApiService.cache[cacheKey]) {
+      return ApiService.cache[cacheKey] as PublicFeedResponse;
+    }
+
     const params = configId ? `?configId=${configId}` : "";
-    return (await this.client.get(`/feed${params}`)).data;
+    const response = await this.client.get(`/feed${params}`);
+
+    // Armazenar no cache
+    ApiService.cache[cacheKey] = response.data;
+
+    return response.data;
   };
 
   // ===== Reports =====
@@ -1718,6 +1803,17 @@ class ApiService {
   checkLowStock = async (threshold: number = 3) => {
     const res = await this.client.get(
       `/reports/stock/check?threshold=${threshold}`
+    );
+    return res.data;
+  };
+
+  // ===== Item Constraints =====
+  getItemConstraints = async (
+    itemId: string,
+    itemType: "PRODUCT" | "ADDITIONAL"
+  ) => {
+    const res = await this.client.get(
+      `/constraints/item/${itemType}/${itemId}`
     );
     return res.data;
   };

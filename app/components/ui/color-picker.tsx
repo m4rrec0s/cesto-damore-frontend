@@ -15,7 +15,7 @@ const presetColors = [
   "#000000", // Preto
   "#F43F5E", // Rose
   "#EF4444", // Red
-  "#F97316", // Orange
+  "#F97316", // rose
   "#F59E0B", // Amber
   "#EAB308", // Yellow
   "#84CC16", // Lime

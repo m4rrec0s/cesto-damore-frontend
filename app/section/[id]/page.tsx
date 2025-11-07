@@ -114,7 +114,7 @@ function FeedItemCard({ item }: FeedItemCardProps) {
 
             <button
               aria-label="Adicionar ao carrinho"
-              className="bg-orange-500 text-white p-2 rounded-full hover:bg-orange-600 transition-colors"
+              className="bg-rose-500 text-white p-2 rounded-full hover:bg-rose-600 transition-colors"
             >
               <ShoppingCart className="h-4 w-4" />
             </button>
@@ -265,7 +265,7 @@ export default function SectionDetailPage() {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
-          <Loader2 className="h-12 w-12 animate-spin text-orange-600 mx-auto mb-4" />
+          <Loader2 className="h-12 w-12 animate-spin text-rose-600 mx-auto mb-4" />
           <p className="text-gray-600">Carregando seção...</p>
         </div>
       </div>
@@ -285,7 +285,7 @@ export default function SectionDetailPage() {
           </p>
           <Link
             href="/"
-            className="inline-flex items-center px-6 py-3 bg-orange-600 text-white font-semibold rounded-lg hover:bg-orange-700 transition-colors"
+            className="inline-flex items-center px-6 py-3 bg-rose-600 text-white font-semibold rounded-lg hover:bg-rose-700 transition-colors"
           >
             <ChevronLeft className="h-4 w-4 mr-2" />
             Voltar para a página inicial
@@ -302,7 +302,7 @@ export default function SectionDetailPage() {
         <div className="mb-8">
           <Link
             href="/"
-            className="inline-flex items-center text-orange-600 hover:text-orange-700 font-semibold mb-4 group"
+            className="inline-flex items-center text-rose-600 hover:text-rose-700 font-semibold mb-4 group"
           >
             <ChevronLeft className="h-4 w-4 mr-1 group-hover:-translate-x-1 transition-transform" />
             Voltar para a página inicial

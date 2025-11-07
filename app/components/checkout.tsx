@@ -142,7 +142,7 @@ export function Checkout({ user, onClose, isOpen = true }: CheckoutProps) {
               </div>
               <div className="border-t pt-2 mt-3 flex justify-between font-semibold">
                 <span>Total:</span>
-                <span className="text-orange-600">
+                <span className="text-rose-600">
                   R$ {cart.total.toFixed(2)}
                 </span>
               </div>
@@ -158,7 +158,7 @@ export function Checkout({ user, onClose, isOpen = true }: CheckoutProps) {
                   value={deliveryAddress}
                   onChange={(e) => setDeliveryAddress(e.target.value)}
                   placeholder="Digite o endereço completo para entrega"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-rose-500"
                   rows={3}
                 />
               </div>
@@ -171,7 +171,7 @@ export function Checkout({ user, onClose, isOpen = true }: CheckoutProps) {
                   type="datetime-local"
                   value={deliveryDate}
                   onChange={(e) => setDeliveryDate(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-rose-500"
                   placeholder="Selecione a data e hora"
                 />
               </div>
@@ -186,7 +186,7 @@ export function Checkout({ user, onClose, isOpen = true }: CheckoutProps) {
             <Button
               onClick={handleCheckout}
               disabled={isProcessing || !deliveryAddress.trim()}
-              className="w-full bg-orange-600 hover:bg-orange-700 text-white"
+              className="w-full bg-rose-600 hover:bg-rose-700 text-white"
               size="lg"
             >
               {isProcessing ? (

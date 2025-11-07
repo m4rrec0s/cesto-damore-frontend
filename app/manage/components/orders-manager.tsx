@@ -223,8 +223,7 @@ export function OrdersManager() {
       <header className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
           <h2 className="flex items-center gap-2 text-2xl font-semibold text-gray-900">
-            <Workflow className="h-6 w-6 text-orange-500" /> Pedidos em
-            andamento
+            <Workflow className="h-6 w-6 text-rose-500" /> Pedidos em andamento
           </h2>
           <p className="text-sm text-gray-500">
             Acompanhe pedidos em tempo real, avance etapas e mantenha seus
@@ -237,7 +236,7 @@ export function OrdersManager() {
               type="checkbox"
               checked={notifyCustomer}
               onChange={(event) => setNotifyCustomer(event.target.checked)}
-              className="h-4 w-4 rounded border-gray-300 text-orange-500 focus:ring-orange-500"
+              className="h-4 w-4 rounded border-gray-300 text-rose-500 focus:ring-rose-500"
             />
             Notificar cliente a cada atualização
           </label>
@@ -268,7 +267,7 @@ export function OrdersManager() {
               className={cn(
                 "rounded-xl border border-gray-200 bg-white p-4 text-left shadow-sm transition hover:shadow-md",
                 statusFilter === filter &&
-                  "border-orange-400 shadow-md ring-1 ring-orange-200"
+                  "border-rose-400 shadow-md ring-1 ring-rose-200"
               )}
             >
               <span className="text-sm font-medium text-gray-500">
@@ -404,7 +403,7 @@ export function OrdersManager() {
                             )}`}
                             target="_blank"
                             rel="noreferrer"
-                            className="hover:text-orange-600"
+                            className="hover:text-rose-600"
                           >
                             {order.user.phone}
                           </a>

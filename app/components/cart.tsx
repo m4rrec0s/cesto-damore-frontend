@@ -204,13 +204,13 @@ export function Cart({ onCheckout, className = "" }: CartProps) {
       <div className="border-t pt-4 mt-4">
         <div className="flex justify-between items-center mb-4">
           <span className="text-lg font-semibold text-gray-900">Total:</span>
-          <span className="text-xl font-bold text-orange-600">
+          <span className="text-xl font-bold text-rose-600">
             R$ {cart.total.toFixed(2)}
           </span>
         </div>
 
         <Button
-          className="w-full bg-orange-600 hover:bg-orange-700 text-white"
+          className="w-full bg-rose-600 hover:bg-rose-700 text-white"
           size="lg"
           onClick={onCheckout}
         >

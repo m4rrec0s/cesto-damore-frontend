@@ -36,6 +36,7 @@ import Image from "next/image";
 import { Textarea } from "@/app/components/ui/textarea";
 import { Checkbox } from "@/app/components/ui/checkbox";
 import { LoadingSpinner } from "@/app/components/LoadingSpinner";
+import CustomizationManager from "./CustomizationManager";
 
 interface Item {
   id: string;
@@ -71,33 +72,6 @@ interface Additional {
   image_url?: string;
 }
 
-const CUSTOMIZATION_TYPES = [
-  {
-    value: "BASE_LAYOUT",
-    label: "Layout Base",
-    description: "Cliente escolhe um layout pronto",
-    icon: "🎨",
-  },
-  {
-    value: "TEXT",
-    label: "Texto Personalizável",
-    description: "Cliente modifica textos (nomes, datas, frases)",
-    icon: "✏️",
-  },
-  {
-    value: "IMAGES",
-    label: "Upload de Imagens",
-    description: "Cliente anexa imagens em posições específicas",
-    icon: "🖼️",
-  },
-  {
-    value: "MULTIPLE_CHOICE",
-    label: "Múltipla Escolha",
-    description: "Cliente escolhe entre múltiplas opções",
-    icon: "☑️",
-  },
-];
-
 export function ItemsTab() {
   const api = useApi();
   const [items, setItems] = useState<Item[]>([]);
@@ -110,7 +84,6 @@ export function ItemsTab() {
   const [editingItem, setEditingItem] = useState<Item | null>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string>("");
-  const [customizations, setCustomizations] = useState<Customization[]>([]);
   const [formData, setFormData] = useState({
     name: "",
     description: "",
@@ -141,20 +114,6 @@ export function ItemsTab() {
       console.error("Erro ao carregar adicionais:", error);
     }
   }, [api]);
-
-  const loadCustomizations = useCallback(
-    async (itemId: string) => {
-      try {
-        const data = await api.get(`/items/${itemId}/customizations`);
-        // Garantir que sempre seja um array
-        setCustomizations(Array.isArray(data) ? data : []);
-      } catch (error) {
-        console.error("Erro ao carregar customizações:", error);
-        setCustomizations([]);
-      }
-    },
-    [api]
-  );
 
   useEffect(() => {
     loadItems();
@@ -265,7 +224,6 @@ export function ItemsTab() {
 
   const handleOpenCustomizationModal = async (item: Item) => {
     setSelectedItem(item);
-    await loadCustomizations(item.id);
     setShowCustomizationModal(true);
   };
 
@@ -611,7 +569,7 @@ export function ItemsTab() {
 
         {/* Modal de Customização */}
         {showCustomizationModal && selectedItem && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
             <div className="bg-white rounded-lg max-w-6xl w-full max-h-[90vh] overflow-y-auto">
               <div className="p-6">
                 <div className="flex justify-between items-center mb-6">
@@ -628,133 +586,10 @@ export function ItemsTab() {
                   </Button>
                 </div>
 
-                <div className="space-y-6">
-                  <div className="bg-gradient-to-r from-purple-50 to-pink-50 border border-purple-200 rounded-lg p-6">
-                    <h3 className="font-semibold text-lg mb-3 flex items-center gap-2">
-                      <span className="text-2xl">🎨</span>
-                      Tipos de Customização Disponíveis
-                    </h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {CUSTOMIZATION_TYPES.map((type) => (
-                        <div
-                          key={type.value}
-                          className="bg-white border border-gray-200 rounded-lg p-4 hover:border-purple-300 transition-colors"
-                        >
-                          <div className="flex items-start gap-3">
-                            <span className="text-2xl">{type.icon}</span>
-                            <div>
-                              <h4 className="font-semibold text-sm">
-                                {type.label}
-                              </h4>
-                              <p className="text-xs text-gray-600 mt-1">
-                                {type.description}
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className="flex justify-between items-center mb-4">
-                      <h3 className="font-semibold text-lg">
-                        Customizações Configuradas
-                      </h3>
-                      <Button size="sm">
-                        <Plus className="w-4 h-4 mr-2" />
-                        Nova Customização
-                      </Button>
-                    </div>
-
-                    {loading && !customizations && (
-                      <div className="text-center py-12">
-                        <LoadingSpinner />
-                      </div>
-                    )}
-
-                    {Array.isArray(customizations) &&
-                    customizations.length === 0 ? (
-                      <div className="text-center py-12 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
-                        <Wand2 className="w-12 h-12 mx-auto mb-3 text-gray-400" />
-                        <p className="text-gray-700 font-medium">
-                          Nenhuma customização configurada
-                        </p>
-                        <p className="text-sm text-gray-500 mt-1">
-                          Adicione customizações para permitir que os clientes
-                          personalizem este item
-                        </p>
-                      </div>
-                    ) : (
-                      <div className="space-y-3">
-                        {Array.isArray(customizations) &&
-                          customizations.map((custom) => (
-                            <div
-                              key={custom.id}
-                              className="border border-gray-200 rounded-lg p-4 hover:border-gray-300 transition-colors"
-                            >
-                              <div className="flex justify-between items-start">
-                                <div className="flex-1">
-                                  <div className="flex items-center gap-2 mb-2">
-                                    <h4 className="font-semibold">
-                                      {custom.name}
-                                    </h4>
-                                    <Badge variant="outline">
-                                      {
-                                        CUSTOMIZATION_TYPES.find(
-                                          (t) => t.value === custom.type
-                                        )?.icon
-                                      }{" "}
-                                      {
-                                        CUSTOMIZATION_TYPES.find(
-                                          (t) => t.value === custom.type
-                                        )?.label
-                                      }
-                                    </Badge>
-                                    {custom.isRequired && (
-                                      <Badge variant="destructive">
-                                        Obrigatório
-                                      </Badge>
-                                    )}
-                                  </div>
-                                  {custom.description && (
-                                    <p className="text-sm text-gray-600">
-                                      {custom.description}
-                                    </p>
-                                  )}
-                                  <p className="text-sm text-green-600 font-medium mt-2">
-                                    + R$ {custom.price.toFixed(2)}
-                                  </p>
-                                </div>
-                                <div className="flex gap-2">
-                                  <Button variant="outline" size="sm">
-                                    <Edit2 className="w-4 h-4" />
-                                  </Button>
-                                  <Button variant="destructive" size="sm">
-                                    <Trash2 className="w-4 h-4" />
-                                  </Button>
-                                </div>
-                              </div>
-                            </div>
-                          ))}
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4">
-                    <p className="text-sm text-yellow-800">
-                      ℹ️ <strong>Nota:</strong> Apenas itens do tipo
-                      &quot;Caneca&quot; usarão visualização 3D. Outros itens
-                      terão customização via imagens 2D.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex justify-end pt-6 border-t mt-6">
-                  <Button onClick={() => setShowCustomizationModal(false)}>
-                    Fechar
-                  </Button>
-                </div>
+                <CustomizationManager
+                  itemId={selectedItem.id}
+                  itemName={selectedItem.name}
+                />
               </div>
             </div>
           </div>

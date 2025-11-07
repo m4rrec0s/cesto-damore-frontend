@@ -721,7 +721,7 @@ export function IntegratedProductManager({
                     {items.length === 0 && (
                       <Badge
                         variant="outline"
-                        className="text-xs text-orange-600"
+                        className="text-xs text-rose-600"
                       >
                         <AlertCircle className="h-3 w-3 mr-1" />
                         Crie itens primeiro

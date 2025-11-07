@@ -20,6 +20,7 @@ export interface LayoutBase {
   name: string;
   item_type: string; // "caneca" | "quadro" | ...
   image_url: string; // URL da imagem base
+  model_url?: string; // URL do modelo 3D (opcional)
   width: number; // px reais da imagem base
   height: number;
   slots: SlotDef[];

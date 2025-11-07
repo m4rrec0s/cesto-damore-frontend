@@ -40,6 +40,7 @@ interface BannerFormData {
   link_url: string;
   text_color: string;
   is_active: boolean;
+  imageFile?: File;
 }
 
 export default function BannersTab({
@@ -81,38 +82,17 @@ export default function BannersTab({
     const file = e.target.files?.[0];
     if (!file) return;
 
-    try {
-      setUploadingImage(true);
-      setImagePreview(URL.createObjectURL(file));
+    // Armazena o arquivo para enviar junto com o formulário
+    setUploadingImage(true);
+    setImagePreview(URL.createObjectURL(file));
 
-      const formDataUpload = new FormData();
-      formDataUpload.append("image", file);
+    // Guarda o arquivo no estado (será enviado no submit)
+    setFormData((prev) => ({
+      ...prev,
+      imageFile: file,
+    }));
 
-      const response = await fetch(
-        `${
-          process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api"
-        }/upload/image`,
-        {
-          method: "POST",
-          body: formDataUpload,
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error("Erro ao fazer upload da imagem");
-      }
-
-      const data = await response.json();
-      const imageUrl = data.image_url || data.url;
-
-      setFormData((prev) => ({ ...prev, image_url: imageUrl }));
-    } catch (error) {
-      console.error("Erro no upload:", error);
-      alert("Erro ao fazer upload da imagem. Tente novamente.");
-      setImagePreview(null);
-    } finally {
-      setUploadingImage(false);
-    }
+    setUploadingImage(false);
   };
 
   const handleEdit = (banner: FeedBanner) => {
@@ -137,7 +117,7 @@ export default function BannersTab({
       return;
     }
 
-    if (!formData.image_url) {
+    if (!formData.imageFile && !formData.image_url) {
       alert("Por favor, faça upload de uma imagem");
       return;
     }
@@ -146,17 +126,38 @@ export default function BannersTab({
 
     try {
       if (editingBanner) {
+        // Ao editar, enviar o arquivo se houver um novo
         await api.updateFeedBanner(
           editingBanner.id,
-          formData as UpdateFeedBannerInput
+          {
+            title: formData.title,
+            subtitle: formData.subtitle,
+            link_url: formData.link_url,
+            text_color: formData.text_color,
+            is_active: formData.is_active,
+          } as UpdateFeedBannerInput,
+          formData.imageFile
         );
         alert("Banner atualizado com sucesso!");
       } else {
-        await api.createFeedBanner({
-          ...formData,
-          feed_config_id: configurationId,
-          display_order: banners.length,
-        } as CreateFeedBannerInput);
+        // Ao criar, o arquivo é obrigatório
+        if (!formData.imageFile) {
+          alert("Por favor, selecione uma imagem");
+          return;
+        }
+
+        await api.createFeedBanner(
+          {
+            feed_config_id: configurationId,
+            title: formData.title,
+            subtitle: formData.subtitle,
+            link_url: formData.link_url,
+            text_color: formData.text_color,
+            is_active: formData.is_active,
+            display_order: banners.length,
+          } as CreateFeedBannerInput,
+          formData.imageFile
+        );
         alert("Banner criado com sucesso!");
       }
 

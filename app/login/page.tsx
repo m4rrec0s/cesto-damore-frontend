@@ -122,17 +122,17 @@ function LoginForm() {
   if (user) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-rose-500"></div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-orange-50 to-rose-50 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-rose-50 to-rose-50 flex items-center justify-center p-4">
       <Card className="w-full max-w-md p-8">
         <div className="text-center mb-8">
-          <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <LogIn className="h-8 w-8 text-orange-600" />
+          <div className="w-16 h-16 bg-rose-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <LogIn className="h-8 w-8 text-rose-600" />
           </div>
           <h1 className="text-2xl font-bold text-gray-900 mb-2">
             {isRegistering ? "Criar Conta" : "Entrar"}
@@ -223,7 +223,7 @@ function LoginForm() {
 
           <Button
             type="submit"
-            className="w-full bg-orange-600 hover:bg-orange-700 text-white"
+            className="w-full bg-rose-600 hover:bg-rose-700 text-white"
             disabled={isLoading}
           >
             {isLoading ? (
@@ -243,7 +243,7 @@ function LoginForm() {
           <button
             type="button"
             onClick={() => setIsRegistering(!isRegistering)}
-            className="text-orange-600 hover:text-orange-700 font-medium"
+            className="text-rose-600 hover:text-rose-700 font-medium"
             disabled={isLoading}
           >
             {isRegistering
@@ -273,7 +273,7 @@ function LoginForm() {
           >
             {isGoogleLoading ? (
               <div className="flex items-center gap-2">
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-orange-600"></div>
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-rose-600"></div>
                 Conectando...
               </div>
             ) : (
@@ -317,7 +317,7 @@ const LoginPage = () => {
     <Suspense
       fallback={
         <div className="min-h-screen flex items-center justify-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500"></div>
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-rose-500"></div>
         </div>
       }
     >

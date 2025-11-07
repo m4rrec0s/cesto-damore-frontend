@@ -8,12 +8,7 @@ import { ShoppingCart, Minus, Plus, ChevronLeft } from "lucide-react";
 import { Button } from "@/app/components/ui/button";
 import { Badge } from "@/app/components/ui/badge";
 import { cn } from "@/app/lib/utils";
-import useApi, {
-  Additional,
-  Customization,
-  Item,
-  Product,
-} from "@/app/hooks/use-api";
+import useApi, { Additional, Item, Product } from "@/app/hooks/use-api";
 import { useCartContext } from "@/app/hooks/cart-context";
 import type { CartCustomization } from "@/app/hooks/use-cart";
 import { Model3DViewer } from "./Model3DViewer";
@@ -21,13 +16,13 @@ import AdditionalCard from "./additional-card";
 import Link from "next/link";
 import { ProductCard } from "@/app/components/layout/product-card";
 import { useRouter } from "next/navigation";
-import { ClientCustomizationPanel } from "@/app/components/customization/ClientCustomizationPanel";
-import customizationClientService from "@/app/services/customization-client-service";
-import type {
-  SaveOrderItemCustomizationPayload,
-  CustomizationTypeValue,
+import {
+  CustomizationType,
+  type CustomizationInput,
 } from "@/app/types/customization";
+import type { SlotDef } from "@/app/types/personalization";
 import { Separator } from "@/app/components/ui/separator";
+import { ItemCustomizationModal } from "./itemCustomizationsModal";
 
 const formatCurrency = (value: number) =>
   value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -41,61 +36,95 @@ const ClientProductPage = ({ id }: { id: string }) => {
   const [quantity, setQuantity] = useState(1);
   const [addingToCart, setAddingToCart] = useState(false);
   const [additionals, setAdditionals] = useState<Additional[]>([]);
-  const [missingRequiredFields, setMissingRequiredFields] = useState<string[]>(
-    []
-  );
   const [components, setComponents] = useState<Item[]>([]);
   const [selectedComponent, setSelectedComponent] = useState<Item | null>(null);
-  const [itemCustomizationPayloads, setItemCustomizationPayloads] = useState<
-    Record<string, SaveOrderItemCustomizationPayload | undefined>
+  const [itemCustomizations, setItemCustomizations] = useState<
+    Record<string, CustomizationInput[]>
   >({});
+  const [customizationPreviews, setCustomizationPreviews] = useState<
+    Record<string, string>
+  >({});
+  const [activeCustomizationModal, setActiveCustomizationModal] = useState<
+    string | null
+  >(null);
+  const [previewComponentId, setPreviewComponentId] = useState<string | null>(
+    null
+  );
   const isUploading = false;
 
   const handleCustomizationComplete = useCallback(
-    async (itemId: string, hasCustomizations: boolean) => {
-      try {
-        if (hasCustomizations) {
-          const payload =
-            await customizationClientService.buildOrderItemCustomizationPayload(
-              selectedComponent?.name || product.name || "Personalização"
-            );
-          setItemCustomizationPayloads((prev) => ({
-            ...prev,
-            [itemId]: payload,
-          }));
-          toast.success("Personalização salva para o item");
-        } else {
-          setItemCustomizationPayloads((prev) => {
-            const copy = { ...prev };
-            delete copy[itemId];
-            return copy;
-          });
+    (
+      itemId: string,
+      hasCustomizations: boolean,
+      data: CustomizationInput[]
+    ) => {
+      console.log("🎨 [handleCustomizationComplete] Início:", {
+        itemId,
+        hasCustomizations,
+        data,
+      });
+
+      if (hasCustomizations) {
+        setItemCustomizations((prev) => ({
+          ...prev,
+          [itemId]: data,
+        }));
+
+        // Verificar se tem BASE_LAYOUT customizado
+        const hasBaseLayout = data.some(
+          (c) => c.customizationType === CustomizationType.LAYOUT_BASE
+        );
+
+        console.log(
+          "🎨 [handleCustomizationComplete] hasBaseLayout:",
+          hasBaseLayout
+        );
+
+        if (hasBaseLayout) {
+          console.log(
+            "✅ [handleCustomizationComplete] Ativando preview para:",
+            itemId
+          );
+          setPreviewComponentId(itemId);
         }
-      } catch (err) {
-        console.error("Erro ao finalizar customização:", err);
-        toast.error("Falha ao salvar customização");
-      } finally {
-        try {
-          customizationClientService.clearSession();
-        } catch (e) {
-          console.error("Erro ao limpar sessão de customização:", e);
+
+        toast.success("Personalização salva!");
+      } else {
+        setItemCustomizations((prev) => {
+          const copy = { ...prev };
+          delete copy[itemId];
+          return copy;
+        });
+
+        // Limpar preview se era deste item
+        if (previewComponentId === itemId) {
+          console.log("🗑️ [handleCustomizationComplete] Limpando preview");
+          setPreviewComponentId(null);
         }
       }
     },
-    [product.name, selectedComponent?.name]
+    [previewComponentId]
+  );
+
+  const handlePreviewChange = useCallback(
+    (itemId: string, previewUrl: string | null) => {
+      if (previewUrl) {
+        setCustomizationPreviews((prev) => ({
+          ...prev,
+          [itemId]: previewUrl,
+        }));
+      } else {
+        setCustomizationPreviews((prev) => {
+          const copy = { ...prev };
+          delete copy[itemId];
+          return copy;
+        });
+      }
+    },
+    []
   );
 
   const router = useRouter();
-
-  // Memoized wrapper to pass to ClientCustomizationPanel so the prop identity
-  // doesn't change on every render (prevents the child from re-running effects)
-  const onCustomizationComplete = useCallback(
-    (has: boolean) => {
-      if (!selectedComponent) return;
-      handleCustomizationComplete(selectedComponent.id, has);
-    },
-    [handleCustomizationComplete, selectedComponent]
-  );
 
   useEffect(() => {
     const fetchProduct = async () => {
@@ -173,23 +202,120 @@ const ClientProductPage = ({ id }: { id: string }) => {
   //   [cartCustomizations]
   // );
 
-  const currentImageUrl =
-    selectedComponent?.image_url || product.image_url || "/placeholder.svg";
+  // Determinar a imagem/preview atual a ser exibido
+  const currentImageUrl = useMemo(() => {
+    // 1. Se há um componente sendo visualizado para preview
+    if (previewComponentId) {
+      const previewComponent = components.find(
+        (c) => c.id === previewComponentId
+      );
+      if (previewComponent) {
+        // Se tem customização BASE_LAYOUT, verificar se há layout selecionado
+        const componentCustomizations =
+          itemCustomizations[previewComponentId] || [];
+        const baseLayoutCustomization = componentCustomizations.find(
+          (c) => c.customizationType === CustomizationType.LAYOUT_BASE
+        );
+
+        if (baseLayoutCustomization) {
+          const layoutData = baseLayoutCustomization.data as
+            | { id?: string; image_url?: string }
+            | undefined;
+
+          console.log("🖼️ [currentImageUrl] Layout data:", layoutData);
+
+          // Usar image_url diretamente dos dados salvos
+          if (layoutData?.image_url) {
+            console.log(
+              "✅ [currentImageUrl] Usando image_url do layout:",
+              layoutData.image_url
+            );
+            return layoutData.image_url;
+          }
+        }
+
+        // Fallback para imagem do componente
+        return (
+          previewComponent.image_url || product.image_url || "/placeholder.svg"
+        );
+      }
+    }
+
+    // 2. Se há um preview de customização para o componente selecionado
+    if (selectedComponent && customizationPreviews[selectedComponent.id]) {
+      return customizationPreviews[selectedComponent.id];
+    }
+
+    // 3. Usar a imagem do componente ou do produto
+    return (
+      selectedComponent?.image_url || product.image_url || "/placeholder.svg"
+    );
+  }, [
+    selectedComponent,
+    customizationPreviews,
+    product.image_url,
+    previewComponentId,
+    components,
+    itemCustomizations,
+  ]);
+
   const currentName = selectedComponent?.name || product.name;
 
-  const shouldShow3D = useMemo(() => {
-    if (!selectedComponent) return false;
-    if (!selectedComponent.allows_customization) return false;
-    if (
-      selectedComponent.type !== "caneca" &&
-      selectedComponent.type !== "quadro"
-    )
-      return false;
-    // Mostrar 3D se o componente tiver um layout base associado
-    return Boolean(selectedComponent.layout_base_id);
-  }, [selectedComponent]);
+  // Determinar se deve mostrar modelo 3D e qual modelo usar
+  const { shouldShow3D, modelUrl, textureUrl } = useMemo(() => {
+    // Priorizar componente sendo previsualizado
+    const componentToCheck = previewComponentId
+      ? components.find((c) => c.id === previewComponentId)
+      : selectedComponent;
 
-  // photo upload helpers removed (product-level rules deprecated)
+    if (!componentToCheck)
+      return {
+        shouldShow3D: false,
+        modelUrl: undefined,
+        textureUrl: undefined,
+      };
+    if (!componentToCheck.allows_customization)
+      return {
+        shouldShow3D: false,
+        modelUrl: undefined,
+        textureUrl: undefined,
+      };
+
+    // Verificar se há uma customização BASE_LAYOUT ativa com layout selecionado
+    const componentCustomizations =
+      itemCustomizations[componentToCheck.id] || [];
+    const baseLayoutCustomization = componentCustomizations.find(
+      (c) => c.customizationType === CustomizationType.LAYOUT_BASE
+    );
+
+    if (baseLayoutCustomization) {
+      const layoutData = baseLayoutCustomization.data as
+        | {
+            id?: string;
+            name?: string;
+            model_url?: string;
+            item_type?: string;
+            previewUrl?: string;
+          }
+        | undefined;
+
+      if (layoutData?.model_url && layoutData?.previewUrl) {
+        console.log("✅ [shouldShow3D] Mostrando 3D:", {
+          modelUrl: layoutData.model_url,
+          itemType: layoutData.item_type,
+          hasTexture: !!layoutData.previewUrl,
+        });
+        return {
+          shouldShow3D: true,
+          modelUrl: layoutData.model_url,
+          textureUrl: layoutData.previewUrl,
+        };
+      }
+    }
+
+    console.log("❌ [shouldShow3D] Não deve mostrar 3D");
+    return { shouldShow3D: false, modelUrl: undefined, textureUrl: undefined };
+  }, [selectedComponent, itemCustomizations, previewComponentId, components]);
 
   const handleAddToCart = async () => {
     if (!product.id) return;
@@ -199,47 +325,191 @@ const ClientProductPage = ({ id }: { id: string }) => {
       return;
     }
 
-    if (missingRequiredFields.length > 0) {
+    // Validar customizações obrigatórias
+    const missingCustomizations: string[] = [];
+
+    components.forEach((component) => {
+      if (!component.allows_customization) return;
+
+      const requiredCustomizations =
+        component.customizations?.filter((c) => c.isRequired) || [];
+      const componentData = itemCustomizations[component.id] || [];
+
+      requiredCustomizations.forEach((reqCustom) => {
+        const hasData = componentData.some((c) => c.ruleId === reqCustom.id);
+
+        if (!hasData) {
+          missingCustomizations.push(`${component.name} - ${reqCustom.name}`);
+        } else {
+          // Verificar se os dados estão preenchidos
+          const customData = componentData.find(
+            (c) => c.ruleId === reqCustom.id
+          );
+          if (customData) {
+            const data = customData.data as Record<string, unknown>;
+
+            // Validar TEXT
+            if (reqCustom.type === "TEXT") {
+              const fields =
+                (
+                  reqCustom.customization_data as {
+                    fields?: Array<{ id: string }>;
+                  }
+                )?.fields || [];
+              const hasEmptyField = fields.some((field) => {
+                const value = data[field.id];
+                return (
+                  !value || (typeof value === "string" && value.trim() === "")
+                );
+              });
+
+              if (hasEmptyField) {
+                missingCustomizations.push(
+                  `${component.name} - ${reqCustom.name} (campo vazio)`
+                );
+              }
+            }
+
+            // Validar IMAGES
+            if (reqCustom.type === "IMAGES") {
+              const photos = Array.isArray(data) ? data : [];
+              if (photos.length === 0) {
+                missingCustomizations.push(
+                  `${component.name} - ${reqCustom.name} (sem fotos)`
+                );
+              }
+            }
+
+            // Validar MULTIPLE_CHOICE
+            if (reqCustom.type === "MULTIPLE_CHOICE") {
+              const choice = data as { id?: string } | undefined;
+              if (!choice || !choice.id) {
+                missingCustomizations.push(
+                  `${component.name} - ${reqCustom.name} (nenhuma opção selecionada)`
+                );
+              }
+            }
+
+            // Validar BASE_LAYOUT
+            if (reqCustom.type === "BASE_LAYOUT") {
+              const layout = data as { id?: string } | undefined;
+              if (!layout || !layout.id) {
+                missingCustomizations.push(
+                  `${component.name} - ${reqCustom.name} (nenhum layout selecionado)`
+                );
+              }
+            }
+          }
+        }
+      });
+    });
+
+    if (missingCustomizations.length > 0) {
       toast.error(
-        `Complete as personalizações obrigatórias: ${missingRequiredFields.join(
-          ", "
-        )}`
+        <div>
+          <p className="font-semibold">
+            Personalizações obrigatórias não preenchidas:
+          </p>
+          <ul className="list-disc list-inside mt-2 text-sm">
+            {missingCustomizations.map((missing, idx) => (
+              <li key={idx}>{missing}</li>
+            ))}
+          </ul>
+        </div>,
+        { duration: 5000 }
       );
       return;
     }
 
-    setMissingRequiredFields([]);
     setAddingToCart(true);
 
     try {
-      // Converter payloads de item em customizações compatíveis com o carrinho
-      const cartCustomizations: CartCustomization[] = Object.entries(
-        itemCustomizationPayloads
-      )
-        .filter(([, v]) => Boolean(v))
-        .map(([itemId, payload]) => {
-          const customizationId =
-            (payload?.customizationRuleId as string) ||
-            (`item_${itemId}` as string);
-          const customizationType =
-            (payload?.customizationType as unknown as CustomizationTypeValue) ||
-            ("MULTIPLE_CHOICE" as CustomizationTypeValue);
+      // Converter customizações dos itens para o formato do carrinho
+      const cartCustomizations: CartCustomization[] = [];
 
-          return {
-            customization_id: customizationId,
-            title: payload?.title || `Personalização do item ${itemId}`,
-            customization_type: customizationType,
-            is_required: false,
-            price_adjustment: (payload?.data?.price_adjustment as number) || 0,
-            text: payload?.data?.text as string | undefined,
-            selected_option: payload?.data?.selected_option as
-              | string
-              | undefined,
-            selected_item: payload?.data
-              ?.selected_item as CartCustomization["selected_item"],
-            photos: undefined,
-          } as CartCustomization;
-        });
+      Object.entries(itemCustomizations).forEach(
+        ([itemId, customizationInputs]) => {
+          customizationInputs.forEach((input) => {
+            const data = input.data as Record<string, unknown>;
+            const customizationName =
+              (data._customizationName as string) || "Personalização";
+
+            // Converter baseado no tipo de customização
+            if (input.customizationType === "TEXT") {
+              const textValue = (data.text as string) || String(data || "");
+
+              cartCustomizations.push({
+                customization_id: input.ruleId || `item_${itemId}`,
+                title: customizationName,
+                customization_type: "TEXT",
+                is_required: false,
+                price_adjustment: 0,
+                text: textValue,
+              });
+            } else if (input.customizationType === "MULTIPLE_CHOICE") {
+              const choice = data as { id?: string; label?: string } | string;
+              const optionId =
+                typeof choice === "string" ? choice : choice.id || "";
+              const optionLabel =
+                typeof choice === "string" ? choice : choice.label || "";
+
+              cartCustomizations.push({
+                customization_id: input.ruleId || `item_${itemId}`,
+                title: customizationName,
+                customization_type: "MULTIPLE_CHOICE",
+                is_required: false,
+                price_adjustment: 0,
+                selected_option: optionId,
+                selected_option_label: optionLabel,
+              });
+            } else if (input.customizationType === "IMAGES") {
+              const photos = Array.isArray(data)
+                ? data
+                    .map(
+                      (
+                        item: { file?: File; preview?: string },
+                        index: number
+                      ) => ({
+                        preview_url: item.preview || "",
+                        original_name:
+                          item.file?.name || `photo-${index + 1}.jpg`,
+                        temp_file_id: `temp-${Date.now()}-${index}`,
+                        position: index,
+                      })
+                    )
+                    .filter((p) => p.preview_url)
+                : [];
+
+              cartCustomizations.push({
+                customization_id: input.ruleId || `item_${itemId}`,
+                title: customizationName,
+                customization_type: "IMAGES",
+                is_required: false,
+                price_adjustment: 0,
+                photos: photos,
+              });
+            } else if (input.customizationType === "LAYOUT_BASE") {
+              cartCustomizations.push({
+                customization_id: input.ruleId || `item_${itemId}`,
+                title: customizationName,
+                customization_type: "BASE_LAYOUT",
+                is_required: false,
+                price_adjustment: 0,
+                selected_item: {
+                  original_item: "Layout Base",
+                  selected_item: "Personalizado",
+                  price_adjustment: 0,
+                },
+              });
+            }
+          });
+        }
+      );
+
+      console.log(
+        "🛒 Customizações convertidas para carrinho:",
+        cartCustomizations
+      );
 
       await addToCart(
         product.id,
@@ -311,17 +581,31 @@ const ClientProductPage = ({ id }: { id: string }) => {
                 <ChevronLeft size={24} />
               </Button>
 
-              {shouldShow3D ? (
+              {shouldShow3D && modelUrl && textureUrl ? (
                 <Model3DViewer
-                  modelUrl={
-                    selectedComponent?.layout_base_id
-                      ? `/api/models/${selectedComponent.layout_base_id}`
-                      : undefined
-                  }
+                  modelUrl={modelUrl}
                   className="w-full h-full"
                   autoRotate={true}
                   rotateSpeed={0.3}
                   baseScale={6}
+                  materialColor="#ffffff"
+                  textures={[
+                    {
+                      areaId: "customTexture",
+                      imageUrl: textureUrl,
+                      position: { x: 0, y: 0.35, z: 0 },
+                      dimensions: {
+                        width: 0.95,
+                        height: 0.95,
+                      },
+                      mapping: "cylinder",
+                      cylinder: {
+                        radius: 0.46,
+                        height: 0.95,
+                        segments: 200,
+                      },
+                    },
+                  ]}
                 />
               ) : (
                 <Image
@@ -333,9 +617,25 @@ const ClientProductPage = ({ id }: { id: string }) => {
                 />
               )}
               {hasDiscount && (
-                <Badge className="absolute top-3 left-3 bg-red-500 hover:bg-red-600">
+                <Badge className="absolute top-3 right-3 bg-red-500 hover:bg-red-600">
                   -{product.discount}%
                 </Badge>
+              )}
+
+              {previewComponentId && (
+                <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between gap-2">
+                  <Badge className="bg-purple-600 hover:bg-purple-700 text-white">
+                    🎨 Preview Personalizado
+                  </Badge>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => setPreviewComponentId(null)}
+                    className="text-xs"
+                  >
+                    Ver Original
+                  </Button>
+                </div>
               )}
             </div>
 
@@ -399,21 +699,26 @@ const ClientProductPage = ({ id }: { id: string }) => {
                   ))}
               </>
             </div>
-            {selectedComponent && selectedComponent.allows_customization && (
-              <div className="mt-4">
-                <h3 className="font-medium mb-2">
-                  Customizações do item: {selectedComponent.name}
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mt-8">
+              <div>
+                <h3 className="font-medium text-gray-900 mb-2">
+                  Descrição do Produto
                 </h3>
-                <ClientCustomizationPanel
-                  itemType="PRODUCT"
-                  itemId={selectedComponent.id}
-                  onComplete={onCustomizationComplete}
-                />
+                <div className="prose">
+                  {product.description ? (
+                    <div
+                      dangerouslySetInnerHTML={{ __html: product.description }}
+                    />
+                  ) : (
+                    <p className="text-gray-500 italic">Sem descrição.</p>
+                  )}
+                </div>
               </div>
-            )}
+            </div>
           </div>
 
-          <div className="space-y-6">
+          <div className="space-y-6 flex flex-col justify-between">
             <div className="space-y-1">
               <div className="flex items-center space-x-2 h-6">
                 <span className="text-sm md:text-base text-gray-500">Novo</span>
@@ -449,197 +754,175 @@ const ClientProductPage = ({ id }: { id: string }) => {
               </div>
             </div>
 
-            <div>
-              {/* Seção: Personalizações dos Itens (agrupar por item) */}
-              <h3 className="font-medium text-gray-900 mb-2">
-                Personalizações dos Itens
-              </h3>
-              <div className="space-y-4 mb-6">
-                {components && components.length > 0 ? (
-                  components.map((item) => {
-                    const customizations = (item as Item).customizations || [];
-                    return (
-                      <div
-                        key={item.id}
-                        className="rounded-md bg-white p-3 border"
-                      >
-                        <div className="flex items-center justify-between">
-                          <h4 className="text-sm font-semibold text-gray-800">
-                            {item.name}
-                          </h4>
-                          <span className="text-xs text-muted-foreground">
-                            {item.allows_customization
-                              ? "Permite personalização"
-                              : "Sem personalização"}
-                          </span>
-                        </div>
+            <div className="flex flex-col h-fit overflow-hidden">
+              <div className="flex-1 overflow-y-auto space-y-6 pr-2">
+                {/* Seção: Lista de Customizações Disponíveis */}
+                {components.filter((c) => c.allows_customization).length >
+                  0 && (
+                  <div className="space-y-4 border-t pt-4">
+                    <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                      <span className="text-2xl">🎨</span>
+                      Personalizações Disponíveis
+                    </h3>
 
-                        {customizations && customizations.length > 0 ? (
-                          <ul className="mt-3 space-y-2">
-                            {customizations.map((c: Customization) => {
-                              const map = (() => {
-                                switch (c.type) {
-                                  case "BASE_LAYOUT":
-                                    return {
-                                      label: "Layout 3D",
-                                      color: "bg-purple-500",
-                                    };
-                                  case "TEXT":
-                                    return {
-                                      label: "Texto",
-                                      color: "bg-blue-500",
-                                    };
-                                  case "IMAGES":
-                                    return {
-                                      label: "Imagens",
-                                      color: "bg-green-500",
-                                    };
-                                  case "MULTIPLE_CHOICE":
-                                    return {
-                                      label: "Múltipla Escolha",
-                                      color: "bg-yellow-500",
-                                    };
-                                  default:
-                                    return {
-                                      label: c.type || "Personalização",
-                                      color: "bg-gray-500",
-                                    };
+                    <div className="space-y-2">
+                      {components
+                        .filter((c) => c.allows_customization)
+                        .map((component) => {
+                          const hasCustomizations =
+                            itemCustomizations[component.id]?.length > 0;
+                          const requiredCount =
+                            component.customizations?.filter(
+                              (c) => c.isRequired
+                            ).length || 0;
+                          const totalCount =
+                            component.customizations?.length || 0;
+
+                          // Verificar se tem customização BASE_LAYOUT
+                          const hasBaseLayout = component.customizations?.some(
+                            (c) => c.type === "BASE_LAYOUT"
+                          );
+
+                          return (
+                            <Button
+                              key={component.id}
+                              onClick={() => {
+                                console.log("🖱️ [Button Click] Componente:", {
+                                  id: component.id,
+                                  name: component.name,
+                                  hasBaseLayout,
+                                  hasCustomizations,
+                                });
+
+                                // Se tem BASE_LAYOUT e já foi customizado, ativar preview
+                                if (hasBaseLayout && hasCustomizations) {
+                                  console.log(
+                                    "✅ [Button Click] Ativando preview"
+                                  );
+                                  setPreviewComponentId(component.id);
                                 }
-                              })();
-
-                              return (
-                                <li
-                                  key={c.id}
-                                  className="flex items-start justify-between gap-4 p-3 rounded-md border border-border bg-muted/10"
-                                >
-                                  <div className="flex-1">
-                                    <div className="flex items-center gap-2">
-                                      <span className="text-sm font-medium text-gray-900">
-                                        {c.name}
-                                        {c.isRequired && (
-                                          <span className="text-red-500 ml-1">
-                                            *
-                                          </span>
-                                        )}
-                                      </span>
-                                      <Badge className={map.color}>
-                                        {map.label}
+                                setActiveCustomizationModal(component.id);
+                              }}
+                              variant="outline"
+                              className="w-full justify-between h-auto py-3"
+                            >
+                              <div className="flex items-center gap-3">
+                                <div className="w-12 h-12 relative rounded-md overflow-hidden flex-shrink-0">
+                                  <Image
+                                    src={
+                                      component.image_url || "/placeholder.svg"
+                                    }
+                                    alt={component.name}
+                                    fill
+                                    className="object-cover"
+                                  />
+                                </div>
+                                <div className="text-left">
+                                  <p className="font-medium">
+                                    {component.name}
+                                  </p>
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-xs text-gray-500">
+                                      {totalCount} opç
+                                      {totalCount === 1 ? "ão" : "ões"}{" "}
+                                      disponíve
+                                      {totalCount === 1 ? "l" : "is"}
+                                    </span>
+                                    {requiredCount > 0 && (
+                                      <Badge
+                                        variant="destructive"
+                                        className="ml-2 text-xs text-white"
+                                      >
+                                        {requiredCount} obrigatória
+                                        {requiredCount === 1 ? "" : "s"}
                                       </Badge>
-                                      {typeof c.price === "number" &&
-                                        c.price > 0 && (
-                                          <span className="text-xs text-emerald-600 font-medium ml-2">
-                                            +{formatCurrency(c.price)}
-                                          </span>
-                                        )}
-                                    </div>
-                                    {c.description && (
-                                      <p className="text-xs text-muted-foreground mt-1">
-                                        {c.description}
-                                      </p>
                                     )}
                                   </div>
-                                  <div className="text-xs text-muted-foreground">
-                                    Item: {item.name}
-                                  </div>
-                                </li>
-                              );
-                            })}
-                          </ul>
-                        ) : (
-                          <p className="text-xs text-muted-foreground italic mt-2">
-                            Sem customizações disponíveis
-                          </p>
-                        )}
-                      </div>
-                    );
-                  })
-                ) : (
-                  <p className="text-xs text-muted-foreground italic">
-                    Nenhum componente encontrado para este produto.
-                  </p>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                {hasCustomizations && (
+                                  <Badge
+                                    variant="default"
+                                    className="bg-green-500"
+                                  >
+                                    ✓ Personalizado
+                                  </Badge>
+                                )}
+                                <ChevronLeft className="w-5 h-5 rotate-180" />
+                              </div>
+                            </Button>
+                          );
+                        })}
+                    </div>
+                  </div>
                 )}
               </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Quantidade
-                </label>
-                <div className="flex items-center gap-3">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                    disabled={quantity <= 1}
-                  >
-                    <Minus className="w-4 h-4" />
-                  </Button>
-                  <span className="w-12 text-center font-medium">
-                    {quantity}
-                  </span>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setQuantity(quantity + 1)}
-                  >
-                    <Plus className="w-4 h-4" />
-                  </Button>
+            </div>
+            <div className="space-y-3">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Quantidade
+              </label>
+              <div className="flex items-center gap-3">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setQuantity(Math.max(1, quantity - 1))}
+                  disabled={quantity <= 1}
+                >
+                  <Minus className="w-4 h-4" />
+                </Button>
+                <span className="w-12 text-center font-medium">{quantity}</span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setQuantity(quantity + 1)}
+                >
+                  <Plus className="w-4 h-4" />
+                </Button>
+              </div>
+              <Button
+                onClick={handleAddToCart}
+                disabled={addingToCart || isUploading}
+                className="w-full bg-green-600 hover:bg-green-700 text-white py-3 text-lg font-medium"
+                size="lg"
+              >
+                {addingToCart ? (
+                  <>
+                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2" />
+                    Adicionando...
+                  </>
+                ) : (
+                  <>
+                    <ShoppingCart className="w-5 h-5 mr-2" />
+                    Adicionar por {formatCurrency(totalPriceForQuantity)}
+                  </>
+                )}
+              </Button>
+            </div>
+            <div>
+              <h2 className="text-xl font-bold text-gray-900 mb-4">
+                Adicionais
+              </h2>
+              {additionals.length > 0 ? (
+                <div className="flex items-center gap-4 overflow-x-auto">
+                  {additionals.map((additional) => (
+                    <AdditionalCard
+                      key={additional.id}
+                      additional={additional}
+                      productId={product.id}
+                    />
+                  ))}
                 </div>
-              </div>
-            </div>
-            <Button
-              onClick={handleAddToCart}
-              disabled={addingToCart || isUploading}
-              className="w-full bg-green-600 hover:bg-green-700 text-white py-3 text-lg font-medium"
-              size="lg"
-            >
-              {addingToCart ? (
-                <>
-                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2" />
-                  Adicionando...
-                </>
               ) : (
-                <>
-                  <ShoppingCart className="w-5 h-5 mr-2" />
-                  Adicionar por {formatCurrency(totalPriceForQuantity)}
-                </>
-              )}
-            </Button>
-          </div>
-
-          <div>
-            <h3 className="font-medium text-gray-900 mb-2">
-              Descrição do Produto
-            </h3>
-            <div className="prose">
-              {product.description ? (
-                <div
-                  dangerouslySetInnerHTML={{ __html: product.description }}
-                />
-              ) : (
-                <p className="text-gray-500 italic">Sem descrição.</p>
+                <p className="text-gray-500 italic">
+                  Nenhum adicional disponível para este produto.
+                </p>
               )}
             </div>
-          </div>
-
-          <div className="">
-            <h2 className="text-xl font-bold text-gray-900 mb-4">Adicionais</h2>
-            {additionals.length > 0 ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                {additionals.map((additional) => (
-                  <AdditionalCard
-                    key={additional.id}
-                    additional={additional}
-                    productId={product.id}
-                  />
-                ))}
-              </div>
-            ) : (
-              <p className="text-gray-500 italic">
-                Nenhum adicional disponível para este produto.
-              </p>
-            )}
           </div>
         </div>
+
         <div className="w-full mt-12">
           <h2 className="text-xl font-bold text-gray-900 mb-6">
             Produtos relacionados
@@ -668,6 +951,68 @@ const ClientProductPage = ({ id }: { id: string }) => {
           </div>
         </div>
       </div>
+
+      {components
+        .filter((c) => c.allows_customization)
+        .map((component) => (
+          <ItemCustomizationModal
+            key={component.id}
+            isOpen={activeCustomizationModal === component.id}
+            onClose={() => setActiveCustomizationModal(null)}
+            itemId={component.id}
+            itemName={component.name}
+            customizations={(component.customizations || []).map((c) => ({
+              id: c.id,
+              name: c.name,
+              description: c.description,
+              type: c.type as
+                | "BASE_LAYOUT"
+                | "TEXT"
+                | "IMAGES"
+                | "MULTIPLE_CHOICE",
+              isRequired: c.isRequired,
+              price: c.price,
+              customization_data: c.customization_data as {
+                layouts?: Array<{
+                  id: string;
+                  name: string;
+                  model_url?: string;
+                  image_url?: string;
+                  slots?: SlotDef[];
+                }>;
+                fields?: Array<{
+                  id: string;
+                  label: string;
+                  placeholder?: string;
+                  max_length?: number;
+                }>;
+                base_layout?: {
+                  max_images: number;
+                  min_width?: number;
+                  min_height?: number;
+                  max_file_size_mb?: number;
+                  accepted_formats?: string[];
+                };
+                options?: Array<{
+                  id: string;
+                  label: string;
+                  value: string;
+                  price_adjustment?: number;
+                  image_url?: string;
+                  description?: string;
+                }>;
+              },
+            }))}
+            onComplete={(hasCustomizations, data) =>
+              handleCustomizationComplete(component.id, hasCustomizations, data)
+            }
+            onPreviewChange={(url) =>
+              url &&
+              url !== "3D_MODEL" &&
+              handlePreviewChange(component.id, url)
+            }
+          />
+        ))}
     </div>
   );
 };

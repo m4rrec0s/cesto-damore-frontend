@@ -162,14 +162,24 @@ export interface CustomizationConfigResponse {
   item: {
     id: string;
     name: string;
-    type: ItemType;
-    allowsCustomization: boolean;
-    has3dPreview: boolean;
+    type?: ItemType;
+    allowsCustomization?: boolean;
+    allows_customization?: boolean; // Backend retorna em snake_case
+    has3dPreview?: boolean;
   };
-  layouts: LayoutDTO[];
-  rules: ProductRuleDTO[];
-  legacyRules: LegacyCustomizationDTO[];
-  constraints: ConstraintDTO[];
+  customizations: Array<{
+    id: string;
+    type: string;
+    name: string;
+    description?: string;
+    isRequired: boolean;
+    customization_data: Record<string, unknown>;
+    price: number;
+  }>;
+  layouts?: LayoutDTO[];
+  rules?: ProductRuleDTO[];
+  legacyRules?: LegacyCustomizationDTO[];
+  constraints?: ConstraintDTO[];
 }
 
 /**

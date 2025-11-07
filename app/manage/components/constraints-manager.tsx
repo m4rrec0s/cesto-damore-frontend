@@ -273,8 +273,7 @@ export function ConstraintsManager({
   };
 
   const getItemTypeLabel = (type: ItemType) => {
-    // Backend now unifies additional -> item; show a generic label
-    return type === "PRODUCT" ? "Produto" : "Item";
+    return type === "PRODUCT" ? "Produto" : "Adicional";
   };
 
   return (

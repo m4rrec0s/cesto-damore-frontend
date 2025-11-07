@@ -46,6 +46,13 @@ interface ProductComponent {
   item?: Item;
 }
 
+interface ProductAdditional {
+  id?: string;
+  item_id: string;
+  custom_price: number;
+  item?: Item;
+}
+
 export function ProductsTab() {
   const api = useApi();
   const [products, setProducts] = useState<Product[]>([]);
@@ -59,6 +66,13 @@ export function ProductsTab() {
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string>("");
   const [components, setComponents] = useState<ProductComponent[]>([]);
+  const [additionals, setAdditionals] = useState<ProductAdditional[]>([]);
+  const [originalComponents, setOriginalComponents] = useState<
+    ProductComponent[]
+  >([]);
+  const [originalAdditionals, setOriginalAdditionals] = useState<
+    ProductAdditional[]
+  >([]);
   const [formData, setFormData] = useState({
     name: "",
     description: "",
@@ -76,7 +90,7 @@ export function ProductsTab() {
           api.getProducts(),
           api.getCategories(),
           api.getTypes(),
-          api.get("/items"),
+          api.getItems(),
         ]);
       setProducts(productsData.products);
       setCategories(categoriesData);
@@ -130,9 +144,44 @@ export function ProductsTab() {
         const componentsArray = componentsData?.components || [];
 
         setComponents(componentsArray);
+        setOriginalComponents(componentsArray); // Salvar estado original
       } catch (error) {
         console.error("Erro ao carregar componentes:", error);
         setComponents([]);
+        setOriginalComponents([]);
+      }
+
+      // Carregar adicionais do produto
+      try {
+        const additionalsData = await api.getAdditionalsByProduct(product.id);
+
+        // Mapear para o formato esperado pelo formulário
+        const additionalsArray = (
+          additionalsData as Array<{
+            id: string;
+            name: string;
+            price: number;
+            stock_quantity?: number;
+            image_url?: string;
+          }>
+        ).map((additional) => ({
+          item_id: additional.id,
+          custom_price: additional.price,
+          item: {
+            id: additional.id,
+            name: additional.name,
+            stock_quantity: additional.stock_quantity || 0,
+            base_price: additional.price,
+            image_url: additional.image_url,
+          },
+        }));
+
+        setAdditionals(additionalsArray);
+        setOriginalAdditionals(additionalsArray); // Salvar estado original
+      } catch (error) {
+        console.error("Erro ao carregar adicionais:", error);
+        setAdditionals([]);
+        setOriginalAdditionals([]);
       }
     } else {
       setEditingProduct(null);
@@ -146,6 +195,9 @@ export function ProductsTab() {
       });
       setImagePreview("");
       setComponents([]);
+      setAdditionals([]);
+      setOriginalComponents([]);
+      setOriginalAdditionals([]);
     }
     setShowModal(true);
   };
@@ -156,6 +208,9 @@ export function ProductsTab() {
     setImageFile(null);
     setImagePreview("");
     setComponents([]);
+    setAdditionals([]);
+    setOriginalComponents([]);
+    setOriginalAdditionals([]);
   };
 
   const handleAddComponent = () => {
@@ -191,6 +246,54 @@ export function ProductsTab() {
     setComponents(updated);
   };
 
+  const handleAddAdditional = () => {
+    // Garantir que additionals é sempre um array
+    const currentAdditionals = Array.isArray(additionals) ? additionals : [];
+    setAdditionals([...currentAdditionals, { item_id: "", custom_price: 0 }]);
+  };
+
+  const handleRemoveAdditional = (index: number) => {
+    // Garantir que additionals é sempre um array
+    const currentAdditionals = Array.isArray(additionals) ? additionals : [];
+    setAdditionals(currentAdditionals.filter((_, i) => i !== index));
+  };
+
+  const handleAdditionalChange = (
+    index: number,
+    field: "item_id" | "custom_price",
+    value: string | number
+  ) => {
+    // Garantir que additionals é sempre um array
+    const currentAdditionals = Array.isArray(additionals) ? additionals : [];
+    const updated = [...currentAdditionals];
+
+    if (field === "item_id") {
+      updated[index].item_id = value as string;
+      const item = items.find((i) => i.id === value);
+      if (item) {
+        updated[index].item = item;
+      }
+    } else {
+      updated[index].custom_price = Number(value);
+    }
+    setAdditionals(updated);
+  };
+
+  // Funções para filtrar itens disponíveis e evitar duplicatas
+  const getAvailableComponentItems = (currentIndex: number) => {
+    const selectedIds = components
+      .map((c, idx) => (idx !== currentIndex ? c.item_id : null))
+      .filter((id): id is string => id !== null && id !== "");
+    return items.filter((item) => !selectedIds.includes(item.id));
+  };
+
+  const getAvailableAdditionalItems = (currentIndex: number) => {
+    const selectedIds = additionals
+      .map((a, idx) => (idx !== currentIndex ? a.item_id : null))
+      .filter((id): id is string => id !== null && id !== "");
+    return items.filter((item) => !selectedIds.includes(item.id));
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -223,11 +326,67 @@ export function ProductsTab() {
         toast.success("Produto criado com sucesso!");
       }
 
-      // Atualizar componentes
-      const validComponents = Array.isArray(components) ? components : [];
+      // Sincronizar componentes (adicionar, atualizar e remover)
+      if (editingProduct) {
+        const validComponents = Array.isArray(components) ? components : [];
+        const originalComponentsArray = Array.isArray(originalComponents)
+          ? originalComponents
+          : [];
 
-      if (validComponents.length > 0) {
-        // Filtrar apenas componentes com item_id selecionado
+        // 1. Identificar componentes removidos
+        const removedComponents = originalComponentsArray.filter(
+          (original) =>
+            !validComponents.some((current) => current.id === original.id)
+        );
+
+        // 2. Remover componentes deletados
+        for (const removed of removedComponents) {
+          if (removed.id) {
+            try {
+              await api.removeProductComponent(removed.id);
+              console.log(`✅ Componente ${removed.id} removido`);
+            } catch (error) {
+              console.error(
+                `❌ Erro ao remover componente ${removed.id}:`,
+                error
+              );
+            }
+          }
+        }
+
+        // 3. Adicionar novos componentes e atualizar existentes
+        const componentsToProcess = validComponents.filter(
+          (component) =>
+            component.item_id &&
+            component.item_id !== "" &&
+            component.quantity > 0
+        );
+
+        for (const component of componentsToProcess) {
+          try {
+            if (component.id) {
+              // Atualizar componente existente
+              await api.updateProductComponent(component.id, {
+                quantity: component.quantity,
+              });
+              console.log(`✅ Componente ${component.id} atualizado`);
+            } else {
+              // Adicionar novo componente
+              await api.addProductComponent(productId, {
+                item_id: component.item_id,
+                quantity: component.quantity,
+              });
+              console.log(
+                `✅ Novo componente adicionado: ${component.item_id}`
+              );
+            }
+          } catch (error) {
+            console.error(`❌ Erro ao processar componente:`, error);
+          }
+        }
+      } else {
+        // Produto novo - apenas adicionar componentes
+        const validComponents = Array.isArray(components) ? components : [];
         const componentsToSave = validComponents.filter(
           (component) =>
             component.item_id &&
@@ -236,15 +395,83 @@ export function ProductsTab() {
         );
 
         for (const component of componentsToSave) {
-          if (component.id) {
-            await api.put(`/components/${component.id}`, {
-              quantity: component.quantity,
-            });
-          } else {
-            await api.post(`/products/${productId}/components`, {
+          try {
+            await api.addProductComponent(productId, {
               item_id: component.item_id,
               quantity: component.quantity,
             });
+            console.log(`✅ Componente adicionado: ${component.item_id}`);
+          } catch (error) {
+            console.error(`❌ Erro ao adicionar componente:`, error);
+          }
+        }
+      }
+
+      // Sincronizar adicionais (adicionar e remover)
+      if (editingProduct) {
+        const validAdditionals = Array.isArray(additionals) ? additionals : [];
+        const originalAdditionalsArray = Array.isArray(originalAdditionals)
+          ? originalAdditionals
+          : [];
+
+        // 1. Identificar adicionais removidos
+        const removedAdditionals = originalAdditionalsArray.filter(
+          (original) =>
+            !validAdditionals.some(
+              (current) => current.item_id === original.item_id
+            )
+        );
+
+        // 2. Remover adicionais deletados
+        for (const removed of removedAdditionals) {
+          try {
+            await api.unlinkAdditionalFromProduct(removed.item_id, productId);
+            console.log(`✅ Adicional ${removed.item_id} desvinculado`);
+          } catch (error) {
+            console.error(
+              `❌ Erro ao desvincular adicional ${removed.item_id}:`,
+              error
+            );
+          }
+        }
+
+        // 3. Adicionar novos adicionais (re-link sempre para atualizar custom_price)
+        const additionalsToProcess = validAdditionals.filter(
+          (additional) =>
+            additional.item_id &&
+            additional.item_id !== "" &&
+            additional.custom_price >= 0
+        );
+
+        for (const additional of additionalsToProcess) {
+          try {
+            await api.linkAdditionalToProduct(additional.item_id, productId);
+            console.log(
+              `✅ Adicional ${additional.item_id} vinculado/atualizado`
+            );
+          } catch (error) {
+            console.error(
+              `❌ Erro ao vincular adicional ${additional.item_id}:`,
+              error
+            );
+          }
+        }
+      } else {
+        // Produto novo - apenas adicionar adicionais
+        const validAdditionals = Array.isArray(additionals) ? additionals : [];
+        const additionalsToSave = validAdditionals.filter(
+          (additional) =>
+            additional.item_id &&
+            additional.item_id !== "" &&
+            additional.custom_price >= 0
+        );
+
+        for (const additional of additionalsToSave) {
+          try {
+            await api.linkAdditionalToProduct(additional.item_id, productId);
+            console.log(`✅ Adicional adicionado: ${additional.item_id}`);
+          } catch (error) {
+            console.error(`❌ Erro ao adicionar adicional:`, error);
           }
         }
       }
@@ -269,7 +496,7 @@ export function ProductsTab() {
 
     setLoading(true);
     try {
-      await api.delete(`/products/${id}`);
+      await api.deleteProduct(id);
       toast.success("Produto excluído com sucesso!");
       await loadData();
     } catch (error) {
@@ -702,79 +929,97 @@ export function ProductsTab() {
 
                     {components.length > 0 ? (
                       <div className="space-y-3">
-                        {components.map((component, index) => (
-                          <div
-                            key={index}
-                            className="flex gap-3 items-start p-4 bg-gray-50 border border-gray-200 rounded-lg hover:border-gray-300 transition-colors"
-                          >
-                            <div className="flex-1 space-y-2">
-                              <Label className="text-sm font-medium">
-                                Item Componente *
-                              </Label>
-                              <select
-                                value={component.item_id}
-                                onChange={(e) =>
-                                  handleComponentChange(
-                                    index,
-                                    "item_id",
-                                    e.target.value
-                                  )
-                                }
-                                className={`w-full px-3 py-2 border rounded-md ${
-                                  !component.item_id
-                                    ? "border-orange-300 bg-orange-50"
-                                    : "border-gray-300"
-                                }`}
-                                aria-label="Selecionar item componente"
-                              >
-                                <option value="">⚠️ Selecione um item</option>
-                                {items.map((item) => (
-                                  <option key={item.id} value={item.id}>
-                                    {item.name} • R${" "}
-                                    {item.base_price.toFixed(2)} • Estoque:{" "}
-                                    {item.stock_quantity}
-                                  </option>
-                                ))}
-                              </select>
-                              {!component.item_id && (
-                                <p className="text-xs text-orange-600">
-                                  Selecione um item antes de salvar
-                                </p>
-                              )}
-                            </div>
+                        {components.map((component, index) => {
+                          const availableItems =
+                            getAvailableComponentItems(index);
+                          const selectedItem = items.find(
+                            (item) => item.id === component.item_id
+                          );
 
-                            <div className="w-32 space-y-2">
-                              <Label className="text-sm font-medium">
-                                Qtd. Necessária *
-                              </Label>
-                              <Input
-                                type="number"
-                                min="1"
-                                value={component.quantity}
-                                onChange={(e) =>
-                                  handleComponentChange(
-                                    index,
-                                    "quantity",
-                                    e.target.value
-                                  )
-                                }
-                                className="text-center font-semibold"
-                              />
-                            </div>
+                          return (
+                            <div
+                              key={index}
+                              className="flex gap-3 items-start p-4 bg-gray-50 border border-gray-200 rounded-lg hover:border-gray-300 transition-colors"
+                            >
+                              <div className="flex-1 space-y-2">
+                                <Label className="text-sm font-medium">
+                                  Item Componente *
+                                </Label>
+                                <select
+                                  value={component.item_id}
+                                  onChange={(e) =>
+                                    handleComponentChange(
+                                      index,
+                                      "item_id",
+                                      e.target.value
+                                    )
+                                  }
+                                  className={`w-full px-3 py-2 border rounded-md ${
+                                    !component.item_id
+                                      ? "border-rose-300 bg-rose-50"
+                                      : "border-gray-300"
+                                  }`}
+                                  aria-label="Selecionar item componente"
+                                >
+                                  <option value="">⚠️ Selecione um item</option>
+                                  {component.item_id && selectedItem && (
+                                    <option
+                                      key={selectedItem.id}
+                                      value={selectedItem.id}
+                                    >
+                                      {selectedItem.name} • R${" "}
+                                      {selectedItem.base_price.toFixed(2)} •
+                                      Estoque: {selectedItem.stock_quantity}
+                                    </option>
+                                  )}
+                                  {availableItems.map((item) => (
+                                    <option key={item.id} value={item.id}>
+                                      {item.name} • R${" "}
+                                      {item.base_price.toFixed(2)} • Estoque:{" "}
+                                      {item.stock_quantity}
+                                    </option>
+                                  ))}
+                                </select>
+                                {!component.item_id && (
+                                  <p className="text-xs text-rose-600">
+                                    Selecione um item antes de salvar
+                                  </p>
+                                )}
+                              </div>
 
-                            <div className="pt-7">
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleRemoveComponent(index)}
-                                className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </Button>
+                              <div className="w-32 space-y-2">
+                                <Label className="text-sm font-medium">
+                                  Qtd. Necessária *
+                                </Label>
+                                <Input
+                                  type="number"
+                                  min="1"
+                                  value={component.quantity}
+                                  onChange={(e) =>
+                                    handleComponentChange(
+                                      index,
+                                      "quantity",
+                                      e.target.value
+                                    )
+                                  }
+                                  className="text-center font-semibold"
+                                />
+                              </div>
+
+                              <div className="pt-7">
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleRemoveComponent(index)}
+                                  className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </Button>
+                              </div>
                             </div>
-                          </div>
-                        ))}
+                          );
+                        })}
 
                         <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
                           <p className="text-sm text-blue-800">
@@ -783,7 +1028,7 @@ export function ProductsTab() {
                             disponibilidade dos componentes.
                             {components.length > 0 &&
                               !components.every((c) => c.item_id) && (
-                                <span className="block mt-1 text-orange-700 font-medium">
+                                <span className="block mt-1 text-rose-700 font-medium">
                                   ⚠️ Selecione um item para cada componente
                                   antes de salvar.
                                 </span>
@@ -808,6 +1053,172 @@ export function ProductsTab() {
                         >
                           <Plus className="w-4 h-4 mr-2" />
                           Adicionar Primeiro Item
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Seção de Adicionais */}
+                  <div className="space-y-4 border-t pt-4 mt-6">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <Label className="text-lg font-semibold">
+                          Adicionais do Produto
+                        </Label>
+                        <p className="text-sm text-gray-500 mt-1">
+                          Defina itens opcionais que podem ser adicionados ao
+                          produto com preços personalizados diferentes do valor
+                          base.
+                        </p>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={handleAddAdditional}
+                      >
+                        <Plus className="w-4 h-4 mr-2" />
+                        Adicionar Adicional
+                      </Button>
+                    </div>
+
+                    {additionals.length > 0 ? (
+                      <div className="space-y-3">
+                        {additionals.map((additional, index) => {
+                          const availableItems =
+                            getAvailableAdditionalItems(index);
+                          const selectedItem = items.find(
+                            (item) => item.id === additional.item_id
+                          );
+
+                          return (
+                            <div
+                              key={index}
+                              className="flex gap-3 items-start p-4 bg-gray-50 border border-gray-200 rounded-lg hover:border-gray-300 transition-colors"
+                            >
+                              <div className="flex-1 space-y-2">
+                                <Label className="text-sm font-medium">
+                                  Item Adicional *
+                                </Label>
+                                <select
+                                  value={additional.item_id}
+                                  onChange={(e) =>
+                                    handleAdditionalChange(
+                                      index,
+                                      "item_id",
+                                      e.target.value
+                                    )
+                                  }
+                                  className={`w-full px-3 py-2 border rounded-md ${
+                                    !additional.item_id
+                                      ? "border-rose-300 bg-rose-50"
+                                      : "border-gray-300"
+                                  }`}
+                                  aria-label="Selecionar item adicional"
+                                >
+                                  <option value="">⚠️ Selecione um item</option>
+                                  {additional.item_id && selectedItem && (
+                                    <option
+                                      key={selectedItem.id}
+                                      value={selectedItem.id}
+                                    >
+                                      {selectedItem.name} • Preço Base: R${" "}
+                                      {selectedItem.base_price.toFixed(2)}
+                                    </option>
+                                  )}
+                                  {availableItems.map((item) => (
+                                    <option key={item.id} value={item.id}>
+                                      {item.name} • Preço Base: R${" "}
+                                      {item.base_price.toFixed(2)}
+                                    </option>
+                                  ))}
+                                </select>
+                                {!additional.item_id && (
+                                  <p className="text-xs text-rose-600">
+                                    Selecione um item antes de salvar
+                                  </p>
+                                )}
+                                {selectedItem &&
+                                  additional.custom_price !==
+                                    selectedItem.base_price && (
+                                    <p className="text-xs text-blue-600">
+                                      💡 Preço customizado: R${" "}
+                                      {additional.custom_price.toFixed(2)}{" "}
+                                      (Base: R${" "}
+                                      {selectedItem.base_price.toFixed(2)})
+                                    </p>
+                                  )}
+                              </div>
+
+                              <div className="w-40 space-y-2">
+                                <Label className="text-sm font-medium">
+                                  Preço Personalizado *
+                                </Label>
+                                <Input
+                                  type="number"
+                                  min="0"
+                                  step="0.01"
+                                  value={additional.custom_price}
+                                  onChange={(e) =>
+                                    handleAdditionalChange(
+                                      index,
+                                      "custom_price",
+                                      e.target.value
+                                    )
+                                  }
+                                  className="text-center font-semibold"
+                                  placeholder="0.00"
+                                />
+                              </div>
+
+                              <div className="pt-7">
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleRemoveAdditional(index)}
+                                  className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </Button>
+                              </div>
+                            </div>
+                          );
+                        })}
+
+                        <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
+                          <p className="text-sm text-blue-800">
+                            💡 <strong>Dica:</strong> O preço personalizado
+                            permite que você cobre um valor diferente do preço
+                            base do item quando ele for vendido como adicional
+                            deste produto.
+                            {additionals.length > 0 &&
+                              !additionals.every((a) => a.item_id) && (
+                                <span className="block mt-1 text-rose-700 font-medium">
+                                  ⚠️ Selecione um item para cada adicional antes
+                                  de salvar.
+                                </span>
+                              )}
+                          </p>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="text-center py-8 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
+                        <Package className="w-12 h-12 mx-auto mb-3 text-gray-400" />
+                        <p className="text-gray-700 font-medium">
+                          Nenhum adicional configurado
+                        </p>
+                        <p className="text-sm text-gray-500 mt-1 mb-4">
+                          Adicione itens opcionais com preços personalizados
+                        </p>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={handleAddAdditional}
+                        >
+                          <Plus className="w-4 h-4 mr-2" />
+                          Adicionar Primeiro Adicional
                         </Button>
                       </div>
                     )}

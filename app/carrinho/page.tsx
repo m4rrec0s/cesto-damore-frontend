@@ -33,6 +33,7 @@ import {
   ArrowRight,
   ArrowLeft,
 } from "lucide-react";
+import { CustomizationsReview } from "./components/CustomizationsReview";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
@@ -175,7 +176,7 @@ interface ProductCardProps {
 
 const formatCustomizationValue = (custom: CartCustomization) => {
   switch (custom.customization_type) {
-    case "TEXT_INPUT":
+    case "TEXT":
       return custom.text?.trim() || "Mensagem não informada";
     case "MULTIPLE_CHOICE":
       return (
@@ -183,12 +184,23 @@ const formatCustomizationValue = (custom: CartCustomization) => {
         custom.selected_option ||
         "Opção não selecionada"
       );
-    case "ITEM_SUBSTITUTION":
+    case "BASE_LAYOUT":
       if (custom.selected_item) {
-        return `${custom.selected_item.original_item} → ${custom.selected_item.selected_item}`;
+        // Se for uma string (preview URL), mostrar "Personalização de Layout"
+        if (typeof custom.selected_item === "string") {
+          return "Personalização de Layout Aplicada";
+        }
+        // Se for objeto com original_item e selected_item
+        return `${
+          (custom.selected_item as { original_item?: string }).original_item ||
+          "Item"
+        } → ${
+          (custom.selected_item as { selected_item?: string }).selected_item ||
+          "Personalizado"
+        }`;
       }
       return "Substituição não definida";
-    case "PHOTO_UPLOAD":
+    case "IMAGES":
       return `${custom.photos?.length || 0} foto(s)`;
     default:
       return "Personalização";
@@ -1707,7 +1719,7 @@ export default function CarrinhoPage() {
                       <div className="border-t border-gray-200 pt-3 mt-3">
                         <div className="flex justify-between">
                           <span className="text-gray-600">Taxa de entrega</span>
-                          <span className="font-semibold text-orange-600">
+                          <span className="font-semibold text-rose-600">
                             Informe o endereço
                           </span>
                         </div>
@@ -1715,6 +1727,9 @@ export default function CarrinhoPage() {
                     )}
                   </div>
                 </Card>
+
+                {/* 🎨 REVISÃO DE CUSTOMIZAÇÕES */}
+                <CustomizationsReview cartItems={cart.items} />
 
                 {/* Botões de Navegação */}
                 <div className="flex justify-between gap-4">
