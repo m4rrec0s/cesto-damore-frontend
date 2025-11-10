@@ -399,7 +399,7 @@ export function OrdersManager() {
                         <p className="flex items-center gap-2">
                           <Phone className="h-4 w-4 text-gray-400" />
                           <Link
-                            href={`https://wa.me/${order.user.phone}`}
+                            href={`https://wa.me/55${order.user.phone}`}
                             target="_blank"
                             rel="noreferrer"
                             className="hover:text-rose-600"

@@ -1659,6 +1659,30 @@ class ApiService {
     return res.data;
   };
 
+  /**
+   * Busca o pedido pendente de pagamento do usuário
+   */
+  getPendingOrder = async (userId: string) => {
+    try {
+      const res = await this.client.get(`/orders/pending/user/${userId}`);
+      return res.data;
+    } catch (error: unknown) {
+      // Se retornar 404, significa que não há pedido pendente
+      if (axios.isAxiosError(error) && error?.response?.status === 404) {
+        return null;
+      }
+      throw error;
+    }
+  };
+
+  /**
+   * Cancela um pedido pendente
+   */
+  cancelOrder = async (orderId: string) => {
+    const res = await this.client.post(`/orders/${orderId}/cancel`);
+    return res.data;
+  };
+
   // ===== Payment Methods =====
   getPaymentMethods = async () => {
     const res = await this.client.get("/payment-methods");

@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { useAuth } from "@/app/hooks/use-auth";
 import { useCartContext } from "@/app/hooks/cart-context";
 import { useApi } from "@/app/hooks/use-api";
+import { usePaymentManager } from "@/app/hooks/use-payment-manager";
 import type { CartCustomization } from "@/app/hooks/use-cart";
 import { Card } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
@@ -33,6 +34,7 @@ import {
   ArrowRight,
   ArrowLeft,
   Edit2,
+  XCircle,
 } from "lucide-react";
 import { CustomizationsReview } from "./components/CustomizationsReview";
 import Link from "next/link";
@@ -508,13 +510,16 @@ export default function CarrinhoPage() {
     getDeliveryDateBounds,
   } = useCartContext();
 
-  // Estado da etapa do checkout
+  // Hook de gerenciamento de pagamento
+  const {
+    pendingOrder,
+    hasPendingOrder,
+    handleCancelOrder,
+    clearPendingOrder,
+    isCanceling,
+  } = usePaymentManager();
+
   const [currentStep, setCurrentStep] = useState<CheckoutStep>(1);
-
-  // Estados para edição de customizações (para implementação futura de modal completo)
-  // const [editingItem, setEditingItem] = useState<CartItem | null>(null);
-  // const [showEditModal, setShowEditModal] = useState(false);
-
   const [calendarOpen, setCalendarOpen] = useState(false);
 
   const isDateDisabled = useCallback(
@@ -556,6 +561,7 @@ export default function CarrinhoPage() {
   const [paymentStatus, setPaymentStatus] = useState<PaymentStatusType>("");
   const [paymentError, setPaymentError] = useState<string | null>(null);
   const [currentOrderId, setCurrentOrderId] = useState<string | null>(null);
+  const [userDocument, setUserDocument] = useState<string>(""); // CPF/CNPJ do usuário
 
   // Hook de polling de pagamento
   const { status: pollingStatus, attempts: pollingAttempts } =
@@ -569,6 +575,8 @@ export default function CarrinhoPage() {
         setPaymentStatus("success");
         // Limpar localStorage
         localStorage.removeItem("pendingOrderId");
+        // Limpar pedido pendente do hook
+        clearPendingOrder();
         // Limpar carrinho
         clearCart();
         toast.success("Pagamento confirmado! Pedido realizado com sucesso.");
@@ -739,6 +747,136 @@ export default function CarrinhoPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
+  // ✅ NOVO: Verificar se há pedido pendente e redirecionar para pagamento
+  useEffect(() => {
+    if (hasPendingOrder && pendingOrder && !currentOrderId) {
+      console.log("🔔 Pedido pendente detectado:", pendingOrder.id);
+
+      const orderPaymentMethod = pendingOrder.payment?.payment_method;
+
+      setCurrentOrderId(pendingOrder.id);
+      localStorage.setItem("pendingOrderId", pendingOrder.id);
+
+      if (orderPaymentMethod) {
+        setPaymentMethod(orderPaymentMethod === "pix" ? "pix" : "card");
+        setCurrentStep(3);
+
+        toast.info(
+          "Você tem um pedido pendente. Complete o pagamento ou cancele para criar um novo.",
+          { duration: 5000 }
+        );
+      }
+    }
+  }, [hasPendingOrder, pendingOrder, currentOrderId]);
+
+  useEffect(() => {
+    const generatePixPayment = async () => {
+      if (
+        paymentMethod === "pix" &&
+        currentOrderId &&
+        !pixData &&
+        !isProcessing &&
+        currentStep === 3
+      ) {
+        console.log("💳 Gerando pagamento PIX automaticamente...");
+        setIsProcessing(true);
+        setPaymentError(null);
+
+        try {
+          if (!user) {
+            router.push("/login");
+            return;
+          }
+
+          const paymentResponse = await createTransparentPayment({
+            orderId: currentOrderId,
+            paymentMethodId: "pix",
+            payerEmail: user.email || "",
+            payerName: user.name || "",
+            // Usar CPF do formulário de cartão se disponível, senão usar um genérico
+            payerDocument: userDocument || "00000000000",
+            payerDocumentType: "CPF",
+          });
+
+          if (!paymentResponse?.success) {
+            throw new Error(
+              paymentResponse?.message || "Erro ao gerar pagamento PIX"
+            );
+          }
+
+          const responseData =
+            paymentResponse.data || paymentResponse.point_of_interaction;
+
+          if (!responseData?.qr_code) {
+            console.error(
+              "Resposta inesperada do pagamento PIX:",
+              paymentResponse
+            );
+            throw new Error("Resposta inválida do servidor");
+          }
+
+          const rawStatus =
+            paymentResponse.status || responseData.status || "pending";
+          const normalizedStatus = mapPaymentStatus(rawStatus) || "pending";
+
+          setPixData({
+            qr_code: responseData.qr_code,
+            qr_code_base64: responseData.qr_code_base64 || "",
+            ticket_url: responseData.ticket_url || "",
+            amount: Number(responseData.amount) || 0,
+            expires_at:
+              responseData.expires_at ||
+              responseData.expiration_date ||
+              responseData.expiration_time ||
+              new Date(Date.now() + 30 * 60 * 1000).toISOString(),
+            payment_id:
+              responseData.payment_id ||
+              paymentResponse.paymentId ||
+              currentOrderId,
+            mercado_pago_id:
+              responseData.mercado_pago_id ||
+              paymentResponse.mercadoPagoId ||
+              "",
+            status: rawStatus,
+            status_detail:
+              responseData.status_detail || paymentResponse.status_detail || "",
+            payer_info:
+              responseData.payer_info ||
+              ({
+                email: user.email || undefined,
+                first_name: user.name || undefined,
+              } as PixPaymentData["payer_info"]),
+          });
+
+          setPaymentStatus(normalizedStatus);
+
+          toast.success("QR Code PIX gerado! Escaneie para pagar.");
+        } catch (error) {
+          console.error("Erro ao gerar pagamento PIX:", error);
+          const errorMessage =
+            error instanceof Error ? error.message : "Erro desconhecido";
+          setPaymentError(errorMessage);
+          toast.error(`Erro ao gerar PIX: ${errorMessage}`);
+        } finally {
+          setIsProcessing(false);
+        }
+      }
+    };
+
+    generatePixPayment();
+  }, [
+    router,
+    paymentMethod,
+    currentOrderId,
+    pixData,
+    isProcessing,
+    currentStep,
+    createTransparentPayment,
+    user,
+    mapPaymentStatus,
+    userDocument,
+  ]);
+
   const cartItems = Array.isArray(cart?.items) ? cart.items : [];
   const cartTotal = cart?.total || 0;
 
@@ -768,6 +906,12 @@ export default function CarrinhoPage() {
     }
     return shippingRule[paymentMethod];
   }, [paymentMethod, isAddressServed, shippingRule]);
+
+  const grandTotal = useMemo(
+    () => cartTotal + (shippingCost ?? 0),
+    [cartTotal, shippingCost]
+  );
+
   const addressWarning = useMemo(() => {
     if (!city.trim()) return null;
     if (state.trim() && normalizedState !== "pb") {
@@ -780,10 +924,6 @@ export default function CarrinhoPage() {
     }
     return null;
   }, [city, state, normalizedState, shippingRule, acceptedCities]);
-  const grandTotal = useMemo(
-    () => cartTotal + (shippingCost ?? 0),
-    [cartTotal, shippingCost]
-  );
 
   useEffect(() => {
     if (!isAddressServed && paymentMethod) {
@@ -863,6 +1003,9 @@ export default function CarrinhoPage() {
 
     setIsProcessing(true);
     setPaymentError(null);
+
+    // Salvar o documento do usuário para uso posterior (ex: PIX)
+    setUserDocument(cardData.identificationNumber);
 
     try {
       // Verificar múltiplas fontes possíveis do orderId
@@ -1072,6 +1215,10 @@ export default function CarrinhoPage() {
         toast.success("Pagamento aprovado! Pedido confirmado.");
         // Limpar localStorage
         localStorage.removeItem("pendingOrderId");
+        // Limpar pedido pendente do hook
+        clearPendingOrder();
+        // Limpar carrinho
+        clearCart();
         // Aguarda 1 segundo antes de redirecionar
         setTimeout(() => {
           router.push("/pedidos");
@@ -1102,6 +1249,10 @@ export default function CarrinhoPage() {
     }
   };
 
+  // ⚠️ FUNÇÃO DESCONTINUADA - Agora o pedido é criado automaticamente ao avançar para etapa 3
+  // e o pagamento PIX é gerado automaticamente ao selecionar PIX
+  // Mantida comentada para referência
+  /*
   const handleFinalizePurchase = async () => {
     if (!zipCode.trim()) {
       toast.error("Por favor, informe o CEP");
@@ -1236,9 +1387,8 @@ export default function CarrinhoPage() {
           paymentMethodId: "pix",
           payerEmail: user.email || "",
           payerName: user.name || "",
-          // TODO: Adicionar campo de CPF no cadastro do usuário
-          // Por enquanto usando CPF de teste para desenvolvimento
-          payerDocument: "12345678909",
+          // Usar CPF do formulário de cartão se disponível, senão usar um genérico
+          payerDocument: userDocument || "00000000000",
           payerDocumentType: "CPF",
         });
 
@@ -1315,6 +1465,7 @@ export default function CarrinhoPage() {
       setIsProcessing(false);
     }
   };
+  */
 
   const originalTotal = cartItems.reduce((sum, item) => {
     const baseTotal = (item.effectivePrice ?? item.price) * item.quantity;
@@ -1375,6 +1526,78 @@ export default function CarrinhoPage() {
           toast.warning(
             "Não foi possível salvar seus dados, mas você pode continuar."
           );
+        }
+      }
+
+      // ✅ NOVO: Criar pedido automaticamente ao avançar para etapa 3
+      // Só cria se não houver um pedido pendente
+      if (!currentOrderId && !hasPendingOrder) {
+        setIsProcessing(true);
+        try {
+          const fullAddress = `${address}, ${houseNumber} - ${neighborhood}, ${city}/${state} - CEP: ${zipCode}`;
+
+          let finalDeliveryDate: Date | null = null;
+          if (selectedDate && selectedTime) {
+            const [hours, minutes] = selectedTime.split(":").map(Number);
+            finalDeliveryDate = new Date(selectedDate);
+            finalDeliveryDate.setHours(hours, minutes, 0, 0);
+          }
+
+          // Criar pedido com método de pagamento "pix" como padrão (será alterado depois)
+          const createdOrder = await createOrder(
+            user.id,
+            fullAddress,
+            finalDeliveryDate || undefined,
+            {
+              shippingCost: 0, // Será calculado quando o método de pagamento for selecionado
+              paymentMethod: "pix", // Valor padrão temporário
+              grandTotal: cartTotal, // Total sem frete ainda
+              deliveryCity: city,
+              deliveryState: state,
+              recipientPhone: normalizePhoneForBackend(recipientPhone),
+            }
+          );
+
+          const createdOrderId = (() => {
+            if (createdOrder && typeof createdOrder === "object") {
+              if ("id" in createdOrder && createdOrder.id) {
+                return String(createdOrder.id);
+              }
+              if (
+                "order" in createdOrder &&
+                (createdOrder as { order?: { id?: string } }).order?.id
+              ) {
+                return String(
+                  (createdOrder as { order?: { id?: string } }).order?.id
+                );
+              }
+            }
+            return "";
+          })();
+
+          if (!createdOrderId) {
+            throw new Error("Não foi possível identificar o pedido gerado.");
+          }
+
+          console.log(
+            "📦 Pedido criado automaticamente - OrderId:",
+            createdOrderId
+          );
+
+          // Salvar orderId no localStorage e estado
+          localStorage.setItem("pendingOrderId", createdOrderId);
+          setCurrentOrderId(createdOrderId);
+
+          toast.success("Pedido criado! Selecione a forma de pagamento.");
+        } catch (error) {
+          console.error("Erro ao criar pedido:", error);
+          const errorMessage =
+            error instanceof Error ? error.message : "Erro desconhecido";
+          toast.error(`Erro ao criar pedido: ${errorMessage}`);
+          setIsProcessing(false);
+          return; // Não avança para etapa 3 se houver erro
+        } finally {
+          setIsProcessing(false);
         }
       }
 
@@ -1743,7 +1966,7 @@ export default function CarrinhoPage() {
                               </Button>
                             </PopoverTrigger>
                             <PopoverContent
-                              className="w-auto p-0"
+                              className="w-full max-w-[200px] p-0"
                               align="start"
                             >
                               <Calendar
@@ -2093,37 +2316,80 @@ export default function CarrinhoPage() {
                 </Card>
 
                 {/* Botões Finais */}
-                <div className="flex justify-between gap-4">
-                  <Button
-                    onClick={handlePreviousStep}
-                    variant="outline"
-                    className="px-6 py-6 rounded-xl font-bold border-2"
-                    disabled={isProcessing || paymentStatus === "pending"}
-                  >
-                    <ArrowLeft className="mr-2 h-5 w-5" />
-                    Voltar
-                  </Button>
-
-                  {/* Só mostrar botão de pagamento se ainda não tiver gerado */}
-                  {!pixData && !currentOrderId && (
+                <div className="flex flex-col sm:flex-row justify-between gap-4">
+                  <div className="flex gap-4">
                     <Button
-                      onClick={handleFinalizePurchase}
-                      disabled={isProcessing || !paymentMethod}
-                      className="bg-rose-600 hover:bg-rose-700 text-white px-12 py-6 rounded-xl font-bold text-lg shadow-lg hover:shadow-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                      onClick={handlePreviousStep}
+                      variant="outline"
+                      className="px-6 py-6 rounded-xl font-bold border-2"
+                      disabled={
+                        isProcessing ||
+                        paymentStatus === "pending" ||
+                        isCanceling
+                      }
                     >
-                      {isProcessing ? (
-                        <>
-                          <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                          Processando...
-                        </>
-                      ) : (
-                        <>
-                          Gerar Pagamento
-                          <CheckCircle2 className="ml-2 h-5 w-5" />
-                        </>
-                      )}
+                      <ArrowLeft className="mr-2 h-5 w-5" />
+                      Voltar
                     </Button>
-                  )}
+
+                    {/* Botão de Cancelar Compra */}
+                    {currentOrderId && (
+                      <Button
+                        onClick={async () => {
+                          const confirmed = window.confirm(
+                            "Tem certeza que deseja cancelar esta compra? Todos os dados serão perdidos."
+                          );
+
+                          if (confirmed) {
+                            const success = await handleCancelOrder();
+                            if (success) {
+                              // Limpar estados locais
+                              setCurrentOrderId(null);
+                              setPixData(null);
+                              setPaymentStatus("");
+                              setPaymentError(null);
+                              setPaymentMethod("");
+                              // Voltar para etapa 1
+                              setCurrentStep(1);
+                              window.scrollTo({ top: 0, behavior: "smooth" });
+                            }
+                          }
+                        }}
+                        variant="destructive"
+                        className="px-6 py-6 rounded-xl font-bold"
+                        disabled={
+                          isProcessing ||
+                          paymentStatus === "success" ||
+                          isCanceling
+                        }
+                      >
+                        {isCanceling ? (
+                          <>
+                            <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                            Cancelando...
+                          </>
+                        ) : (
+                          <>
+                            <XCircle className="mr-2 h-5 w-5" />
+                            Cancelar Compra
+                          </>
+                        )}
+                      </Button>
+                    )}
+                  </div>
+
+                  {/* Mensagem informativa ao invés do botão */}
+                  {currentOrderId &&
+                    paymentMethod &&
+                    !pixData &&
+                    paymentMethod === "pix" && (
+                      <Alert className="border-blue-200 bg-blue-50">
+                        <Loader2 className="h-4 w-4 text-blue-600 animate-spin" />
+                        <AlertDescription className="text-blue-800 text-sm">
+                          Gerando QR Code PIX...
+                        </AlertDescription>
+                      </Alert>
+                    )}
                 </div>
               </div>
             )}
