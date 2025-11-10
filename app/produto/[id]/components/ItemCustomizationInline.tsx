@@ -177,7 +177,7 @@ export function ItemCustomizationInline({
       // Converter data URL para File
       fetch(croppedImageUrl)
         .then((res) => res.blob())
-        .then((blob) => {
+        .then(async (blob) => {
           const file = new File([blob], "cropped-image.png", {
             type: "image/png",
           });
@@ -192,11 +192,26 @@ export function ItemCustomizationInline({
             [currentCustomizationId]: totalFiles,
           }));
 
-          const filesData = totalFiles.map((f, index) => ({
-            file: f,
-            preview: URL.createObjectURL(f),
-            position: index,
-          }));
+          // Converter cada arquivo para base64
+          const filesDataPromises = totalFiles.map(async (f, index) => {
+            const reader = new FileReader();
+            const base64Promise = new Promise<string>((resolve) => {
+              reader.onloadend = () => resolve(reader.result as string);
+              reader.readAsDataURL(f);
+            });
+            const base64 = await base64Promise;
+
+            return {
+              file: f,
+              preview: URL.createObjectURL(f),
+              position: index,
+              base64, // ✅ Dados base64 para upload ao Drive
+              mime_type: f.type,
+              size: f.size,
+            };
+          });
+
+          const filesData = await Promise.all(filesDataPromises);
 
           setCustomizationData((prev) => ({
             ...prev,
@@ -211,7 +226,7 @@ export function ItemCustomizationInline({
   );
 
   const handleRemoveFile = useCallback(
-    (customizationId: string, index: number) => {
+    async (customizationId: string, index: number) => {
       const currentFiles = uploadingFiles[customizationId] || [];
       const newFiles = currentFiles.filter((_, i) => i !== index);
 
@@ -220,11 +235,26 @@ export function ItemCustomizationInline({
         [customizationId]: newFiles,
       }));
 
-      const filesData = newFiles.map((file, idx) => ({
-        file,
-        preview: URL.createObjectURL(file),
-        position: idx,
-      }));
+      // Converter cada arquivo para base64
+      const filesDataPromises = newFiles.map(async (file, idx) => {
+        const reader = new FileReader();
+        const base64Promise = new Promise<string>((resolve) => {
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.readAsDataURL(file);
+        });
+        const base64 = await base64Promise;
+
+        return {
+          file,
+          preview: URL.createObjectURL(file),
+          position: idx,
+          base64, // ✅ Dados base64 para upload ao Drive
+          mime_type: file.type,
+          size: file.size,
+        };
+      });
+
+      const filesData = await Promise.all(filesDataPromises);
 
       setCustomizationData((prev) => ({
         ...prev,

@@ -54,7 +54,37 @@ export function isValidPhone(value: string): boolean {
 
   // Deve ter 13 dígitos (55 + DDD + número)
   // ou 11 dígitos (DDD + número)
-  return numbers.length === 13 || numbers.length === 11;
+  // ou 10 dígitos (DDD + número fixo sem 9)
+  return (
+    numbers.length === 13 || numbers.length === 11 || numbers.length === 10
+  );
+}
+
+/**
+ * Normaliza telefone removendo o código do país e o 9 extra se necessário
+ * Retorna no formato: DDDNNNNNNNNN (10 ou 11 dígitos)
+ */
+export function normalizePhoneForBackend(value: string): string {
+  let numbers = unformatPhoneNumber(value);
+
+  // Remove código do país se existir
+  if (numbers.startsWith("55")) {
+    numbers = numbers.substring(2);
+  }
+
+  // Se tiver 11 dígitos e o terceiro dígito for 9, manter como está (celular)
+  // Se tiver 12 dígitos (pode ter vindo com 55 + DDD + 9 + número), remover o primeiro 9
+  if (numbers.length === 11) {
+    // Formato: DDNNNNNNNNN
+    // Se for DDD + 9 + 8 dígitos = celular (manter)
+    return numbers;
+  } else if (numbers.length === 10) {
+    // Formato: DDNNNNNNNN (telefone fixo ou celular sem 9)
+    return numbers;
+  }
+
+  // Para qualquer outro caso, retornar apenas os últimos 10 ou 11 dígitos
+  return numbers.substring(Math.max(0, numbers.length - 11));
 }
 
 /**

@@ -32,6 +32,9 @@ export interface PhotoUploadData {
   original_name: string;
   position: number;
   preview_url?: string;
+  base64?: string; // ✅ Dados base64 da imagem para upload ao Drive
+  mime_type?: string;
+  size?: number;
 }
 
 export interface CustomizationValue {

@@ -18,13 +18,23 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { CartSheet } from "../cart-sheet";
 import { Separator } from "../ui/separator";
+import {
+  Dialog,
+  DialogHeader,
+  DialogTitle,
+  DialogContent,
+  DialogDescription,
+  DialogClose,
+  DialogFooter,
+} from "../ui/dialog";
 
 export function SiteHeader() {
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isClient, setIsClient] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+  const [isDialogUserOpen, setIsDialogUserOpen] = useState(false);
   const { cart } = useCartContext();
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
@@ -85,17 +95,24 @@ export function SiteHeader() {
                 className="lg:hidden"
                 aria-label="Buscar"
               >
-                <Search className="h-8 w-8" />
+                <Search className="h-6 w-6" />
               </Button>
 
-              <div className="flex items-center gap-3">
-                <User className="h-8 w-8" fill="#FFFFFF" />
+              <div
+                aria-label="Usuário"
+                className="flex items-center gap-3 cursor-pointer"
+              >
+                <User className="h-6 w-6" fill="#FFFFFF" />
                 <div className="hidden md:block text-left">
                   {user ? (
-                    <div className="flex flex-col items-start">
+                    <button
+                      type="button"
+                      onClick={() => setIsDialogUserOpen(true)}
+                      className="flex flex-col items-start"
+                    >
                       <span className="text-xs">Bem vindo de volta,</span>
                       <span className="font-semibold text-xs">{user.name}</span>
-                    </div>
+                    </button>
                   ) : (
                     <>
                       <Link href="/login" className="flex flex-col items-start">
@@ -113,8 +130,8 @@ export function SiteHeader() {
 
               <div className="hidden md:flex items-center gap-3">
                 <div className="relative">
-                  <MapPin className="h-8 w-8" fill="#FFFFFF" />
-                  <span className="absolute top-2 right-2.5 h-3 w-3 bg-rose-400 text-white text-xs rounded-full flex items-center justify-center" />
+                  <MapPin className="h-6 w-6" fill="#FFFFFF" />
+                  <span className="absolute top-1.5 right-2 h-2 w-2 bg-rose-400 text-white text-xs rounded-full flex items-center justify-center" />
                 </div>
                 <div className="text-left">
                   <Link href="/pedidos" className="flex flex-col items-start">
@@ -135,7 +152,7 @@ export function SiteHeader() {
                 onClick={handleOpenCart}
               >
                 <div className="relative">
-                  <ShoppingCart className="h-8 w-8" fill="#FFFFFF" />
+                  <ShoppingCart className="h-6 w-6" fill="#FFFFFF" />
                   {isClient && (
                     <span className="absolute -top-2 -right-2 h-5 w-5 bg-rose-500 text-white text-xs rounded-full flex items-center justify-center">
                       {cart.itemCount}
@@ -216,6 +233,31 @@ export function SiteHeader() {
       </div>
 
       <CartSheet isOpen={isCartOpen} onClose={() => setIsCartOpen(false)} />
+
+      <Dialog open={isDialogUserOpen} onOpenChange={setIsDialogUserOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Deseja sair da sua conta?</DialogTitle>
+            <DialogDescription>
+              Você será redirecionado para a página inicial.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button variant="outline">Cancelar</Button>
+            </DialogClose>
+            <Button
+              className="ml-2"
+              onClick={() => {
+                setIsDialogUserOpen(false);
+                logout();
+              }}
+            >
+              Sair
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

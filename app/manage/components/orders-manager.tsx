@@ -31,6 +31,7 @@ import {
   SelectValue,
 } from "../../components/ui/select";
 import { cn } from "../../lib/utils";
+import Link from "next/link";
 
 const STATUS_LABELS: Record<OrderStatus, string> = {
   PENDING: "Aguardando pagamento",
@@ -41,7 +42,7 @@ const STATUS_LABELS: Record<OrderStatus, string> = {
 };
 
 const STATUS_COLORS: Record<OrderStatus, string> = {
-  PENDING: "bg-amber-100 text-amber-700 border-amber-200",
+  PENDING: "bg-rose-100 text-rose-700 border-rose-200",
   PAID: "bg-sky-100 text-sky-700 border-sky-200",
   SHIPPED: "bg-blue-100 text-blue-700 border-blue-200",
   DELIVERED: "bg-emerald-100 text-emerald-700 border-emerald-200",
@@ -397,16 +398,14 @@ export function OrdersManager() {
                       {order.user?.phone && (
                         <p className="flex items-center gap-2">
                           <Phone className="h-4 w-4 text-gray-400" />
-                          <a
-                            href={`https://wa.me/${onlyDigits(
-                              order.user.phone
-                            )}`}
+                          <Link
+                            href={`https://wa.me/${order.user.phone}`}
                             target="_blank"
                             rel="noreferrer"
                             className="hover:text-rose-600"
                           >
                             {order.user.phone}
-                          </a>
+                          </Link>
                         </p>
                       )}
                       <p className="mt-1 flex items-center gap-2">
@@ -523,45 +522,175 @@ export function OrdersManager() {
                           </div>
                         )}
                         {item.customizations.length > 0 && (
-                          <div className="mt-3 space-y-1 text-xs">
+                          <div className="mt-3 space-y-2 text-xs">
                             <p className="font-medium text-gray-700">
-                              Customizações
+                              Customizações ({item.customizations.length})
                             </p>
-                            <ul className="space-y-1">
-                              {item.customizations.map((customization) => (
-                                <li
-                                  key={customization.id}
-                                  className="flex flex-wrap items-center gap-2 rounded-md border border-gray-100 bg-gray-50 px-2 py-1 text-gray-600"
-                                >
-                                  <Badge
-                                    variant="outline"
-                                    className="border-gray-200 bg-white px-2 py-0 text-[10px] uppercase tracking-wide text-gray-500"
+                            <ul className="space-y-2">
+                              {item.customizations.map((customization) => {
+                                const customData = parseCustomizationData(
+                                  customization.value
+                                );
+
+                                const displayType =
+                                  customization.customization_type ||
+                                  customData.customization_type ||
+                                  "UNKNOWN";
+                                const displayTitle =
+                                  customization.title ||
+                                  customData.title ||
+                                  "Personalização";
+
+                                return (
+                                  <li
+                                    key={customization.id}
+                                    className="rounded-md border border-gray-200 bg-gray-50 p-2"
                                   >
-                                    {formatCustomizationType(
-                                      customization.customization_type
-                                    )}
-                                  </Badge>
-                                  <span className="font-medium text-gray-700">
-                                    {customization.title}
-                                  </span>
-                                  {customization.google_drive_url && (
-                                    <a
-                                      href={customization.google_drive_url}
-                                      target="_blank"
-                                      rel="noreferrer"
-                                      className="text-xs font-medium text-blue-600 hover:text-blue-700"
-                                    >
-                                      Ver arquivos
-                                    </a>
-                                  )}
-                                </li>
-                              ))}
+                                    <div className="flex flex-wrap items-start gap-2">
+                                      <Badge
+                                        variant="outline"
+                                        className="border-purple-200 bg-purple-50 px-2 py-0 text-[10px] uppercase tracking-wide text-purple-700"
+                                      >
+                                        {formatCustomizationType(displayType)}
+                                      </Badge>
+                                      <span className="flex-1 font-medium text-gray-800">
+                                        {displayTitle}
+                                      </span>
+                                    </div>
+
+                                    {/* Detalhes específicos por tipo */}
+                                    <div className="mt-2 space-y-1 text-gray-600">
+                                      {/* Fotos */}
+                                      {displayType === "IMAGES" &&
+                                        customData.photos && (
+                                          <p className="flex items-center gap-1">
+                                            <span className="text-blue-600">
+                                              📸
+                                            </span>
+                                            {Array.isArray(customData.photos)
+                                              ? customData.photos.length
+                                              : 0}{" "}
+                                            foto(s) anexada(s)
+                                          </p>
+                                        )}
+
+                                      {customData.selected_option && (
+                                        <p className="flex items-center gap-1">
+                                          <span className="text-green-600">
+                                            ✓
+                                          </span>
+                                          Opção:{" "}
+                                          {String(
+                                            customData.selected_option_label ||
+                                              customData.selected_option
+                                          )}
+                                        </p>
+                                      )}
+
+                                      {/* Texto personalizado */}
+                                      {customData.text && (
+                                        <p className="flex items-center gap-1">
+                                          <span className="text-gray-600">
+                                            ✏️
+                                          </span>
+                                          {String(customData.text)}
+                                        </p>
+                                      )}
+
+                                      {/* Layout Base */}
+                                      {customData.selected_item && (
+                                        <p className="flex items-center gap-1">
+                                          <span className="text-purple-600">
+                                            🎨
+                                          </span>
+                                          {String(
+                                            (
+                                              customData.selected_item as {
+                                                selected_item?: string;
+                                              }
+                                            )?.selected_item ||
+                                              customData.selected_item_label ||
+                                              "Layout personalizado"
+                                          )}
+                                        </p>
+                                      )}
+
+                                      {/* Link do Drive */}
+                                      {customization.google_drive_url && (
+                                        <a
+                                          href={customization.google_drive_url}
+                                          target="_blank"
+                                          rel="noreferrer"
+                                          className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700 hover:underline"
+                                        >
+                                          <span>📁</span>
+                                          Ver arquivos no Drive
+                                        </a>
+                                      )}
+                                    </div>
+                                  </li>
+                                );
+                              })}
                             </ul>
                           </div>
                         )}
                       </div>
                     ))}
                   </div>
+                </section>
+
+                {/* Botões de Ação Rápida */}
+                <section className="mt-6 flex flex-wrap gap-3 border-t border-gray-100 pt-4">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-2 border-green-200 bg-green-50 text-green-700 hover:bg-green-100 hover:text-green-800"
+                    onClick={() => {
+                      const phone = order.recipient_phone || order.user?.phone;
+                      if (phone) {
+                        const whatsappUrl = `https://wa.me/${onlyDigits(
+                          phone
+                        )}?text=${encodeURIComponent(
+                          `Olá! Sobre o pedido #${shortId(order.id)}`
+                        )}`;
+                        window.open(whatsappUrl, "_blank");
+                      } else {
+                        toast.error("Número de telefone não disponível");
+                      }
+                    }}
+                  >
+                    <Phone className="h-4 w-4" />
+                    Falar no WhatsApp
+                  </Button>
+
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-2"
+                    onClick={() => {
+                      toast.info(
+                        "Função de mensagem direta em desenvolvimento"
+                      );
+                    }}
+                  >
+                    <User className="h-4 w-4" />
+                    Mensagem Direta
+                  </Button>
+
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-2"
+                    onClick={() => {
+                      window.open(
+                        `/manage/service?order=${order.id}`,
+                        "_blank"
+                      );
+                    }}
+                  >
+                    <PackageCheck className="h-4 w-4" />
+                    Verificar Situação
+                  </Button>
                 </section>
 
                 <footer className="mt-6 flex flex-col gap-4 border-t border-gray-100 pt-4 md:flex-row md:items-center md:justify-between">
@@ -669,16 +798,37 @@ function onlyDigits(value?: string | null) {
   return value ? value.replace(/\D/g, "") : "";
 }
 
+interface CustomizationData {
+  customization_type?: string;
+  title?: string;
+  photos?: unknown[];
+  selected_option?: string;
+  selected_option_label?: string;
+  text?: string;
+  selected_item?: { selected_item?: string } | string;
+  selected_item_label?: string;
+}
+
+function parseCustomizationData(value?: string | null): CustomizationData {
+  if (!value) return {};
+  try {
+    return JSON.parse(value) as CustomizationData;
+  } catch {
+    return {};
+  }
+}
+
 function formatCustomizationType(type: string) {
   switch (type) {
-    case "PHOTO_UPLOAD":
-      return "Envio de fotos";
-    case "ITEM_SUBSTITUTION":
-      return "Substituição";
+    case "IMAGES":
+      return "Fotos";
+    case "TEXT":
     case "TEXT_INPUT":
-      return "Mensagem";
+      return "Texto";
     case "MULTIPLE_CHOICE":
-      return "Opções";
+      return "Escolha";
+    case "BASE_LAYOUT":
+      return "Layout";
     default:
       return "Customização";
   }

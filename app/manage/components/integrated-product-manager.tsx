@@ -767,12 +767,12 @@ export function IntegratedProductManager({
                       </div>
                     </>
                   ) : (
-                    <div className="text-center py-6 text-gray-500 text-sm bg-amber-50 border border-amber-200 rounded-lg">
-                      <AlertCircle className="h-8 w-8 mx-auto mb-2 text-amber-600" />
-                      <p className="font-medium text-amber-900">
+                    <div className="text-center py-6 text-gray-500 text-sm bg-rose-50 border border-rose-200 rounded-lg">
+                      <AlertCircle className="h-8 w-8 mx-auto mb-2 text-rose-600" />
+                      <p className="font-medium text-rose-900">
                         Nenhum item disponível
                       </p>
-                      <p className="text-xs mt-1 text-amber-700">
+                      <p className="text-xs mt-1 text-rose-700">
                         Vá para a aba &quot;Itens&quot; e crie itens antes de
                         adicionar componentes
                       </p>

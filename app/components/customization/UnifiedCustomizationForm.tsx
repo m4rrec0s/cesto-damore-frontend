@@ -317,16 +317,31 @@ export function UnifiedCustomizationForm({
     }, 100);
   };
 
-  const handleFileUpload = (
+  const handleFileUpload = async (
     customizationId: string,
     files: FileList | null
   ) => {
     if (!files || files.length === 0) return;
 
-    const photos = Array.from(files).map((file) => ({
-      file,
-      preview: URL.createObjectURL(file),
-    }));
+    // Converter cada arquivo para base64
+    const photoPromises = Array.from(files).map(async (file) => {
+      const reader = new FileReader();
+      const base64Promise = new Promise<string>((resolve) => {
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.readAsDataURL(file);
+      });
+      const base64 = await base64Promise;
+
+      return {
+        file,
+        preview: URL.createObjectURL(file),
+        base64, // ✅ Dados base64 para upload ao Drive
+        mime_type: file.type,
+        size: file.size,
+      };
+    });
+
+    const photos = await Promise.all(photoPromises);
 
     handleCustomizationChange(customizationId, "IMAGES", photos);
     toast.success(`${files.length} foto(s) adicionada(s)`);

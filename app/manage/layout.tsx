@@ -5,11 +5,11 @@ import {
   ClipboardList,
   Grid3X3,
   PackageCheckIcon,
-  Plus,
   Tag,
   LayoutDashboard,
   Menu,
   X,
+  BotMessageSquareIcon,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -25,12 +25,10 @@ export default function ManageLayout({
   const [isOpen, setIsOpen] = useState(false);
   const pathname = usePathname();
 
-  // Fechar o menu mobile quando a rota mudar
   useEffect(() => {
     setIsOpen(false);
   }, [pathname]);
 
-  // Função melhorada para verificar se a rota está ativa
   const isActive = (path: string) => {
     if (path === "/manage" || path === "/manage/") {
       return pathname === "/manage" || pathname === "/manage/";
@@ -42,10 +40,14 @@ export default function ManageLayout({
     { name: "Dashboard", href: "/manage", icon: LayoutDashboard },
     { name: "Pedidos", href: "/manage/orders", icon: ClipboardList },
     { name: "Catálogo", href: "/manage/catalog", icon: Box },
-    { name: "Adicionais", href: "/manage/additionals", icon: Plus },
     { name: "Categorias", href: "/manage/categories", icon: Tag },
     { name: "Tipos", href: "/manage/types", icon: Grid3X3 },
     { name: "Feed", href: "/manage/feed", icon: PackageCheckIcon },
+    {
+      name: "Atendimento",
+      href: "/manage/service",
+      icon: BotMessageSquareIcon,
+    },
   ];
 
   return (
@@ -70,7 +72,6 @@ export default function ManageLayout({
           <h2 className="text-lg font-bold text-rose-900">Painel Admin</h2>
         </Link>
 
-        {/* Navigation */}
         <nav className="p-4">
           <ul className="space-y-2 overflow-y-auto h-[calc(100vh-200px)] w-full overflow-x-hidden scrollbar-hide">
             {tabs.map((tab) => (
@@ -91,7 +92,6 @@ export default function ManageLayout({
           </ul>
         </nav>
 
-        {/* Footer */}
         <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-rose-200 bg-white/50">
           <p className="text-xs text-center text-rose-700">
             © 2025 Cesto D&apos;Amore
@@ -99,7 +99,6 @@ export default function ManageLayout({
         </div>
       </aside>
 
-      {/* Backdrop for mobile */}
       {isOpen && (
         <div
           className="fixed inset-0 bg-black/30 z-20 md:hidden transition-opacity duration-300"
@@ -107,9 +106,7 @@ export default function ManageLayout({
         ></div>
       )}
 
-      {/* Main content */}
       <main className="flex-1 overflow-auto">
-        {/* Mobile Header */}
         <div className="md:hidden bg-white border-b border-gray-200 p-4 shadow-sm sticky top-0 z-10">
           <Button
             onClick={() => setIsOpen(!isOpen)}
@@ -121,7 +118,6 @@ export default function ManageLayout({
           </Button>
         </div>
 
-        {/* Content */}
         <div className="p-4 md:p-0">
           <header className="w-full bg-white border-b shadow-sm py-4 px-3 mb-4">
             <h2 className="text-2xl font-bold">

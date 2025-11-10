@@ -445,9 +445,13 @@ export function ProductsTab() {
 
         for (const additional of additionalsToProcess) {
           try {
-            await api.linkAdditionalToProduct(additional.item_id, productId);
+            await api.linkAdditionalToProduct(
+              additional.item_id,
+              productId,
+              additional.custom_price
+            );
             console.log(
-              `✅ Adicional ${additional.item_id} vinculado/atualizado`
+              `✅ Adicional ${additional.item_id} vinculado/atualizado com preço ${additional.custom_price}`
             );
           } catch (error) {
             console.error(
@@ -468,8 +472,14 @@ export function ProductsTab() {
 
         for (const additional of additionalsToSave) {
           try {
-            await api.linkAdditionalToProduct(additional.item_id, productId);
-            console.log(`✅ Adicional adicionado: ${additional.item_id}`);
+            await api.linkAdditionalToProduct(
+              additional.item_id,
+              productId,
+              additional.custom_price
+            );
+            console.log(
+              `✅ Adicional adicionado: ${additional.item_id} com preço ${additional.custom_price}`
+            );
           } catch (error) {
             console.error(`❌ Erro ao adicionar adicional:`, error);
           }

@@ -32,6 +32,13 @@ interface CartContextType {
     customizations?: CartCustomization[],
     additionalColors?: Record<string, string>
   ) => void;
+  updateCustomizations: (
+    productId: string,
+    oldCustomizations: CartCustomization[],
+    newCustomizations: CartCustomization[],
+    additionals?: string[],
+    additionalColors?: Record<string, string>
+  ) => void;
   clearCart: () => void;
   createOrder: (
     userId: string,

@@ -6,7 +6,7 @@ const nextConfig: NextConfig = {
       {
         protocol: "http",
         hostname: "localhost",
-        port: "8080",
+        port: "3333",
         pathname: "/api/**",
       },
       {
@@ -23,6 +23,11 @@ const nextConfig: NextConfig = {
         protocol: "https",
         hostname: "drive.google.com",
         pathname: "/file/**",
+      },
+      {
+        protocol: "https",
+        hostname: "api.cestodamore.com.br",
+        pathname: "/**",
       },
     ],
   },

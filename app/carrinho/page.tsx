@@ -32,6 +32,7 @@ import {
   CheckCircle2,
   ArrowRight,
   ArrowLeft,
+  Edit2,
 } from "lucide-react";
 import { CustomizationsReview } from "./components/CustomizationsReview";
 import Link from "next/link";
@@ -39,7 +40,11 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { QRCodePIX } from "@/app/components/QRCodePIX";
-import { formatPhoneNumber, isValidPhone } from "@/app/lib/phoneMask";
+import {
+  formatPhoneNumber,
+  isValidPhone,
+  normalizePhoneForBackend,
+} from "@/app/lib/phoneMask";
 import {
   CreditCardForm,
   type CreditCardData,
@@ -94,6 +99,43 @@ interface PixPaymentData {
   };
 }
 
+/**
+ * Calcula o preço final de um adicional considerando suas customizações
+ * @param additionalId - ID do adicional
+ * @param basePrice - Preço base do adicional
+ * @param customizations - Array de customizações do item do carrinho
+ * @returns Preço final do adicional (base + ajustes de customizações)
+ */
+const getAdditionalFinalPrice = (
+  additionalId: string,
+  basePrice: number,
+  customizations?: CartCustomization[]
+): number => {
+  if (!customizations || customizations.length === 0) {
+    return basePrice;
+  }
+
+  // Filtrar customizações que pertencem a este adicional
+  // O customization_id pode ser o ruleId ou ter o formato `item_${itemId}`
+  const additionalCustomizations = customizations.filter(
+    (c) =>
+      c.customization_id?.includes(additionalId) ||
+      c.customization_id?.endsWith(`_${additionalId}`)
+  );
+
+  if (additionalCustomizations.length === 0) {
+    return basePrice;
+  }
+
+  // Somar os ajustes de preço das customizações
+  const adjustmentTotal = additionalCustomizations.reduce(
+    (sum, c) => sum + (c.price_adjustment || 0),
+    0
+  );
+
+  return basePrice + adjustmentTotal;
+};
+
 // Tipos para os componentes
 interface CartItem {
   product_id: string;
@@ -108,17 +150,10 @@ interface CartItem {
   effectivePrice?: number;
   discount?: number;
   additional_ids?: string[];
-  additional_colors?: Record<string, string>; // Mapeia additional_id -> color_id
   additionals?: Array<{
     id: string;
     name: string;
     price: number;
-    colors?: Array<{
-      color_id: string;
-      color_name: string;
-      color_hex_code: string;
-      stock_quantity: number;
-    }>;
   }>;
   customizations?: CartCustomization[];
   customization_total?: number;
@@ -139,40 +174,8 @@ interface ProductCardProps {
     customizations?: CartCustomization[],
     additionalColors?: Record<string, string>
   ) => void;
+  onEditCustomizations?: (item: CartItem) => void;
 }
-
-// interface OrderSummaryCardProps {
-//   originalTotal: number;
-//   discountAmount: number;
-//   cartTotal: number;
-// }
-
-// interface CheckoutButtonProps {
-//   handleFinalizePurchase: () => void;
-//   isProcessing: boolean;
-//   zipCode: string;
-//   address: string;
-//   houseNumber: string;
-//   city: string;
-//   state: string;
-//   customerPhone: string;
-//   selectedDate: Date | undefined;
-//   selectedTime: string;
-//   cartItems: CartItem[];
-//   cartTotal: number;
-//   user?: {
-//     name: string;
-//     email: string;
-//   };
-//   paymentMethod: "" | "pix" | "card";
-//   shippingCost: number | null;
-//   grandTotal: number;
-//   isAddressServed: boolean;
-//   paymentStatus: PaymentStatusType;
-//   paymentError: string | null;
-//   pixData: PixPaymentData | null;
-//   onViewPix: () => void;
-// }
 
 const formatCustomizationValue = (custom: CartCustomization) => {
   switch (custom.customization_type) {
@@ -185,21 +188,21 @@ const formatCustomizationValue = (custom: CartCustomization) => {
         "Opção não selecionada"
       );
     case "BASE_LAYOUT":
+      // Se tiver um label descritivo, usar ele
+      if (custom.selected_item_label) {
+        return custom.selected_item_label;
+      }
+      // Caso contrário, tentar mostrar o nome do layout
       if (custom.selected_item) {
-        // Se for uma string (preview URL), mostrar "Personalização de Layout"
         if (typeof custom.selected_item === "string") {
           return "Personalização de Layout Aplicada";
         }
-        // Se for objeto com original_item e selected_item
         return `${
-          (custom.selected_item as { original_item?: string }).original_item ||
-          "Item"
-        } → ${
           (custom.selected_item as { selected_item?: string }).selected_item ||
-          "Personalizado"
+          "Layout Personalizado"
         }`;
       }
-      return "Substituição não definida";
+      return "Layout Personalizado";
     case "IMAGES":
       return `${custom.photos?.length || 0} foto(s)`;
     default:
@@ -269,189 +272,226 @@ const ProductCard = ({
   item,
   updateQuantity,
   removeFromCart,
-}: ProductCardProps) => (
-  <div className="flex gap-4 rounded-2xl bg-white p-5 shadow-sm border border-gray-100 transition-all hover:shadow-md">
-    <div className="relative w-20 h-20 lg:w-24 lg:h-24 flex-shrink-0 rounded-xl overflow-hidden bg-gray-50">
-      <Image
-        src={item.product.image_url || "/placeholder.svg"}
-        alt={item.product.name}
-        fill
-        className="object-cover"
-      />
-    </div>
+  onEditCustomizations,
+}: ProductCardProps) => {
+  const layoutCustomization = item.customizations?.find(
+    (c) => c.customization_type === "BASE_LAYOUT"
+  );
+  const previewUrl = layoutCustomization?.text;
+  const hasCustomizations =
+    item.customizations && item.customizations.length > 0;
 
-    <div className="flex flex-1 flex-col justify-between min-w-0">
-      <div>
-        <h3 className="font-semibold text-base mb-1.5 line-clamp-2 text-gray-900">
-          {item.product.name}
-        </h3>
-        <p className="text-sm text-gray-500 mb-2 line-clamp-2">
-          {item.product.description}
-        </p>
-
-        {item.additionals && item.additionals.length > 0 && (
-          <div className="mb-2 flex flex-wrap gap-1 lg:gap-2">
-            {item.additionals.map((add) => {
-              // Buscar cor selecionada para este adicional
-              const selectedColorId = item.additional_colors?.[add.id];
-              const selectedColor = selectedColorId
-                ? add.colors?.find((c) => c.color_id === selectedColorId)
-                : null;
-
-              return (
-                <Badge
-                  key={add.id}
-                  variant="secondary"
-                  className="text-xs flex items-center gap-1 bg-rose-50 text-rose-700 border-rose-200 font-medium"
-                >
-                  + {add.name} (+R$ {add.price.toFixed(2)})
-                  {selectedColor && (
-                    <span className="flex items-center gap-1 ml-1">
-                      <div
-                        className="w-3 h-3 rounded-full border border-gray-300"
-                        style={{
-                          backgroundColor: selectedColor.color_hex_code,
-                        }}
-                        title={selectedColor.color_name}
-                      />
-                      <span className="text-[10px]">
-                        {selectedColor.color_name}
-                      </span>
-                    </span>
-                  )}
-                </Badge>
-              );
-            })}
-          </div>
-        )}
-
-        {item.customizations && item.customizations.length > 0 && (
-          <div className="mb-2 space-y-1.5">
-            {item.customizations.map((customization) => (
-              <div
-                key={customization.customization_id}
-                className="flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50/50 px-3 py-2 text-xs"
-              >
-                <span className="font-semibold text-rose-700">
-                  {customization.title}:
-                </span>
-                <span className="flex-1 text-rose-900/80 line-clamp-2">
-                  {formatCustomizationValue(customization)}
-                </span>
-                {customization.price_adjustment ? (
-                  <span className="text-emerald-600 font-semibold whitespace-nowrap">
-                    +R$ {customization.price_adjustment.toFixed(2)}
-                  </span>
-                ) : null}
-              </div>
-            ))}
+  return (
+    <div className="flex gap-4 rounded-2xl bg-white p-5 shadow-sm border border-gray-100 transition-all hover:shadow-md">
+      <div className="relative w-20 h-20 lg:w-24 lg:h-24 flex-shrink-0 rounded-xl overflow-hidden bg-gray-50">
+        <Image
+          src={previewUrl || item.product.image_url || "/placeholder.svg"}
+          alt={item.product.name}
+          fill
+          className="object-cover"
+        />
+        {previewUrl && (
+          <div className="absolute bottom-0 left-0 right-0 bg-purple-600/90 text-white text-[10px] text-center py-0.5 font-semibold">
+            Personalizado
           </div>
         )}
       </div>
 
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2 rounded-lg bg-gray-50 border border-gray-200">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() =>
-              updateQuantity(
-                item.product_id,
-                item.quantity - 1,
-                item.additional_ids,
-                item.customizations,
-                item.additional_colors
-              )
-            }
-            disabled={item.quantity <= 1}
-            className="h-9 w-9 hover:bg-gray-100 text-gray-700"
-          >
-            <Minus className="h-4 w-4" />
-          </Button>
-          <span className="w-10 text-center text-sm font-semibold text-gray-900">
-            {item.quantity}
-          </span>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() =>
-              updateQuantity(
-                item.product_id,
-                item.quantity + 1,
-                item.additional_ids,
-                item.customizations,
-                item.additional_colors
-              )
-            }
-            className="h-9 w-9 hover:bg-gray-100 text-gray-700"
-          >
-            <Plus className="h-4 w-4" />
-          </Button>
+      <div className="flex flex-1 flex-col justify-between min-w-0">
+        <div>
+          <h3 className="font-semibold text-base mb-1.5 line-clamp-2 text-gray-900">
+            {item.product.name}
+          </h3>
+          <p className="text-sm text-gray-500 mb-2 line-clamp-2">
+            {item.product.description}
+          </p>
+
+          {item.additionals && item.additionals.length > 0 && (
+            <div className="mb-2 flex flex-wrap gap-1 lg:gap-2">
+              {item.additionals.map((add) => {
+                const finalPrice = getAdditionalFinalPrice(
+                  add.id,
+                  add.price,
+                  item.customizations
+                );
+                return (
+                  <Badge
+                    key={add.id}
+                    variant="secondary"
+                    className="text-xs flex items-center gap-1 bg-rose-50 text-rose-700 border-rose-200 font-medium"
+                  >
+                    + {add.name} (+R$ {finalPrice.toFixed(2)})
+                  </Badge>
+                );
+              })}
+            </div>
+          )}
+
+          {item.customizations && item.customizations.length > 0 && (
+            <div className="mb-2">
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-xs font-semibold text-gray-600">
+                  Personalizações:
+                </span>
+                {hasCustomizations && onEditCustomizations && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => onEditCustomizations(item)}
+                    className="h-6 px-2 text-xs text-purple-600 hover:text-purple-700 hover:bg-purple-50"
+                  >
+                    <Edit2 className="h-3 w-3 mr-1" />
+                    Editar
+                  </Button>
+                )}
+              </div>
+              <div className="space-y-1.5">
+                {item.customizations.map((customization) => (
+                  <div
+                    key={customization.customization_id}
+                    className="flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50/50 px-3 py-2 text-xs"
+                  >
+                    <span className="font-semibold text-rose-700">
+                      {customization.title}:
+                    </span>
+                    <span className="flex-1 text-rose-900/80 line-clamp-2">
+                      {formatCustomizationValue(customization)}
+                    </span>
+                    {customization.price_adjustment ? (
+                      <span className="text-emerald-600 font-semibold whitespace-nowrap">
+                        +R$ {customization.price_adjustment.toFixed(2)}
+                      </span>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() =>
-            removeFromCart(
-              item.product_id,
-              item.additional_ids,
-              item.customizations,
-              item.additional_colors
-            )
-          }
-          className="h-9 w-9 text-red-500 hover:text-red-600 hover:bg-red-50"
-        >
-          <Trash2 className="h-4 w-4" />
-        </Button>
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2 rounded-lg bg-gray-50 border border-gray-200">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() =>
+                updateQuantity(
+                  item.product_id,
+                  item.quantity - 1,
+                  item.additional_ids,
+                  item.customizations
+                )
+              }
+              disabled={item.quantity <= 1}
+              className="h-9 w-9 hover:bg-gray-100 text-gray-700"
+            >
+              <Minus className="h-4 w-4" />
+            </Button>
+            <span className="w-10 text-center text-sm font-semibold text-gray-900">
+              {item.quantity}
+            </span>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() =>
+                updateQuantity(
+                  item.product_id,
+                  item.quantity + 1,
+                  item.additional_ids,
+                  item.customizations
+                )
+              }
+              className="h-9 w-9 hover:bg-gray-100 text-gray-700"
+            >
+              <Plus className="h-4 w-4" />
+            </Button>
+          </div>
+
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() =>
+              removeFromCart(
+                item.product_id,
+                item.additional_ids,
+                item.customizations
+              )
+            }
+            className="h-9 w-9 text-red-500 hover:text-red-600 hover:bg-red-50"
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </div>
       </div>
-    </div>
-    <div className="text-right flex flex-col justify-between">
-      {item.discount && item.discount > 0 ? (
-        <div className="flex flex-col items-end gap-1">
-          <span className="text-xs text-gray-400 line-through">
-            R${" "}
-            {(
-              item.price * item.quantity +
-              (item.customization_total || 0) * item.quantity +
-              (item.additionals?.reduce(
-                (sum: number, add) => sum + add.price * item.quantity,
-                0
-              ) || 0)
-            ).toFixed(2)}
-          </span>
+      <div className="text-right flex flex-col justify-between">
+        {item.discount && item.discount > 0 ? (
+          <div className="flex flex-col items-end gap-1">
+            <span className="text-xs text-gray-400 line-through">
+              R${" "}
+              {(
+                item.price * item.quantity +
+                (item.customization_total || 0) * item.quantity +
+                (item.additionals?.reduce(
+                  (sum: number, add) =>
+                    sum +
+                    getAdditionalFinalPrice(
+                      add.id,
+                      add.price,
+                      item.customizations
+                    ) *
+                      item.quantity,
+                  0
+                ) || 0)
+              ).toFixed(2)}
+            </span>
+            <span className="font-bold text-gray-900 text-lg">
+              R${" "}
+              {(
+                (item.effectivePrice ?? item.price) * item.quantity +
+                (item.additionals?.reduce(
+                  (sum: number, add) =>
+                    sum +
+                    getAdditionalFinalPrice(
+                      add.id,
+                      add.price,
+                      item.customizations
+                    ) *
+                      item.quantity,
+                  0
+                ) || 0)
+              ).toFixed(2)}
+            </span>
+          </div>
+        ) : (
           <span className="font-bold text-gray-900 text-lg">
             R${" "}
             {(
               (item.effectivePrice ?? item.price) * item.quantity +
               (item.additionals?.reduce(
-                (sum: number, add) => sum + add.price * item.quantity,
+                (sum: number, add) =>
+                  sum +
+                  getAdditionalFinalPrice(
+                    add.id,
+                    add.price,
+                    item.customizations
+                  ) *
+                    item.quantity,
                 0
               ) || 0)
             ).toFixed(2)}
           </span>
-        </div>
-      ) : (
-        <span className="font-bold text-gray-900 text-lg">
-          R${" "}
-          {(
-            (item.effectivePrice ?? item.price) * item.quantity +
-            (item.additionals?.reduce(
-              (sum: number, add) => sum + add.price * item.quantity,
-              0
-            ) || 0)
-          ).toFixed(2)}
-        </span>
-      )}
+        )}
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 export default function CarrinhoPage() {
   const { user, isLoading, login } = useAuth();
   const {
     getCepInfo,
     getUser,
+    updateUser,
     createTransparentPayment,
     createCardToken,
     getCardIssuers,
@@ -460,6 +500,8 @@ export default function CarrinhoPage() {
     cart,
     updateQuantity,
     removeFromCart,
+    clearCart,
+    // updateCustomizations, // Para implementação futura de edição completa
     createOrder,
     getMinPreparationHours,
     generateTimeSlots,
@@ -468,6 +510,10 @@ export default function CarrinhoPage() {
 
   // Estado da etapa do checkout
   const [currentStep, setCurrentStep] = useState<CheckoutStep>(1);
+
+  // Estados para edição de customizações (para implementação futura de modal completo)
+  // const [editingItem, setEditingItem] = useState<CartItem | null>(null);
+  // const [showEditModal, setShowEditModal] = useState(false);
 
   const [calendarOpen, setCalendarOpen] = useState(false);
 
@@ -523,6 +569,8 @@ export default function CarrinhoPage() {
         setPaymentStatus("success");
         // Limpar localStorage
         localStorage.removeItem("pendingOrderId");
+        // Limpar carrinho
+        clearCart();
         toast.success("Pagamento confirmado! Pedido realizado com sucesso.");
         // Aguardar 2 segundos antes de redirecionar
         setTimeout(() => {
@@ -631,44 +679,55 @@ export default function CarrinhoPage() {
         setState(user.state);
       }
 
-      // Preencher telefone formatado
+      // Preencher telefone
       if (user.phone && !customerPhone) {
         setCustomerPhone(formatPhoneNumber(user.phone));
       }
 
-      // Preencher endereço completo
+      // Preencher endereço se disponível
       if (user.address && !address) {
+        // Se o endereço estiver no formato completo "Rua X, 123 - Bairro, Cidade/UF - CEP: 12345678"
         const addressStr = user.address;
 
+        // Tentar extrair CEP se ainda não foi preenchido
         if (!user.zip_code && !zipCode) {
-          const cepMatch = addressStr.match(/CEP:\s*(\d{8})/);
+          const cepMatch = addressStr.match(/CEP:\s*(\d{5}-?\d{3}|\d{8})/);
           if (cepMatch) {
-            setZipCode(cepMatch[1]);
+            const extractedCep = cepMatch[1].replace(/\D/g, "");
+            setZipCode(extractedCep);
           }
         }
 
-        const streetMatch = addressStr.match(/^([^,]+),\s*(\w+)/);
+        // Tentar extrair rua e número
+        const streetMatch = addressStr.match(/^([^,]+),\s*(\d+)/);
         if (streetMatch) {
           setAddress(streetMatch[1].trim());
           setHouseNumber(streetMatch[2].trim());
         } else {
-          setAddress(addressStr);
+          // Se não conseguir extrair, colocar tudo no endereço
+          const basicAddress = addressStr.split("-")[0]?.split(",")[0]?.trim();
+          if (basicAddress) {
+            setAddress(basicAddress);
+          }
         }
 
+        // Tentar extrair bairro
         const neighborhoodMatch = addressStr.match(/-\s*([^,]+),/);
         if (neighborhoodMatch) {
           setNeighborhood(neighborhoodMatch[1].trim());
         }
 
+        // Tentar extrair cidade e estado se não foram preenchidos ainda
         if (!user.city && !user.state && !city && !state) {
           const cityStateMatch = addressStr.match(/,\s*([^/]+)\/(\w{2})/);
           if (cityStateMatch) {
             setCity(cityStateMatch[1].trim());
-            setState(cityStateMatch[2].trim());
+            setState(cityStateMatch[2].trim().toUpperCase());
           }
         }
       }
     } else if (!user) {
+      // Limpar campos se não houver usuário
       setZipCode("");
       setAddress("");
       setHouseNumber("");
@@ -731,6 +790,15 @@ export default function CarrinhoPage() {
       setPaymentMethod("");
     }
   }, [isAddressServed, paymentMethod]);
+
+  const handleEditCustomizations = useCallback((item: CartItem) => {
+    console.log("🎨 Abrindo edição de customizações para:", item);
+
+    toast.info(
+      `Edição de personalizações: Para alterar as personalizações de "${item.product.name}", remova o item e adicione novamente ao carrinho com as novas opções.`,
+      { duration: 6000 }
+    );
+  }, []);
 
   const handleCepSearch = async (cep: string) => {
     if (!cep || cep.length !== 8) {
@@ -892,11 +960,31 @@ export default function CarrinhoPage() {
 
         console.log("✅ Token gerado com sucesso:", cardTokenId);
 
-        // Buscar issuer_id usando o BIN
+        // Detectar o payment_method_id baseado no BIN
+        let detectedPaymentMethod = "master"; // default
+        const firstDigit = bin.charAt(0);
+
+        if (firstDigit === "4") {
+          detectedPaymentMethod = "visa";
+        } else if (firstDigit === "5") {
+          detectedPaymentMethod = "master";
+        } else if (firstDigit === "3") {
+          detectedPaymentMethod = "amex";
+        } else if (firstDigit === "6") {
+          detectedPaymentMethod = "elo";
+        }
+
+        console.log("🔍 Payment method detectado:", {
+          bin,
+          firstDigit,
+          detectedPaymentMethod,
+        });
+
+        // Buscar issuer_id usando o BIN e o payment_method correto
         console.log("🏦 Buscando emissor do cartão...");
         const issuerData = await getCardIssuers({
           bin: bin,
-          paymentMethodId: "master",
+          paymentMethodId: detectedPaymentMethod,
         });
 
         console.log("✅ Emissor encontrado:", issuerData);
@@ -942,13 +1030,19 @@ export default function CarrinhoPage() {
         "  - issuerId:",
         (cardData as unknown as { issuerId?: string }).issuerId
       );
+      console.log("  - cardholderName:", cardData.cardholderName);
+      console.log("  - identificationType:", cardData.identificationType);
+      console.log(
+        "  - identificationNumber (parcial):",
+        cardData.identificationNumber.substring(0, 3) + "***"
+      );
 
       const paymentResponse = await createTransparentPayment({
         orderId: orderId,
         paymentMethodId: "credit_card",
         installments: cardData.installments,
         payerEmail: cardData.email,
-        payerName: cardData.cardholderName,
+        payerName: cardData.cardholderName, // IMPORTANTE: Usar o mesmo nome do titular
         payerDocument: cardData.identificationNumber,
         payerDocumentType:
           cardData.identificationType === "CPF" ? "CPF" : "CNPJ",
@@ -1085,7 +1179,7 @@ export default function CarrinhoPage() {
           grandTotal,
           deliveryCity: city,
           deliveryState: state,
-          recipientPhone: recipientPhone.replace(/\D/g, ""), // Remove caracteres não numéricos
+          recipientPhone: normalizePhoneForBackend(recipientPhone),
         }
       );
 
@@ -1225,8 +1319,13 @@ export default function CarrinhoPage() {
   const originalTotal = cartItems.reduce((sum, item) => {
     const baseTotal = (item.effectivePrice ?? item.price) * item.quantity;
     const additionalsTotal =
-      item.additionals?.reduce((a, add) => a + add.price * item.quantity, 0) ||
-      0;
+      item.additionals?.reduce(
+        (a, add) =>
+          a +
+          getAdditionalFinalPrice(add.id, add.price, item.customizations) *
+            item.quantity,
+        0
+      ) || 0;
     return sum + baseTotal + additionalsTotal;
   }, 0);
 
@@ -1250,11 +1349,35 @@ export default function CarrinhoPage() {
     selectedTime !== "" &&
     isAddressServed;
 
-  const handleNextStep = () => {
+  const handleNextStep = async () => {
     if (currentStep === 1 && canProceedToStep2) {
       setCurrentStep(2);
       window.scrollTo({ top: 0, behavior: "smooth" });
     } else if (currentStep === 2 && canProceedToStep3) {
+      // ✅ Salvar dados do usuário antes de avançar para pagamento
+      if (user?.id) {
+        try {
+          const fullAddress = `${address}, ${houseNumber} - ${neighborhood}, ${city}/${state} - CEP: ${zipCode}`;
+
+          await updateUser(user.id, {
+            zip_code: zipCode,
+            address: fullAddress,
+            city,
+            state,
+            phone: customerPhone.replace(/\D/g, ""), // Remove formatação
+          });
+
+          console.log("✅ Dados do usuário salvos com sucesso");
+          toast.success("Dados salvos com sucesso!");
+        } catch (error) {
+          console.error("Erro ao salvar dados do usuário:", error);
+          // Não bloqueia o avanço, apenas notifica
+          toast.warning(
+            "Não foi possível salvar seus dados, mas você pode continuar."
+          );
+        }
+      }
+
       setCurrentStep(3);
       window.scrollTo({ top: 0, behavior: "smooth" });
     }
@@ -1328,6 +1451,7 @@ export default function CarrinhoPage() {
                         item={item}
                         updateQuantity={updateQuantity}
                         removeFromCart={removeFromCart}
+                        onEditCustomizations={handleEditCustomizations}
                       />
                     ))}
                   </div>
@@ -1887,12 +2011,12 @@ export default function CarrinhoPage() {
                     {/* Aviso se o pedido não foi criado ainda */}
                     {!currentOrderId &&
                       !localStorage.getItem("pendingOrderId") && (
-                        <Alert className="border-amber-200 bg-amber-50 mb-6">
-                          <AlertCircle className="h-4 w-4 text-amber-600" />
-                          <AlertTitle className="text-amber-900">
+                        <Alert className="border-rose-200 bg-rose-50 mb-6">
+                          <AlertCircle className="h-4 w-4 text-rose-600" />
+                          <AlertTitle className="text-rose-900">
                             Atenção
                           </AlertTitle>
-                          <AlertDescription className="text-amber-800 text-sm">
+                          <AlertDescription className="text-rose-800 text-sm">
                             Clique em &ldquo;Finalizar Compra&rdquo; primeiro
                             para criar seu pedido antes de preencher os dados do
                             cartão.

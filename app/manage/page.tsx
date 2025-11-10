@@ -12,6 +12,7 @@ import {
 import { useAuth } from "../hooks/use-auth";
 import { StatsOverview } from "./components/stats-overview";
 import { useRouter } from "next/navigation";
+import StockReportManage from "./components/stock/stock-manage";
 
 export default function DashboardPage() {
   const api = useApi();
@@ -95,6 +96,7 @@ export default function DashboardPage() {
   return (
     <div className="p-5">
       <StatsOverview data={data} />
+      <StockReportManage />
     </div>
   );
 }

@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
+import { useApi } from "@/app/hooks/use-api";
 
 interface Order {
   id: string;
@@ -71,6 +72,7 @@ export default function PedidosPage() {
   const router = useRouter();
   const [orders, setOrders] = useState<Order[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const { getOrderByUserId } = useApi();
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -84,15 +86,7 @@ export default function PedidosPage() {
 
       try {
         setIsLoading(true);
-        // Simulando API - você precisará implementar o endpoint no backend
-        const response = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/orders?user_id=${user.id}`,
-          {
-            headers: {
-              Authorization: `Bearer ${localStorage.getItem("authToken")}`,
-            },
-          }
-        );
+        const response = await getOrderByUserId(user.id);
 
         if (response.ok) {
           const data = await response.json();
@@ -106,7 +100,7 @@ export default function PedidosPage() {
     };
 
     fetchOrders();
-  }, [user]);
+  }, [user, getOrderByUserId]);
 
   if (authLoading || isLoading) {
     return (

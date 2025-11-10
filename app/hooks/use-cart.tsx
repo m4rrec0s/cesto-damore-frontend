@@ -22,6 +22,12 @@ export interface OrderItem {
   quantity: number;
   price: number;
   additionals?: OrderAdditionalItem[];
+  customizations?: {
+    customization_id?: string;
+    customization_type?: string;
+    title?: string;
+    customization_data?: Record<string, unknown>;
+  }[];
 }
 
 export interface CartItem {
@@ -188,9 +194,51 @@ export function useCart() {
   useEffect(() => {
     if (typeof window !== "undefined") {
       try {
-        localStorage.setItem("cart", JSON.stringify(cart));
+        // Criar uma cópia do carrinho sem dados pesados (imagens base64)
+        const cartToSave = {
+          ...cart,
+          items: cart.items.map((item) => ({
+            ...item,
+            customizations: item.customizations?.map((custom) => ({
+              ...custom,
+              // Limpar dados pesados das customizações
+              photos: custom.photos?.map((photo) => ({
+                ...photo,
+                preview_url: undefined, // Remover preview base64
+              })),
+              text:
+                custom.customization_type === "BASE_LAYOUT"
+                  ? undefined // Remover preview URL do layout
+                  : custom.text,
+            })),
+          })),
+        };
+
+        localStorage.setItem("cart", JSON.stringify(cartToSave));
       } catch (error) {
         console.error("Erro ao salvar carrinho no localStorage:", error);
+
+        // Se ainda assim falhar, tentar limpar completamente as customizações
+        try {
+          const minimalCart = {
+            ...cart,
+            items: cart.items.map((item) => ({
+              ...item,
+              customizations: undefined, // Remover customizações completamente
+            })),
+          };
+          localStorage.setItem("cart", JSON.stringify(minimalCart));
+          console.warn(
+            "⚠️ Carrinho salvo sem customizações para evitar quota exceeded"
+          );
+        } catch (fallbackError) {
+          console.error(
+            "❌ Não foi possível salvar carrinho mesmo sem customizações:",
+            fallbackError
+          );
+          // Como último recurso, limpar o carrinho
+          localStorage.removeItem("cart");
+        }
       }
     }
   }, [cart]);
@@ -391,6 +439,72 @@ export function useCart() {
     [calculateTotals, removeFromCart]
   );
 
+  /**
+   * Atualizar customizações de um item específico no carrinho
+   */
+  const updateCustomizations = useCallback(
+    (
+      productId: string,
+      oldCustomizations: CartCustomization[],
+      newCustomizations: CartCustomization[],
+      additionals?: string[],
+      additionalColors?: Record<string, string>
+    ) => {
+      setCart((prevCart) => {
+        const currentItems = Array.isArray(prevCart.items)
+          ? prevCart.items
+          : [];
+
+        const targetAdditionals = serializeAdditionals(additionals);
+        const targetOldCustomizations =
+          serializeCustomizations(oldCustomizations);
+        const targetColors = serializeAdditionalColors(additionalColors);
+
+        // Encontrar o item com as customizações antigas
+        const itemIndex = currentItems.findIndex(
+          (item) =>
+            item.product_id === productId &&
+            serializeAdditionals(item.additional_ids) === targetAdditionals &&
+            serializeCustomizations(item.customizations) ===
+              targetOldCustomizations &&
+            serializeAdditionalColors(item.additional_colors) === targetColors
+        );
+
+        if (itemIndex === -1) {
+          console.error("Item não encontrado no carrinho para atualização");
+          return prevCart;
+        }
+
+        const newItems = [...currentItems];
+        const item = newItems[itemIndex];
+
+        // Calcular novo total de customização
+        const customizationEntries = cloneCustomizations(newCustomizations);
+        const customizationTotal =
+          calculateCustomizationTotal(customizationEntries);
+
+        // Recalcular preço efetivo
+        const baseEffective = item.price * (1 - (item.discount || 0) / 100);
+        const effectivePrice = Number(
+          (baseEffective + customizationTotal).toFixed(2)
+        );
+
+        // Atualizar item com novas customizações
+        newItems[itemIndex] = {
+          ...item,
+          customizations:
+            customizationEntries.length > 0 ? customizationEntries : undefined,
+          customization_total:
+            customizationEntries.length > 0 ? customizationTotal : undefined,
+          effectivePrice,
+        };
+
+        return calculateTotals(newItems);
+      });
+    },
+    [calculateTotals]
+  );
+
   const clearCart = useCallback(() => {
     const emptyCart = {
       items: [],
@@ -465,6 +579,18 @@ export function useCart() {
           additional_id: add.id,
           quantity: item.quantity,
           price: add.price,
+        })),
+        // ✅ NOVO: Incluir customizações
+        customizations: item.customizations?.map((custom) => ({
+          customization_id: custom.customization_id || "default",
+          customization_type: custom.customization_type,
+          title: custom.title || "Personalização",
+          customization_data: {
+            text: custom.text,
+            photos: custom.photos, // ✅ Array de PhotoUploadData com base64
+            selected_option: custom.selected_option,
+            selected_item: custom.selected_item,
+          },
         })),
       }));
 
@@ -1051,6 +1177,7 @@ export function useCart() {
     addToCart,
     removeFromCart,
     updateQuantity,
+    updateCustomizations,
     clearCart,
     createOrder,
     createOrderWithTransparentCheckout,

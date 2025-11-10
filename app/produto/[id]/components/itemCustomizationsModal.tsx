@@ -37,6 +37,7 @@ import { getDirectImageUrl } from "@/app/helpers/drive-normalize";
 import ClientPersonalizationEditor from "@/app/components/client-personalization-editor";
 import useApi from "@/app/hooks/use-api";
 import { ImageCropDialog } from "@/app/components/ui/image-crop-dialog";
+import Image from "next/image";
 
 interface Customization {
   id: string;
@@ -114,7 +115,6 @@ export function ItemCustomizationModal({
     Record<string, boolean>
   >({});
 
-  // 🔍 NOVO: Estado para layouts completos (com image_url)
   const [layoutsWithImages, setLayoutsWithImages] = useState<
     Record<
       string,
@@ -123,7 +123,6 @@ export function ItemCustomizationModal({
   >({});
   const [loadingLayouts, setLoadingLayouts] = useState(false);
 
-  // Estados para crop de imagem
   const [cropDialogOpen, setCropDialogOpen] = useState(false);
   const [fileToCrop, setFileToCrop] = useState<File | null>(null);
   const [cropAspect, setCropAspect] = useState<number | undefined>(undefined);
@@ -131,10 +130,8 @@ export function ItemCustomizationModal({
     string | null
   >(null);
 
-  // Inicializar useApi hook
   const { getLayoutById } = useApi();
 
-  // useEffect para buscar layouts completos quando modal abre
   useEffect(() => {
     if (!isOpen) return;
 
@@ -147,11 +144,6 @@ export function ItemCustomizationModal({
       const layouts = baseLayoutCustom.customization_data.layouts || [];
       if (layouts.length === 0) return;
 
-      console.log(
-        "🖼️ [fetchLayouts] Buscando layouts completos:",
-        layouts.length
-      );
-
       setLoadingLayouts(true);
       const fetchedLayouts: Record<
         string,
@@ -160,7 +152,6 @@ export function ItemCustomizationModal({
 
       for (const layout of layouts) {
         try {
-          console.log(`🔄 Buscando layout ${layout.id}...`);
           const fullLayout = await getLayoutById(layout.id);
           fetchedLayouts[layout.id] = {
             id: fullLayout.id,
@@ -168,10 +159,6 @@ export function ItemCustomizationModal({
             image_url: fullLayout.image_url,
             slots: fullLayout.slots,
           };
-          console.log(`✅ Layout ${layout.id} carregado:`, {
-            name: fullLayout.name,
-            slotsCount: fullLayout.slots?.length || 0,
-          });
         } catch (error) {
           console.error(`❌ Erro ao carregar layout ${layout.id}:`, error);
         }
@@ -179,16 +166,11 @@ export function ItemCustomizationModal({
 
       setLayoutsWithImages(fetchedLayouts);
       setLoadingLayouts(false);
-      console.log(
-        "✅ [fetchLayouts] Todos layouts carregados:",
-        fetchedLayouts
-      );
     };
 
     fetchLayouts();
   }, [isOpen, customizations, getLayoutById]);
 
-  // Callback para quando layout é selecionado - SEM useEffect!
   const handleLayoutSelect = useCallback(
     async (layoutId: string) => {
       setSelectedLayoutId(layoutId);
@@ -204,13 +186,6 @@ export function ItemCustomizationModal({
       );
       if (!layout) return;
 
-      console.log("🎨 [handleLayoutSelect] Layout selecionado:", {
-        layoutId,
-        layoutName: layout.name,
-        imageUrl: layout.image_url,
-      });
-
-      // Atualizar dados da customização
       setCustomizationData((prev) => ({
         ...prev,
         [baseLayoutCustom.id]: {
@@ -219,7 +194,6 @@ export function ItemCustomizationModal({
         },
       }));
 
-      // Buscar layout completo com slots
       try {
         const token =
           typeof window !== "undefined"
@@ -241,11 +215,6 @@ export function ItemCustomizationModal({
             : layoutData.item_type?.toLowerCase() === "quadro"
             ? "/3DModels/quadro.glb"
             : undefined;
-
-        console.log("🎨 [handleLayoutSelect] Model URL determinado:", {
-          itemType: layoutData.item_type,
-          modelUrl,
-        });
 
         setCustomizationData((prev) => ({
           ...prev,
@@ -314,11 +283,13 @@ export function ItemCustomizationModal({
               layout_id?: string;
               layout_name?: string;
               model_url?: string;
+              item_type?: string;
               images?: ImageData[];
               previewUrl?: string;
             };
             if (layoutData.layout_id) {
               result.push({
+                ruleId: custom.id,
                 customizationRuleId: custom.id,
                 customizationType: CustomizationType.LAYOUT_BASE,
                 selectedLayoutId: layoutData.layout_id,
@@ -326,8 +297,10 @@ export function ItemCustomizationModal({
                   id: layoutData.layout_id,
                   name: layoutData.layout_name || "",
                   model_url: layoutData.model_url,
+                  item_type: layoutData.item_type,
                   images: layoutData.images || [],
                   previewUrl: layoutData.previewUrl,
+                  _customizationName: custom.name,
                 } as unknown as Record<string, unknown>,
               });
             }
@@ -422,7 +395,7 @@ export function ItemCustomizationModal({
       // Converter data URL para File
       fetch(croppedImageUrl)
         .then((res) => res.blob())
-        .then((blob) => {
+        .then(async (blob) => {
           const file = new File([blob], fileToCrop?.name || "cropped.png", {
             type: "image/png",
           });
@@ -437,11 +410,26 @@ export function ItemCustomizationModal({
             [currentCustomizationId]: totalFiles,
           }));
 
-          const filesData = totalFiles.map((f, index) => ({
-            file: f,
-            preview: URL.createObjectURL(f),
-            position: index,
-          }));
+          // Converter cada arquivo para base64
+          const filesDataPromises = totalFiles.map(async (f, index) => {
+            const reader = new FileReader();
+            const base64Promise = new Promise<string>((resolve) => {
+              reader.onloadend = () => resolve(reader.result as string);
+              reader.readAsDataURL(f);
+            });
+            const base64 = await base64Promise;
+
+            return {
+              file: f,
+              preview: URL.createObjectURL(f),
+              position: index,
+              base64, // ✅ Dados base64 para upload ao Drive
+              mime_type: f.type,
+              size: f.size,
+            };
+          });
+
+          const filesData = await Promise.all(filesDataPromises);
 
           setCustomizationData((prev) => ({
             ...prev,
@@ -458,17 +446,32 @@ export function ItemCustomizationModal({
   );
 
   const handleRemoveFile = useCallback(
-    (customizationId: string, index: number) => {
+    async (customizationId: string, index: number) => {
       const currentFiles = uploadingFiles[customizationId] || [];
       const newFiles = currentFiles.filter((_, i) => i !== index);
 
       setUploadingFiles((prev) => ({ ...prev, [customizationId]: newFiles }));
 
-      const filesData = newFiles.map((file, idx) => ({
-        file,
-        preview: URL.createObjectURL(file),
-        position: idx,
-      }));
+      // Converter cada arquivo para base64
+      const filesDataPromises = newFiles.map(async (file, idx) => {
+        const reader = new FileReader();
+        const base64Promise = new Promise<string>((resolve) => {
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.readAsDataURL(file);
+        });
+        const base64 = await base64Promise;
+
+        return {
+          file,
+          preview: URL.createObjectURL(file),
+          position: idx,
+          base64, // ✅ Dados base64 para upload ao Drive
+          mime_type: file.type,
+          size: file.size,
+        };
+      });
+
+      const filesData = await Promise.all(filesDataPromises);
 
       setCustomizationData((prev) => ({
         ...prev,
@@ -492,48 +495,128 @@ export function ItemCustomizationModal({
     setLoading(true);
     try {
       const result: CustomizationInput[] = [];
+      const errors: string[] = [];
 
       customizations.forEach((custom) => {
         const data = customizationData[custom.id];
 
+        // Validar campos obrigatórios
+        if (custom.isRequired && !data) {
+          errors.push(`${custom.name} é obrigatório`);
+          return;
+        }
+
         if (custom.type === "TEXT" && data) {
           result.push({
+            ruleId: custom.id,
             customizationRuleId: custom.id,
             customizationType: CustomizationType.TEXT,
-            data: data as Record<string, unknown>,
+            data: {
+              ...data,
+              _customizationName: custom.name,
+              _priceAdjustment: custom.price || 0,
+            } as Record<string, unknown>,
           });
         } else if (custom.type === "BASE_LAYOUT" && data) {
           const layoutData = data as {
             layout_id?: string;
+            layout_name?: string;
+            model_url?: string;
             images?: ImageData[];
             previewUrl?: string;
+            item_type?: string;
           };
           if (layoutData.layout_id) {
             result.push({
+              ruleId: custom.id,
               customizationRuleId: custom.id,
               customizationType: CustomizationType.LAYOUT_BASE,
               selectedLayoutId: layoutData.layout_id,
               data: {
                 id: layoutData.layout_id,
+                name: layoutData.layout_name || "",
+                model_url: layoutData.model_url,
+                item_type: layoutData.item_type,
                 images: layoutData.images || [],
                 previewUrl: layoutData.previewUrl,
+                _customizationName: custom.name,
+                _priceAdjustment: custom.price || 0,
               } as unknown as Record<string, unknown>,
             });
           }
         } else if (custom.type === "IMAGES" && data) {
-          result.push({
-            customizationRuleId: custom.id,
-            customizationType: CustomizationType.IMAGES,
-            data: data as unknown as Record<string, unknown>,
-          });
+          // Para IMAGES, data é um array de { file, preview, position, base64, mime_type, size }
+          const filesData = data as Array<{
+            file: File;
+            preview: string;
+            position: number;
+            base64?: string;
+            mime_type?: string;
+            size?: number;
+          }>;
+
+          const maxImages =
+            custom.customization_data.base_layout?.max_images || 10;
+
+          // Se for obrigatório E tiver max_images definido, deve ter exatamente aquela quantidade
+          const requiredImages = custom.isRequired ? maxImages : 0;
+
+          // Validar quantidade de imagens
+          if (custom.isRequired && filesData.length < requiredImages) {
+            errors.push(
+              `${custom.name} requer exatamente ${requiredImages} imagem(ns). Você adicionou apenas ${filesData.length}.`
+            );
+            return;
+          }
+
+          if (filesData.length > maxImages) {
+            errors.push(
+              `${custom.name} permite no máximo ${maxImages} imagem(ns)`
+            );
+            return;
+          }
+
+          if (filesData.length > 0) {
+            result.push({
+              ruleId: custom.id,
+              customizationRuleId: custom.id,
+              customizationType: CustomizationType.IMAGES,
+              data: {
+                files: filesData.map((item) => item.file),
+                previews: filesData.map((item) => item.base64 || item.preview),
+                count: filesData.length,
+                _customizationName: custom.name,
+                _priceAdjustment: custom.price || 0,
+              } as unknown as Record<string, unknown>,
+            });
+          }
         } else if (custom.type === "MULTIPLE_CHOICE" && data) {
+          const selectedData = data as { id?: string; label?: string };
+          const selectedOption = custom.customization_data.options?.find(
+            (opt) => opt.id === selectedData.id
+          );
+          const optionPriceAdjustment = selectedOption?.price_adjustment || 0;
+
           result.push({
+            ruleId: custom.id,
             customizationRuleId: custom.id,
             customizationType: CustomizationType.MULTIPLE_CHOICE,
-            data: data as Record<string, unknown>,
+            data: {
+              ...(data as Record<string, unknown>),
+              _customizationName: custom.name,
+              _priceAdjustment:
+                custom.price + optionPriceAdjustment || custom.price || 0,
+            } as Record<string, unknown>,
           });
         }
       });
+
+      // Se houver erros de validação, mostrar e não salvar
+      if (errors.length > 0) {
+        setLoading(false);
+        toast.error(errors.join("\n"));
+        return;
+      }
 
       onComplete(result.length > 0, result);
       toast.success("Personalização salva!");
@@ -870,14 +953,17 @@ export function ItemCustomizationModal({
     return (
       <div className="space-y-4">
         <div className="flex items-center gap-3">
-          <div className="p-2 rounded-lg bg-amber-100">
-            <CheckCircle2 className="h-5 w-5 text-amber-600" />
+          <div className="p-2 rounded-lg bg-rose-100">
+            <CheckCircle2 className="h-5 w-5 text-rose-600" />
           </div>
           <div>
             <Label className="text-lg font-bold text-gray-900">
               {customization.name}
               {customization.isRequired && (
-                <Badge variant="destructive" className="ml-2 text-xs">
+                <Badge
+                  variant="destructive"
+                  className="ml-2 text-xs text-white"
+                >
                   Obrigatório
                 </Badge>
               )}
@@ -898,8 +984,8 @@ export function ItemCustomizationModal({
                 key={option.id}
                 className={`p-4 cursor-pointer transition-all ${
                   isSelected
-                    ? "border-2 border-amber-500 bg-amber-50"
-                    : "border-2 border-gray-200 hover:border-amber-300 hover:bg-amber-50/50"
+                    ? "border-2 border-rose-500 bg-rose-50"
+                    : "border-2 border-gray-200 hover:border-rose-300 hover:bg-rose-50/50"
                 }`}
                 onClick={() =>
                   handleOptionSelect(customization.id, option.id, option.label)
@@ -907,6 +993,14 @@ export function ItemCustomizationModal({
               >
                 <div className="flex items-center gap-3">
                   <Checkbox checked={isSelected} className="border-2" />
+                  <Image
+                    src={option.image_url || "/placeholder-image.png"}
+                    alt={option.label}
+                    width={64}
+                    height={64}
+                    quality={90}
+                    className="w-16 h-16 object-cover rounded-md border"
+                  />
                   <div className="flex-1">
                     <p className="font-semibold text-gray-900">
                       {option.label}
@@ -920,7 +1014,7 @@ export function ItemCustomizationModal({
                   {option.price_adjustment && option.price_adjustment > 0 && (
                     <Badge
                       variant="outline"
-                      className="text-amber-700 border-amber-300"
+                      className="text-rose-700 border-rose-300"
                     >
                       +R$ {option.price_adjustment.toFixed(2)}
                     </Badge>

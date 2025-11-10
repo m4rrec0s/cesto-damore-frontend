@@ -186,6 +186,8 @@ export interface Product {
   type_id: string;
   components?: string[];
   related_products?: Omit<Product, "components" | "related_products">[];
+  created_at: string;
+  updated_at: string;
 }
 
 export interface ProductInput {
@@ -205,6 +207,8 @@ export interface Additional {
   discount?: number;
   image_url?: string;
   stock_quantity?: number;
+  allows_customization?: boolean;
+  customizations?: Customization[];
   compatible_products?: Array<{
     product_id: string;
     product_name: string;
@@ -335,6 +339,7 @@ export interface OrderItemCustomizationSummary {
   title: string;
   customization_type: CustomizationTypeValue;
   google_drive_url?: string | null;
+  value?: string | null; // JSON com os dados da customização
 }
 
 export interface OrderItemDetailed {
@@ -371,6 +376,7 @@ export interface Order {
   shipping_price?: number | null;
   payment_method?: string | null;
   grand_total?: number | null;
+  recipient_phone?: string | null; // Número do destinatário
   payment?: {
     id: string;
     status: string;
@@ -457,6 +463,62 @@ export interface PublicFeedItem {
   item_data?: Record<string, unknown>;
 }
 
+// ===== Customer Management Types =====
+export interface N8NCustomer {
+  number: string; // telefone (PK)
+  name?: string | null;
+  last_message_sent?: string | null;
+  service_status?: string | null;
+  already_a_customer?: boolean;
+  follow_up?: boolean;
+}
+
+export interface AppUserWithOrders {
+  id: string;
+  name: string;
+  email: string;
+  phone?: string | null;
+  address?: string | null;
+  city?: string | null;
+  state?: string | null;
+  zip_code?: string | null;
+  role: string;
+  created_at: string;
+  orders: Array<{
+    id: string;
+    status: string;
+    total_price: number;
+    created_at: string;
+  }>;
+}
+
+export interface CombinedCustomerInfo {
+  n8n_customer?: N8NCustomer;
+  app_user?: AppUserWithOrders;
+  has_app_account: boolean;
+  total_orders: number;
+  last_order_status?: string;
+}
+
+export interface CustomerListResponse {
+  customers: N8NCustomer[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
+export interface UpsertCustomerInput {
+  number: string;
+  name?: string;
+  service_status?: string;
+  already_a_customer?: boolean;
+  follow_up?: boolean;
+}
+
+export interface SendMessageInput {
+  message: string;
+}
+
 interface CacheShape {
   users: unknown | null;
   products: unknown | null;
@@ -480,7 +542,7 @@ class ApiService {
   };
 
   private client = axios.create({
-    baseURL: process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api",
+    baseURL: process.env.NEXT_PUBLIC_API_URL || "",
   });
 
   // ===== Utilidades de Cache =====
@@ -843,9 +905,14 @@ class ApiService {
     this.clearCache("additionals");
     return res.data;
   };
-  linkAdditionalToProduct = async (additionalId: string, productId: string) => {
+  linkAdditionalToProduct = async (
+    additionalId: string,
+    productId: string,
+    customPrice?: number
+  ) => {
     const res = await this.client.post(`/additional/${additionalId}/link`, {
       productId,
+      customPrice,
     });
     this.clearCache("additionals");
     this.clearCache("products");
@@ -937,14 +1004,8 @@ class ApiService {
     payload: Partial<ProductInput>,
     imageFile?: File
   ): Promise<Product> => {
-    console.log("🔧 API createProduct - payload recebido:", payload);
-    console.log("🔧 API createProduct - tem imagem?", !!imageFile);
-
-    // TEMPORÁRIO: Desabilitar FormData para debug
     if (false && imageFile) {
     } else {
-      // Enviar como JSON normal
-      console.log("📦 Enviando como JSON:", payload);
       const res = await this.client.post("/products", payload);
       this.clearCache("products");
       return res.data;
@@ -1593,6 +1654,11 @@ class ApiService {
     }
   };
 
+  getOrderByUserId = async (userId: string) => {
+    const res = await this.client.get(`/users/${userId}/orders`);
+    return res.data;
+  };
+
   // ===== Payment Methods =====
   getPaymentMethods = async () => {
     const res = await this.client.get("/payment-methods");
@@ -1805,6 +1871,112 @@ class ApiService {
       `/reports/stock/check?threshold=${threshold}`
     );
     return res.data;
+  };
+
+  // ===== Customer Management =====
+
+  // Listar clientes com filtros
+  listCustomers = async (filters?: {
+    follow_up?: boolean;
+    service_status?: string;
+    already_a_customer?: boolean;
+    limit?: number;
+    offset?: number;
+  }): Promise<CustomerListResponse> => {
+    const params = new URLSearchParams();
+    if (filters?.follow_up !== undefined)
+      params.append("follow_up", String(filters.follow_up));
+    if (filters?.service_status)
+      params.append("service_status", filters.service_status);
+    if (filters?.already_a_customer !== undefined)
+      params.append("already_a_customer", String(filters.already_a_customer));
+    if (filters?.limit) params.append("limit", String(filters.limit));
+    if (filters?.offset) params.append("offset", String(filters.offset));
+
+    const response = await this.client.get(`/customers?${params.toString()}`);
+    return response.data;
+  };
+
+  // Buscar informações completas de um cliente
+  getCustomerInfo = async (phone: string): Promise<CombinedCustomerInfo> => {
+    const response = await this.client.get(`/customers/${phone}`);
+    return response.data;
+  };
+
+  // Criar ou atualizar cliente
+  upsertCustomer = async (data: UpsertCustomerInput): Promise<N8NCustomer> => {
+    const response = await this.client.post("/customers", data);
+    return response.data;
+  };
+
+  // Atualizar follow-up
+  updateCustomerFollowUp = async (
+    phone: string,
+    followUp: boolean
+  ): Promise<{ success: boolean }> => {
+    const response = await this.client.patch(`/customers/${phone}/follow-up`, {
+      follow_up: followUp,
+    });
+    return response.data;
+  };
+
+  // Atualizar status de serviço
+  updateCustomerServiceStatus = async (
+    phone: string,
+    status: string
+  ): Promise<{ success: boolean }> => {
+    const response = await this.client.patch(
+      `/customers/${phone}/service-status`,
+      { service_status: status }
+    );
+    return response.data;
+  };
+
+  // Atualizar status de cliente
+  updateCustomerStatus = async (
+    phone: string,
+    alreadyCustomer: boolean
+  ): Promise<{ success: boolean }> => {
+    const response = await this.client.patch(
+      `/customers/${phone}/customer-status`,
+      { already_a_customer: alreadyCustomer }
+    );
+    return response.data;
+  };
+
+  // Atualizar nome do cliente
+  updateCustomerName = async (
+    phone: string,
+    name: string
+  ): Promise<{ success: boolean }> => {
+    const response = await this.client.patch(`/customers/${phone}/name`, {
+      name,
+    });
+    return response.data;
+  };
+
+  // Enviar mensagem ao cliente
+  sendMessageToCustomer = async (
+    phone: string,
+    message: string
+  ): Promise<{ success: boolean; customer?: N8NCustomer }> => {
+    const response = await this.client.post(
+      `/customers/${phone}/send-message`,
+      { message }
+    );
+    return response.data;
+  };
+
+  // Listar clientes para follow-up
+  getFollowUpCustomers = async (): Promise<CombinedCustomerInfo[]> => {
+    const response = await this.client.get("/customers/follow-up");
+    return response.data;
+  };
+
+  // Sincronizar usuário do app para n8n
+  syncAppUserToN8N = async (userId: string): Promise<{ success: boolean }> => {
+    const response = await this.client.post(`/customers/sync/${userId}`);
+    return response.data;
   };
 
   // ===== Item Constraints =====
