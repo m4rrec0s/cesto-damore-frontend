@@ -2103,6 +2103,25 @@ export default function CarrinhoPage() {
             {/* Etapa 3: Pagamento */}
             {currentStep === 3 && (
               <div className="space-y-6 animate-in fade-in duration-300">
+                {/* 🔄 Loading Overlay quando estiver processando */}
+                {isProcessing && !pixData && (
+                  <Card className="bg-gradient-to-br from-blue-50 to-indigo-50 p-8 rounded-2xl shadow-lg border-blue-200">
+                    <div className="flex flex-col items-center justify-center gap-4">
+                      <Loader2 className="h-12 w-12 text-blue-600 animate-spin" />
+                      <div className="text-center">
+                        <h3 className="text-xl font-bold text-blue-900 mb-2">
+                          Processando seu pagamento...
+                        </h3>
+                        <p className="text-sm text-blue-700">
+                          {paymentMethod === "pix"
+                            ? "Gerando QR Code PIX, aguarde um momento"
+                            : "Processando dados do cartão, aguarde"}
+                        </p>
+                      </div>
+                    </div>
+                  </Card>
+                )}
+
                 {/* Seleção de Método de Pagamento */}
                 <Card className="bg-white p-6 lg:p-8 rounded-2xl shadow-sm border-gray-100">
                   <h2 className="text-2xl font-bold mb-6 text-gray-900 flex items-center gap-2">

@@ -86,14 +86,15 @@ export default function PedidosPage() {
 
       try {
         setIsLoading(true);
-        const response = await getOrderByUserId(user.id);
+        console.log("🔍 Buscando pedidos do usuário:", user.id);
 
-        if (response.ok) {
-          const data = await response.json();
-          setOrders(data);
-        }
+        const data = await getOrderByUserId(user.id);
+
+        console.log("📦 Pedidos recebidos:", data);
+        setOrders(data || []);
       } catch (error) {
-        console.error("Erro ao carregar pedidos:", error);
+        console.error("❌ Erro ao carregar pedidos:", error);
+        setOrders([]);
       } finally {
         setIsLoading(false);
       }

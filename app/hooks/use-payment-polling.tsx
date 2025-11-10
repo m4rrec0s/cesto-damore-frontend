@@ -91,7 +91,19 @@ export function usePaymentPolling({
       const orderStatus = order.status;
 
       console.log(
-        `[Payment Polling] Status atual - Pedido: ${orderStatus}, Pagamento: ${paymentStatus}`
+        `[Payment Polling] 📊 Status detalhado:`,
+        JSON.stringify(
+          {
+            orderStatus,
+            paymentStatus,
+            paymentId: order.payment?.id,
+            mercadoPagoId: order.payment?.mercado_pago_id,
+            orderCreatedAt: order.created_at,
+            paymentUpdatedAt: order.payment?.last_webhook_at,
+          },
+          null,
+          2
+        )
       );
 
       // Pagamento aprovado
