@@ -274,7 +274,9 @@ export function ProductManager({
       additional_name: additional.name,
       // Items may expose base_price or price depending on backend shape
       additional_price:
-        (additional as Item).base_price ?? (additional as Item).price ?? 0,
+        (additional as Item).base_price ??
+        (additional as { price?: number }).price ??
+        0,
       custom_price: customPriceValue,
     };
 
@@ -1171,11 +1173,7 @@ export function ProductManager({
                         {getAvailableAdditionals().map((additional) => (
                           <option key={additional.id} value={additional.id}>
                             {additional.name} - R${" "}
-                            {(
-                              (additional as Item).base_price ??
-                              (additional as Item).price ??
-                              0
-                            ).toFixed(2)}
+                            {((additional as Item).base_price ?? 0).toFixed(2)}
                           </option>
                         ))}
                       </select>

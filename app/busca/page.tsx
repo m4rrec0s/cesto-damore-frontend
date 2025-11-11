@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { ProductCard } from "@/app/components/layout/product-card";
 import { Button } from "@/app/components/ui/button";
@@ -9,7 +9,7 @@ import { Search, Filter, X } from "lucide-react";
 import useApi, { Product, Category, Type } from "@/app/hooks/use-api";
 import { toast } from "sonner";
 
-export default function SearchPage() {
+function SearchPageContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const api = useApi();
@@ -385,5 +385,19 @@ export default function SearchPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function SearchPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex justify-center items-center min-h-screen">
+          Carregando...
+        </div>
+      }
+    >
+      <SearchPageContent />
+    </Suspense>
   );
 }

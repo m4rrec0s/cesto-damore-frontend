@@ -626,33 +626,10 @@ class ApiService {
       }
       return config;
     });
-
-    // Interceptor de resposta para corrigir URLs duplicadas
     this.client.interceptors.response.use((response) => {
-      // Função auxiliar para corrigir URLs duplicadas
-      const fixDuplicateApiUrl = (obj: unknown): unknown => {
-        if (typeof obj === "string" && obj.includes("/api/api/")) {
-          return obj.replace("/api/api/", "/api/");
-        }
-        if (Array.isArray(obj)) {
-          return obj.map(fixDuplicateApiUrl);
-        }
-        if (obj && typeof obj === "object") {
-          const fixed: Record<string, unknown> = {};
-          for (const key in obj) {
-            if (obj.hasOwnProperty(key)) {
-              fixed[key] = fixDuplicateApiUrl(
-                (obj as Record<string, unknown>)[key]
-              );
-            }
-          }
-          return fixed;
-        }
-        return obj;
-      };
 
       if (response.data) {
-        response.data = fixDuplicateApiUrl(response.data);
+        response.data = response.data;
       }
 
       return response;
@@ -1664,7 +1641,7 @@ class ApiService {
    */
   getPendingOrder = async (userId: string) => {
     try {
-      const res = await this.client.get(`/orders/pending/user/${userId}`);
+      const res = await this.client.get(`/users/${userId}/orders/pending`);
       return res.data;
     } catch (error: unknown) {
       // Se retornar 404, significa que não há pedido pendente

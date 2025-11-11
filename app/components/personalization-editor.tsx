@@ -150,7 +150,10 @@ export default function PersonalizationEditor({
           <div className="space-y-2">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src={(imageData as ImageData).previewUrl || ""}
+              src={
+                (imageData as ImageData & { previewUrl?: string }).previewUrl ||
+                ""
+              }
               alt={imageData.originalName}
               className="w-full h-32 object-cover rounded"
             />

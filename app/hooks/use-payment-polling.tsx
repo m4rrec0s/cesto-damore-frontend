@@ -9,7 +9,8 @@ export type PaymentPollingStatus =
   | "polling"
   | "success"
   | "failure"
-  | "timeout";
+  | "timeout"
+  | "pending";
 
 interface UsePaymentPollingOptions {
   orderId: string | null;
@@ -19,6 +20,7 @@ interface UsePaymentPollingOptions {
   onSuccess?: (order: Order) => void;
   onFailure?: (order: Order) => void;
   onTimeout?: () => void;
+  onPending?: (order: Order) => void;
 }
 
 interface UsePaymentPollingReturn {
@@ -43,6 +45,7 @@ export function usePaymentPolling({
   onSuccess,
   onFailure,
   onTimeout,
+  onPending,
 }: UsePaymentPollingOptions): UsePaymentPollingReturn {
   const api = useApi();
   const [status, setStatus] = useState<PaymentPollingStatus>("idle");
@@ -100,11 +103,40 @@ export function usePaymentPolling({
             mercadoPagoId: order.payment?.mercado_pago_id,
             orderCreatedAt: order.created_at,
             paymentUpdatedAt: order.payment?.last_webhook_at,
+            webhookAttempts: order.payment?.webhook_attempts,
           },
           null,
           2
         )
       );
+
+      // ⚠️ FALLBACK: Se payment não existe mas order está PAID
+      if (!order.payment && orderStatus === "PAID") {
+        console.log(
+          "[Payment Polling] ✅ Pedido marcado como PAGO (sem objeto payment)"
+        );
+        setStatus("success");
+        stopPolling();
+        onSuccess?.(order);
+        return;
+      }
+
+      // ⚠️ FALLBACK: Se não tem payment ainda, continuar tentando
+      if (!order.payment) {
+        console.log("[Payment Polling] ⏳ Aguardando criação do pagamento...", {
+          orderStatus,
+        });
+        // Continua polling
+        if (attemptsRef.current >= maxAttempts) {
+          console.log(
+            "[Payment Polling] ⏱️ Timeout - pagamento não foi criado"
+          );
+          setStatus("timeout");
+          stopPolling();
+          onTimeout?.();
+        }
+        return;
+      }
 
       // Pagamento aprovado
       if (
@@ -112,7 +144,13 @@ export function usePaymentPolling({
         paymentStatus === "AUTHORIZED" ||
         orderStatus === "PAID"
       ) {
-        console.log("[Payment Polling] ✅ Pagamento aprovado!");
+        console.log("[Payment Polling] ✅ PAGAMENTO APROVADO!", {
+          paymentStatus,
+          orderStatus,
+          orderId: order.id,
+          paymentId: order.payment?.id,
+          mercadoPagoId: order.payment?.mercado_pago_id,
+        });
         setStatus("success");
         stopPolling();
         onSuccess?.(order);
@@ -131,6 +169,19 @@ export function usePaymentPolling({
         stopPolling();
         onFailure?.(order);
         return;
+      }
+
+      // Pagamento em processamento/validação
+      if (
+        paymentStatus === "PROCESSING" ||
+        paymentStatus === "IN_PROCESS" ||
+        paymentStatus === "IN_MEDIATION" ||
+        orderStatus === "PROCESSING"
+      ) {
+        console.log("[Payment Polling] ⏳ Pagamento em validação...");
+        setStatus("pending");
+        onPending?.(order);
+        // Continua polling
       }
 
       // Ainda pendente, continua verificando
@@ -170,6 +221,7 @@ export function usePaymentPolling({
     onSuccess,
     onFailure,
     onTimeout,
+    onPending,
     stopPolling,
   ]);
 

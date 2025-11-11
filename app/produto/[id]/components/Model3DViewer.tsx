@@ -10,7 +10,44 @@ import {
 } from "@react-three/drei";
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
-import { Loader2 } from "lucide-react";
+import { Loader2, AlertCircle } from "lucide-react";
+
+// Error Boundary para capturar erros de carregamento
+class Model3DErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { hasError: boolean; error?: Error }
+> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.error("Erro ao carregar modelo 3D:", error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <Html center>
+          <div className="flex flex-col items-center gap-2 text-gray-600 bg-white/90 p-4 rounded-lg shadow-lg">
+            <AlertCircle className="h-8 w-8 text-amber-500" />
+            <p className="text-sm font-medium">Erro ao carregar modelo 3D</p>
+            <p className="text-xs text-gray-500 max-w-xs text-center">
+              {this.state.error?.message || "Tente recarregar a página"}
+            </p>
+          </div>
+        </Html>
+      );
+    }
+
+    return this.props.children;
+  }
+}
 
 type Vector3Config = { x: number; y: number; z: number };
 
@@ -75,7 +112,14 @@ function Model({
   rotateSpeed = 0.3,
   baseScale,
 }: ModelProps) {
-  const gltf = useLoader(GLTFLoader, modelUrl);
+  // Aumentar timeout do loader para 60 segundos
+  const gltf = useLoader(GLTFLoader, modelUrl, (loader) => {
+    if (loader.manager) {
+      loader.manager.itemStart = () => {};
+      loader.manager.itemEnd = () => {};
+      loader.manager.itemError = () => {};
+    }
+  });
   const meshRef = useRef<THREE.Group>(null);
   const originalMaterials = useRef<
     Map<string, THREE.Material | THREE.Material[]>
@@ -215,7 +259,13 @@ function ImageTexture({
   rotation?: Vector3Config;
   dimensions: { width: number; height: number };
 }) {
-  const texture = useLoader(THREE.TextureLoader, imageUrl);
+  const texture = useLoader(THREE.TextureLoader, imageUrl, (loader) => {
+    if (loader.manager) {
+      loader.manager.itemStart = () => {};
+      loader.manager.itemEnd = () => {};
+      loader.manager.itemError = () => {};
+    }
+  });
 
   useEffect(() => {
     // Ajustes para texturas provenientes de canvas/dataURL
@@ -261,7 +311,13 @@ function CylinderImageTexture({
   autoRotate?: boolean;
   rotateSpeed?: number;
 }) {
-  const texture = useLoader(THREE.TextureLoader, imageUrl);
+  const texture = useLoader(THREE.TextureLoader, imageUrl, (loader) => {
+    if (loader.manager) {
+      loader.manager.itemStart = () => {};
+      loader.manager.itemEnd = () => {};
+      loader.manager.itemError = () => {};
+    }
+  });
   const meshRef = useRef<THREE.Mesh>(null);
   const [roughnessTexture, setRoughnessTexture] =
     React.useState<THREE.CanvasTexture | null>(null);
@@ -665,13 +721,15 @@ export function Model3DViewer({
 
         {/* Modelo 3D */}
         <Suspense fallback={<LoadingFallback />}>
-          <Model
-            modelUrl={modelUrl}
-            materialColor={materialColor}
-            autoRotate={autoRotate}
-            rotateSpeed={rotateSpeed}
-            baseScale={baseScale}
-          />
+          <Model3DErrorBoundary>
+            <Model
+              modelUrl={modelUrl}
+              materialColor={materialColor}
+              autoRotate={autoRotate}
+              rotateSpeed={rotateSpeed}
+              baseScale={baseScale}
+            />
+          </Model3DErrorBoundary>
 
           {/* IBL environment para reflexos sutis */}
           {/* Ambiente IBL — mantém background=false para não alterar a cena */}

@@ -33,7 +33,7 @@ export function CartSheet({ isOpen, onClose, onCheckout }: CartSheetProps) {
 
   const renderCustomizationValue = (custom: CartCustomization) => {
     switch (custom.customization_type) {
-      case "TEXT_INPUT":
+      case "TEXT":
         return custom.text?.trim() || "Mensagem não informada";
       case "MULTIPLE_CHOICE":
         return (
@@ -41,12 +41,15 @@ export function CartSheet({ isOpen, onClose, onCheckout }: CartSheetProps) {
           custom.selected_option ||
           "Opção não selecionada"
         );
-      case "ITEM_SUBSTITUTION":
+      case "BASE_LAYOUT":
         if (custom.selected_item) {
           return `${custom.selected_item.original_item} → ${custom.selected_item.selected_item}`;
         }
-        return "Substituição não definida";
-      case "PHOTO_UPLOAD":
+        if (custom.text) {
+          return custom.text;
+        }
+        return "Layout selecionado";
+      case "IMAGES":
         return `${custom.photos?.length || 0} foto(s)`;
       default:
         return "Personalização";
@@ -132,15 +135,6 @@ export function CartSheet({ isOpen, onClose, onCheckout }: CartSheetProps) {
                       {item.additionals && item.additionals.length > 0 && (
                         <div className="mt-1 flex flex-wrap gap-1">
                           {item.additionals.map((add) => {
-                            // Buscar cor selecionada para este adicional
-                            const selectedColorId =
-                              item.additional_colors?.[add.id];
-                            const selectedColor = selectedColorId
-                              ? add.colors?.find(
-                                  (c) => c.color_id === selectedColorId
-                                )
-                              : null;
-
                             return (
                               <Badge
                                 key={add.id}
@@ -148,16 +142,6 @@ export function CartSheet({ isOpen, onClose, onCheckout }: CartSheetProps) {
                                 className="text-xs flex items-center gap-1"
                               >
                                 + {add.name} (+R$ {add.price.toFixed(2)})
-                                {selectedColor && (
-                                  <div
-                                    className="w-3 h-3 rounded-full border border-gray-300"
-                                    style={{
-                                      backgroundColor:
-                                        selectedColor.color_hex_code,
-                                    }}
-                                    title={selectedColor.color_name}
-                                  />
-                                )}
                               </Badge>
                             );
                           })}

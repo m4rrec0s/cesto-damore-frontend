@@ -20,7 +20,7 @@ export function Cart({ onCheckout, className = "" }: CartProps) {
 
   const renderCustomizationValue = (custom: CartCustomization) => {
     switch (custom.customization_type) {
-      case "TEXT_INPUT":
+      case "TEXT":
         return custom.text?.trim() || "Mensagem não informada";
       case "MULTIPLE_CHOICE":
         return (
@@ -28,12 +28,15 @@ export function Cart({ onCheckout, className = "" }: CartProps) {
           custom.selected_option ||
           "Opção não selecionada"
         );
-      case "ITEM_SUBSTITUTION":
+      case "BASE_LAYOUT":
         if (custom.selected_item) {
           return `${custom.selected_item.original_item} → ${custom.selected_item.selected_item}`;
         }
-        return "Substituição não definida";
-      case "PHOTO_UPLOAD":
+        if (custom.text) {
+          return custom.text;
+        }
+        return "Layout selecionado";
+      case "IMAGES":
         return `${custom.photos?.length || 0} foto(s)`;
       default:
         return "Personalização";

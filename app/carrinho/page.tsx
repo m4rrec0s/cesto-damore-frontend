@@ -35,6 +35,7 @@ import {
   ArrowLeft,
   Edit2,
   XCircle,
+  RefreshCcw,
 } from "lucide-react";
 import { CustomizationsReview } from "./components/CustomizationsReview";
 import Link from "next/link";
@@ -42,6 +43,7 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { QRCodePIX } from "@/app/components/QRCodePIX";
+import { PaymentStatusOverlay } from "@/app/components/PaymentStatusOverlay";
 import {
   formatPhoneNumber,
   isValidPhone,
@@ -497,6 +499,7 @@ export default function CarrinhoPage() {
     createTransparentPayment,
     createCardToken,
     getCardIssuers,
+    getOrder,
   } = useApi();
   const {
     cart,
@@ -569,7 +572,7 @@ export default function CarrinhoPage() {
       orderId: currentOrderId,
       enabled: Boolean(currentOrderId && paymentStatus === "pending"),
       maxAttempts: 60, // 5 minutos
-      intervalMs: 5000, // 5 segundos
+      intervalMs: 3000, // ⚡ 3 segundos (mais agressivo)
       onSuccess: (order) => {
         console.log("✅ Pagamento confirmado pelo webhook!", order);
         setPaymentStatus("success");
@@ -595,11 +598,29 @@ export default function CarrinhoPage() {
       },
       onTimeout: () => {
         console.log("⏱️ Timeout ao aguardar confirmação");
+        setPaymentError(
+          "O tempo de espera expirou. Verifique o status do seu pedido na página 'Meus Pedidos'."
+        );
         toast.warning(
           "Ainda não recebemos a confirmação do pagamento. Você pode acompanhar o status na página de pedidos.",
-          { duration: 6000 }
+          { duration: 8000 }
         );
-        // Não redireciona automaticamente no timeout
+        // Oferecer opção de verificar pedidos
+        setTimeout(() => {
+          const shouldRedirect = confirm(
+            "Deseja verificar o status do seu pedido agora?"
+          );
+          if (shouldRedirect) {
+            router.push("/pedidos");
+          }
+        }, 2000);
+      },
+      onPending: (order) => {
+        console.log("⏳ Pagamento em processamento...", {
+          orderId: order.id,
+          paymentStatus: order.payment?.status,
+          attempts: pollingAttempts,
+        });
       },
     });
 
@@ -2195,14 +2216,14 @@ export default function CarrinhoPage() {
 
                 {/* Mostrar QR Code PIX se PIX foi selecionado E já gerado */}
                 {paymentMethod === "pix" && pixData && (
-                  <Card className="bg-white p-6 rounded-2xl shadow-sm border-gray-100">
+                  <Card className="bg-white p-6 rounded-2xl shadow-sm border-gray-100 relative">
                     {/* Indicador de polling */}
                     {paymentStatus === "pending" &&
                       pollingStatus === "polling" && (
                         <Alert className="border-blue-200 bg-blue-50 mb-6">
                           <Loader2 className="h-4 w-4 text-blue-600 animate-spin" />
                           <AlertDescription className="text-blue-800 text-sm">
-                            <div className="flex flex-col gap-1">
+                            <div className="flex flex-col gap-2">
                               <span className="font-medium">
                                 Aguardando confirmação do pagamento...
                               </span>
@@ -2210,6 +2231,100 @@ export default function CarrinhoPage() {
                                 Verificação {pollingAttempts} de 60 • Isso pode
                                 levar alguns minutos
                               </span>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={async () => {
+                                  if (!currentOrderId) {
+                                    toast.error("ID do pedido não encontrado");
+                                    return;
+                                  }
+
+                                  console.log(
+                                    "🔍 [MANUAL CHECK] Verificando pagamento manualmente...",
+                                    {
+                                      orderId: currentOrderId,
+                                      currentPaymentStatus: paymentStatus,
+                                      currentPollingStatus: pollingStatus,
+                                    }
+                                  );
+
+                                  toast.info("Verificando pagamento...");
+
+                                  try {
+                                    const order = await getOrder(
+                                      currentOrderId
+                                    );
+
+                                    console.log(
+                                      "🔍 [MANUAL CHECK] Pedido recebido:",
+                                      {
+                                        orderId: order?.id,
+                                        orderStatus: order?.status,
+                                        paymentId: order?.payment?.id,
+                                        paymentStatus: order?.payment?.status,
+                                        paymentMercadoPagoId:
+                                          order?.payment?.mercado_pago_id,
+                                        webhookAttempts:
+                                          order?.payment?.webhook_attempts,
+                                        lastWebhookAt:
+                                          order?.payment?.last_webhook_at,
+                                      }
+                                    );
+
+                                    if (
+                                      order?.payment?.status === "APPROVED" ||
+                                      order?.payment?.status === "AUTHORIZED" ||
+                                      order?.status === "PAID"
+                                    ) {
+                                      console.log(
+                                        "✅ [MANUAL CHECK] PAGAMENTO CONFIRMADO!"
+                                      );
+                                      setPaymentStatus("success");
+                                      clearCart();
+                                      clearPendingOrder();
+                                      localStorage.removeItem("pendingOrderId");
+                                      toast.success(
+                                        "🎉 Pagamento confirmado!",
+                                        {
+                                          duration: 3000,
+                                        }
+                                      );
+                                      setTimeout(
+                                        () => router.push("/pedidos"),
+                                        2000
+                                      );
+                                    } else if (
+                                      order?.payment?.status === "REJECTED" ||
+                                      order?.payment?.status === "CANCELLED"
+                                    ) {
+                                      console.log(
+                                        "❌ [MANUAL CHECK] Pagamento rejeitado"
+                                      );
+                                      setPaymentStatus("failure");
+                                      toast.error("Pagamento foi rejeitado");
+                                    } else {
+                                      console.log(
+                                        "⏳ [MANUAL CHECK] Pagamento ainda pendente"
+                                      );
+                                      toast.warning(
+                                        "Pagamento ainda pendente. Continue aguardando.",
+                                        { duration: 4000 }
+                                      );
+                                    }
+                                  } catch (error) {
+                                    console.error(
+                                      "❌ [MANUAL CHECK] Erro ao verificar:",
+                                      error
+                                    );
+                                    toast.error("Erro ao verificar pagamento");
+                                  }
+                                }}
+                                className="mt-2 text-xs"
+                              >
+                                <RefreshCcw className="h-3 w-3 mr-1" />
+                                Verificar agora
+                              </Button>
                             </div>
                           </AlertDescription>
                         </Alert>
@@ -2224,6 +2339,29 @@ export default function CarrinhoPage() {
                       </Alert>
                     )}
 
+                    {/* Alert de timeout */}
+                    {pollingStatus === "timeout" && paymentError && (
+                      <Alert className="border-orange-200 bg-orange-50 mb-6">
+                        <AlertCircle className="h-4 w-4 text-orange-600" />
+                        <AlertTitle className="text-orange-900 font-semibold">
+                          Tempo de Espera Expirado
+                        </AlertTitle>
+                        <AlertDescription className="text-orange-800 text-sm">
+                          <div className="flex flex-col gap-3 mt-2">
+                            <p>{paymentError}</p>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => router.push("/pedidos")}
+                              className="border-orange-300 hover:bg-orange-100"
+                            >
+                              Verificar Meus Pedidos
+                            </Button>
+                          </div>
+                        </AlertDescription>
+                      </Alert>
+                    )}
+
                     {currentOrderId && (
                       <div className="text-sm text-gray-600 bg-gray-50 p-3 rounded-xl mb-4">
                         <span className="font-medium text-gray-700">
@@ -2233,17 +2371,47 @@ export default function CarrinhoPage() {
                       </div>
                     )}
 
-                    <QRCodePIX
-                      pixData={{
-                        ...pixData,
-                        payer_info: {
-                          id: pixData.payer_info.id || "",
-                          email: pixData.payer_info.email || "",
-                          first_name: pixData.payer_info.first_name,
-                          last_name: pixData.payer_info.last_name,
-                        },
-                      }}
-                    />
+                    {/* Container relativo para overlay */}
+                    <div className="relative">
+                      <QRCodePIX
+                        pixData={{
+                          ...pixData,
+                          payer_info: {
+                            id: pixData.payer_info.id || "",
+                            email: pixData.payer_info.email || "",
+                            first_name: pixData.payer_info.first_name,
+                            last_name: pixData.payer_info.last_name,
+                          },
+                        }}
+                      />
+
+                      {/* Overlay de status sobre o QR Code */}
+                      {(pollingStatus === "success" ||
+                        pollingStatus === "failure" ||
+                        pollingStatus === "timeout" ||
+                        (pollingStatus === "pending" &&
+                          paymentStatus === "pending")) && (
+                        <PaymentStatusOverlay
+                          status={
+                            pollingStatus === "success"
+                              ? "success"
+                              : pollingStatus === "failure"
+                              ? "failure"
+                              : pollingStatus === "timeout"
+                              ? "timeout"
+                              : "pending"
+                          }
+                          paymentMethod="pix"
+                          showOverQRCode={true}
+                          onAnimationComplete={() => {
+                            if (pollingStatus === "success") {
+                              // Redirecionar para página de pedidos após animação
+                              router.push("/pedidos");
+                            }
+                          }}
+                        />
+                      )}
+                    </div>
                   </Card>
                 )}
 

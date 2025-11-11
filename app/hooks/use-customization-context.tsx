@@ -53,16 +53,12 @@ export function CustomizationProvider({
 
       try {
         // Usar novo endpoint unificado
-        const response = await api.get(`/customizations/${productId}`);
-
-        const allRules = response.rules || [];
+        await api.get(`/customizations/${productId}`);
 
         setState({
           productId,
-          rules: allRules,
           data: {},
           previewUrl: undefined,
-          model3dUrl: undefined,
         });
       } catch (err) {
         console.error("Erro ao carregar regras de customização:", err);
