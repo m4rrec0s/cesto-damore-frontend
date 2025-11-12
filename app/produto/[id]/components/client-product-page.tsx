@@ -1040,7 +1040,15 @@ const ClientProductPage = ({ id }: { id: string }) => {
   if (loadingProduct) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-rose-500" />
+        <div className="animate-pulse flex flex-col items-center">
+          <Image
+            src="/logocestodamore.png"
+            alt="Cesto d'Amore"
+            className="w-14 h-14"
+            width={56}
+            height={56}
+          />
+        </div>
       </div>
     );
   }

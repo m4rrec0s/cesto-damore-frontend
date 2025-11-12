@@ -45,7 +45,7 @@ export default function FeedBannerCarousel({
       {/* <div className="absolute w-full inset-0 h-[10%] bg-gradient-to-b from-rose-400 to-transparent z-50" /> */}
 
       <div className="w-full overflow-hidden">
-        <div className="relative w-full h-[250px] sm:h-[300px] md:h-[350px] lg:h-[400px]">
+        <div className="relative w-full h-[270px] sm:h-[320px] md:h-[350px] lg:h-[400px]">
           {banners.map((banner, index) => (
             <div
               key={banner.id}

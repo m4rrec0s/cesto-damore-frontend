@@ -11,8 +11,6 @@ import {
 import { Button } from "./components/ui/button";
 import { RefreshCw } from "lucide-react";
 import { DatabaseErrorFallback } from "./components/database-error-fallback";
-import { cn } from "./lib/utils";
-import Link from "next/link";
 import FeedBannerCarousel from "./components/feed/FeedBannerCarousel";
 import FeedSection from "./components/feed/FeedSection";
 import Image from "next/image";
@@ -146,6 +144,25 @@ export default function Home() {
     window.location.reload();
   };
 
+  if (initialLoad || loading) {
+    return (
+      <div className="fixed z-50 bg-white flex justify-center items-center inset-0 h-[100vh]">
+        <div className="animate-pulse flex flex-col items-center">
+          <Image
+            src="/logocestodamore.png"
+            alt="Cesto d'Amore"
+            className="w-14 h-14"
+            width={56}
+            height={56}
+          />
+          <span className="text-xs text-gray-500">
+            Preparando tudo para você
+          </span>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white">
       {/* Banner Carousel */}
@@ -159,7 +176,7 @@ export default function Home() {
         )}
 
       {/* Categories Section */}
-      <section className="py-8 w-full flex flex-col justify-center transition-all duration-300">
+      {/* <section className="py-8 w-full flex flex-col justify-center transition-all duration-300">
         <div className="mx-auto max-w-none sm:max-w-[90%] px-4">
           {initialLoad ? (
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
@@ -194,7 +211,7 @@ export default function Home() {
             </div>
           )}
         </div>
-      </section>
+      </section> */}
 
       {feedData && !useFallback ? (
         <div className="space-y-8 pb-12 animate-fadeIn">
@@ -216,36 +233,6 @@ export default function Home() {
               <div className="animate-fadeIn">
                 <DatabaseErrorFallback error={error} onRetry={handleRetry} />
               </div>
-            )}
-
-            {loading && !initialLoad ? (
-              <div className="text-center py-16">
-                <div className="mx-auto relative w-32 h-32">
-                  <div className="absolute inset-0 rounded-full bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 opacity-25 animate-pulse" />
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <div className="w-24 h-24 bg-black rounded-full flex items-center justify-center shadow-lg">
-                      <Image
-                        src="/logo.png"
-                        alt="Cesto d'Amore"
-                        className="w-14 h-14 animate-spin"
-                        width={56}
-                        height={56}
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              !loading &&
-              !error &&
-              products.length > 0 && (
-                <div className="animate-fadeIn">
-                  <ProductGrid
-                    products={products}
-                    title="Produtos em destaque"
-                  />
-                </div>
-              )
             )}
 
             {!loading && !error && products.length === 0 && !initialLoad && (
