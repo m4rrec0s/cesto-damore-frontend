@@ -1,14 +1,17 @@
 import Image from "next/image";
 import Link from "next/link";
 
+interface Category {
+  category: { id: string; name: string };
+}
+
 interface ProductCardProps {
   props: {
     id: string;
     name: string;
     price: number;
     image_url: string | null;
-    categoryName?: string;
-    categoryNames?: string[];
+    categories?: Category[];
     discount?: number;
   };
 }
@@ -25,37 +28,31 @@ export function ProductCard({ props }: ProductCardProps) {
     >
       <div className="relative aspect-square overflow-hidden bg-gradient-to-br from-rose-50 via-pink-50 to-orange-50">
         <Image
-          src={props.image_url || "/placeholder.svg"}
+          src={props.image_url || "/placeholder.png"}
           alt={props.name}
           fill
           className="object-cover group-hover:scale-110 transition-transform duration-500"
           sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, (max-width: 1024px) 25vw, 16vw"
         />
 
-        {/* Discount Badge */}
         {props.discount && props.discount > 0 ? (
           <div className="absolute top-3 right-3 bg-gradient-to-r from-red-500 to-pink-500 text-white text-sm font-bold px-3 py-1.5 rounded-full shadow-xl animate-pulse">
             -{props.discount.toFixed(0)}%
           </div>
         ) : null}
 
-        {/* Categories */}
-        {props.categoryNames && props.categoryNames.length > 0 ? (
+        {props.categories && props.categories.length > 0 ? (
           <div className="absolute bottom-3 left-3 gap-1.5 flex">
-            {props.categoryNames[0] && (
+            {props.categories[0] && (
               <div className="bg-white/95 backdrop-blur-sm px-3 py-1.5 rounded-full text-xs font-semibold text-gray-700 shadow-md border border-gray-200">
-                {props.categoryNames[0]}
+                {props.categories[0].category.name}
               </div>
             )}
-            {props.categoryNames.length > 1 && (
+            {props.categories.length > 1 && (
               <div className="bg-white/95 backdrop-blur-sm px-2.5 py-1.5 rounded-full text-xs font-semibold text-gray-700 shadow-md border border-gray-200">
-                +{props.categoryNames.length - 1}
+                +{props.categories.length - 1}
               </div>
             )}
-          </div>
-        ) : props.categoryName ? (
-          <div className="absolute bottom-3 left-3 bg-white/95 backdrop-blur-sm px-3 py-1.5 rounded-full text-xs font-semibold text-gray-700 shadow-md border border-gray-200">
-            {props.categoryName}
           </div>
         ) : null}
 

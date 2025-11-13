@@ -136,7 +136,7 @@ const AdditionalCard = ({
 
       <div className="relative aspect-square overflow-hidden bg-gradient-to-br from-gray-50 to-gray-100 w-full max-w-[200px] mx-auto">
         <Image
-          src={additional.image_url || "/placeholder.svg"}
+          src={additional.image_url || "/placeholder.png"}
           alt={additional.name}
           fill
           className="object-cover"

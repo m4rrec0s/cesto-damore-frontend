@@ -9,10 +9,9 @@ import {
   TabsList,
   TabsTrigger,
 } from "@/app/components/ui/tabs";
-import { Box, Layers, Link2 } from "lucide-react";
+import { Box, Layers } from "lucide-react";
 import { ProductsTab } from "@/app/manage/components/catalog/ProductsTab";
 import { ItemsTab } from "@/app/manage/components/catalog/ItemsTab";
-import { ConstraintsTab } from "@/app/manage/components/catalog/ConstraintsTab";
 
 export default function CatalogPage() {
   const { user, isLoading: authLoading } = useAuth();
@@ -58,13 +57,13 @@ export default function CatalogPage() {
               Componentes
             </TabsTrigger>
 
-            <TabsTrigger
+            {/* <TabsTrigger
               value="constraints"
               className="flex items-center gap-2"
             >
               <Link2 className="w-4 h-4" />
               Restrições
-            </TabsTrigger>
+            </TabsTrigger> */}
           </TabsList>
 
           <TabsContent value="products">
@@ -74,10 +73,10 @@ export default function CatalogPage() {
           <TabsContent value="items">
             <ItemsTab />
           </TabsContent>
-
+          {/* 
           <TabsContent value="constraints">
             <ConstraintsTab />
-          </TabsContent>
+          </TabsContent> */}
         </Tabs>
       </div>
     </div>

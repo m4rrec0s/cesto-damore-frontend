@@ -297,6 +297,11 @@ export interface ProductsResponse {
   products: Product[];
   pagination: PaginationInfo;
 }
+
+export interface ItemsResponse {
+  items: Item[];
+  pagination: PaginationInfo;
+}
 export type OrderStatus =
   | "PENDING"
   | "PAID"
@@ -627,7 +632,6 @@ class ApiService {
       return config;
     });
     this.client.interceptors.response.use((response) => {
-
       if (response.data) {
         response.data = response.data;
       }
@@ -800,8 +804,23 @@ class ApiService {
    * Lista items unificados (novo endpoint)
    * GET /items
    */
-  getItems = async (id?: string): Promise<Item[]> => {
-    const res = await this.client.get("/items", { params: { id } });
+  getItems = async (params?: {
+    page?: number;
+    perPage?: number;
+    search?: string;
+    id?: string;
+  }): Promise<ItemsResponse> => {
+    const queryParams = new URLSearchParams();
+    if (params?.page) queryParams.append("page", params.page.toString());
+    if (params?.perPage)
+      queryParams.append("per_page", params.perPage.toString());
+    if (params?.search) queryParams.append("search", params.search);
+    if (params?.id) queryParams.append("id", params.id);
+
+    const queryString = queryParams.toString();
+    const url = `/items${queryString ? `?${queryString}` : ""}`;
+
+    const res = await this.client.get(url);
     return res.data;
   };
   getItemsByProduct = async (productId: string): Promise<Item[]> => {
@@ -952,7 +971,7 @@ class ApiService {
     const queryParams = new URLSearchParams();
     if (params?.page) queryParams.append("page", params.page.toString());
     if (params?.perPage)
-      queryParams.append("perPage", params.perPage.toString());
+      queryParams.append("per_page", params.perPage.toString());
     if (params?.search) queryParams.append("search", params.search);
     if (params?.category_id)
       queryParams.append("category_id", params.category_id);

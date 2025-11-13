@@ -54,23 +54,19 @@ export default function FeedBannerCarousel({
                 index === currentIndex ? "opacity-100 z-10" : "opacity-0 z-0"
               )}
             >
-              {banner.image_url ? (
-                <div className="absolute inset-0 flex items-center justify-center overflow-hidden">
-                  <Image
-                    src={banner.image_url}
-                    alt={banner.title}
-                    fill
-                    className="object-cover object-center"
-                    style={{ objectPosition: "center center" }}
-                    quality={100}
-                    priority={index === 0}
-                    unoptimized
-                    sizes="100vw"
-                  />
-                </div>
-              ) : (
-                <div className="absolute inset-0 bg-gradient-to-r from-gray-100 to-gray-200" />
-              )}
+              <div className="absolute inset-0 flex items-center justify-center overflow-hidden">
+                <Image
+                  src={banner.image_url || "banner-placeholder.png"}
+                  alt={banner.title}
+                  fill
+                  className="object-cover object-center"
+                  style={{ objectPosition: "center center" }}
+                  quality={100}
+                  priority={index === 0}
+                  unoptimized
+                  sizes="100vw"
+                />
+              </div>
 
               <div className="relative z-20 h-full flex items-end justify-start px-4">
                 <div className="hidden text-left max-w-4xl p-6">

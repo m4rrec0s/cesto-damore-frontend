@@ -80,7 +80,7 @@ export function Cart({ onCheckout, className = "" }: CartProps) {
           >
             <div className="relative w-16 h-16 flex-shrink-0">
               <Image
-                src={item.product.image_url || "/placeholder.svg"}
+                src={item.product.image_url || "/placeholder.png"}
                 alt={item.product.name}
                 fill
                 className="object-cover rounded-md"

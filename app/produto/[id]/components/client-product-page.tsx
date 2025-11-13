@@ -680,7 +680,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
         }
 
         return (
-          previewComponent.image_url || product.image_url || "/placeholder.svg"
+          previewComponent.image_url || product.image_url || "/placeholder.png"
         );
       }
     }
@@ -690,7 +690,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
     }
 
     return (
-      selectedComponent?.image_url || product.image_url || "/placeholder.svg"
+      selectedComponent?.image_url || product.image_url || "/placeholder.png"
     );
   }, [
     selectedComponent,
@@ -1178,7 +1178,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
                     aria-label="Selecionar imagem do produto"
                   >
                     <Image
-                      src={product.image_url || "/placeholder.svg"}
+                      src={product.image_url || "/placeholder.png"}
                       alt={product.name || "Produto"}
                       fill
                       className="object-cover rounded-lg"
@@ -1207,7 +1207,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
                         aria-label={`Selecionar componente ${component.name}`}
                       >
                         <Image
-                          src={component.image_url || "/placeholder.svg"}
+                          src={component.image_url || "/placeholder.png"}
                           alt={component.name}
                           fill
                           className="object-cover rounded-lg"
@@ -1316,7 +1316,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
                                 <div className="w-12 h-12 relative rounded-md overflow-hidden flex-shrink-0">
                                   <Image
                                     src={
-                                      component.image_url || "/placeholder.svg"
+                                      component.image_url || "/placeholder.png"
                                     }
                                     alt={component.name}
                                     fill
@@ -1493,7 +1493,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
                     props={{
                       id: relatedProduct.id,
                       name: relatedProduct.name,
-                      image_url: relatedProduct.image_url || "/placeholder.svg",
+                      image_url: relatedProduct.image_url || "/placeholder.png",
                       price: relatedProduct.price,
                       discount: relatedProduct.discount,
                     }}

@@ -416,17 +416,15 @@ export default function BannersTab({
                   className="border rounded-lg p-4 hover:shadow-md transition-shadow"
                 >
                   <div className="flex items-start gap-4">
-                    {/* Imagem */}
                     <div className="relative w-32 h-20 flex-shrink-0 rounded overflow-hidden bg-gray-100">
                       <Image
-                        src={banner.image_url}
+                        src={banner.image_url || "/banner-placeholder.png"}
                         alt={banner.title}
                         fill
                         className="object-cover"
                       />
                     </div>
 
-                    {/* Conteúdo */}
                     <div className="flex-1">
                       <div className="flex items-start justify-between">
                         <div>
@@ -469,7 +467,6 @@ export default function BannersTab({
                           )}
                         </div>
 
-                        {/* Ações */}
                         <div className="flex items-center gap-2">
                           <Button
                             onClick={() => handleEdit(banner)}

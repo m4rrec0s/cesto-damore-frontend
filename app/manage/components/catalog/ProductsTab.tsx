@@ -30,6 +30,7 @@ import { toast } from "sonner";
 import Image from "next/image";
 import { Textarea } from "@/app/components/ui/textarea";
 import { LoadingSpinner } from "@/app/components/LoadingSpinner";
+import { Pagination } from "@/app/components/ui/pagination";
 
 interface Item {
   id: string;
@@ -61,6 +62,10 @@ export function ProductsTab() {
   const [items, setItems] = useState<Item[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [total, setTotal] = useState(0);
+  const perPage = 15;
   const [showModal, setShowModal] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
@@ -87,26 +92,40 @@ export function ProductsTab() {
     try {
       const [productsData, categoriesData, typesData, itemsData] =
         await Promise.all([
-          api.getProducts(),
+          api.getProducts({
+            page: currentPage,
+            perPage,
+            search: searchTerm || undefined,
+          }),
           api.getCategories(),
           api.getTypes(),
           api.getItems(),
         ]);
       setProducts(productsData.products);
+      setTotalPages(productsData.pagination.totalPages);
+      setTotal(productsData.pagination.total);
       setCategories(categoriesData);
       setTypes(typesData);
-      setItems(itemsData);
+      setItems(itemsData.items);
     } catch (error) {
       console.error("Erro ao carregar dados:", error);
       toast.error("Erro ao carregar dados");
     } finally {
       setLoading(false);
     }
-  }, [api]);
+  }, [api, currentPage, searchTerm]);
 
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm]);
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+  };
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -531,12 +550,8 @@ export function ProductsTab() {
     }));
   };
 
-  const filteredProducts = products.filter((product) =>
-    product.name.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-
   return (
-    <Card>
+    <Card className="flex flex-col h-full">
       <CardHeader>
         <div className="flex justify-between items-center">
           <CardTitle className="flex items-center gap-2">
@@ -549,7 +564,7 @@ export function ProductsTab() {
           </Button>
         </div>
       </CardHeader>
-      <CardContent>
+      <CardContent className="flex flex-col flex-1 overflow-hidden">
         <div className="mb-4">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
@@ -563,144 +578,154 @@ export function ProductsTab() {
           </div>
         </div>
 
-        <div className="rounded-md border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-16">Imagem</TableHead>
-                <TableHead>Nome</TableHead>
-                <TableHead>Tipo</TableHead>
-                <TableHead>Categorias</TableHead>
-                <TableHead className="text-center">Preço</TableHead>
-                <TableHead className="text-center">Desconto</TableHead>
-                <TableHead className="text-center">Componentes</TableHead>
-                <TableHead className="text-right">Ações</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {loading && (
+        <div className="rounded-md border flex-1 flex flex-col overflow-hidden">
+          <div className="overflow-auto flex-1">
+            <Table>
+              <TableHeader className="sticky top-0 bg-white z-10">
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center py-8">
-                    <LoadingSpinner />
-                  </TableCell>
+                  <TableHead className="w-16">Imagem</TableHead>
+                  <TableHead>Nome</TableHead>
+                  <TableHead>Tipo</TableHead>
+                  <TableHead>Categorias</TableHead>
+                  <TableHead className="text-center">Preço</TableHead>
+                  <TableHead className="text-center">Desconto</TableHead>
+                  <TableHead className="text-center">Componentes</TableHead>
+                  <TableHead className="text-right">Ações</TableHead>
                 </TableRow>
-              )}
-
-              {!loading && filteredProducts.length === 0 ? (
-                <TableRow>
-                  <TableCell
-                    colSpan={8}
-                    className="text-center py-8 text-gray-500"
-                  >
-                    Nenhum produto encontrado
-                  </TableCell>
-                </TableRow>
-              ) : (
-                filteredProducts.map((product) => (
-                  <TableRow key={product.id}>
-                    <TableCell>
-                      {product.image_url ? (
-                        <div className="relative w-12 h-12 rounded-md overflow-hidden">
-                          <Image
-                            src={product.image_url}
-                            alt={product.name}
-                            fill
-                            className="object-cover"
-                          />
-                        </div>
-                      ) : (
-                        <div className="w-12 h-12 rounded-md bg-gray-100 flex items-center justify-center">
-                          <Package className="w-6 h-6 text-gray-400" />
-                        </div>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <div>
-                        <p className="font-medium">{product.name}</p>
-                        {product.description && (
-                          <p className="text-xs text-gray-500 truncate max-w-xs">
-                            {product.description}
-                          </p>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline">
-                        {types.find((t) => t.id === product.type_id)?.name ||
-                          "N/A"}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex flex-wrap gap-1">
-                        {product.categories.map((cat) => (
-                          <Badge
-                            key={cat.id}
-                            variant="secondary"
-                            className="text-xs"
-                          >
-                            {cat.name}
-                          </Badge>
-                        ))}
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <p className="font-semibold text-center">
-                        {product.price &&
-                        product.discount &&
-                        product.discount > 0 ? (
-                          <>
-                            <del className="text-gray-500">
-                              R$ {product.price.toFixed(2)}
-                            </del>
-                            <br />
-                            <span className="text-green-600 font-bold">
-                              R${" "}
-                              {(
-                                product.price -
-                                (product.price * product.discount) / 100
-                              ).toFixed(2)}
-                            </span>
-                          </>
-                        ) : (
-                          `R$ ${product.price.toFixed(2)}`
-                        )}
-                      </p>
-                    </TableCell>
-                    <TableCell className="text-center">
-                      {product.discount && product.discount > 0 ? (
-                        <Badge variant="destructive">
-                          -{product.discount}%
-                        </Badge>
-                      ) : (
-                        <span className="text-gray-400">-</span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <span className="text-gray-400">-</span>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleOpenModal(product)}
-                        >
-                          <Edit2 className="w-4 h-4" />
-                        </Button>
-                        <Button
-                          variant="destructive"
-                          size="sm"
-                          onClick={() => handleDelete(product.id)}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </div>
+              </TableHeader>
+              <TableBody>
+                {loading && (
+                  <TableRow>
+                    <TableCell colSpan={8} className="text-center py-8">
+                      <LoadingSpinner />
                     </TableCell>
                   </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
+                )}
+
+                {!loading && products.length > 0
+                  ? products.map((product) => (
+                      <TableRow key={product.id}>
+                        <TableCell>
+                          {product.image_url ? (
+                            <div className="relative w-12 h-12 rounded-md overflow-hidden">
+                              <Image
+                                src={product.image_url}
+                                alt={product.name}
+                                fill
+                                className="object-cover"
+                              />
+                            </div>
+                          ) : (
+                            <div className="w-12 h-12 rounded-md bg-gray-100 flex items-center justify-center">
+                              <Package className="w-6 h-6 text-gray-400" />
+                            </div>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <div>
+                            <p className="font-medium">{product.name}</p>
+                            {product.description && (
+                              <p className="text-xs text-gray-500 truncate max-w-xs">
+                                {product.description}
+                              </p>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline">
+                            {types.find((t) => t.id === product.type_id)
+                              ?.name || "N/A"}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex flex-wrap gap-1">
+                            {product.categories.map((cat) => (
+                              <Badge
+                                key={cat.id}
+                                variant="secondary"
+                                className="text-xs"
+                              >
+                                {cat.name}
+                              </Badge>
+                            ))}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <p className="font-semibold text-center">
+                            {product.price &&
+                            product.discount &&
+                            product.discount > 0 ? (
+                              <>
+                                <del className="text-gray-500">
+                                  R$ {product.price.toFixed(2)}
+                                </del>
+                                <br />
+                                <span className="text-green-600 font-bold">
+                                  R${" "}
+                                  {(
+                                    product.price -
+                                    (product.price * product.discount) / 100
+                                  ).toFixed(2)}
+                                </span>
+                              </>
+                            ) : (
+                              `R$ ${product.price.toFixed(2)}`
+                            )}
+                          </p>
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {product.discount && product.discount > 0 ? (
+                            <Badge variant="destructive">
+                              -{product.discount}%
+                            </Badge>
+                          ) : (
+                            <span className="text-gray-400">-</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <span className="text-gray-400">-</span>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleOpenModal(product)}
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              onClick={() => handleDelete(product.id)}
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  : !loading && (
+                      <TableRow>
+                        <TableCell
+                          colSpan={8}
+                          className="text-center py-8 text-gray-500"
+                        >
+                          Nenhum produto encontrado
+                        </TableCell>
+                      </TableRow>
+                    )}
+              </TableBody>
+            </Table>
+          </div>
+
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            total={total}
+            perPage={perPage}
+            onPageChange={handlePageChange}
+          />
         </div>
 
         {showModal && (

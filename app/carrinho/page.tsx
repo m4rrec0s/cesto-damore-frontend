@@ -289,7 +289,7 @@ const ProductCard = ({
     <div className="flex gap-4 rounded-2xl bg-white p-5 shadow-sm border border-gray-100 transition-all hover:shadow-md">
       <div className="relative w-20 h-20 lg:w-24 lg:h-24 flex-shrink-0 rounded-xl overflow-hidden bg-gray-50">
         <Image
-          src={previewUrl || item.product.image_url || "/placeholder.svg"}
+          src={item.product.image_url || "/placeholder.png"}
           alt={item.product.name}
           fill
           className="object-cover"
@@ -297,6 +297,12 @@ const ProductCard = ({
         {previewUrl && (
           <div className="absolute bottom-0 left-0 right-0 bg-purple-600/90 text-white text-[10px] text-center py-0.5 font-semibold">
             Personalizado
+            <Image
+              src={previewUrl}
+              alt={"Preview da personalização"}
+              width={40}
+              height={40}
+            />
           </div>
         )}
       </div>
@@ -1025,16 +1031,13 @@ export default function CarrinhoPage() {
     setIsProcessing(true);
     setPaymentError(null);
 
-    // Salvar o documento do usuário para uso posterior (ex: PIX)
     setUserDocument(cardData.identificationNumber);
 
     try {
-      // Verificar múltiplas fontes possíveis do orderId
       let orderId = currentOrderId;
 
       console.log("🔍 Verificando currentOrderId:", orderId);
 
-      // Se não tiver currentOrderId, tentar obter do localStorage como fallback
       if (!orderId) {
         console.log(
           "⚠️ currentOrderId está vazio, verificando localStorage..."

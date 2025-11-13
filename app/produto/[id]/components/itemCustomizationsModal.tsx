@@ -994,7 +994,7 @@ export function ItemCustomizationModal({
                 <div className="flex items-center gap-3">
                   <Checkbox checked={isSelected} className="border-2" />
                   <Image
-                    src={option.image_url || "/placeholder-image.png"}
+                    src={option.image_url || "/placeholder.png"}
                     alt={option.label}
                     width={64}
                     height={64}

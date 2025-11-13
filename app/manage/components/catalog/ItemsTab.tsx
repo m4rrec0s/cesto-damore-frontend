@@ -37,6 +37,7 @@ import { Textarea } from "@/app/components/ui/textarea";
 import { Checkbox } from "@/app/components/ui/checkbox";
 import { LoadingSpinner } from "@/app/components/LoadingSpinner";
 import CustomizationManager from "./CustomizationManager";
+import { Pagination } from "@/app/components/ui/pagination";
 
 interface Item {
   id: string;
@@ -78,6 +79,10 @@ export function ItemsTab() {
   const [additionals, setAdditionals] = useState<Additional[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [total, setTotal] = useState(0);
+  const perPage = 15;
   const [showModal, setShowModal] = useState(false);
   const [showCustomizationModal, setShowCustomizationModal] = useState(false);
   const [selectedItem, setSelectedItem] = useState<Item | null>(null);
@@ -96,15 +101,21 @@ export function ItemsTab() {
   const loadItems = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await api.get("/items");
-      setItems(data);
+      const data = await api.getItems({
+        page: currentPage,
+        perPage,
+        search: searchTerm || undefined,
+      });
+      setItems(data.items);
+      setTotalPages(data.pagination.totalPages);
+      setTotal(data.pagination.total);
     } catch (error) {
       console.error("Erro ao carregar itens:", error);
       toast.error("Erro ao carregar itens");
     } finally {
       setLoading(false);
     }
-  }, [api]);
+  }, [api, currentPage, searchTerm]);
 
   const loadAdditionals = useCallback(async () => {
     try {
@@ -119,6 +130,14 @@ export function ItemsTab() {
     loadItems();
     loadAdditionals();
   }, [loadItems, loadAdditionals]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm]);
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+  };
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -227,12 +246,8 @@ export function ItemsTab() {
     setShowCustomizationModal(true);
   };
 
-  const filteredItems = items.filter((item) =>
-    item.name.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-
   return (
-    <Card>
+    <Card className="flex flex-col h-full">
       <CardHeader>
         <div className="flex justify-between items-center">
           <CardTitle className="flex items-center gap-2">
@@ -245,7 +260,7 @@ export function ItemsTab() {
           </Button>
         </div>
       </CardHeader>
-      <CardContent>
+      <CardContent className="flex flex-col flex-1 overflow-hidden">
         <div className="mb-4">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
@@ -259,132 +274,143 @@ export function ItemsTab() {
           </div>
         </div>
 
-        <div className="rounded-md border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-16">Imagem</TableHead>
-                <TableHead>Nome</TableHead>
-                <TableHead>Descrição</TableHead>
-                <TableHead className="text-center">Estoque</TableHead>
-                <TableHead className="text-center">Preço Base</TableHead>
-                <TableHead className="text-center">Customizável</TableHead>
-                <TableHead className="text-center">Adicional</TableHead>
-                <TableHead className="text-right">Ações</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {loading && (
+        <div className="rounded-md border flex-1 flex flex-col overflow-hidden">
+          <div className="overflow-auto flex-1">
+            <Table>
+              <TableHeader className="sticky top-0 bg-white z-10">
                 <TableRow>
-                  <TableCell
-                    colSpan={8}
-                    className="text-center py-8 text-gray-500"
-                  >
-                    <LoadingSpinner />
-                  </TableCell>
+                  <TableHead className="w-16">Imagem</TableHead>
+                  <TableHead>Nome</TableHead>
+                  <TableHead>Descrição</TableHead>
+                  <TableHead className="text-center">Estoque</TableHead>
+                  <TableHead className="text-center">Preço Base</TableHead>
+                  <TableHead className="text-center">Customizável</TableHead>
+                  <TableHead className="text-center">Adicional</TableHead>
+                  <TableHead className="text-right">Ações</TableHead>
                 </TableRow>
-              )}
+              </TableHeader>
+              <TableBody>
+                {loading && (
+                  <TableRow>
+                    <TableCell
+                      colSpan={8}
+                      className="text-center py-8 text-gray-500"
+                    >
+                      <LoadingSpinner />
+                    </TableCell>
+                  </TableRow>
+                )}
 
-              {!loading && filteredItems.length === 0 ? (
-                <TableRow>
-                  <TableCell
-                    colSpan={8}
-                    className="text-center py-8 text-gray-500"
-                  >
-                    Nenhum item encontrado
-                  </TableCell>
-                </TableRow>
-              ) : (
-                filteredItems.map((item) => (
-                  <TableRow key={item.id}>
-                    <TableCell>
-                      {item.image_url ? (
-                        <div className="relative w-12 h-12 rounded-md overflow-hidden">
-                          <Image
-                            src={item.image_url}
-                            alt={item.name}
-                            fill
-                            className="object-cover"
-                          />
-                        </div>
-                      ) : (
-                        <div className="w-12 h-12 rounded-md bg-gray-100 flex items-center justify-center">
-                          <Layers className="w-6 h-6 text-gray-400" />
-                        </div>
-                      )}
+                {!loading && items.length === 0 ? (
+                  <TableRow>
+                    <TableCell
+                      colSpan={8}
+                      className="text-center py-8 text-gray-500"
+                    >
+                      Nenhum item encontrado
                     </TableCell>
-                    <TableCell className="font-medium">{item.name}</TableCell>
-                    <TableCell className="max-w-xs truncate">
-                      {item.description || "-"}
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <Badge
-                        variant={
-                          item.stock_quantity > 10
-                            ? "default"
-                            : item.stock_quantity > 0
-                            ? "secondary"
-                            : "destructive"
-                        }
-                      >
-                        {item.stock_quantity}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-center">
-                      R$ {item.base_price.toFixed(2)}
-                    </TableCell>
-                    <TableCell className="text-center">
-                      {item.allows_customization ? (
-                        <Badge className="bg-purple-100 text-purple-800 hover:bg-purple-200">
-                          <Check className="w-3 h-3 mr-1" />
-                          Sim
+                  </TableRow>
+                ) : (
+                  !loading &&
+                  items.map((item) => (
+                    <TableRow key={item.id}>
+                      <TableCell>
+                        {item.image_url ? (
+                          <div className="relative w-12 h-12 rounded-md overflow-hidden">
+                            <Image
+                              src={item.image_url}
+                              alt={item.name}
+                              fill
+                              className="object-cover"
+                            />
+                          </div>
+                        ) : (
+                          <div className="w-12 h-12 rounded-md bg-gray-100 flex items-center justify-center">
+                            <Layers className="w-6 h-6 text-gray-400" />
+                          </div>
+                        )}
+                      </TableCell>
+                      <TableCell className="font-medium">{item.name}</TableCell>
+                      <TableCell className="max-w-xs truncate">
+                        {item.description || "-"}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <Badge
+                          variant={
+                            item.stock_quantity > 10
+                              ? "default"
+                              : item.stock_quantity > 0
+                              ? "secondary"
+                              : "destructive"
+                          }
+                        >
+                          {item.stock_quantity}
                         </Badge>
-                      ) : (
-                        <Badge variant="outline">Não</Badge>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-center">
-                      {item.additional ? (
-                        <Badge variant="secondary">
-                          {item.additional.name}
-                        </Badge>
-                      ) : (
-                        "-"
-                      )}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-2">
-                        {item.allows_customization && (
+                      </TableCell>
+                      <TableCell className="text-center">
+                        R$ {item.base_price.toFixed(2)}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        {item.allows_customization ? (
+                          <Badge className="bg-purple-100 text-purple-800 hover:bg-purple-200">
+                            <Check className="w-3 h-3 mr-1" />
+                            Sim
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline">Não</Badge>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        {item.additional ? (
+                          <Badge variant="secondary">
+                            {item.additional.name}
+                          </Badge>
+                        ) : (
+                          "-"
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-2">
+                          {item.allows_customization && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleOpenCustomizationModal(item)}
+                              title="Configurar Customizações"
+                            >
+                              <Wand2 className="w-4 h-4" />
+                            </Button>
+                          )}
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => handleOpenCustomizationModal(item)}
-                            title="Configurar Customizações"
+                            onClick={() => handleOpenModal(item)}
                           >
-                            <Wand2 className="w-4 h-4" />
+                            <Edit2 className="w-4 h-4" />
                           </Button>
-                        )}
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleOpenModal(item)}
-                        >
-                          <Edit2 className="w-4 h-4" />
-                        </Button>
-                        <Button
-                          variant="destructive"
-                          size="sm"
-                          onClick={() => handleDelete(item.id)}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            onClick={() => handleDelete(item.id)}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
+
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            total={total}
+            perPage={perPage}
+            onPageChange={handlePageChange}
+          />
         </div>
 
         {/* Modal de Criação/Edição de Item */}

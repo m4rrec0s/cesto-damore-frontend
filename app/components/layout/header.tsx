@@ -255,10 +255,10 @@ export function SiteHeader() {
             Cestas Românticas
           </Link>
           <Link
-            href="/itens-personalizados"
+            href="/buques-de-flores"
             className="hover:text-neutral-200 transition-colors"
           >
-            Itens Personalizados
+            Buquês de Flores
           </Link>
           <Link
             href="/cesto-express"
