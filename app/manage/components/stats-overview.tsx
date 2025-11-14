@@ -58,7 +58,7 @@ export function StatsOverview({ data }: StatsOverviewProps) {
     // Categorias vazias (sem produtos)
     const emptyCategories = data.categories.filter((cat) => {
       return !data.products.some((p) =>
-        p.categories.some((c) => c.id === cat.id)
+        p.categories.some((c) => c.category_id === cat.id)
       );
     }).length;
 

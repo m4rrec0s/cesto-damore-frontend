@@ -1,17 +1,18 @@
 import Image from "next/image";
 import Link from "next/link";
 
-interface Category {
-  category: { id: string; name: string };
-}
-
 interface ProductCardProps {
   props: {
     id: string;
     name: string;
     price: number;
     image_url: string | null;
-    categories?: Category[];
+    categories?: Array<{
+      category: {
+        id: string;
+        name: string;
+      };
+    }>;
     discount?: number;
   };
 }

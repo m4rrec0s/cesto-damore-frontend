@@ -189,9 +189,7 @@ export function IntegratedProductManager({
         description: product.description || "",
         price: product.price,
         discount: product.discount || 0,
-        categories:
-          product.categories?.map((c: { id: string; name: string }) => c.id) ||
-          [],
+        categories: product.categories?.map((c) => c.category_id) || [],
         type_id: product.type_id,
         components,
       });
@@ -420,11 +418,7 @@ export function IntegratedProductManager({
   };
 
   const getCategoryNames = (product: Product) => {
-    return (
-      product.categories
-        ?.map((c: { id: string; name: string }) => c.name)
-        .join(", ") || "N/A"
-    );
+    return product.categories?.map((c) => c.category.name).join(", ") || "N/A";
   };
 
   return (

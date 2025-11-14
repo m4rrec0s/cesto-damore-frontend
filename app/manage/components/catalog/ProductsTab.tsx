@@ -148,7 +148,7 @@ export function ProductsTab() {
         price: product.price,
         discount: product.discount || 0,
         type_id: product.type_id,
-        categories: product.categories.map((c) => c.id),
+        categories: product.categories.map((c) => c.category_id),
       });
       setImagePreview(product.image_url || "");
 
@@ -641,11 +641,11 @@ export function ProductsTab() {
                           <div className="flex flex-wrap gap-1">
                             {product.categories.map((cat) => (
                               <Badge
-                                key={cat.id}
+                                key={cat.category.id}
                                 variant="secondary"
                                 className="text-xs"
                               >
-                                {cat.name}
+                                {cat.category.name}
                               </Badge>
                             ))}
                           </div>

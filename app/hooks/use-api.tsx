@@ -175,7 +175,34 @@ export interface Components {
   item: Item;
 }
 
+export interface CategoryProduct {
+  category: {
+    id: string;
+    name: string;
+  };
+}
+
 export interface Product {
+  id: string;
+  name: string;
+  description?: string;
+  price: number;
+  discount?: number;
+  image_url?: string | null;
+  categories: Array<{
+    product_id: string;
+    category_id: string;
+    created_at: string;
+    category: Category;
+  }>;
+  type_id: string;
+  components?: string[];
+  related_products?: Omit<Product, "components" | "related_products">[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProductForm {
   id: string;
   name: string;
   description?: string;
@@ -184,7 +211,7 @@ export interface Product {
   image_url?: string | null;
   categories: Category[];
   type_id: string;
-  components?: string[];
+  components?: CategoryProduct[];
   related_products?: Omit<Product, "components" | "related_products">[];
   created_at: string;
   updated_at: string;
@@ -196,7 +223,7 @@ export interface ProductInput {
   price: number;
   discount?: number;
   image_url?: string | null;
-  categories: string[]; // Array of category IDs for API input
+  categories: string[];
   type_id: string;
 }
 export interface Additional {

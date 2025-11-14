@@ -1,11 +1,9 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
-import { ProductGrid } from "./components/layout/product-grid";
 import {
   useApi,
   Product as ApiProduct,
-  Category,
   PublicFeedResponse,
 } from "./hooks/use-api";
 import { Button } from "./components/ui/button";
@@ -24,20 +22,13 @@ interface GridProduct {
   categoryName?: string;
 }
 
-// Componente de Skeleton para loading
-function CategorySkeleton() {
-  return (
-    <div className="w-full h-9 bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 animate-pulse rounded-full" />
-  );
-}
-
 export default function Home() {
   const api = useApi();
   const [loading, setLoading] = useState(false);
   const [initialLoad, setInitialLoad] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [products, setProducts] = useState<GridProduct[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
+  // const [categories, setCategories] = useState<Category[]>([]);
   const [feedData, setFeedData] = useState<PublicFeedResponse | null>(null);
   const [useFallback, setUseFallback] = useState(false);
 
@@ -61,9 +52,7 @@ export default function Home() {
 
   useEffect(() => {
     const loadData = async () => {
-      // Se tem cache, mostrar imediatamente
       if (cachedData?.categories) {
-        setCategories(cachedData.categories);
         setInitialLoad(false);
       }
 
@@ -81,12 +70,10 @@ export default function Home() {
           setUseFallback(true);
         }
 
-        const [productsResponse, fetchedCategories] = await Promise.all([
+        const [productsResponse] = await Promise.all([
           api.getProducts(),
           api.getCategories(),
         ]);
-
-        setCategories(fetchedCategories);
 
         if (feed && !useFallback) {
           setProducts([]);
@@ -95,7 +82,7 @@ export default function Home() {
             (product: ApiProduct) => {
               const categoryName =
                 product.categories && product.categories.length > 0
-                  ? product.categories[0].name
+                  ? product.categories[0].category.name
                   : "Sem categoria";
 
               return {
@@ -105,7 +92,8 @@ export default function Home() {
                 discount: product.discount || undefined,
                 image_url: product.image_url || null,
                 categoryName,
-                categoryNames: product.categories?.map((cat) => cat.name) || [],
+                categoryNames:
+                  product.categories?.map((cat) => cat.category.name) || [],
               };
             }
           );

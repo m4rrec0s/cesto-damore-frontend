@@ -142,7 +142,7 @@ export function ProductManager({
     try {
       // Prefer the unified items endpoint when available
       const items = await api.getItems();
-      setAvailableAdditionals(items || []);
+      setAvailableAdditionals(items.items || []);
     } catch (error) {
       console.error(
         "Erro ao carregar itens (fallback para adicionais):",
@@ -186,7 +186,9 @@ export function ProductManager({
 
       let categoryIds: string[] = [];
       if (product.categories && product.categories.length > 0) {
-        categoryIds = product.categories.map((category) => category.id);
+        categoryIds = product.categories.map(
+          (category) => category.category_id
+        );
       }
 
       const initialData = {
@@ -558,7 +560,7 @@ export function ProductManager({
   const getCategoryNames = (product: Product) => {
     let categoryIds: string[] = [];
     if (product.categories && product.categories.length > 0) {
-      categoryIds = product.categories.map((category) => category.id);
+      categoryIds = product.categories.map((category) => category.category_id);
     }
 
     if (categoryIds.length === 0) return ["Sem categoria"];

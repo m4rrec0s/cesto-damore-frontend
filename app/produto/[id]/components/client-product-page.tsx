@@ -1077,10 +1077,10 @@ const ClientProductPage = ({ id }: { id: string }) => {
           </Link>
           <span className="mx-2">›</span>
           <Link
-            href={`/categoria/${product.categories?.[0]?.id}`}
+            href={`/categoria/${product.categories?.[0]?.category_id}`}
             className="hover:underline"
           >
-            {product.categories?.[0]?.name || "Produtos"}
+            {product.categories?.[0]?.category.name || "Produtos"}
           </Link>
           <span className="mx-2">›</span>
           <span className="text-gray-900 font-medium">{product.name}</span>

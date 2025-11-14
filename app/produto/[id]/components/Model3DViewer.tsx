@@ -688,7 +688,7 @@ export function Model3DViewer({
           const gl = state.gl as any;
           gl.physicallyCorrectLights = true;
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          gl.outputEncoding = (THREE as any).sRGBEncoding;
+          gl.outputColorSpace = (THREE as any).SRGBColorSpace;
           gl.toneMappingExposure = 1.0;
         }}
       >
