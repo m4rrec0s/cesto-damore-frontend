@@ -186,9 +186,7 @@ export function ProductManager({
 
       let categoryIds: string[] = [];
       if (product.categories && product.categories.length > 0) {
-        categoryIds = product.categories.map(
-          (category) => category.category_id
-        );
+        categoryIds = product.categories.map((category) => category.id);
       }
 
       const initialData = {
@@ -560,9 +558,8 @@ export function ProductManager({
   const getCategoryNames = (product: Product) => {
     let categoryIds: string[] = [];
     if (product.categories && product.categories.length > 0) {
-      categoryIds = product.categories.map((category) => category.category_id);
+      categoryIds = product.categories.map((category) => category.id);
     }
-
     if (categoryIds.length === 0) return ["Sem categoria"];
 
     return categoryIds.map(

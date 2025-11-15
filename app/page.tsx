@@ -12,6 +12,7 @@ import { DatabaseErrorFallback } from "./components/database-error-fallback";
 import FeedBannerCarousel from "./components/feed/FeedBannerCarousel";
 import FeedSection from "./components/feed/FeedSection";
 import Image from "next/image";
+import InfiniteScroll from "react-infinite-scroll-component";
 
 interface GridProduct {
   id: string;
@@ -31,6 +32,7 @@ export default function Home() {
   // const [categories, setCategories] = useState<Category[]>([]);
   const [feedData, setFeedData] = useState<PublicFeedResponse | null>(null);
   const [useFallback, setUseFallback] = useState(false);
+  const [visibleSections, setVisibleSections] = useState(2); // Inicialmente mostrar 2 seções
 
   // Usar cache imediatamente se disponível
   const cachedData = useMemo(() => {
@@ -82,7 +84,7 @@ export default function Home() {
             (product: ApiProduct) => {
               const categoryName =
                 product.categories && product.categories.length > 0
-                  ? product.categories[0].category.name
+                  ? product.categories[0].name
                   : "Sem categoria";
 
               return {
@@ -92,8 +94,7 @@ export default function Home() {
                 discount: product.discount || undefined,
                 image_url: product.image_url || null,
                 categoryName,
-                categoryNames:
-                  product.categories?.map((cat) => cat.category.name) || [],
+                categoryNames: product.categories?.map((cat) => cat.name) || [],
               };
             }
           );
@@ -203,16 +204,36 @@ export default function Home() {
 
       {feedData && !useFallback ? (
         <div className="space-y-8 pb-12 animate-fadeIn">
-          {feedData.sections &&
-            feedData.sections.map((section, index) => (
-              <div
-                key={section.id}
-                className="animate-slideUp"
-                style={{ animationDelay: `${index * 100}ms` }}
-              >
-                <FeedSection section={section} />
-              </div>
-            ))}
+          <InfiniteScroll
+            dataLength={visibleSections}
+            next={() =>
+              setVisibleSections((prev) =>
+                Math.min(prev + 1, feedData.sections?.length || 0)
+              )
+            }
+            hasMore={visibleSections < (feedData.sections?.length || 0)}
+            loader={
+              <h4 className="text-center py-4">Carregando mais seções...</h4>
+            }
+            endMessage={
+              <p className="text-center py-4 text-gray-500">
+                Você viu tudo! 🎉
+              </p>
+            }
+          >
+            {feedData.sections &&
+              feedData.sections
+                .slice(0, visibleSections)
+                .map((section, index) => (
+                  <div
+                    key={section.id}
+                    className="animate-slideUp"
+                    style={{ animationDelay: `${index * 100}ms` }}
+                  >
+                    <FeedSection section={section} />
+                  </div>
+                ))}
+          </InfiniteScroll>
         </div>
       ) : (
         <section className="py-12">

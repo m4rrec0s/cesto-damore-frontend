@@ -148,7 +148,7 @@ export function ProductsTab() {
         price: product.price,
         discount: product.discount || 0,
         type_id: product.type_id,
-        categories: product.categories.map((c) => c.category_id),
+        categories: product.categories.map((c) => c.id),
       });
       setImagePreview(product.image_url || "");
 
@@ -639,15 +639,21 @@ export function ProductsTab() {
                         </TableCell>
                         <TableCell>
                           <div className="flex flex-wrap gap-1">
-                            {product.categories.map((cat) => (
-                              <Badge
-                                key={cat.category.id}
-                                variant="secondary"
-                                className="text-xs"
-                              >
-                                {cat.category.name}
-                              </Badge>
-                            ))}
+                            {product.categories.length > 0 ? (
+                              product.categories.map((cat) => (
+                                <Badge
+                                  key={cat.id}
+                                  variant="secondary"
+                                  className="text-xs"
+                                >
+                                  {cat.name}
+                                </Badge>
+                              ))
+                            ) : (
+                              <span className="text-gray-500 text-xs">
+                                Sem categoria
+                              </span>
+                            )}
                           </div>
                         </TableCell>
                         <TableCell className="text-center">

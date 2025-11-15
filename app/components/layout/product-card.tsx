@@ -25,7 +25,7 @@ export function ProductCard({ props }: ProductCardProps) {
   return (
     <Link
       href={`/produto/${props.id}`}
-      className="group flex flex-col relative w-full h-full max-w-[300px] bg-white rounded-2xl shadow-lg hover:shadow-2xl overflow-hidden transition-all duration-300 hover:-translate-y-2 border-2 border-transparent hover:border-rose-300"
+      className="group flex flex-col relative w-full h-full min-w-[200px] max-w-[300px] bg-white rounded-2xl shadow-lg hover:shadow-2xl overflow-hidden transition-all duration-300 hover:-translate-y-2 border-2 border-transparent hover:border-rose-300"
     >
       <div className="relative aspect-square overflow-hidden bg-gradient-to-br from-rose-50 via-pink-50 to-orange-50">
         <Image
@@ -75,7 +75,7 @@ export function ProductCard({ props }: ProductCardProps) {
               })}
             </span>
           ) : null}
-          <div className="flex items-baseline gap-2">
+          <div className="flex flex-col items-start gap-2">
             <span className="text-2xl font-black text-rose-600 group-hover:text-rose-700 transition-colors">
               {finalPrice.toLocaleString("pt-BR", {
                 style: "currency",

@@ -189,12 +189,7 @@ export interface Product {
   price: number;
   discount?: number;
   image_url?: string | null;
-  categories: Array<{
-    product_id: string;
-    category_id: string;
-    created_at: string;
-    category: Category;
-  }>;
+  categories: Category[];
   type_id: string;
   components?: string[];
   related_products?: Omit<Product, "components" | "related_products">[];

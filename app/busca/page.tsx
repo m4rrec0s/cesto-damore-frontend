@@ -314,7 +314,9 @@ function SearchPageContent() {
                         name: product.name,
                         price: product.price,
                         image_url: product.image_url || null,
-                        categories: product.categories,
+                        categories: product.categories.map((cat) => ({
+                          category: cat,
+                        })),
                         discount: product.discount,
                       }}
                     />
