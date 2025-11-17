@@ -571,6 +571,21 @@ export function useCart() {
         throw new Error("Cidade e estado de entrega são obrigatórios");
       }
 
+      // Validar método de pagamento
+      if (
+        !options?.paymentMethod ||
+        (options.paymentMethod !== "pix" && options.paymentMethod !== "card")
+      ) {
+        throw new Error(
+          "Método de pagamento é obrigatório e deve ser 'pix' ou 'card'"
+        );
+      }
+
+      // Validar telefone do destinatário
+      if (!options?.recipientPhone || options.recipientPhone.trim() === "") {
+        throw new Error("Telefone do destinatário é obrigatório");
+      }
+
       const orderItems: OrderItem[] = cart.items.map((item) => ({
         product_id: item.product_id,
         quantity: item.quantity,
@@ -599,21 +614,29 @@ export function useCart() {
           ? options.grandTotal
           : cart.total + (options?.shippingCost ?? 0);
 
-      const order = await api.createOrder({
+      const payload = {
         user_id: userId,
-        total_price: totalPrice,
-        shipping_price: options?.shippingCost,
-        payment_method: options?.paymentMethod,
-        grand_total: totalPrice,
+        payment_method: options.paymentMethod,
         items: orderItems,
         delivery_address: deliveryAddress,
         delivery_city: deliveryCity,
         delivery_state: deliveryState,
         delivery_date: deliveryDate,
-        recipient_phone: options?.recipientPhone,
+        recipient_phone: options.recipientPhone,
+        discount: 0, // Pode ser ajustado se houver desconto
+      };
+
+      // Log sucinto do payload para evitar impressão de base64/imagens
+      console.log("📦 [useCart] Payload do pedido - resumo:", {
+        user_id: payload.user_id,
+        itemsCount: payload.items?.length || 0,
+        grandTotal: totalPrice || null,
+        delivery_city: payload.delivery_city || null,
       });
 
-      console.log("✅ Pedido criado com sucesso:", order);
+      const order = await api.createOrder(payload);
+
+      console.log("✅ Pedido criado com sucesso:", order?.id);
       return order;
     },
     [cart, api]
@@ -683,17 +706,17 @@ export function useCart() {
           },
         };
 
-        console.log(
-          "📤 Dados sendo enviados para o Mercado Pago:",
-          JSON.stringify(requestBody, null, 2)
-        );
+        console.log("📤 Dados enviados ao Mercado Pago (resumido):", {
+          itemsCount: items.length,
+          payerEmail: requestBody.payer?.email ? "[REDACTED]" : undefined,
+          external_reference: requestBody.external_reference,
+        });
 
         const token = process.env.NEXT_PUBLIC_MERCADOPAGO_ACCESS_TOKEN;
-        console.log(
-          "🔑 Token sendo usado:",
-          token ? `${token.substring(0, 20)}...` : "Token NÃO configurado"
-        );
-        console.log("🔑 Token completo disponível:", !!token);
+        console.log("🔑 Token sendo usado (resumido):", {
+          tokenConfigured: !!token,
+          tokenLength: token?.length || 0,
+        });
 
         const response = await fetch(
           "https://api.mercadopago.com/checkout/preferences",
@@ -707,11 +730,7 @@ export function useCart() {
           }
         );
 
-        console.log("📥 Status da resposta:", response.status);
-        console.log(
-          "📥 Headers da resposta:",
-          Object.fromEntries(response.headers.entries())
-        );
+        console.log("📥 Status da resposta (MP):", response.status);
 
         if (!response.ok) {
           const errorText = await response.text();
@@ -722,11 +741,8 @@ export function useCart() {
         }
 
         const preference = await response.json();
-        console.log("🎯 Preferência completa recebida:", preference);
-        console.log("🎯 init_point disponível:", preference.init_point);
         console.log(
-          "🎯 sandbox_init_point disponível:",
-          preference.sandbox_init_point
+          "🎯 Preferência criada (Mercado Pago) - init_point sanitized available"
         );
         return preference;
       } catch (error) {

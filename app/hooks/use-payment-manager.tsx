@@ -40,7 +40,10 @@ export function usePaymentManager() {
       setPendingOrder(order);
       return order;
     } catch (error) {
-      console.error("Erro ao verificar pedido pendente:", error);
+      console.error(
+        "Erro ao verificar pedido pendente:",
+        error instanceof Error ? error.message : String(error)
+      );
       setPendingOrder(null);
       return null;
     } finally {

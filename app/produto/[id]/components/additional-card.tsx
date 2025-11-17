@@ -28,27 +28,7 @@ const AdditionalCard = ({
 }: AdditionalCardProps) => {
   const { cart } = useCartContext();
   const [isAddingToCart, setIsAddingToCart] = useState(false);
-
-  console.log(`🎴 [AdditionalCard ${additional.name}] Props:`, {
-    additionalId: additional.id,
-    hasCustomizations,
-    hasProductRequiredCustomizations,
-    hasCompletedProductCustomizations,
-  });
-
-  console.log(`🔍 [AdditionalCard ${additional.name}] Dados do adicional:`, {
-    allows_customization: additional.allows_customization,
-    customizations: additional.customizations,
-    customizationsLength: additional.customizations?.length,
-    hasRequiredCustomizations: additional.customizations?.some(
-      (c) => c.isRequired
-    ),
-  });
-
-  // Verificar se o adicional permite customização
   const allowsCustomization = additional.allows_customization || false;
-
-  // Verificar se tem customizações obrigatórias
   const hasRequiredCustomizations =
     allowsCustomization && additional.customizations?.some((c) => c.isRequired);
 
@@ -60,36 +40,22 @@ const AdditionalCard = ({
     ) || false;
 
   const handleAddToCart = async () => {
-    console.log("🔍 [AdditionalCard] handleAddToCart chamado:", {
-      additionalId: additional.id,
-      additionalName: additional.name,
-      hasRequiredCustomizations,
-      hasCustomizations,
-      hasProductRequiredCustomizations,
-      hasCompletedProductCustomizations,
-    });
-
     if (!productId || !additional.id) {
       toast.error("Erro: Informações do produto ou adicional não encontradas");
       return;
     }
 
-    // Verificar se completou customizações do produto primeiro
     if (
       hasProductRequiredCustomizations &&
       !hasCompletedProductCustomizations
     ) {
-      console.log("⚠️ [AdditionalCard] Bloqueado: produto não customizado");
       toast.warning(
         "Complete as personalizações obrigatórias do produto antes de adicionar adicionais"
       );
       return;
     }
 
-    // Se o adicional tem customizações obrigatórias e não foram completadas
     if (hasRequiredCustomizations && !hasCustomizations) {
-      console.log("🎨 [AdditionalCard] Abrindo modal de customização");
-      // Abrir modal de customização
       if (onCustomizeClick) {
         onCustomizeClick(additional.id);
       } else {
@@ -98,34 +64,28 @@ const AdditionalCard = ({
       return;
     }
 
-    // Se chegou aqui, pode adicionar ao carrinho
     if (isInCart) {
-      console.log("ℹ️ [AdditionalCard] Adicional já está no carrinho");
       toast.info("Este adicional já está no carrinho!");
       return;
     }
 
-    console.log("✅ [AdditionalCard] Adicionando ao carrinho via onAddToCart");
     setIsAddingToCart(true);
     try {
-      // Se tem customizações, chamar callback de adicionar ao carrinho
       if (onAddToCart) {
         await onAddToCart(additional.id);
       } else {
-        console.error("❌ [AdditionalCard] onAddToCart não está definido!");
         toast.error("Função de adicionar ao carrinho não disponível");
       }
     } catch (error) {
-      console.error("❌ [AdditionalCard] Erro ao adicionar:", error);
       toast.error("Erro ao adicionar adicional ao carrinho");
+      console.error(error);
     } finally {
       setIsAddingToCart(false);
     }
   };
 
   return (
-    <div className="group flex flex-col max-w-[200px] justify-between relative bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-xs transition-all duration-300 overflow-hidden">
-      {/* Badges */}
+    <div className="group flex flex-col min-w-[150px] max-w-[300px] justify-between relative bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-xs transition-all duration-300 overflow-hidden">
       <div className="absolute top-2 right-2 z-10 flex flex-col gap-1 items-end">
         {allowsCustomization && hasCustomizations && (
           <Badge className="bg-purple-600 text-white hover:bg-purple-700">
@@ -154,9 +114,7 @@ const AdditionalCard = ({
         </span>
 
         <div className="mt-4 w-full space-y-2">
-          {/* Botão de adicionar/personalizar */}
           {allowsCustomization && hasRequiredCustomizations ? (
-            // Se tem customizações obrigatórias, sempre mostrar como "Personalizar"
             <Button
               onClick={handleAddToCart}
               disabled={

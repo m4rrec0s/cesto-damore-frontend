@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useCallback, useEffect } from "react";
+import React, { useState, useCallback, useEffect, useRef } from "react";
 import {
   Dialog,
   DialogContent,
@@ -121,6 +121,8 @@ export function ItemCustomizationModal({
       { id: string; name: string; image_url: string; slots?: SlotDef[] }
     >
   >({});
+  // Local cache for fetched full layouts to avoid repeated network calls
+  const layoutCacheRef = useRef<Record<string, LayoutBase | undefined>>({});
   const [loadingLayouts, setLoadingLayouts] = useState(false);
 
   const [cropDialogOpen, setCropDialogOpen] = useState(false);
@@ -150,17 +152,39 @@ export function ItemCustomizationModal({
         { id: string; name: string; image_url: string; slots?: SlotDef[] }
       > = {};
 
-      for (const layout of layouts) {
+      // Use Promise.all to fetch in parallel, but skip if cached
+      const toFetch = layouts.filter((l) => !layoutCacheRef.current[l.id]);
+      const fetchPromises = toFetch.map(async (l) => {
         try {
-          const fullLayout = await getLayoutById(layout.id);
-          fetchedLayouts[layout.id] = {
+          const fullLayout = await getLayoutById(l.id);
+          layoutCacheRef.current[l.id] = fullLayout;
+          return {
             id: fullLayout.id,
             name: fullLayout.name,
             image_url: fullLayout.image_url,
             slots: fullLayout.slots,
           };
         } catch (error) {
-          console.error(`❌ Erro ao carregar layout ${layout.id}:`, error);
+          console.error(`❌ Erro ao carregar layout ${l.id}:`, error);
+          return null;
+        }
+      });
+
+      const fetched = await Promise.all(fetchPromises);
+      for (const item of fetched) {
+        if (item) fetchedLayouts[item.id] = item;
+      }
+
+      // Reuse cached layouts for those already fetched earlier
+      for (const layout of layouts) {
+        if (layoutCacheRef.current[layout.id] && !fetchedLayouts[layout.id]) {
+          const fullLayout = layoutCacheRef.current[layout.id]!;
+          fetchedLayouts[layout.id] = {
+            id: fullLayout.id,
+            name: fullLayout.name,
+            image_url: fullLayout.image_url,
+            slots: fullLayout.slots,
+          };
         }
       }
 
@@ -195,18 +219,28 @@ export function ItemCustomizationModal({
       }));
 
       try {
-        const token =
-          typeof window !== "undefined"
-            ? localStorage.getItem("appToken") || localStorage.getItem("token")
-            : null;
+        // Check in-memory cache first
+        let layoutData: LayoutBase | undefined = layoutCacheRef.current[
+          layoutId
+        ] as LayoutBase | undefined;
 
-        const response = await fetch(`${API_URL}/layouts/${layoutId}`, {
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
-        });
+        if (!layoutData) {
+          const token =
+            typeof window !== "undefined"
+              ? localStorage.getItem("appToken") ||
+                localStorage.getItem("token")
+              : null;
 
-        if (!response.ok) throw new Error("Erro ao buscar layout");
+          const response = await fetch(`${API_URL}/layouts/${layoutId}`, {
+            headers: token ? { Authorization: `Bearer ${token}` } : {},
+          });
 
-        const layoutData: LayoutBase = await response.json();
+          if (!response.ok) throw new Error("Erro ao buscar layout");
+
+          layoutData = (await response.json()) as LayoutBase;
+          layoutCacheRef.current[layoutId] = layoutData;
+        }
+
         setFullLayoutBase(layoutData);
 
         const modelUrl =
@@ -225,7 +259,6 @@ export function ItemCustomizationModal({
           },
         }));
 
-        // Mudar para etapa de edição
         setStep("editing");
       } catch (err) {
         console.error("Erro ao carregar layout:", err);
@@ -238,7 +271,6 @@ export function ItemCustomizationModal({
     [customizations]
   );
 
-  // Callback para quando a personalização é completada
   const handleLayoutComplete = useCallback(
     (images: ImageData[], previewUrl: string) => {
       const baseLayoutCustom = customizations.find(
@@ -246,7 +278,6 @@ export function ItemCustomizationModal({
       );
       if (!baseLayoutCustom) return;
 
-      // Preservar dados existentes (incluindo model_url e layout_name)
       const existingData =
         (customizationData[baseLayoutCustom.id] as Record<string, unknown>) ||
         {};
@@ -254,16 +285,11 @@ export function ItemCustomizationModal({
       const updatedData = {
         ...customizationData,
         [baseLayoutCustom.id]: {
-          ...existingData, // IMPORTANTE: preservar model_url e layout_name
+          ...existingData,
           images,
           previewUrl,
         },
       };
-
-      console.log("💾 [handleLayoutComplete] Dados salvos:", {
-        existingData,
-        newData: updatedData[baseLayoutCustom.id],
-      });
 
       setCustomizationData(updatedData);
 
@@ -345,10 +371,6 @@ export function ItemCustomizationModal({
 
   const handleFileUpload = useCallback(
     (customizationId: string, files: FileList | null) => {
-      console.log("🔵 [Modal] handleFileUpload chamado", {
-        customizationId,
-        files,
-      });
       if (!files || files.length === 0) return;
 
       const customization = customizations.find(
@@ -356,24 +378,16 @@ export function ItemCustomizationModal({
       );
       if (!customization) return;
 
-      const file = files[0]; // Pegar apenas o primeiro arquivo por vez
-      console.log("🔵 [Modal] Arquivo selecionado:", file);
+      const file = files[0];
 
-      // Determinar o aspect ratio baseado no tipo de customização
       let aspect: number | undefined;
 
       if (customization.type === "IMAGES") {
-        // IMAGES sempre quadrado (1:1)
         aspect = 1;
-        console.log("🔵 [Modal] Tipo IMAGES - aspect 1:1");
       } else if (customization.type === "BASE_LAYOUT") {
-        // BASE_LAYOUT usa proporção dos slots se houver
         aspect = undefined;
-        console.log("🔵 [Modal] Tipo BASE_LAYOUT - aspect undefined");
       }
 
-      // Abrir dialog de crop
-      console.log("🔵 [Modal] Abrindo dialog de crop...", { file, aspect });
       setFileToCrop(file);
       setCropAspect(aspect);
       setCurrentCustomizationId(customizationId);
@@ -384,7 +398,6 @@ export function ItemCustomizationModal({
 
   const handleCropComplete = useCallback(
     (croppedImageUrl: string) => {
-      console.log("🔵 [Modal] handleCropComplete chamado");
       if (!currentCustomizationId) return;
 
       const customization = customizations.find(
@@ -392,7 +405,6 @@ export function ItemCustomizationModal({
       );
       if (!customization) return;
 
-      // Converter data URL para File
       fetch(croppedImageUrl)
         .then((res) => res.blob())
         .then(async (blob) => {
@@ -410,7 +422,6 @@ export function ItemCustomizationModal({
             [currentCustomizationId]: totalFiles,
           }));
 
-          // Converter cada arquivo para base64
           const filesDataPromises = totalFiles.map(async (f, index) => {
             const reader = new FileReader();
             const base64Promise = new Promise<string>((resolve) => {
@@ -452,7 +463,6 @@ export function ItemCustomizationModal({
 
       setUploadingFiles((prev) => ({ ...prev, [customizationId]: newFiles }));
 
-      // Converter cada arquivo para base64
       const filesDataPromises = newFiles.map(async (file, idx) => {
         const reader = new FileReader();
         const base64Promise = new Promise<string>((resolve) => {
@@ -500,7 +510,6 @@ export function ItemCustomizationModal({
       customizations.forEach((custom) => {
         const data = customizationData[custom.id];
 
-        // Validar campos obrigatórios
         if (custom.isRequired && !data) {
           errors.push(`${custom.name} é obrigatório`);
           return;
@@ -545,7 +554,6 @@ export function ItemCustomizationModal({
             });
           }
         } else if (custom.type === "IMAGES" && data) {
-          // Para IMAGES, data é um array de { file, preview, position, base64, mime_type, size }
           const filesData = data as Array<{
             file: File;
             preview: string;
@@ -558,10 +566,8 @@ export function ItemCustomizationModal({
           const maxImages =
             custom.customization_data.base_layout?.max_images || 10;
 
-          // Se for obrigatório E tiver max_images definido, deve ter exatamente aquela quantidade
           const requiredImages = custom.isRequired ? maxImages : 0;
 
-          // Validar quantidade de imagens
           if (custom.isRequired && filesData.length < requiredImages) {
             errors.push(
               `${custom.name} requer exatamente ${requiredImages} imagem(ns). Você adicionou apenas ${filesData.length}.`
@@ -611,7 +617,6 @@ export function ItemCustomizationModal({
         }
       });
 
-      // Se houver erros de validação, mostrar e não salvar
       if (errors.length > 0) {
         setLoading(false);
         toast.error(errors.join("\n"));
@@ -629,7 +634,6 @@ export function ItemCustomizationModal({
     }
   }, [customizations, customizationData, onComplete, onClose]);
 
-  // Renderizar seleção de layout
   const renderBaseLayoutSelection = (customization: Customization) => {
     const layouts = customization.customization_data.layouts || [];
 
@@ -694,11 +698,6 @@ export function ItemCustomizationModal({
               };
 
               const imageUrl = getProxiedImageUrl(fullLayout.image_url || "");
-
-              console.log(`🖼️ [Layout ${fullLayout.name}]:`, {
-                fullLayout,
-              });
-
               const hasSlots = fullLayout.slots && fullLayout.slots.length > 0;
 
               return (

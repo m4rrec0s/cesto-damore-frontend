@@ -1,6 +1,5 @@
 "use client";
-
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useAuth } from "@/app/hooks/use-auth";
 import { useCartContext } from "@/app/hooks/cart-context";
 import { useApi } from "@/app/hooks/use-api";
@@ -54,6 +53,7 @@ import {
   type CreditCardData,
 } from "@/app/components/credit-card-form";
 import { usePaymentPolling } from "@/app/hooks/use-payment-polling";
+import { useWebhookNotification } from "@/app/hooks/use-webhook-notification";
 
 const ACCEPTED_CITIES = [
   "Campina Grande",
@@ -179,6 +179,7 @@ interface ProductCardProps {
     additionalColors?: Record<string, string>
   ) => void;
   onEditCustomizations?: (item: CartItem) => void;
+  isProcessing?: boolean;
 }
 
 const formatCustomizationValue = (custom: CartCustomization) => {
@@ -277,6 +278,7 @@ const ProductCard = ({
   updateQuantity,
   removeFromCart,
   onEditCustomizations,
+  isProcessing,
 }: ProductCardProps) => {
   const layoutCustomization = item.customizations?.find(
     (c) => c.customization_type === "BASE_LAYOUT"
@@ -348,6 +350,7 @@ const ProductCard = ({
                     variant="ghost"
                     size="sm"
                     onClick={() => onEditCustomizations(item)}
+                    disabled={isProcessing}
                     className="h-6 px-2 text-xs text-purple-600 hover:text-purple-700 hover:bg-purple-50"
                   >
                     <Edit2 className="h-3 w-3 mr-1" />
@@ -378,7 +381,6 @@ const ProductCard = ({
             </div>
           )}
         </div>
-
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2 rounded-lg bg-gray-50 border border-gray-200">
             <Button
@@ -392,7 +394,7 @@ const ProductCard = ({
                   item.customizations
                 )
               }
-              disabled={item.quantity <= 1}
+              disabled={isProcessing || item.quantity <= 1}
               className="h-9 w-9 hover:bg-gray-100 text-gray-700"
             >
               <Minus className="h-4 w-4" />
@@ -411,86 +413,86 @@ const ProductCard = ({
                   item.customizations
                 )
               }
+              disabled={isProcessing}
               className="h-9 w-9 hover:bg-gray-100 text-gray-700"
             >
               <Plus className="h-4 w-4" />
             </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() =>
+                removeFromCart(
+                  item.product_id,
+                  item.additional_ids,
+                  item.customizations
+                )
+              }
+              disabled={isProcessing}
+              className="h-9 w-9 text-red-500 hover:text-red-600 hover:bg-red-50"
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
           </div>
-
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() =>
-              removeFromCart(
-                item.product_id,
-                item.additional_ids,
-                item.customizations
-              )
-            }
-            className="h-9 w-9 text-red-500 hover:text-red-600 hover:bg-red-50"
-          >
-            <Trash2 className="h-4 w-4" />
-          </Button>
+          <div className="text-right flex flex-col justify-between">
+            {item.discount && item.discount > 0 ? (
+              <div className="flex flex-col items-end gap-1">
+                <span className="text-xs text-gray-400 line-through">
+                  R${" "}
+                  {(
+                    (item.price ?? 0) * item.quantity +
+                    (item.additionals?.reduce(
+                      (sum: number, add) =>
+                        sum +
+                        getAdditionalFinalPrice(
+                          add.id,
+                          add.price,
+                          item.customizations
+                        ) *
+                          item.quantity,
+                      0
+                    ) || 0)
+                  ).toFixed(2)}
+                </span>
+                <span className="font-bold text-gray-900 text-lg">
+                  R${" "}
+                  {(
+                    (item.effectivePrice ?? item.price) * item.quantity +
+                    (item.additionals?.reduce(
+                      (sum: number, add) =>
+                        sum +
+                        getAdditionalFinalPrice(
+                          add.id,
+                          add.price,
+                          item.customizations
+                        ) *
+                          item.quantity,
+                      0
+                    ) || 0)
+                  ).toFixed(2)}
+                </span>
+              </div>
+            ) : (
+              <span className="font-bold text-gray-900 text-lg">
+                R${" "}
+                {(
+                  (item.effectivePrice ?? item.price) * item.quantity +
+                  (item.additionals?.reduce(
+                    (sum: number, add) =>
+                      sum +
+                      getAdditionalFinalPrice(
+                        add.id,
+                        add.price,
+                        item.customizations
+                      ) *
+                        item.quantity,
+                    0
+                  ) || 0)
+                ).toFixed(2)}
+              </span>
+            )}
+          </div>
         </div>
-      </div>
-      <div className="text-right flex flex-col justify-between">
-        {item.discount && item.discount > 0 ? (
-          <div className="flex flex-col items-end gap-1">
-            <span className="text-xs text-gray-400 line-through">
-              R${" "}
-              {(
-                item.price * item.quantity +
-                (item.customization_total || 0) * item.quantity +
-                (item.additionals?.reduce(
-                  (sum: number, add) =>
-                    sum +
-                    getAdditionalFinalPrice(
-                      add.id,
-                      add.price,
-                      item.customizations
-                    ) *
-                      item.quantity,
-                  0
-                ) || 0)
-              ).toFixed(2)}
-            </span>
-            <span className="font-bold text-gray-900 text-lg">
-              R${" "}
-              {(
-                (item.effectivePrice ?? item.price) * item.quantity +
-                (item.additionals?.reduce(
-                  (sum: number, add) =>
-                    sum +
-                    getAdditionalFinalPrice(
-                      add.id,
-                      add.price,
-                      item.customizations
-                    ) *
-                      item.quantity,
-                  0
-                ) || 0)
-              ).toFixed(2)}
-            </span>
-          </div>
-        ) : (
-          <span className="font-bold text-gray-900 text-lg">
-            R${" "}
-            {(
-              (item.effectivePrice ?? item.price) * item.quantity +
-              (item.additionals?.reduce(
-                (sum: number, add) =>
-                  sum +
-                  getAdditionalFinalPrice(
-                    add.id,
-                    add.price,
-                    item.customizations
-                  ) *
-                    item.quantity,
-                0
-              ) || 0)
-            ).toFixed(2)}
-          </span>
-        )}
       </div>
     </div>
   );
@@ -570,65 +572,90 @@ export default function CarrinhoPage() {
   const [paymentStatus, setPaymentStatus] = useState<PaymentStatusType>("");
   const [paymentError, setPaymentError] = useState<string | null>(null);
   const [currentOrderId, setCurrentOrderId] = useState<string | null>(null);
+  // Verificando pedidos pendentes quando o usuário entra na página
+  const [checkingPendingOrder, setCheckingPendingOrder] = useState(true);
   const [userDocument, setUserDocument] = useState<string>(""); // CPF/CNPJ do usuário
 
+  // Ref para prevenir múltiplas aprovações de pagamento
+  const paymentApprovedRef = useRef(false);
+  const disconnectSSERef = useRef<(() => void) | null>(null);
+  // Ref para controlar se o polling já foi iniciado para este pedido
+  const pollingStartedRef = useRef(false);
+  // Contador de desconexões SSE para só iniciar polling após falhas persistentes
+  const sseDisconnectCountRef = useRef(0);
+
+  // Reset polling ref quando orderId muda
+  useEffect(() => {
+    pollingStartedRef.current = false;
+    sseDisconnectCountRef.current = 0;
+  }, [currentOrderId]);
+
   // Hook de polling de pagamento
-  const { status: pollingStatus, attempts: pollingAttempts } =
-    usePaymentPolling({
-      orderId: currentOrderId,
-      enabled: Boolean(currentOrderId && paymentStatus === "pending"),
-      maxAttempts: 60, // 5 minutos
-      intervalMs: 3000, // ⚡ 3 segundos (mais agressivo)
-      onSuccess: (order) => {
-        console.log("✅ Pagamento confirmado pelo webhook!", order);
-        setPaymentStatus("success");
-        // Limpar localStorage
-        localStorage.removeItem("pendingOrderId");
-        // Limpar pedido pendente do hook
-        clearPendingOrder();
-        // Limpar carrinho
-        clearCart();
-        toast.success("Pagamento confirmado! Pedido realizado com sucesso.");
-        // Aguardar 2 segundos antes de redirecionar
-        setTimeout(() => {
+  const {
+    status: pollingStatus,
+    attempts: pollingAttempts,
+    startPolling,
+  } = usePaymentPolling({
+    orderId: currentOrderId,
+    enabled: Boolean(currentOrderId && paymentStatus === "pending"),
+    maxAttempts: 60, // 5 minutos
+    intervalMs: 3000, // ⚡ 3 segundos (mais agressivo)
+    onSuccess: (order) => {
+      if (paymentApprovedRef.current) {
+        console.log("⚠️ Pagamento já aprovado, ignorando polling");
+        return;
+      }
+      paymentApprovedRef.current = true;
+      console.log("✅ Pagamento confirmado pelo webhook! orderId=", order.id);
+      setPaymentStatus("success");
+      // Limpar localStorage
+      localStorage.removeItem("pendingOrderId");
+      // Limpar pedido pendente do hook
+      clearPendingOrder();
+      // Limpar carrinho
+      clearCart();
+      toast.success("Pagamento confirmado! Pedido realizado com sucesso.");
+      // Aguardar 2 segundos antes de redirecionar
+      setTimeout(() => {
+        router.push("/pedidos");
+      }, 2000);
+    },
+    onFailure: (order) => {
+      console.log("❌ Pagamento rejeitado/cancelado orderId=", order.id);
+      setPaymentStatus("failure");
+      setPaymentError(
+        "Pagamento recusado. Por favor, verifique os dados e tente novamente."
+      );
+      toast.error("Pagamento recusado. Verifique os dados do pagamento.");
+    },
+    onTimeout: () => {
+      console.log("⏱️ Timeout ao aguardar confirmação");
+      setPaymentError(
+        "O tempo de espera expirou. Verifique o status do seu pedido na página 'Meus Pedidos'."
+      );
+      toast.warning(
+        "Ainda não recebemos a confirmação do pagamento. Você pode acompanhar o status na página de pedidos.",
+        { duration: 8000 }
+      );
+      // Oferecer opção de verificar pedidos
+      setTimeout(() => {
+        const shouldRedirect = confirm(
+          "Deseja verificar o status do seu pedido agora?"
+        );
+        if (shouldRedirect) {
           router.push("/pedidos");
-        }, 2000);
-      },
-      onFailure: (order) => {
-        console.log("❌ Pagamento rejeitado/cancelado", order);
-        setPaymentStatus("failure");
-        setPaymentError(
-          "Pagamento recusado. Por favor, verifique os dados e tente novamente."
-        );
-        toast.error("Pagamento recusado. Verifique os dados do pagamento.");
-      },
-      onTimeout: () => {
-        console.log("⏱️ Timeout ao aguardar confirmação");
-        setPaymentError(
-          "O tempo de espera expirou. Verifique o status do seu pedido na página 'Meus Pedidos'."
-        );
-        toast.warning(
-          "Ainda não recebemos a confirmação do pagamento. Você pode acompanhar o status na página de pedidos.",
-          { duration: 8000 }
-        );
-        // Oferecer opção de verificar pedidos
-        setTimeout(() => {
-          const shouldRedirect = confirm(
-            "Deseja verificar o status do seu pedido agora?"
-          );
-          if (shouldRedirect) {
-            router.push("/pedidos");
-          }
-        }, 2000);
-      },
-      onPending: (order) => {
-        console.log("⏳ Pagamento em processamento...", {
-          orderId: order.id,
-          paymentStatus: order.payment?.status,
-          attempts: pollingAttempts,
-        });
-      },
-    });
+        }
+      }, 2000);
+    },
+    onPending: (order) => {
+      console.log(
+        "⏳ Pagamento em processamento... orderId=",
+        order.id,
+        "attempts=",
+        pollingAttempts
+      );
+    },
+  });
 
   const mapPaymentStatus = useCallback(
     (status?: string | null): PaymentStatusType => {
@@ -658,6 +685,113 @@ export default function CarrinhoPage() {
   );
 
   const router = useRouter();
+
+  // Memorizar callbacks do SSE para evitar recriações e reconexões do EventSource
+  const sseOnConnected = useCallback(() => {
+    console.log(
+      "✅ Conectado ao webhook SSE para receber atualizações em tempo real"
+    );
+    // Reset contador de desconexões quando conectar com sucesso
+    sseDisconnectCountRef.current = 0;
+    // Não parar polling aqui, deixar como fallback
+  }, []);
+
+  const sseOnDisconnected = useCallback(() => {
+    sseDisconnectCountRef.current += 1;
+    console.log(
+      `🔌 Desconectado do webhook SSE (${sseDisconnectCountRef.current}/3) - ${
+        sseDisconnectCountRef.current >= 3
+          ? "iniciando fallback via polling"
+          : "tentando reconectar"
+      }`
+    );
+    if (sseDisconnectCountRef.current >= 3 && !pollingStartedRef.current) {
+      pollingStartedRef.current = true;
+      startPolling();
+    }
+  }, [startPolling]);
+
+  const sseOnError = useCallback(
+    (error: unknown) => {
+      sseDisconnectCountRef.current += 1;
+      console.error(
+        `❌ Erro no webhook SSE (${sseDisconnectCountRef.current}/3):`,
+        error
+      );
+      if (sseDisconnectCountRef.current >= 3 && !pollingStartedRef.current) {
+        pollingStartedRef.current = true;
+        startPolling();
+      }
+    },
+    [startPolling]
+  );
+
+  const sseOnPaymentApproved = useCallback(
+    (data: unknown) => {
+      if (paymentApprovedRef.current) {
+        console.log("⚠️ Pagamento já aprovado, ignorando SSE");
+        return;
+      }
+      paymentApprovedRef.current = true;
+      console.log("✅ Pagamento aprovado via webhook SSE!", data);
+      setPaymentStatus("success");
+      clearCart();
+      clearPendingOrder();
+      localStorage.removeItem("pendingOrderId");
+      disconnectSSERef.current?.(); // Desconectar SSE após aprovação
+      toast.success("Pagamento confirmado! 🎉", {
+        description: "Recebemos a confirmação do seu pagamento em tempo real!",
+        duration: 5000,
+      });
+      setTimeout(() => {
+        const orderIdFromData = (data as { orderId?: string })?.orderId;
+        if (orderIdFromData) {
+          router.push(`/pedidos/${orderIdFromData}`);
+        }
+      }, 2000);
+    },
+    [clearCart, clearPendingOrder, router]
+  );
+
+  const sseOnPaymentRejected = useCallback((data: unknown) => {
+    console.error("❌ Pagamento rejeitado via webhook SSE", data);
+    setPaymentStatus("failure");
+    setPaymentError("Pagamento rejeitado pelo Mercado Pago");
+    toast.error("Pagamento rejeitado", {
+      description: "Seu pagamento não foi aprovado. Tente novamente.",
+    });
+  }, []);
+
+  const sseOnPaymentPending = useCallback((data: unknown) => {
+    console.log("⏳ Pagamento pendente via webhook SSE", data);
+  }, []);
+
+  // 🔔 Hook de notificações webhook em tempo real (SSE)
+  const sseOnPaymentUpdate = useCallback((data: unknown) => {
+    console.log("🔔 SSE Message (onPaymentUpdate):", data);
+  }, []);
+
+  const { disconnect: disconnectSSE } = useWebhookNotification({
+    orderId: currentOrderId,
+    // Habilitar SSE enquanto houver um pedido pendente (evitar loops causados por toggles de enabled)
+    enabled: Boolean(
+      currentOrderId &&
+        paymentStatus !== "success" &&
+        paymentStatus !== "failure"
+    ),
+    onPaymentUpdate: sseOnPaymentUpdate,
+    onPaymentApproved: sseOnPaymentApproved,
+    onPaymentRejected: sseOnPaymentRejected,
+    onPaymentPending: sseOnPaymentPending,
+    onError: sseOnError,
+    onConnected: sseOnConnected,
+    onDisconnected: sseOnDisconnected,
+  });
+
+  // Set the ref after the hook is called
+  useEffect(() => {
+    disconnectSSERef.current = disconnectSSE;
+  }, [disconnectSSE]);
 
   const refreshUserData = useCallback(async () => {
     if (user?.id) {
@@ -690,7 +824,6 @@ export default function CarrinhoPage() {
     }
   }, [user?.id, isLoading, hasRefreshedUser, refreshUserData]);
 
-  // Sincronizar telefone do destinatário quando "eu vou receber" for marcado
   useEffect(() => {
     if (isSelfRecipient) {
       setRecipientPhone(customerPhone);
@@ -699,32 +832,25 @@ export default function CarrinhoPage() {
 
   useEffect(() => {
     if (user) {
-      // Preencher CEP
       if (user.zip_code && !zipCode) {
-        setZipCode(user.zip_code);
+        setZipCode(user.zip_code.replace(/\D/g, ""));
       }
 
-      // Preencher cidade
       if (user.city && !city) {
         setCity(user.city);
       }
 
-      // Preencher estado
       if (user.state && !state) {
         setState(user.state);
       }
 
-      // Preencher telefone
       if (user.phone && !customerPhone) {
         setCustomerPhone(formatPhoneNumber(user.phone));
       }
 
-      // Preencher endereço se disponível
       if (user.address && !address) {
-        // Se o endereço estiver no formato completo "Rua X, 123 - Bairro, Cidade/UF - CEP: 12345678"
         const addressStr = user.address;
 
-        // Tentar extrair CEP se ainda não foi preenchido
         if (!user.zip_code && !zipCode) {
           const cepMatch = addressStr.match(/CEP:\s*(\d{5}-?\d{3}|\d{8})/);
           if (cepMatch) {
@@ -776,135 +902,56 @@ export default function CarrinhoPage() {
 
   // ✅ NOVO: Verificar se há pedido pendente e redirecionar para pagamento
   useEffect(() => {
-    if (hasPendingOrder && pendingOrder && !currentOrderId) {
-      console.log("🔔 Pedido pendente detectado:", pendingOrder.id);
+    // Ao entrar na página, garantimos que checamos pendentes e direcionamos
+    const detect = async () => {
+      setCheckingPendingOrder(true);
+      try {
+        if (hasPendingOrder && pendingOrder) {
+          console.log("🔔 Pedido pendente detectado:", pendingOrder.id);
 
-      const orderPaymentMethod = pendingOrder.payment?.payment_method;
+          // Salvar no estado e no localStorage imediatamente
+          setCurrentOrderId(pendingOrder.id);
+          localStorage.setItem("pendingOrderId", pendingOrder.id);
 
-      setCurrentOrderId(pendingOrder.id);
-      localStorage.setItem("pendingOrderId", pendingOrder.id);
+          // Definir método de pagamento se disponível
+          const orderPaymentMethod = pendingOrder.payment?.payment_method;
+          setPaymentMethod(
+            orderPaymentMethod === "pix"
+              ? "pix"
+              : orderPaymentMethod === "card"
+              ? "card"
+              : ""
+          );
 
-      if (orderPaymentMethod) {
-        setPaymentMethod(orderPaymentMethod === "pix" ? "pix" : "card");
-        setCurrentStep(3);
+          // Forçar navegação para a etapa 3 (Pagamento)
+          setCurrentStep(3);
+          // Garantir a rolagem para o topo para foco no pagamento
+          window.scrollTo({ top: 0, behavior: "smooth" });
 
-        toast.info(
-          "Você tem um pedido pendente. Complete o pagamento ou cancele para criar um novo.",
-          { duration: 5000 }
-        );
-      }
-    }
-  }, [hasPendingOrder, pendingOrder, currentOrderId]);
-
-  useEffect(() => {
-    const generatePixPayment = async () => {
-      if (
-        paymentMethod === "pix" &&
-        currentOrderId &&
-        !pixData &&
-        !isProcessing &&
-        currentStep === 3
-      ) {
-        console.log("💳 Gerando pagamento PIX automaticamente...");
-        setIsProcessing(true);
-        setPaymentError(null);
-
-        try {
-          if (!user) {
-            router.push("/login");
-            return;
-          }
-
-          const paymentResponse = await createTransparentPayment({
-            orderId: currentOrderId,
-            paymentMethodId: "pix",
-            payerEmail: user.email || "",
-            payerName: user.name || "",
-            // Usar CPF do formulário de cartão se disponível, senão usar um genérico
-            payerDocument: userDocument || "00000000000",
-            payerDocumentType: "CPF",
-          });
-
-          if (!paymentResponse?.success) {
-            throw new Error(
-              paymentResponse?.message || "Erro ao gerar pagamento PIX"
-            );
-          }
-
-          const responseData =
-            paymentResponse.data || paymentResponse.point_of_interaction;
-
-          if (!responseData?.qr_code) {
-            console.error(
-              "Resposta inesperada do pagamento PIX:",
-              paymentResponse
-            );
-            throw new Error("Resposta inválida do servidor");
-          }
-
-          const rawStatus =
-            paymentResponse.status || responseData.status || "pending";
-          const normalizedStatus = mapPaymentStatus(rawStatus) || "pending";
-
-          setPixData({
-            qr_code: responseData.qr_code,
-            qr_code_base64: responseData.qr_code_base64 || "",
-            ticket_url: responseData.ticket_url || "",
-            amount: Number(responseData.amount) || 0,
-            expires_at:
-              responseData.expires_at ||
-              responseData.expiration_date ||
-              responseData.expiration_time ||
-              new Date(Date.now() + 30 * 60 * 1000).toISOString(),
-            payment_id:
-              responseData.payment_id ||
-              paymentResponse.paymentId ||
-              currentOrderId,
-            mercado_pago_id:
-              responseData.mercado_pago_id ||
-              paymentResponse.mercadoPagoId ||
-              "",
-            status: rawStatus,
-            status_detail:
-              responseData.status_detail || paymentResponse.status_detail || "",
-            payer_info:
-              responseData.payer_info ||
-              ({
-                email: user.email || undefined,
-                first_name: user.name || undefined,
-              } as PixPaymentData["payer_info"]),
-          });
-
-          setPaymentStatus(normalizedStatus);
-
-          toast.success("QR Code PIX gerado! Escaneie para pagar.");
-        } catch (error) {
-          console.error("Erro ao gerar pagamento PIX:", error);
-          const errorMessage =
-            error instanceof Error ? error.message : "Erro desconhecido";
-          setPaymentError(errorMessage);
-          toast.error(`Erro ao gerar PIX: ${errorMessage}`);
-        } finally {
-          setIsProcessing(false);
+          toast.info(
+            "Você tem um pedido pendente. Complete o pagamento ou cancele para criar um novo.",
+            { duration: 5000 }
+          );
         }
+      } catch {
+        /* ignore */
+      } finally {
+        // Sempre interrompe a verificação após a tentativa
+        setCheckingPendingOrder(false);
       }
     };
 
-    generatePixPayment();
-  }, [
-    router,
-    paymentMethod,
-    currentOrderId,
-    pixData,
-    isProcessing,
-    currentStep,
-    createTransparentPayment,
-    user,
-    mapPaymentStatus,
-    userDocument,
-  ]);
+    detect();
+  }, [hasPendingOrder, pendingOrder]);
 
   const cartItems = Array.isArray(cart?.items) ? cart.items : [];
+  const hasImagesInCustomizations = cartItems.some((item) =>
+    Array.isArray(item.customizations)
+      ? item.customizations.some(
+          (c) => Array.isArray(c.photos) && c.photos.length > 0
+        )
+      : false
+  );
   const cartTotal = cart?.total || 0;
 
   const acceptedCities = useMemo(() => ACCEPTED_CITIES, []);
@@ -939,6 +986,121 @@ export default function CarrinhoPage() {
     [cartTotal, shippingCost]
   );
 
+  useEffect(() => {
+    const generatePixPayment = async () => {
+      if (
+        paymentMethod === "pix" &&
+        currentOrderId &&
+        !pixData &&
+        !isProcessing &&
+        currentStep === 3
+      ) {
+        console.log("💳 Gerando pagamento PIX automaticamente...");
+        setIsProcessing(true);
+        setPaymentError(null);
+
+        try {
+          if (!user) {
+            router.push("/login");
+            return;
+          }
+
+          const paymentResponse = await createTransparentPayment({
+            orderId: currentOrderId,
+            paymentMethodId: "pix",
+            payerEmail: user.email || "",
+            payerName: user.name || "",
+            payerDocument: userDocument || "00000000000",
+            payerDocumentType: "CPF",
+          });
+
+          if (!paymentResponse?.success) {
+            throw new Error(
+              paymentResponse?.message || "Erro ao gerar pagamento PIX"
+            );
+          }
+
+          const responseData =
+            paymentResponse.data || paymentResponse.point_of_interaction;
+
+          if (!responseData?.qr_code) {
+            console.error(
+              "Resposta inesperada do pagamento PIX:",
+              paymentResponse
+            );
+            throw new Error("Resposta inválida do servidor");
+          }
+
+          const rawStatus =
+            paymentResponse.status || responseData.status || "pending";
+          const normalizedStatus = mapPaymentStatus(rawStatus) || "pending";
+
+          setPixData({
+            qr_code: responseData.qr_code,
+            qr_code_base64: responseData.qr_code_base64 || "",
+            ticket_url: responseData.ticket_url || "",
+            amount:
+              Number(
+                responseData.amount ??
+                  responseData.transaction_amount ??
+                  cartTotal + (shippingCost ?? 0)
+              ) || cartTotal + (shippingCost ?? 0),
+            expires_at:
+              responseData.expires_at ||
+              responseData.expiration_date ||
+              responseData.expiration_time ||
+              new Date(Date.now() + 30 * 60 * 1000).toISOString(),
+            payment_id:
+              responseData.payment_id ||
+              paymentResponse.paymentId ||
+              currentOrderId,
+            mercado_pago_id:
+              responseData.mercado_pago_id ||
+              paymentResponse.mercadoPagoId ||
+              "",
+            status: rawStatus,
+            status_detail:
+              responseData.status_detail || paymentResponse.status_detail || "",
+            payer_info:
+              responseData.payer_info ||
+              ({
+                id: "",
+                email: user.email || "",
+                first_name: user.name || "",
+              } as PixPaymentData["payer_info"]),
+          });
+
+          setPaymentStatus(normalizedStatus);
+
+          toast.success("QR Code PIX gerado! Escaneie para pagar.");
+        } catch (error) {
+          console.error("Erro ao gerar pagamento PIX:", error);
+          const errorMessage =
+            error instanceof Error ? error.message : "Erro desconhecido";
+          setPaymentError(errorMessage);
+          toast.error(`Erro ao gerar PIX: ${errorMessage}`);
+        } finally {
+          setIsProcessing(false);
+        }
+      }
+    };
+
+    generatePixPayment();
+  }, [
+    router,
+    paymentMethod,
+    currentOrderId,
+    pixData,
+    isProcessing,
+    currentStep,
+    createTransparentPayment,
+    user,
+    mapPaymentStatus,
+    userDocument,
+    cartTotal,
+    shippingCost,
+  ]);
+
   const addressWarning = useMemo(() => {
     if (!city.trim()) return null;
     if (state.trim() && normalizedState !== "pb") {
@@ -959,8 +1121,6 @@ export default function CarrinhoPage() {
   }, [isAddressServed, paymentMethod]);
 
   const handleEditCustomizations = useCallback((item: CartItem) => {
-    console.log("🎨 Abrindo edição de customizações para:", item);
-
     toast.info(
       `Edição de personalizações: Para alterar as personalizações de "${item.product.name}", remova o item e adicione novamente ao carrinho com as novas opções.`,
       { duration: 6000 }
@@ -1001,6 +1161,19 @@ export default function CarrinhoPage() {
     );
   }
 
+  if (checkingPendingOrder) {
+    return (
+      <div className="min-h-screen bg-background  flex items-center justify-center p-4">
+        <div className="text-center">
+          <Loader2 className="mx-auto h-8 w-8 text-rose-600 animate-spin" />
+          <p className="text-sm text-gray-700 mt-3">
+            Verificando pedido pendente...
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   if (!user) {
     return (
       <div className="min-h-screen bg-background  flex items-center justify-center p-4">
@@ -1025,7 +1198,6 @@ export default function CarrinhoPage() {
       currentOrderId,
       paymentMethod,
       cartItemsCount: cartItems.length,
-      localStorageOrderId: localStorage.getItem("pendingOrderId"),
     });
 
     setIsProcessing(true);
@@ -1078,7 +1250,7 @@ export default function CarrinhoPage() {
 
       try {
         console.log("💳 Criando token via backend do Mercado Pago...");
-        console.log("📋 Dados do cartão para tokenização:", {
+        console.log("📋 Dados do cartão para tokenização (não sensíveis):", {
           cardNumberLength: cardData.cardNumber.replace(/\s/g, "").length,
           hasSecurityCode: !!cardData.securityCode,
           expirationMonth: cardData.expirationMonth,
@@ -1104,9 +1276,9 @@ export default function CarrinhoPage() {
 
         console.log("✅ Token criado via backend:", {
           hasToken: !!tokenData.id,
-          tokenLength: tokenData.id?.length,
-          firstSixDigits: tokenData.first_six_digits,
-          lastFourDigits: tokenData.last_four_digits,
+          lastFourMasked: tokenData.last_four_digits
+            ? `****${tokenData.last_four_digits}`
+            : "N/A",
         });
 
         // Extrair token
@@ -1114,9 +1286,9 @@ export default function CarrinhoPage() {
         const bin = tokenData.first_six_digits;
 
         console.log("🎟️ Token extraído:", {
-          cardTokenId,
-          bin: bin,
-          lastDigits: tokenData.last_four_digits,
+          lastFourMasked: tokenData.last_four_digits
+            ? `****${tokenData.last_four_digits}`
+            : "N/A",
         });
 
         if (!cardTokenId || !bin) {
@@ -1125,7 +1297,12 @@ export default function CarrinhoPage() {
           );
         }
 
-        console.log("✅ Token gerado com sucesso:", cardTokenId);
+        console.log("✅ Token gerado com sucesso:", {
+          tokenLength: cardTokenId ? cardTokenId.length : 0,
+          tokenPreview: cardTokenId
+            ? `${String(cardTokenId).slice(0, 4)}****`
+            : "N/A",
+        });
 
         // Detectar o payment_method_id baseado no BIN
         let detectedPaymentMethod = "master"; // default
@@ -1142,7 +1319,7 @@ export default function CarrinhoPage() {
         }
 
         console.log("🔍 Payment method detectado:", {
-          bin,
+          binMasked: bin ? `${String(bin).slice(0, 2)}****` : "N/A",
           firstDigit,
           detectedPaymentMethod,
         });
@@ -1186,7 +1363,9 @@ export default function CarrinhoPage() {
 
       console.log("📤 Enviando pagamento com os seguintes dados:");
       console.log("  - orderId:", orderId);
-      console.log("  - cardToken:", cardTokenId);
+      console.log("  - cardToken: [REDACTED]", {
+        tokenLength: cardTokenId ? cardTokenId.length : 0,
+      });
       console.log("  - paymentMethodId: credit_card");
       console.log(
         "  - payment_method_id:",
@@ -1199,10 +1378,7 @@ export default function CarrinhoPage() {
       );
       console.log("  - cardholderName:", cardData.cardholderName);
       console.log("  - identificationType:", cardData.identificationType);
-      console.log(
-        "  - identificationNumber (parcial):",
-        cardData.identificationNumber.substring(0, 3) + "***"
-      );
+      console.log("  - identificationNumber (masked):", "***");
 
       const paymentResponse = await createTransparentPayment({
         orderId: orderId,
@@ -1220,7 +1396,14 @@ export default function CarrinhoPage() {
           .paymentMethodId,
       });
 
-      console.log("📦 Resposta do pagamento:", paymentResponse);
+      console.log("📦 Resposta do pagamento:", {
+        success: paymentResponse?.success,
+        status: paymentResponse?.status,
+        paymentIdPreview: paymentResponse?.payment_id
+          ? `[REDACTED] len:${String(paymentResponse.payment_id).length}`
+          : undefined,
+        message: paymentResponse?.message,
+      });
 
       if (!paymentResponse?.success) {
         throw new Error(
@@ -1529,7 +1712,6 @@ export default function CarrinhoPage() {
       setCurrentStep(2);
       window.scrollTo({ top: 0, behavior: "smooth" });
     } else if (currentStep === 2 && canProceedToStep3) {
-      // ✅ Salvar dados do usuário antes de avançar para pagamento
       if (user?.id) {
         try {
           const fullAddress = `${address}, ${houseNumber} - ${neighborhood}, ${city}/${state} - CEP: ${zipCode}`;
@@ -1539,22 +1721,18 @@ export default function CarrinhoPage() {
             address: fullAddress,
             city,
             state,
-            phone: customerPhone.replace(/\D/g, ""), // Remove formatação
+            phone: customerPhone.replace(/\D/g, ""),
           });
 
-          console.log("✅ Dados do usuário salvos com sucesso");
           toast.success("Dados salvos com sucesso!");
         } catch (error) {
           console.error("Erro ao salvar dados do usuário:", error);
-          // Não bloqueia o avanço, apenas notifica
           toast.warning(
             "Não foi possível salvar seus dados, mas você pode continuar."
           );
         }
       }
 
-      // ✅ NOVO: Criar pedido automaticamente ao avançar para etapa 3
-      // Só cria se não houver um pedido pendente
       if (!currentOrderId && !hasPendingOrder) {
         setIsProcessing(true);
         try {
@@ -1567,7 +1745,6 @@ export default function CarrinhoPage() {
             finalDeliveryDate.setHours(hours, minutes, 0, 0);
           }
 
-          // Criar pedido com método de pagamento "pix" como padrão (será alterado depois)
           const createdOrder = await createOrder(
             user.id,
             fullAddress,
@@ -1603,12 +1780,6 @@ export default function CarrinhoPage() {
             throw new Error("Não foi possível identificar o pedido gerado.");
           }
 
-          console.log(
-            "📦 Pedido criado automaticamente - OrderId:",
-            createdOrderId
-          );
-
-          // Salvar orderId no localStorage e estado
           localStorage.setItem("pendingOrderId", createdOrderId);
           setCurrentOrderId(createdOrderId);
 
@@ -1619,7 +1790,7 @@ export default function CarrinhoPage() {
             error instanceof Error ? error.message : "Erro desconhecido";
           toast.error(`Erro ao criar pedido: ${errorMessage}`);
           setIsProcessing(false);
-          return; // Não avança para etapa 3 se houver erro
+          return;
         } finally {
           setIsProcessing(false);
         }
@@ -1638,7 +1809,26 @@ export default function CarrinhoPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 relative">
+      {isProcessing && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="w-full max-w-lg p-6 bg-white rounded-xl shadow-lg border">
+            <div className="flex items-center gap-4">
+              <Loader2 className="h-10 w-10 text-rose-600 animate-spin" />
+              <div className="flex-1">
+                <h3 className="text-lg font-semibold text-gray-900">
+                  Estamos preparando seu pedido...
+                </h3>
+                <p className="mt-1 text-sm text-gray-600">
+                  {hasImagesInCustomizations
+                    ? "Carregando suas imagens e preparando o pedido"
+                    : "Confirmando seu endereço e preparando a sacola"}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       {/* Header */}
       <header className="border-b border-gray-200 bg-white shadow-sm">
         <div className="mx-auto max-w-5xl px-4 py-5 sm:px-6 lg:px-8">
@@ -1654,7 +1844,10 @@ export default function CarrinhoPage() {
               variant="ghost"
               size="sm"
               asChild
-              className="text-rose-600 hover:text-rose-700 hover:bg-rose-50 font-semibold"
+              className={`text-rose-600 hover:text-rose-700 hover:bg-rose-50 font-semibold ${
+                isProcessing ? "pointer-events-none opacity-60" : ""
+              }`}
+              aria-disabled={isProcessing}
             >
               <Link href="/">Continuar Comprando</Link>
             </Button>
@@ -1698,6 +1891,7 @@ export default function CarrinhoPage() {
                         item={item}
                         updateQuantity={updateQuantity}
                         removeFromCart={removeFromCart}
+                        isProcessing={isProcessing}
                         onEditCustomizations={handleEditCustomizations}
                       />
                     ))}
@@ -1747,7 +1941,7 @@ export default function CarrinhoPage() {
                 <div className="flex justify-end">
                   <Button
                     onClick={handleNextStep}
-                    disabled={!canProceedToStep2}
+                    disabled={isProcessing || !canProceedToStep2}
                     className="bg-rose-600 hover:bg-rose-700 text-white px-8 py-6 rounded-xl font-bold text-base shadow-lg hover:shadow-xl transition-all"
                   >
                     Prosseguir para Entrega
@@ -1900,7 +2094,6 @@ export default function CarrinhoPage() {
                       </div>
                     </div>
 
-                    {/* Bairro */}
                     <div>
                       <label className="block text-sm font-bold text-gray-900 mb-2">
                         🏘️ Bairro
@@ -1914,7 +2107,6 @@ export default function CarrinhoPage() {
                       />
                     </div>
 
-                    {/* Cidade e Estado */}
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                       <div className="md:col-span-3">
                         <label className="block text-sm font-bold text-gray-900 mb-2">
@@ -1982,6 +2174,7 @@ export default function CarrinhoPage() {
                               <Button
                                 variant="outline"
                                 className="w-full justify-start text-left border-2 border-gray-200 hover:border-rose-300 rounded-xl py-6"
+                                disabled={isProcessing}
                               >
                                 <CalendarIcon className="mr-2 h-4 w-4" />
                                 {selectedDate
@@ -2108,13 +2301,14 @@ export default function CarrinhoPage() {
                     onClick={handlePreviousStep}
                     variant="outline"
                     className="px-6 py-6 rounded-xl font-bold border-2"
+                    disabled={isProcessing}
                   >
                     <ArrowLeft className="mr-2 h-5 w-5" />
                     Voltar
                   </Button>
                   <Button
                     onClick={handleNextStep}
-                    disabled={!canProceedToStep3}
+                    disabled={isProcessing || !canProceedToStep3}
                     className="bg-rose-600 hover:bg-rose-700 text-white px-8 py-6 rounded-xl font-bold shadow-lg hover:shadow-xl transition-all"
                   >
                     Prosseguir para Pagamento
@@ -2153,10 +2347,11 @@ export default function CarrinhoPage() {
                     Forma de Pagamento
                   </h2>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-2 sm:grid-cols-2 gap-3">
                     <Button
                       type="button"
                       variant={paymentMethod === "pix" ? "default" : "outline"}
+                      aria-pressed={paymentMethod === "pix"}
                       className={`py-8 text-base font-bold transition-all rounded-xl ${
                         paymentMethod === "pix"
                           ? "bg-rose-600 text-white hover:bg-rose-700 shadow-md border-0"
@@ -2183,6 +2378,7 @@ export default function CarrinhoPage() {
                     <Button
                       type="button"
                       variant={paymentMethod === "card" ? "default" : "outline"}
+                      aria-pressed={paymentMethod === "card"}
                       className={`py-8 text-base font-bold transition-all rounded-xl ${
                         paymentMethod === "card"
                           ? "bg-rose-600 text-white hover:bg-rose-700 shadow-md border-0"
@@ -2237,6 +2433,9 @@ export default function CarrinhoPage() {
                               <Button
                                 variant="outline"
                                 size="sm"
+                                disabled={
+                                  isProcessing || pollingStatus === "polling"
+                                }
                                 onClick={async () => {
                                   if (!currentOrderId) {
                                     toast.error("ID do pedido não encontrado");
@@ -2357,6 +2556,7 @@ export default function CarrinhoPage() {
                               size="sm"
                               onClick={() => router.push("/pedidos")}
                               className="border-orange-300 hover:bg-orange-100"
+                              disabled={isProcessing}
                             >
                               Verificar Meus Pedidos
                             </Button>
@@ -2375,7 +2575,7 @@ export default function CarrinhoPage() {
                     )}
 
                     {/* Container relativo para overlay */}
-                    <div className="relative">
+                    <div className="relative flex flex-col items-center justify-center max-w-md mx-auto">
                       <QRCodePIX
                         pixData={{
                           ...pixData,
@@ -2414,6 +2614,52 @@ export default function CarrinhoPage() {
                           }}
                         />
                       )}
+                      {/* Ações rápidas: copiar link e abrir em nova aba (melhor UX mobile) */}
+                      <div className="mt-4 flex items-center justify-center gap-3 flex-wrap">
+                        <button
+                          className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-sm shadow-sm"
+                          onClick={async () => {
+                            try {
+                              await navigator.clipboard.writeText(
+                                pixData.ticket_url || pixData.qr_code || ""
+                              );
+                              toast.success("Link de pagamento copiado");
+                            } catch {
+                              toast.error("Não foi possível copiar o link");
+                            }
+                          }}
+                        >
+                          Copiar Link
+                        </button>
+                        <a
+                          className="px-3 py-2 border rounded-lg text-sm flex items-center gap-2"
+                          href={pixData.ticket_url || pixData.qr_code || "#"}
+                          target="_blank"
+                          rel="noreferrer"
+                          onClick={() => {
+                            // abrir em nova aba
+                          }}
+                        >
+                          Abrir Link
+                        </a>
+                      </div>
+                      <div className="mt-3 text-center text-xs text-gray-500">
+                        <div>
+                          Valor:{" "}
+                          <strong>
+                            R${" "}
+                            {pixData.amount
+                              ? pixData.amount.toFixed(2)
+                              : "0,00"}
+                          </strong>
+                        </div>
+                        <div>
+                          Expira em:{" "}
+                          {pixData.expires_at
+                            ? new Date(pixData.expires_at).toLocaleString()
+                            : "-"}
+                        </div>
+                      </div>
                     </div>
                   </Card>
                 )}
@@ -2455,12 +2701,24 @@ export default function CarrinhoPage() {
                         </Alert>
                       )}
 
-                    <CreditCardForm
-                      onSubmit={handleCardPayment}
-                      isProcessing={isProcessing}
-                      defaultEmail={user?.email}
-                      defaultName={user?.name}
-                    />
+                    <div className="max-w-md mx-auto">
+                      <div className="mb-4 text-sm text-gray-700">
+                        <div>
+                          Valor: <strong>R$ {grandTotal.toFixed(2)}</strong>
+                        </div>
+                        {currentOrderId && (
+                          <div className="text-xs text-gray-500 mt-1">
+                            Pedido: {currentOrderId}
+                          </div>
+                        )}
+                      </div>
+                      <CreditCardForm
+                        onSubmit={handleCardPayment}
+                        isProcessing={isProcessing}
+                        defaultEmail={user?.email}
+                        defaultName={user?.name}
+                      />
+                    </div>
                   </Card>
                 )}
 
@@ -2522,7 +2780,6 @@ export default function CarrinhoPage() {
                       Voltar
                     </Button>
 
-                    {/* Botão de Cancelar Compra */}
                     {currentOrderId && (
                       <Button
                         onClick={async () => {
@@ -2533,13 +2790,11 @@ export default function CarrinhoPage() {
                           if (confirmed) {
                             const success = await handleCancelOrder();
                             if (success) {
-                              // Limpar estados locais
                               setCurrentOrderId(null);
                               setPixData(null);
                               setPaymentStatus("");
                               setPaymentError(null);
                               setPaymentMethod("");
-                              // Voltar para etapa 1
                               setCurrentStep(1);
                               window.scrollTo({ top: 0, behavior: "smooth" });
                             }
@@ -2568,7 +2823,6 @@ export default function CarrinhoPage() {
                     )}
                   </div>
 
-                  {/* Mensagem informativa ao invés do botão */}
                   {currentOrderId &&
                     paymentMethod &&
                     !pixData &&

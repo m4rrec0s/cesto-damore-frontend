@@ -49,10 +49,12 @@ function FeedItemCard({ item }: FeedItemCardProps) {
     image_url?: string;
   };
 
-  const renderProductCard = () => <ProductCard props={productData} />;
+  const renderProductCard = () => (
+    <ProductCard props={productData} className="max-sm:min-w-[150px]" />
+  );
 
   const renderCategoryCard = () => (
-    <Link href={`/categoria/${categoryData.id}`}>
+    <Link href={`/categorias/${categoryData.id}`}>
       <div className="group bg-white rounded-xl border border-gray-200 overflow-hidden hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-pointer p-6 h-full">
         <div className="text-center flex flex-col items-center justify-center h-full">
           <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform shadow-lg">

@@ -409,6 +409,9 @@ export interface Order {
     status: string;
     payment_method?: string | null;
     approved_at?: string | null;
+    mercado_pago_id?: string | null;
+    webhook_attempts?: number | null;
+    last_webhook_at?: string | null;
   } | null;
 }
 
@@ -454,6 +457,11 @@ export interface PublicFeedResponse {
     max_discounted: number;
     max_categories: number;
     max_additionals: number;
+  };
+  pagination?: {
+    totalSections: number;
+    page: number;
+    perPage: number;
   };
 }
 
@@ -1109,16 +1117,14 @@ class ApiService {
     (await this.client.get(`/orders/${id}`)).data;
   createOrder = async (payload: {
     user_id: string;
-    total_price: number;
     items: OrderItemInput[];
     delivery_address?: string | null;
     delivery_city: string;
     delivery_state: string;
     delivery_date?: Date | null;
-    shipping_price?: number | null;
-    payment_method?: string | null;
-    grand_total?: number | null;
-    recipient_phone?: string | null;
+    payment_method: "pix" | "card";
+    recipient_phone: string;
+    discount?: number;
   }) => {
     console.log("📡 Enviando pedido para o backend:", payload);
     const res = await this.client.post("/orders", payload);
@@ -1649,7 +1655,14 @@ class ApiService {
     try {
       console.log("🌐 Fazendo requisição para:", `/orders/${orderId}`);
       const res = await this.client.get(`/orders/${orderId}`);
-      console.log("📦 Resposta recebida:", res.data);
+      console.log("📦 Resposta recebida (resumida):", {
+        id: res.data?.id,
+        status: res.data?.status,
+        paymentStatus: res.data?.payment?.status,
+        paymentId: res.data?.payment?.id
+          ? `[REDACTED] len:${String(res.data.payment.id).length}`
+          : undefined,
+      });
       return res.data;
     } catch (error: unknown) {
       console.error("❌ Erro na requisição getOrderForCheckout:", error);
@@ -1681,6 +1694,9 @@ class ApiService {
    * Busca o pedido pendente de pagamento do usuário
    */
   getPendingOrder = async (userId: string) => {
+    if (!userId) {
+      throw new Error("ID do usuário é obrigatório");
+    }
     try {
       const res = await this.client.get(`/users/${userId}/orders/pending`);
       return res.data;
@@ -1880,16 +1896,26 @@ class ApiService {
   };
 
   // ===== Public Feed =====
-  getPublicFeed = async (configId?: string): Promise<PublicFeedResponse> => {
-    const cacheKey = `publicFeed_${configId || "default"}`;
+  getPublicFeed = async (
+    configId?: string,
+    page?: number,
+    perPage?: number
+  ): Promise<PublicFeedResponse> => {
+    const cacheKey = `publicFeed_${configId || "default"}_page_${
+      page ?? "all"
+    }_per_${perPage ?? "all"}`;
 
     // Retornar do cache se disponível
     if (ApiService.cache[cacheKey]) {
       return ApiService.cache[cacheKey] as PublicFeedResponse;
     }
 
-    const params = configId ? `?configId=${configId}` : "";
-    const response = await this.client.get(`/feed${params}`);
+    const paramsArr: string[] = [];
+    if (configId) paramsArr.push(`config_id=${configId}`);
+    if (page !== undefined) paramsArr.push(`page=${page}`);
+    if (perPage !== undefined) paramsArr.push(`perPage=${perPage}`);
+    const queryString = paramsArr.length ? `?${paramsArr.join("&")}` : "";
+    const response = await this.client.get(`/feed${queryString}`);
 
     // Armazenar no cache
     ApiService.cache[cacheKey] = response.data;

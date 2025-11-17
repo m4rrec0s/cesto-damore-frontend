@@ -61,9 +61,9 @@ export default function FeedBannerCarousel({
                   fill
                   className="object-cover object-center"
                   style={{ objectPosition: "center center" }}
-                  quality={100}
+                  quality={75}
                   priority={index === 0}
-                  unoptimized
+                  loading={index === 0 ? "eager" : "lazy"}
                   sizes="100vw"
                 />
               </div>

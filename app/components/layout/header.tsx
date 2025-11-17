@@ -7,7 +7,6 @@ import {
   Search,
   Menu,
   Settings,
-  MapPin,
   Home,
   Grid,
   Tag,
@@ -16,16 +15,16 @@ import {
   Zap,
   Package,
   LogOut,
+  X,
 } from "lucide-react";
 import { Button } from "@/app/components/ui/button";
 import Image from "next/image";
 import { Input } from "../ui/input";
 import { useCartContext } from "../../hooks/cart-context";
 import { useAuth } from "../../hooks/use-auth";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { CartSheet } from "../cart-sheet";
-import { Separator } from "../ui/separator";
 import {
   Dialog,
   DialogHeader,
@@ -40,6 +39,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "../ui/sheet";
 export function SiteHeader() {
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
   const [isClient, setIsClient] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [isDialogUserOpen, setIsDialogUserOpen] = useState(false);
@@ -55,11 +55,14 @@ export function SiteHeader() {
     setIsCartOpen(true);
   };
 
+  const mobileSearchInputRef = useRef<HTMLInputElement | null>(null);
+
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     if (searchTerm.trim()) {
       router.push(`/busca?q=${encodeURIComponent(searchTerm.trim())}`);
       setIsMobileMenuOpen(false);
+      setIsMobileSearchOpen(false);
     }
   };
 
@@ -68,6 +71,14 @@ export function SiteHeader() {
     setIsMobileMenuOpen(false);
     logout();
   };
+
+  useEffect(() => {
+    if (isMobileSearchOpen) {
+      setTimeout(() => {
+        mobileSearchInputRef.current?.focus();
+      }, 50);
+    }
+  }, [isMobileSearchOpen]);
 
   const menuItems = [
     { href: "/", label: "Início", icon: Home },
@@ -83,65 +94,54 @@ export function SiteHeader() {
   ];
 
   return (
-    <div className="flex flex-col items-center bg-rose-500 text-white">
-      <div className="w-full max-w-none sm:max-w-[90%] text-sm py-1 flex justify-between items-center px-4">
-        <span className="text-xs">Atendimento 24hrs no WhatsApp</span>
-        <span className="text-xs text-right">
-          Entregas nos horários comerciais
+    <div className="flex flex-col items-center bg-gradient-to-r from-rose-500 to-rose-600 text-white shadow-lg">
+      <div className="flex w-full max-w-none sm:max-w-[90%] text-sm py-2 justify-between items-center px-4">
+        <span className="text-xs flex items-center gap-2">
+          <span className="bg-white/20 rounded-full w-2 h-2 animate-pulse"></span>
+          Atendimento 24hrs no WhatsApp
         </span>
+        <span className="text-xs">Entregas nos horários comerciais</span>
       </div>
-      <header className="sticky top-0 z-50 w-full bg-rose-400">
-        <div className="mx-auto max-w-none sm:max-w-[90%] px-4">
-          <div className="flex h-20 items-center justify-between">
+
+      {/* Main Header */}
+      <header className="sticky top-0 z-50 w-full bg-white shadow-md">
+        <div className="mx-auto max-w-none sm:max-w-[90%] px-3 sm:px-4">
+          <div className="flex h-16 sm:h-20 items-center justify-between gap-2 sm:gap-4">
+            {/* Logo */}
             <Link
               href="/"
-              className="flex items-center flex-shrink-0 py-2 w-[120px] relative h-12"
+              className="flex items-center flex-shrink-0 py-2 w-[100px] sm:w-[140px] relative h-10 sm:h-12"
             >
               <Image
                 src="/logo.png"
                 alt="Cesto d'Amore"
                 fill
+                priority
                 className="object-contain"
               />
             </Link>
 
-            <div className="hidden lg:flex items-center flex-1 min-w-[30%] lg:min-w-[40%] w-full mx-8">
+            {/* Desktop Search Bar */}
+            <div className="hidden lg:flex items-center flex-1 max-w-2xl mx-4">
               <form onSubmit={handleSearch} className="relative w-full">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-rose-400" />
                 <Input
                   type="text"
-                  placeholder="Buscar produtos, categorias..."
+                  placeholder="O que você procura hoje?"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 bg-gray-50 text-black border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent transition-all"
+                  className="w-full pl-11 pr-4 py-3 bg-gray-50 text-gray-900 border-2 border-gray-100 rounded-full focus:outline-none focus:ring-2 focus:ring-rose-400 focus:border-transparent transition-all hover:border-rose-200"
                 />
               </form>
             </div>
 
-            <div className="w-full flex items-center justify-end gap-6 h-8">
-              {/* Busca Mobile - Apenas ícone */}
-              <Button
-                variant="ghost"
-                size="icon"
-                className="lg:hidden text-white hover:text-white hover:bg-rose-500"
-                aria-label="Buscar"
-                onClick={() => {
-                  const input = document.getElementById(
-                    "mobile-search-input"
-                  ) as HTMLInputElement;
-                  if (input) {
-                    input.focus();
-                  }
-                }}
-              >
-                <Search className="h-6 w-6" />
-              </Button>
-
-              <div
-                aria-label="Usuário"
-                className="hidden md:flex items-center gap-3 cursor-pointer"
-              >
-                <User className="h-6 w-6" fill="#FFFFFF" />
+            {/* Desktop Actions */}
+            <div className="hidden md:flex items-center gap-4">
+              {/* User Account */}
+              <div className="flex items-center gap-2 cursor-pointer group">
+                <div className="bg-rose-50 p-2 rounded-full group-hover:bg-rose-100 transition-colors">
+                  <User className="h-5 w-5 text-rose-500" />
+                </div>
                 <div className="text-left">
                   {user ? (
                     <button
@@ -149,127 +149,168 @@ export function SiteHeader() {
                       onClick={() => setIsDialogUserOpen(true)}
                       className="flex flex-col items-start"
                     >
-                      <span className="text-xs">Bem vindo de volta,</span>
-                      <span className="font-semibold text-xs">{user.name}</span>
+                      <span className="text-xs text-gray-500">Olá,</span>
+                      <span className="font-semibold text-sm text-gray-900 group-hover:text-rose-600 transition-colors">
+                        {user.name.split(" ")[0]}
+                      </span>
                     </button>
                   ) : (
-                    <>
-                      <Link href="/login" className="flex flex-col items-start">
-                        <span className="text-xs">Entre na sua conta</span>
-                        <span className="font-semibold text-xs">
-                          Bem vindo!
-                        </span>
-                      </Link>
-                    </>
+                    <Link href="/login" className="flex flex-col items-start">
+                      <span className="text-xs text-gray-500">Entrar</span>
+                      <span className="font-semibold text-sm text-gray-900 group-hover:text-rose-600 transition-colors">
+                        Minha Conta
+                      </span>
+                    </Link>
                   )}
                 </div>
               </div>
 
-              <Separator orientation="vertical" className="hidden lg:block" />
-
-              <div className="hidden md:flex items-center gap-3">
-                <div className="relative">
-                  <MapPin className="h-6 w-6" fill="#FFFFFF" />
-                  <span className="absolute top-1.5 right-2 h-2 w-2 bg-rose-400 text-white text-xs rounded-full flex items-center justify-center" />
+              {/* Orders */}
+              <div className="flex items-center gap-2 cursor-pointer group">
+                <div className="bg-rose-50 p-2 rounded-full group-hover:bg-rose-100 transition-colors">
+                  <Package className="h-5 w-5 text-rose-500" />
                 </div>
                 <div className="text-left">
                   <Link href="/pedidos" className="flex flex-col items-start">
-                    <span className="text-xs">Seus pedidos</span>
-                    <span className="font-semibold text-xs">
-                      Acompanhe aqui
+                    <span className="text-xs text-gray-500">Meus</span>
+                    <span className="font-semibold text-sm text-gray-900 group-hover:text-rose-600 transition-colors">
+                      Pedidos
                     </span>
                   </Link>
                 </div>
               </div>
 
-              <Separator orientation="vertical" className="hidden lg:block" />
-
+              {/* Cart */}
               <button
                 type="button"
                 aria-label="Carrinho"
-                className="flex items-center gap-3 cursor-pointer"
+                className="flex items-center gap-3 bg-rose-500 hover:bg-rose-600 text-white px-4 py-3 rounded-full transition-all shadow-md hover:shadow-lg"
                 onClick={handleOpenCart}
               >
                 <div className="relative">
-                  <ShoppingCart className="h-6 w-6" fill="#FFFFFF" />
-                  {isClient && (
-                    <span className="absolute -top-2 -right-2 h-5 w-5 bg-rose-500 text-white text-xs rounded-full flex items-center justify-center">
+                  <ShoppingCart className="h-5 w-5" />
+                  {isClient && cart.itemCount > 0 && (
+                    <span className="absolute -top-2 -right-2 h-5 w-5 bg-white text-rose-600 text-xs font-bold rounded-full flex items-center justify-center">
                       {cart.itemCount}
                     </span>
                   )}
                 </div>
-                <div className="hidden md:flex flex-col items-start">
-                  <span className="text-xs">Seu carrinho</span>
-                  <span className="font-semibold text-xs">Ver produtos</span>
-                </div>
+                <span className="font-semibold text-sm">Carrinho</span>
               </button>
+            </div>
 
+            {/* Mobile Actions */}
+            <div className="flex md:hidden items-center gap-1 sm:gap-2">
+              {/* Mobile Search Toggle */}
+              <Button
+                variant="ghost"
+                size="icon"
+                className="text-gray-700 hover:text-rose-500 hover:bg-rose-50 h-10 w-10 rounded-full"
+                aria-label="Buscar"
+                onClick={() => setIsMobileSearchOpen(!isMobileSearchOpen)}
+              >
+                {isMobileSearchOpen ? (
+                  <X className="h-5 w-5" />
+                ) : (
+                  <Search className="h-5 w-5" />
+                )}
+              </Button>
+
+              {/* Mobile Cart */}
               <button
                 type="button"
-                className="lg:hidden text-white hover:bg-rose-500 p-1 rounded-md transition-colors"
+                aria-label="Carrinho"
+                className="relative text-gray-700 hover:text-rose-500 p-2 rounded-full hover:bg-rose-50 transition-colors"
+                onClick={handleOpenCart}
+              >
+                <ShoppingCart className="h-5 w-5" />
+                {isClient && cart.itemCount > 0 && (
+                  <span className="absolute -top-1 -right-1 h-5 w-5 bg-rose-500 text-white text-xs font-bold rounded-full flex items-center justify-center">
+                    {cart.itemCount}
+                  </span>
+                )}
+              </button>
+
+              {/* Mobile Menu */}
+              <Button
+                variant="ghost"
+                size="icon"
+                className="text-gray-700 hover:text-rose-500 hover:bg-rose-50 h-10 w-10 rounded-full"
                 aria-label="Menu"
                 onClick={() => setIsMobileMenuOpen(true)}
               >
-                <Menu className="h-8 w-8" />
-              </button>
+                <Menu className="h-5 w-5" />
+              </Button>
             </div>
           </div>
 
-          {/* Busca Mobile - Abaixo do header principal */}
-          <div className="lg:hidden pb-3">
-            <form onSubmit={handleSearch} className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-              <Input
-                id="mobile-search-input"
-                type="text"
-                placeholder="Buscar produtos..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 bg-white text-gray-900 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent placeholder:text-gray-500"
-              />
-            </form>
-          </div>
+          {/* Mobile Search Bar */}
+          {isMobileSearchOpen && (
+            <div className="pb-4 lg:hidden">
+              <form onSubmit={handleSearch} className="relative">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-rose-400" />
+                <Input
+                  ref={mobileSearchInputRef}
+                  type="text"
+                  placeholder="Buscar produtos..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full pl-11 pr-4 py-3 bg-gray-50 text-gray-900 border-2 border-gray-100 rounded-full focus:outline-none focus:ring-2 focus:ring-rose-400 focus:border-transparent"
+                />
+              </form>
+            </div>
+          )}
         </div>
       </header>
-      <div className="w-full bg-rose-400 text-white py-1">
-        <nav className="hidden lg:flex items-center justify-between text-sm font-medium text-white max-w-none sm:max-w-[90%] mx-auto px-4 py-2">
-          <Link href="/" className="hover:text-neutral-200 transition-colors">
+
+      {/* Desktop Navigation */}
+      <div className="w-full bg-gradient-to-r from-rose-500 to-rose-600 text-white py-3 shadow-inner">
+        <nav className="hidden lg:flex items-center justify-center gap-8 text-sm font-medium max-w-none sm:max-w-[90%] mx-auto px-4">
+          <Link
+            href="/"
+            className="hover:text-rose-100 transition-colors flex items-center gap-2"
+          >
+            <Home className="h-4 w-4" />
             Início
           </Link>
           <Link
             href="/categorias"
-            className="hover:text-neutral-200 transition-colors"
+            className="hover:text-rose-100 transition-colors flex items-center gap-2"
           >
+            <Grid className="h-4 w-4" />
             Categorias
           </Link>
           <Link
             href="/ofertas"
-            className="hover:text-neutral-200 transition-colors"
+            className="hover:text-rose-100 transition-colors flex items-center gap-2 bg-white/10 px-4 py-2 rounded-full"
           >
+            <Tag className="h-4 w-4" />
             Ofertas
           </Link>
           <Link
             href="/cestas-romanticas"
-            className="hover:text-neutral-200 transition-colors"
+            className="hover:text-rose-100 transition-colors flex items-center gap-2"
           >
+            <Heart className="h-4 w-4" />
             Cestas Românticas
           </Link>
           <Link
             href="/buques-de-flores"
-            className="hover:text-neutral-200 transition-colors"
+            className="hover:text-rose-100 transition-colors"
           >
             Buquês de Flores
           </Link>
           <Link
             href="/cesto-express"
-            className="hover:text-neutral-200 transition-colors"
+            className="hover:text-rose-100 transition-colors flex items-center gap-2"
           >
+            <Zap className="h-4 w-4" />
             Cesto Express
           </Link>
           {user?.role === "admin" && (
             <Link
               href="/manage"
-              className="flex items-center gap-1 hover:text-neutral-200 transition-colors"
+              className="flex items-center gap-2 hover:text-rose-100 transition-colors bg-white/10 px-4 py-2 rounded-full"
             >
               <Settings className="h-4 w-4" />
               Gerenciar
@@ -278,22 +319,23 @@ export function SiteHeader() {
         </nav>
       </div>
 
+      {/* Cart Sheet */}
       <CartSheet isOpen={isCartOpen} onClose={() => setIsCartOpen(false)} />
 
       {/* Mobile Menu Sheet */}
       <Sheet open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
-        <SheetContent side="right" className="w-[300px] sm:w-[350px] p-0">
-          <SheetHeader className="p-6 pb-4 border-b">
-            <SheetTitle className="text-left text-rose-500 font-bold text-xl">
+        <SheetContent side="right" className="w-[280px] sm:w-[320px] p-0">
+          <SheetHeader className="p-6 pb-4 bg-gradient-to-r from-rose-500 to-rose-600">
+            <SheetTitle className="text-left text-white font-bold text-xl">
               Menu
             </SheetTitle>
           </SheetHeader>
 
           <div className="flex flex-col h-full">
             {/* User Info */}
-            <div className="p-6 border-b bg-rose-50">
+            <div className="p-6 border-b bg-gradient-to-br from-rose-50 to-pink-50">
               <div className="flex items-center gap-3">
-                <div className="bg-rose-500 rounded-full p-3">
+                <div className="bg-gradient-to-br from-rose-500 to-rose-600 rounded-full p-3 shadow-md">
                   <User className="h-6 w-6 text-white" />
                 </div>
                 <div className="flex-1">
@@ -324,7 +366,7 @@ export function SiteHeader() {
                     <Link
                       key={item.href}
                       href={item.href}
-                      className="flex items-center gap-3 px-6 py-3 text-gray-700 hover:bg-rose-50 hover:text-rose-600 transition-colors"
+                      className="flex items-center gap-3 px-6 py-4 text-gray-700 hover:bg-rose-50 hover:text-rose-600 transition-colors border-l-4 border-transparent hover:border-rose-500"
                       onClick={() => setIsMobileMenuOpen(false)}
                     >
                       <Icon className="h-5 w-5" />
@@ -336,7 +378,7 @@ export function SiteHeader() {
                 {user && (
                   <Link
                     href="/pedidos"
-                    className="flex items-center gap-3 px-6 py-3 text-gray-700 hover:bg-rose-50 hover:text-rose-600 transition-colors border-t mt-2 pt-4"
+                    className="flex items-center gap-3 px-6 py-4 text-gray-700 hover:bg-rose-50 hover:text-rose-600 transition-colors border-t mt-2 pt-4 border-l-4 border-transparent hover:border-rose-500"
                     onClick={() => setIsMobileMenuOpen(false)}
                   >
                     <Package className="h-5 w-5" />
@@ -347,7 +389,7 @@ export function SiteHeader() {
                 {user?.role === "admin" && (
                   <Link
                     href="/manage"
-                    className="flex items-center gap-3 px-6 py-3 text-gray-700 hover:bg-rose-50 hover:text-rose-600 transition-colors"
+                    className="flex items-center gap-3 px-6 py-4 text-gray-700 hover:bg-rose-50 hover:text-rose-600 transition-colors border-l-4 border-transparent hover:border-rose-500"
                     onClick={() => setIsMobileMenuOpen(false)}
                   >
                     <Settings className="h-5 w-5" />
@@ -359,10 +401,10 @@ export function SiteHeader() {
 
             {/* Logout Button */}
             {user && (
-              <div className="p-4 border-t">
+              <div className="p-4 border-t bg-gray-50">
                 <Button
                   variant="outline"
-                  className="w-full justify-start gap-3 text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700"
+                  className="w-full justify-start gap-3 text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700 font-semibold"
                   onClick={() => {
                     setIsMobileMenuOpen(false);
                     setIsDialogUserOpen(true);

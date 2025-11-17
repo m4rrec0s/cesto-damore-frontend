@@ -238,6 +238,47 @@ export default function PedidosPage() {
                     </div>
                   </div>
 
+                  {/* Timeline simples das fases do pedido */}
+                  <div className="mt-4">
+                    <div className="flex items-center gap-4">
+                      {(
+                        ["PENDING", "PAID", "SHIPPED", "DELIVERED"] as const
+                      ).map((s) => {
+                        const isActive =
+                          (s === "PENDING" && order.status === "PENDING") ||
+                          (s === "PAID" &&
+                            (order.status === "PAID" ||
+                              order.status === "SHIPPED" ||
+                              order.status === "DELIVERED")) ||
+                          (s === "SHIPPED" &&
+                            (order.status === "SHIPPED" ||
+                              order.status === "DELIVERED")) ||
+                          (s === "DELIVERED" && order.status === "DELIVERED");
+
+                        const label =
+                          statusConfig[s as keyof typeof statusConfig].label;
+
+                        return (
+                          <div key={s} className="flex items-center gap-2">
+                            <div
+                              className={`w-3 h-3 rounded-full ${
+                                isActive ? "bg-rose-500" : "bg-gray-300"
+                              }`}
+                              aria-hidden
+                            />
+                            <span
+                              className={`text-xs ${
+                                isActive ? "text-gray-900" : "text-gray-400"
+                              }`}
+                            >
+                              {label}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
                   <div className="mt-4 pt-4 border-t flex justify-end">
                     <Button
                       variant="ghost"

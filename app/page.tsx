@@ -9,8 +9,16 @@ import {
 import { Button } from "./components/ui/button";
 import { RefreshCw } from "lucide-react";
 import { DatabaseErrorFallback } from "./components/database-error-fallback";
-import FeedBannerCarousel from "./components/feed/FeedBannerCarousel";
-import FeedSection from "./components/feed/FeedSection";
+import dynamic from "next/dynamic";
+
+// Lazy load feed components to reduce initial JS bundle and speed up first paint
+const FeedBannerCarousel = dynamic(
+  () => import("./components/feed/FeedBannerCarousel"),
+  { loading: () => <div className="h-48 bg-gray-100 animate-pulse" /> }
+);
+const FeedSection = dynamic(() => import("./components/feed/FeedSection"), {
+  loading: () => <div className="h-36 bg-gray-100 animate-pulse" />,
+});
 import Image from "next/image";
 import InfiniteScroll from "react-infinite-scroll-component";
 
@@ -21,24 +29,30 @@ interface GridProduct {
   discount?: number;
   image_url: string | null;
   categoryName?: string;
+  categoryNames?: string[];
 }
 
 export default function Home() {
   const api = useApi();
   const [loading, setLoading] = useState(false);
+  const LOADER_SHOW_DELAY = 180;
   const [initialLoad, setInitialLoad] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [products, setProducts] = useState<GridProduct[]>([]);
-  // const [categories, setCategories] = useState<Category[]>([]);
   const [feedData, setFeedData] = useState<PublicFeedResponse | null>(null);
+  const [page, setPage] = useState<number>(1);
+  const [perPage] = useState<number>(2);
+  const [sections, setSections] = useState<PublicFeedResponse["sections"]>([]);
+  const [pagination, setPagination] = useState<{
+    totalSections?: number;
+    page?: number;
+    perPage?: number;
+  } | null>(null);
   const [useFallback, setUseFallback] = useState(false);
-  const [visibleSections, setVisibleSections] = useState(2); // Inicialmente mostrar 2 seções
 
-  // Usar cache imediatamente se disponível
   const cachedData = useMemo(() => {
     if (typeof window === "undefined") return null;
     try {
-      // Acessar o cache estático da classe ApiService
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const ApiService = (api as any).constructor;
       const cache = ApiService.getCache?.() || {};
@@ -54,32 +68,59 @@ export default function Home() {
 
   useEffect(() => {
     const loadData = async () => {
-      if (cachedData?.categories) {
-        setInitialLoad(false);
+      if (cachedData?.products) {
+        try {
+          const productsCache = cachedData?.products as unknown as {
+            products: ApiProduct[];
+          };
+          if (productsCache?.products?.length) {
+            const featuredProducts = productsCache.products
+              .map((product: ApiProduct) => ({
+                id: product.id,
+                name: product.name,
+                price: product.price,
+                discount: product.discount || undefined,
+                image_url: product.image_url || null,
+                categoryName:
+                  product.categories && product.categories.length > 0
+                    ? product.categories[0].name
+                    : "Sem categoria",
+              }))
+              .slice(0, 8);
+            setProducts(featuredProducts);
+            setInitialLoad(false);
+          }
+        } catch {}
       }
 
-      setLoading(true);
+      const loaderTimer = window.setTimeout(
+        () => setLoading(true),
+        LOADER_SHOW_DELAY
+      );
+      const fallback = useFallback;
       setError(null);
 
       try {
-        let feed = null;
+        let feed: PublicFeedResponse | null = null;
         try {
-          feed = await api.getPublicFeed();
+          feed = await api.getPublicFeed(undefined, 1, perPage);
           setFeedData(feed);
+          setSections(feed?.sections || []);
+          setPagination(feed?.pagination || null);
+          setPage(1);
+          if (feed && feed.sections && feed.sections.length > 0) {
+            setUseFallback(false);
+            if (loaderTimer) clearTimeout(loaderTimer);
+            setLoading(false);
+            setInitialLoad(false);
+          }
         } catch (feedError) {
           console.error("❌ Erro ao carregar feed:", feedError);
-          console.warn("⚠️ Usando fallback devido ao erro:", feedError);
           setUseFallback(true);
         }
 
-        const [productsResponse] = await Promise.all([
-          api.getProducts(),
-          api.getCategories(),
-        ]);
-
-        if (feed && !useFallback) {
-          setProducts([]);
-        } else {
+        if (!feed || fallback) {
+          const productsResponse = await api.getProducts({ perPage: 8 });
           const featuredProducts = productsResponse.products.map(
             (product: ApiProduct) => {
               const categoryName =
@@ -120,17 +161,32 @@ export default function Home() {
           setError(`Não foi possível carregar os dados. Erro: ${errorMessage}`);
         }
       } finally {
+        if (loaderTimer) clearTimeout(loaderTimer);
         setLoading(false);
         setInitialLoad(false);
       }
     };
 
     loadData();
-  }, [api, useFallback, cachedData]);
+  }, [api, cachedData, perPage, useFallback]);
 
   const handleRetry = () => {
     api.invalidateCache();
     window.location.reload();
+  };
+
+  const loadMoreSections = async () => {
+    try {
+      const nextPage = page + 1;
+      const nextFeed = await api.getPublicFeed(undefined, nextPage, perPage);
+      if (nextFeed) {
+        setSections((prev) => [...prev, ...(nextFeed.sections || [])]);
+        setPagination(nextFeed.pagination || null);
+        setPage(nextPage);
+      }
+    } catch (err) {
+      console.error("Erro ao carregar mais seções:", err);
+    }
   };
 
   if (initialLoad || loading) {
@@ -154,7 +210,6 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white">
-      {/* Banner Carousel */}
       {feedData &&
         !useFallback &&
         feedData.banners &&
@@ -164,56 +219,16 @@ export default function Home() {
           </div>
         )}
 
-      {/* Categories Section */}
-      {/* <section className="py-8 w-full flex flex-col justify-center transition-all duration-300">
-        <div className="mx-auto max-w-none sm:max-w-[90%] px-4">
-          {initialLoad ? (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
-              {[...Array(6)].map((_, i) => (
-                <CategorySkeleton key={i} />
-              ))}
-            </div>
-          ) : (
-            <div className="w-full grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 animate-fadeIn">
-              {Array.isArray(categories) &&
-                categories.slice(0, 6).map((category, index) => (
-                  <Link
-                    key={category.id}
-                    href={`/category/${category.id}`}
-                    className="group relative overflow-hidden rounded-xl bg-rose-400 border border-gray-200 hover:border-gray-300 shadow-sm hover:shadow-lg transition-all duration-300 transform hover:-translate-y-1"
-                    style={{ animationDelay: `${index * 50}ms` }}
-                  >
-                    <div
-                      className={cn(
-                        "relative px-6 py-3 flex flex-col items-center justify-center",
-                        category.name === "Cesto Express" &&
-                          "bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500"
-                      )}
-                    >
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                      <span className="relative z-10 text-center font-semibold text-base text-white">
-                        {category.name}
-                      </span>
-                    </div>
-                  </Link>
-                ))}
-            </div>
-          )}
-        </div>
-      </section> */}
-
       {feedData && !useFallback ? (
         <div className="space-y-8 pb-12 animate-fadeIn">
           <InfiniteScroll
-            dataLength={visibleSections}
-            next={() =>
-              setVisibleSections((prev) =>
-                Math.min(prev + 1, feedData.sections?.length || 0)
-              )
-            }
-            hasMore={visibleSections < (feedData.sections?.length || 0)}
+            dataLength={sections.length}
+            next={() => loadMoreSections()}
+            hasMore={sections.length < (pagination?.totalSections || 0)}
             loader={
-              <h4 className="text-center py-4">Carregando mais seções...</h4>
+              <h4 className="text-center py-4 animate-pulse">
+                Carregando mais seções...
+              </h4>
             }
             endMessage={
               <p className="text-center py-4 text-gray-500">
@@ -221,18 +236,16 @@ export default function Home() {
               </p>
             }
           >
-            {feedData.sections &&
-              feedData.sections
-                .slice(0, visibleSections)
-                .map((section, index) => (
-                  <div
-                    key={section.id}
-                    className="animate-slideUp"
-                    style={{ animationDelay: `${index * 100}ms` }}
-                  >
-                    <FeedSection section={section} />
-                  </div>
-                ))}
+            {sections &&
+              sections.map((section, index) => (
+                <div
+                  key={section.id}
+                  className="animate-slideUp"
+                  style={{ animationDelay: `${index * 100}ms` }}
+                >
+                  <FeedSection section={section} />
+                </div>
+              ))}
           </InfiniteScroll>
         </div>
       ) : (

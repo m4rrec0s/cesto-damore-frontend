@@ -125,7 +125,7 @@ function FeedItemCard({ item }: FeedItemCardProps) {
   );
 
   const renderCategoryCard = () => (
-    <Link href={`/categoria/${categoryData.id}`}>
+    <Link href={`/categorias/${categoryData.id}`}>
       <div className="group bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden hover:shadow-lg transition-all duration-300 hover:scale-105 cursor-pointer p-6">
         <div className="text-center">
           <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform">

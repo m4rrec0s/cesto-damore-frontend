@@ -15,12 +15,15 @@ if (!token) {
     console.log("➡️ Solução: Faça login em http://localhost:3000/login");
 } else {
     console.log(`✅ Token encontrado em '${tokenKey}'`);
-    console.log("📋 Token (primeiros 30 caracteres):", token.substring(0, 30) + "...");
 
     // Tentar decodificar JWT
     try {
         const payload = JSON.parse(atob(token.split('.')[1]));
-        console.log("📦 Payload do token:", payload);
+        console.log("📦 Payload do token (resumo):", {
+            exp: payload?.exp,
+            sub: payload?.sub || payload?.id || '(no-sub)',
+            role: payload?.role || '(no-role)'
+        });
 
         // Verificar expiração
         if (payload.exp) {
@@ -48,8 +51,10 @@ if (!userStr) {
 } else {
     try {
         const user = JSON.parse(userStr);
-        console.log("✅ Usuário logado:");
-        console.table(user);
+        console.log("✅ Usuário logado (resumo):", {
+            id: user.id,
+            name: user.name,
+        });
     } catch (err) {
         console.error("❌ Erro ao parsear dados do usuário:", err);
     }

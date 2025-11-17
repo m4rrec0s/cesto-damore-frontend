@@ -72,6 +72,12 @@ export function usePaymentPolling({
       return;
     }
 
+    // Se já foi aprovado, não verificar novamente
+    if (status === "success") {
+      stopPolling();
+      return;
+    }
+
     try {
       attemptsRef.current += 1;
       setAttempts(attemptsRef.current);
@@ -93,21 +99,15 @@ export function usePaymentPolling({
       const paymentStatus = order.payment?.status;
       const orderStatus = order.status;
 
+      const safePaymentId = order.payment?.id
+        ? `${order.payment?.id.slice(0, 4)}...${order.payment?.id.slice(-4)}`
+        : undefined;
+      const safeMercadoId = order.payment?.mercado_pago_id
+        ? `***${order.payment?.mercado_pago_id.slice(-4)}`
+        : undefined;
+
       console.log(
-        `[Payment Polling] 📊 Status detalhado:`,
-        JSON.stringify(
-          {
-            orderStatus,
-            paymentStatus,
-            paymentId: order.payment?.id,
-            mercadoPagoId: order.payment?.mercado_pago_id,
-            orderCreatedAt: order.created_at,
-            paymentUpdatedAt: order.payment?.last_webhook_at,
-            webhookAttempts: order.payment?.webhook_attempts,
-          },
-          null,
-          2
-        )
+        `[Payment Polling] 📊 Status: order=${order.id}, orderStatus=${orderStatus}, paymentStatus=${paymentStatus}, paymentId=${safePaymentId}, mercadoPagoId=${safeMercadoId}, webhookAttempts=${order.payment?.webhook_attempts}`
       );
 
       // ⚠️ FALLBACK: Se payment não existe mas order está PAID
@@ -148,8 +148,8 @@ export function usePaymentPolling({
           paymentStatus,
           orderStatus,
           orderId: order.id,
-          paymentId: order.payment?.id,
-          mercadoPagoId: order.payment?.mercado_pago_id,
+          paymentId: safePaymentId,
+          mercadoPagoId: safeMercadoId,
         });
         setStatus("success");
         stopPolling();

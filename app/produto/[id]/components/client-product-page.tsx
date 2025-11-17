@@ -58,29 +58,25 @@ const ClientProductPage = ({ id }: { id: string }) => {
   );
   const isUploading = false;
 
+  const isNewProduct = useCallback((createdAt: string) => {
+    const createdDate = new Date(createdAt);
+    const currentDate = new Date();
+    const diffTime = Math.abs(currentDate.getTime() - createdDate.getTime());
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return diffDays <= 30;
+  }, []);
+
   const handleCustomizationComplete = useCallback(
     (
       itemId: string,
       hasCustomizations: boolean,
       data: CustomizationInput[]
     ) => {
-      console.log("🎨 [handleCustomizationComplete] Recebido:", {
-        itemId,
-        hasCustomizations,
-        data,
-      });
-
       if (hasCustomizations) {
         setItemCustomizations((prev) => ({
           ...prev,
           [itemId]: data,
         }));
-
-        console.log(
-          "💾 [handleCustomizationComplete] Customizações salvas para item:",
-          itemId,
-          data
-        );
 
         const hasBaseLayout = data.some(
           (c) => c.customizationType === CustomizationType.LAYOUT_BASE
@@ -98,7 +94,6 @@ const ClientProductPage = ({ id }: { id: string }) => {
           return copy;
         });
 
-        // Limpar preview se era deste item
         if (previewComponentId === itemId) {
           setPreviewComponentId(null);
         }
@@ -117,13 +112,6 @@ const ClientProductPage = ({ id }: { id: string }) => {
       hasCustomizations: boolean,
       data: CustomizationInput[]
     ) => {
-      console.log("🎨 [handleAdditionalCustomizationComplete] Início:", {
-        additionalId,
-        hasCustomizations,
-        data,
-        currentAdditionalCustomizations: additionalCustomizations,
-      });
-
       if (hasCustomizations) {
         setAdditionalCustomizations((prev) => {
           const updated = {
@@ -138,10 +126,6 @@ const ClientProductPage = ({ id }: { id: string }) => {
         setAdditionalCustomizations((prev) => {
           const copy = { ...prev };
           delete copy[additionalId];
-          console.log(
-            "🗑️ [handleAdditionalCustomizationComplete] Customização removida:",
-            copy
-          );
           return copy;
         });
 
@@ -236,11 +220,6 @@ const ClientProductPage = ({ id }: { id: string }) => {
                   )
                 : [];
 
-            console.log(
-              "📸 [Conversão IMAGES - handleAdditionalCustomizationComplete] Fotos convertidas:",
-              photos
-            );
-
             return {
               customization_id: input.ruleId || `item_${itemId}`,
               title: customizationName,
@@ -286,54 +265,31 @@ const ClientProductPage = ({ id }: { id: string }) => {
           return null;
         };
 
-        // Adicionar customizações dos componentes do produto
         for (const component of components) {
           const componentCustomizations =
             itemCustomizations[component.id] || [];
-          console.log(
-            `🔍 [handleAdditionalCustomizationComplete] Customizações do componente ${component.name}:`,
-            componentCustomizations
-          );
           for (const custom of componentCustomizations) {
             const converted = await convertToCartCustomization(
               custom,
               component.id
             );
-            console.log(
-              `🔄 [handleAdditionalCustomizationComplete] Convertido:`,
-              { original: custom, converted }
-            );
             if (converted) {
               cartCustomizations.push(converted);
             }
           }
         }
 
-        // Adicionar customizações do adicional
         if (hasCustomizations) {
-          console.log(
-            `🔍 [handleAdditionalCustomizationComplete] Customizações do adicional:`,
-            data
-          );
           for (const custom of data) {
             const converted = await convertToCartCustomization(
               custom,
               additionalId
             );
-            console.log(
-              `🔄 [handleAdditionalCustomizationComplete] Convertido (adicional):`,
-              { original: custom, converted }
-            );
             if (converted) {
               cartCustomizations.push(converted);
             }
           }
         }
-
-        console.log(
-          `📦 [handleAdditionalCustomizationComplete] Total de customizações para carrinho:`,
-          cartCustomizations
-        );
 
         await addToCart(
           product.id,
@@ -349,16 +305,9 @@ const ClientProductPage = ({ id }: { id: string }) => {
         toast.error("Erro ao adicionar adicional ao carrinho");
       }
     },
-    [
-      product.id,
-      components,
-      itemCustomizations,
-      additionalCustomizations,
-      addToCart,
-    ]
+    [product.id, components, itemCustomizations, addToCart]
   );
 
-  // Função para adicionar adicional diretamente ao carrinho (sem customização ou com customizações já salvas)
   const handleAddAdditionalToCart = useCallback(
     async (additionalId: string) => {
       console.log("🛒 [handleAddAdditionalToCart] Início:", { additionalId });
@@ -1079,7 +1028,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
           <Link
             href={
               product.categories?.[0]
-                ? `/categoria/${product.categories[0].id}`
+                ? `/categorias/${product.categories[0].id}`
                 : "#"
             }
             className="hover:underline"
@@ -1244,10 +1193,16 @@ const ClientProductPage = ({ id }: { id: string }) => {
           <div className="space-y-6 flex flex-col justify-between">
             <div className="space-y-1">
               <div className="flex items-center space-x-2 h-6">
-                <span className="text-sm md:text-base text-gray-500">Novo</span>
-                <Separator orientation="vertical" />
+                {product.created_at && isNewProduct(product.created_at) && (
+                  <>
+                    <span className="bg-blue-500 text-sm md:text-base text-white rounded px-2 py-0.5">
+                      Novo
+                    </span>
+                    <Separator orientation="vertical" />
+                  </>
+                )}
                 <span className="text-sm md:text-base text-gray-500">
-                  +1000 Vendidos
+                  +{Math.floor(Math.random() * (1500 - 300 + 1)) + 300} Vendidos
                 </span>
               </div>
               <h1 className="text-xl lg:text-3xl font-bold text-gray-900 mb-2 tracking-tight">
@@ -1415,65 +1370,55 @@ const ClientProductPage = ({ id }: { id: string }) => {
                 Adicionais
               </h2>
               {additionals.length > 0 ? (
-                <div className="flex items-center gap-4 overflow-x-auto">
-                  {additionals.map((additional) => {
-                    console.log("🔍 [Renderizando AdditionalCard]", {
-                      name: additional.name,
-                      id: additional.id,
-                      allows_customization: additional.allows_customization,
-                      customizations: additional.customizations,
-                      customizationsLength: additional.customizations?.length,
-                    });
-
-                    // Verificar se o produto tem customizações obrigatórias
-                    const hasProductRequiredCustomizations = components.some(
-                      (component) =>
-                        component.customizations?.some((c) => c.isRequired)
-                    );
-
-                    // Verificar se as customizações obrigatórias do produto foram completadas
-                    let hasCompletedProductCustomizations = true;
-                    if (hasProductRequiredCustomizations) {
-                      hasCompletedProductCustomizations = components.every(
-                        (component) => {
-                          const requiredCustomizations =
-                            component.customizations?.filter(
-                              (c) => c.isRequired
-                            ) || [];
-
-                          if (requiredCustomizations.length === 0) return true;
-
-                          const componentData =
-                            itemCustomizations[component.id] || [];
-
-                          return requiredCustomizations.every((reqCustom) =>
-                            componentData.some((c) => c.ruleId === reqCustom.id)
-                          );
-                        }
+                <div className="flex items-center w-full">
+                  <div className="flex gap-4 items-center w-full overflow-x-scroll scrollbar-hide py-2">
+                    {additionals.map((additional) => {
+                      const hasProductRequiredCustomizations = components.some(
+                        (component) =>
+                          component.customizations?.some((c) => c.isRequired)
                       );
-                    }
-
-                    return (
-                      <AdditionalCard
-                        key={additional.id}
-                        additional={additional}
-                        productId={product.id}
-                        onCustomizeClick={(additionalId) =>
-                          setActiveAdditionalModal(additionalId)
-                        }
-                        onAddToCart={handleAddAdditionalToCart}
-                        hasCustomizations={
-                          !!additionalCustomizations[additional.id]
-                        }
-                        hasProductRequiredCustomizations={
-                          hasProductRequiredCustomizations
-                        }
-                        hasCompletedProductCustomizations={
-                          hasCompletedProductCustomizations
-                        }
-                      />
-                    );
-                  })}
+                      let hasCompletedProductCustomizations = true;
+                      if (hasProductRequiredCustomizations) {
+                        hasCompletedProductCustomizations = components.every(
+                          (component) => {
+                            const requiredCustomizations =
+                              component.customizations?.filter(
+                                (c) => c.isRequired
+                              ) || [];
+                            if (requiredCustomizations.length === 0)
+                              return true;
+                            const componentData =
+                              itemCustomizations[component.id] || [];
+                            return requiredCustomizations.every((reqCustom) =>
+                              componentData.some(
+                                (c) => c.ruleId === reqCustom.id
+                              )
+                            );
+                          }
+                        );
+                      }
+                      return (
+                        <AdditionalCard
+                          key={additional.id}
+                          additional={additional}
+                          productId={product.id}
+                          onCustomizeClick={(additionalId) =>
+                            setActiveAdditionalModal(additionalId)
+                          }
+                          onAddToCart={handleAddAdditionalToCart}
+                          hasCustomizations={
+                            !!additionalCustomizations[additional.id]
+                          }
+                          hasProductRequiredCustomizations={
+                            hasProductRequiredCustomizations
+                          }
+                          hasCompletedProductCustomizations={
+                            hasCompletedProductCustomizations
+                          }
+                        />
+                      );
+                    })}
+                  </div>
                 </div>
               ) : (
                 <p className="text-gray-500 italic">
@@ -1490,10 +1435,11 @@ const ClientProductPage = ({ id }: { id: string }) => {
           </h2>
           <div className="w-full text-center">
             {product.related_products && product.related_products.length > 0 ? (
-              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+              <div className="flex gap-4 items-center w-full overflow-x-scroll scrollbar-hide py-2">
                 {product.related_products.map((relatedProduct) => (
                   <ProductCard
                     key={relatedProduct.id}
+                    className="min-w-[150px]"
                     props={{
                       id: relatedProduct.id,
                       name: relatedProduct.name,

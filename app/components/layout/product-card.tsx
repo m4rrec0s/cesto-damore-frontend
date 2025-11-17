@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import { cn } from "@/app/lib/utils";
 
 interface ProductCardProps {
   props: {
@@ -15,9 +16,10 @@ interface ProductCardProps {
     }>;
     discount?: number;
   };
+  className?: string;
 }
 
-export function ProductCard({ props }: ProductCardProps) {
+export function ProductCard({ props, className }: ProductCardProps) {
   const finalPrice = props.discount
     ? props.price - (props.discount * props.price) / 100
     : props.price;
@@ -25,7 +27,10 @@ export function ProductCard({ props }: ProductCardProps) {
   return (
     <Link
       href={`/produto/${props.id}`}
-      className="group flex flex-col relative w-full h-full min-w-[200px] max-w-[300px] bg-white rounded-2xl shadow-lg hover:shadow-2xl overflow-hidden transition-all duration-300 hover:-translate-y-2 border-2 border-transparent hover:border-rose-300"
+      className={cn(
+        "group flex flex-col min-w-[200px] max-w-[250px] justify-between relative bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-xs transition-all duration-300 overflow-hidden",
+        className
+      )}
     >
       <div className="relative aspect-square overflow-hidden bg-gradient-to-br from-rose-50 via-pink-50 to-orange-50">
         <Image
