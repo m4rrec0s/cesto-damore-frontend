@@ -67,7 +67,6 @@ export default function ManageLayout({
             width={120}
             height={120}
             className="mb-3"
-            style={{ filter: "invert(1)" }}
           />
           <h2 className="text-lg font-bold text-rose-900">Painel Admin</h2>
         </Link>

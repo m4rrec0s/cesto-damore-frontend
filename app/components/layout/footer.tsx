@@ -199,8 +199,8 @@ export function SiteFooter() {
                 <Clock className="h-5 w-5 text-rose-400 flex-shrink-0 mt-0.5" />
                 <div>
                   <p className="font-medium text-white">Horário de Entrega</p>
-                  <p className="text-gray-400">Seg - Sex: 8h às 18h</p>
-                  <p className="text-gray-400">Sábado: 8h às 14h</p>
+                  <p className="text-gray-400">Seg - Sex: 8h às 17h</p>
+                  <p className="text-gray-400">Sábado: 8h às 11h</p>
                 </div>
               </li>
               <li className="flex items-start gap-3 text-sm">
