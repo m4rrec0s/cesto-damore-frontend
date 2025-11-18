@@ -9,9 +9,10 @@ import {
   TabsList,
   TabsTrigger,
 } from "@/app/components/ui/tabs";
-import { Box, Layers } from "lucide-react";
+import { Box, Layers, Layout } from "lucide-react";
 import { ProductsTab } from "@/app/manage/components/catalog/ProductsTab";
 import { ItemsTab } from "@/app/manage/components/catalog/ItemsTab";
+import LayoutsTab from "@/app/manage/components/catalog/LayoutsTab";
 
 export default function CatalogPage() {
   const { user, isLoading: authLoading } = useAuth();
@@ -47,7 +48,7 @@ export default function CatalogPage() {
     <div className="p-6 bg-gray-50 min-h-screen">
       <div className="max-w-none sm:max-w-[90%] mx-auto">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-4 mb-6">
+          <TabsList className="grid w-full grid-cols-3 md:grid-cols-4 mb-6">
             <TabsTrigger value="products" className="flex items-center gap-2">
               <Box className="w-4 h-4" />
               Produtos
@@ -56,14 +57,10 @@ export default function CatalogPage() {
               <Layers className="w-4 h-4" />
               Componentes
             </TabsTrigger>
-
-            {/* <TabsTrigger
-              value="constraints"
-              className="flex items-center gap-2"
-            >
-              <Link2 className="w-4 h-4" />
-              Restrições
-            </TabsTrigger> */}
+            <TabsTrigger value="layouts" className="flex items-center gap-2">
+              <Layout className="w-4 h-4" />
+              Layouts
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="products">
@@ -73,10 +70,10 @@ export default function CatalogPage() {
           <TabsContent value="items">
             <ItemsTab />
           </TabsContent>
-          {/* 
-          <TabsContent value="constraints">
-            <ConstraintsTab />
-          </TabsContent> */}
+
+          <TabsContent value="layouts">
+            <LayoutsTab />
+          </TabsContent>
         </Tabs>
       </div>
     </div>
