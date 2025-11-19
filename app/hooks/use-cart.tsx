@@ -1,5 +1,6 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { useApi, Product, Additional, CustomizationTypeValue } from "./use-api";
+import { useAuth } from "./use-auth";
 import type { CustomizationValue } from "./use-customization";
 
 export interface CartCustomization extends CustomizationValue {
@@ -136,6 +137,7 @@ const calculateCustomizationTotal = (
 
 export function useCart() {
   const api = useApi();
+  const { user } = useAuth();
 
   const [cart, setCart] = useState<CartState>(() => {
     if (typeof window !== "undefined") {
@@ -191,6 +193,153 @@ export function useCart() {
     };
   });
 
+  const [pendingOrderId, setPendingOrderId] = useState<string | null>(() => {
+    if (typeof window === "undefined") return null;
+    return localStorage.getItem("pendingOrderId");
+  });
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!pendingOrderId) {
+      localStorage.removeItem("pendingOrderId");
+      return;
+    }
+    localStorage.setItem("pendingOrderId", pendingOrderId);
+  }, [pendingOrderId]);
+
+  const [orderMetadata, _setOrderMetadata] = useState<{
+    send_anonymously?: boolean;
+    complement?: string;
+  }>({});
+
+  const setOrderMetadata = useCallback(
+    (metadata: { send_anonymously?: boolean; complement?: string }) => {
+      _setOrderMetadata((prev) => ({ ...prev, ...metadata }));
+    },
+    []
+  );
+
+  // Quando metadata do pedido muda, sincronizar com o backend (se houver rascunho)
+  useEffect(() => {
+    // Debounce sending metadata to server via existing debouncedSync
+    if (!user) return;
+    // Apenas sincronizar metadata se houver pendingOrderId (evita criar pedido sem itens)
+    if (!pendingOrderId) return;
+    // reutiliza o debouncedSync para enviar a atualização
+    debouncedSync(cart);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orderMetadata, pendingOrderId, user]);
+
+  const cartItemsToOrderItems = useCallback((items: CartItem[]) => {
+    return items.map((item) => ({
+      product_id: item.product_id,
+      quantity: item.quantity,
+      price: item.effectivePrice,
+      additionals: item.additionals?.map((add) => ({
+        additional_id: add.id,
+        quantity: item.quantity,
+        price: add.price,
+      })),
+      customizations: item.customizations?.map((custom) => ({
+        customization_id: custom.customization_id || "default",
+        customization_type: custom.customization_type,
+        title: custom.title,
+        customization_data: {
+          text: custom.text,
+          photos: custom.photos,
+          selected_option: custom.selected_option,
+          selected_item: custom.selected_item,
+        },
+      })),
+    }));
+  }, []);
+
+  const syncCartToBackend = useCallback(
+    async (currentCart: CartState) => {
+      if (!user) return; // Only sync when user is authenticated
+
+      try {
+        console.log(
+          "🔁 syncCartToBackend - items:",
+          currentCart.items.length,
+          "pendingOrderId:",
+          pendingOrderId
+        );
+        const itemsPayload = cartItemsToOrderItems(currentCart.items);
+
+        if (itemsPayload.length === 0) {
+          if (pendingOrderId) {
+            await api.deleteOrder(pendingOrderId);
+            setPendingOrderId(null);
+            // Limpar metadata local quando o pedido pendente for removido
+            setOrderMetadata({
+              send_anonymously: false,
+              complement: undefined,
+            });
+          }
+          return;
+        }
+
+        if (!pendingOrderId) {
+          const payload: {
+            user_id: string;
+            items: OrderItem[];
+            is_draft: boolean;
+            send_anonymously: boolean;
+            complement?: string;
+          } = {
+            user_id: user.id,
+            items: itemsPayload,
+            is_draft: true,
+            send_anonymously: orderMetadata.send_anonymously || false,
+            complement: orderMetadata.complement || undefined,
+          };
+          const order = await api.createOrder(payload);
+          setPendingOrderId(order?.id || null);
+          // Atualizar metadata local com os dados do servidor (caso defaults tenham sido definidos lá)
+          if (order) {
+            setOrderMetadata({
+              send_anonymously: !!order.send_anonymously,
+              complement: order.complement || undefined,
+            });
+          }
+        } else {
+          await api.updateOrderItems(pendingOrderId, itemsPayload);
+          // Also update metadata if changed
+          await api.updateOrderMetadata(pendingOrderId, {
+            send_anonymously: orderMetadata.send_anonymously,
+            complement: orderMetadata.complement,
+          });
+        }
+      } catch (error) {
+        console.error("Erro ao sincronizar carrinho com backend:", error);
+      }
+    },
+    [
+      api,
+      cartItemsToOrderItems,
+      pendingOrderId,
+      user,
+      orderMetadata,
+      setOrderMetadata,
+    ]
+  );
+
+  // Debounce setup to avoid spamming the backend when cart changes fast
+  const syncTimeoutRef = useRef<number | null>(null);
+  const debouncedSync = useCallback(
+    (currentCart: CartState) => {
+      if (typeof window === "undefined") return;
+      if (syncTimeoutRef.current) {
+        window.clearTimeout(syncTimeoutRef.current);
+      }
+      syncTimeoutRef.current = window.setTimeout(() => {
+        void syncCartToBackend(currentCart);
+      }, 300);
+    },
+    [syncCartToBackend]
+  );
+
   useEffect(() => {
     if (typeof window !== "undefined") {
       try {
@@ -242,6 +391,110 @@ export function useCart() {
       }
     }
   }, [cart]);
+
+  // Quando o usuário autentica, sincronizar/recuperar rascunho do backend
+  useEffect(() => {
+    const init = async () => {
+      if (!user) return;
+
+      try {
+        if (pendingOrderId) {
+          // Tentar recuperar pedido pendente e preencher o carrinho local caso esteja vazio
+          const serverOrder = await api.getOrder(pendingOrderId);
+          if (serverOrder?.items && serverOrder.items.length > 0) {
+            const transformedCart = calculateTotals(
+              (() => {
+                type ServerAdditional = {
+                  additional_id: string;
+                  price: number;
+                  additional?: { name?: string };
+                };
+                type ServerCustomization = {
+                  customization_id?: string;
+                  value?: string;
+                };
+                type ServerOrderItem = {
+                  product_id: string;
+                  quantity: number;
+                  price: number;
+                  effectivePrice?: number;
+                  customization_total?: number;
+                  additionals?: ServerAdditional[];
+                  customizations?: ServerCustomization[];
+                  product?: Product;
+                };
+
+                return serverOrder.items.map((it: ServerOrderItem) => {
+                  const item = it;
+
+                  const additionals =
+                    item.additionals?.map((a) => ({
+                      id: a.additional_id,
+                      price: a.price,
+                      name: a.additional?.name,
+                    })) || [];
+
+                  const customizations = item.customizations
+                    ? item.customizations.map((c) => {
+                        const parsed = (() => {
+                          try {
+                            return JSON.parse(c.value || "{}") as Record<
+                              string,
+                              unknown
+                            >;
+                          } catch {
+                            return {};
+                          }
+                        })();
+
+                        return {
+                          ...parsed,
+                          customization_id: c.customization_id,
+                          title: (parsed.title as string) || undefined,
+                        };
+                      })
+                    : undefined;
+
+                  return {
+                    product_id: item.product_id,
+                    quantity: item.quantity,
+                    price: item.price,
+                    effectivePrice:
+                      (item.effectivePrice || item.price) +
+                      (item.customization_total || 0),
+                    additionals,
+                    customizations,
+                    product: item.product,
+                  };
+                });
+              })()
+            );
+            if (transformedCart.items.length > 0 && cart.items.length === 0) {
+              setCart(transformedCart);
+            }
+            // Se o pedido do servidor tiver metadata, atualizar o estado local
+            if (
+              typeof serverOrder.send_anonymously !== "undefined" ||
+              serverOrder.complement
+            ) {
+              setOrderMetadata({
+                send_anonymously: !!serverOrder.send_anonymously,
+                complement: serverOrder.complement || undefined,
+              });
+            }
+          }
+        } else if (cart.items.length > 0) {
+          // Sincronizar local -> server sempre que houver itens e não existir rascunho
+          await syncCartToBackend(cart);
+        }
+      } catch (error) {
+        console.error("Erro ao inicializar sincronização de carrinho:", error);
+      }
+    };
+
+    init();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
 
   const calculateTotals = useCallback((items: CartItem[]): CartState => {
     const safeItems = Array.isArray(items) ? items : [];
@@ -351,6 +604,8 @@ export function useCart() {
           }
 
           const updatedCart = calculateTotals(newItems);
+          // Sincronizar com backend (se aplicável)
+          debouncedSync(updatedCart);
           return updatedCart;
         });
       } catch (error) {
@@ -358,7 +613,7 @@ export function useCart() {
         throw error;
       }
     },
-    [api, calculateTotals]
+    [api, calculateTotals, debouncedSync]
   );
 
   const removeFromCart = useCallback(
@@ -388,10 +643,12 @@ export function useCart() {
                 targetCustomizations
             )
         );
-        return calculateTotals(newItems);
+        const updatedCart = calculateTotals(newItems);
+        debouncedSync(updatedCart);
+        return updatedCart;
       });
     },
-    [calculateTotals]
+    [calculateTotals, debouncedSync]
   );
 
   const updateQuantity = useCallback(
@@ -433,10 +690,12 @@ export function useCart() {
           }
           return item;
         });
-        return calculateTotals(newItems);
+        const updatedCart = calculateTotals(newItems);
+        debouncedSync(updatedCart);
+        return updatedCart;
       });
     },
-    [calculateTotals, removeFromCart]
+    [calculateTotals, removeFromCart, debouncedSync]
   );
 
   /**
@@ -499,10 +758,12 @@ export function useCart() {
           effectivePrice,
         };
 
-        return calculateTotals(newItems);
+        const updatedCart = calculateTotals(newItems);
+        debouncedSync(updatedCart);
+        return updatedCart;
       });
     },
-    [calculateTotals]
+    [calculateTotals, debouncedSync]
   );
 
   const clearCart = useCallback(() => {
@@ -520,7 +781,8 @@ export function useCart() {
         console.error("Erro ao limpar carrinho do localStorage:", error);
       }
     }
-  }, []);
+    debouncedSync(emptyCart);
+  }, [debouncedSync]);
 
   const createOrder = useCallback(
     async (
@@ -534,6 +796,8 @@ export function useCart() {
         deliveryCity?: string;
         deliveryState?: string;
         recipientPhone?: string;
+        sendAnonymously?: boolean;
+        complement?: string;
       }
     ) => {
       if (cart.items.length === 0) {
@@ -624,6 +888,8 @@ export function useCart() {
         delivery_date: deliveryDate,
         recipient_phone: options.recipientPhone,
         discount: 0, // Pode ser ajustado se houver desconto
+        send_anonymously: options?.sendAnonymously,
+        complement: options?.complement,
       };
 
       // Log sucinto do payload para evitar impressão de base64/imagens
@@ -635,6 +901,19 @@ export function useCart() {
       });
 
       const order = await api.createOrder(payload);
+
+      // Pedido final criado com sucesso: remover rascunho do backend
+      setPendingOrderId(null);
+      try {
+        if (typeof window !== "undefined") {
+          localStorage.removeItem("cart_pending_order_id");
+        }
+      } catch (err) {
+        console.warn(
+          "Não foi possível remover pending order do localStorage:",
+          err
+        );
+      }
 
       console.log("✅ Pedido criado com sucesso:", order?.id);
       return order;
@@ -1207,5 +1486,7 @@ export function useCart() {
     getAvailableDates,
     getDeliveryDateBounds,
     formatDate,
+    orderMetadata,
+    setOrderMetadata,
   };
 }

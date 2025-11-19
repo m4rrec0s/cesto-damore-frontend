@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useAuth } from "@/app/hooks/use-auth";
 import { useCartContext } from "@/app/hooks/cart-context";
+import { useCart } from "@/app/hooks/use-cart";
 import { useApi } from "@/app/hooks/use-api";
 import { usePaymentManager } from "@/app/hooks/use-payment-manager";
 import type { CartCustomization } from "@/app/hooks/use-cart";
@@ -514,6 +515,7 @@ export default function CarrinhoPage() {
     updateQuantity,
     removeFromCart,
     clearCart,
+    setOrderMetadata,
     // updateCustomizations, // Para implementação futura de edição completa
     createOrder,
     getMinPreparationHours,
@@ -565,6 +567,8 @@ export default function CarrinhoPage() {
   const [state, setState] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
   const [recipientPhone, setRecipientPhone] = useState("");
+  const [complemento, setComplemento] = useState("");
+  const [sendAnonymously, setSendAnonymously] = useState(false);
   const [isSelfRecipient, setIsSelfRecipient] = useState(false);
   const [isLoadingCep, setIsLoadingCep] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<"" | "pix" | "card">("");
@@ -1538,6 +1542,8 @@ export default function CarrinhoPage() {
           deliveryCity: city,
           deliveryState: state,
           recipientPhone: normalizePhoneForBackend(recipientPhone),
+          send_anonymously: sendAnonymously,
+          complement: complemento,
         }
       );
 
@@ -2027,6 +2033,24 @@ export default function CarrinhoPage() {
                                 ⚠️ Telefone incompleto
                               </p>
                             )}
+                          <div className="mt-3 flex items-center gap-3">
+                            <label className="inline-flex items-center">
+                              <input
+                                type="checkbox"
+                                checked={sendAnonymously}
+                                onChange={(e) => {
+                                  setSendAnonymously(e.target.checked);
+                                  setOrderMetadata({
+                                    send_anonymously: e.target.checked,
+                                  });
+                                }}
+                                className="w-4 h-4 text-rose-600 border-gray-300 rounded focus:ring-rose-500"
+                              />
+                              <span className="ml-2 text-sm text-gray-700">
+                                Enviar anonimamente
+                              </span>
+                            </label>
+                          </div>
                         </>
                       )}
                     </div>
@@ -2089,6 +2113,21 @@ export default function CarrinhoPage() {
                           value={houseNumber}
                           onChange={(e) => setHouseNumber(e.target.value)}
                           placeholder="123"
+                          className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent transition-all"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-bold text-gray-900 mb-2">
+                          Complemento
+                        </label>
+                        <input
+                          type="text"
+                          value={complemento}
+                          onChange={(e) => {
+                            setComplemento(e.target.value);
+                            setOrderMetadata({ complement: e.target.value });
+                          }}
+                          placeholder="Apt, bloco, ponto de referência"
                           className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent transition-all"
                         />
                       </div>

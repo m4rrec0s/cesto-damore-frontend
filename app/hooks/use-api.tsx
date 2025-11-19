@@ -1119,12 +1119,15 @@ class ApiService {
     user_id: string;
     items: OrderItemInput[];
     delivery_address?: string | null;
-    delivery_city: string;
-    delivery_state: string;
+    delivery_city?: string;
+    delivery_state?: string;
     delivery_date?: Date | null;
-    payment_method: "pix" | "card";
-    recipient_phone: string;
+    payment_method?: "pix" | "card";
+    recipient_phone?: string;
     discount?: number;
+    is_draft?: boolean;
+    send_anonymously?: boolean;
+    complement?: string;
   }) => {
     console.log("📡 Enviando pedido para o backend:", payload);
     const res = await this.client.post("/orders", payload);
@@ -1134,6 +1137,21 @@ class ApiService {
   };
   deleteOrder = async (id: string) => {
     const res = await this.client.delete(`/orders/${id}`);
+    this.clearCache("orders");
+    return res.data;
+  };
+
+  updateOrderItems = async (id: string, items: OrderItemInput[]) => {
+    const res = await this.client.put(`/orders/${id}/items`, { items });
+    this.clearCache("orders");
+    return res.data;
+  };
+
+  updateOrderMetadata = async (
+    id: string,
+    metadata: { send_anonymously?: boolean; complement?: string }
+  ) => {
+    const res = await this.client.put(`/orders/${id}/metadata`, metadata);
     this.clearCache("orders");
     return res.data;
   };
