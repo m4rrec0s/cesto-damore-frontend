@@ -223,6 +223,7 @@ export function usePaymentPolling({
     onTimeout,
     onPending,
     stopPolling,
+    status,
   ]);
 
   const startPolling = useCallback(() => {

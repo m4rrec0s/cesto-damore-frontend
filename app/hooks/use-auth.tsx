@@ -117,15 +117,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const result = await signInWithPopup(auth, provider);
       const idToken = await result.user.getIdToken();
 
-      // Extrair informações do usuário do Google
       const email = result.user.email;
       const name = result.user.displayName;
       const imageUrl = result.user.photoURL;
 
-      // Enviar token e informações do usuário para o backend
       const response = await api.google(idToken, { email, name, imageUrl });
 
-      // Fazer login localmente com os dados retornados
       login(response.user, response.appToken);
     } catch (error) {
       console.error("Erro no login com Google:", error);

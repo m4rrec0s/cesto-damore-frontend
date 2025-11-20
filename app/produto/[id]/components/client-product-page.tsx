@@ -29,7 +29,7 @@ const formatCurrency = (value: number) =>
 
 const ClientProductPage = ({ id }: { id: string }) => {
   const { getProduct, getAdditionalsByProduct, getItemsByProduct } = useApi();
-  const { addToCart } = useCartContext();
+  const { addToCart, cart } = useCartContext();
 
   const [product, setProduct] = useState<Product>({} as Product);
   const [loadingProduct, setLoadingProduct] = useState(true);
@@ -600,6 +600,13 @@ const ClientProductPage = ({ id }: { id: string }) => {
     () => unitPriceWithCustomizations * quantity,
     [unitPriceWithCustomizations, quantity]
   );
+
+  const isItemInCart = useMemo(() => {
+    if (!product.id) return false;
+
+    // Verificar se existe algum item no carrinho com o mesmo product_id
+    return cart.items.some((item) => item.product_id === product.id);
+  }, [cart.items, product.id]);
 
   // const currentConfigSignature = useMemo(
   //   () => serializeCustomizationsSignature(cartCustomizations),
@@ -1360,7 +1367,11 @@ const ClientProductPage = ({ id }: { id: string }) => {
                 ) : (
                   <>
                     <ShoppingCart className="w-5 h-5 mr-2" />
-                    Adicionar por {formatCurrency(totalPriceForQuantity)}
+                    {isItemInCart
+                      ? "Já adicionado ao carrinho"
+                      : `Adicionar por ${formatCurrency(
+                          totalPriceForQuantity
+                        )}`}
                   </>
                 )}
               </Button>

@@ -2,7 +2,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useAuth } from "@/app/hooks/use-auth";
 import { useCartContext } from "@/app/hooks/cart-context";
-import { useCart } from "@/app/hooks/use-cart";
+// import { useCart } from "@/app/hooks/use-cart";
 import { useApi } from "@/app/hooks/use-api";
 import { usePaymentManager } from "@/app/hooks/use-payment-manager";
 import type { CartCustomization } from "@/app/hooks/use-cart";

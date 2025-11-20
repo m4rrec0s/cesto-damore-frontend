@@ -108,6 +108,8 @@ interface CartContextType {
   getAvailableDates: () => AvailableDate[];
   getDeliveryDateBounds: () => { minDate: Date; maxDate: Date };
   formatDate: (date: Date) => string;
+  orderMetadata: Record<string, unknown>;
+  setOrderMetadata: (metadata: Record<string, unknown>) => void;
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined);

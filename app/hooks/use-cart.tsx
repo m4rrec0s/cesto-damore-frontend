@@ -135,7 +135,106 @@ const calculateCustomizationTotal = (
   );
 };
 
-export function useCart() {
+export function useCart(): {
+  cart: CartState;
+  addToCart: (
+    productId: string,
+    quantity?: number,
+    additionals?: string[],
+    additionalColors?: Record<string, string>,
+    customizations?: CartCustomization[]
+  ) => Promise<void>;
+  removeFromCart: (
+    productId: string,
+    additionals?: string[],
+    customizations?: CartCustomization[],
+    additionalColors?: Record<string, string>
+  ) => void;
+  updateQuantity: (
+    productId: string,
+    quantity: number,
+    additionals?: string[],
+    customizations?: CartCustomization[],
+    additionalColors?: Record<string, string>
+  ) => void;
+  updateCustomizations: (
+    productId: string,
+    oldCustomizations: CartCustomization[],
+    newCustomizations: CartCustomization[],
+    additionals?: string[],
+    additionalColors?: Record<string, string>
+  ) => void;
+  clearCart: () => void;
+  createOrder: (
+    userId: string,
+    deliveryAddress?: string,
+    deliveryDate?: Date,
+    options?: {
+      shippingCost?: number;
+      paymentMethod?: "pix" | "card";
+      grandTotal?: number;
+      deliveryCity?: string;
+      deliveryState?: string;
+      recipientPhone?: string;
+    }
+  ) => Promise<unknown>;
+  createOrderWithTransparentCheckout: (
+    userId: string,
+    deliveryAddress?: string,
+    deliveryDate?: Date,
+    options?: {
+      shippingCost?: number;
+      paymentMethod?: "pix" | "card";
+      grandTotal?: number;
+      deliveryCity?: string;
+      deliveryState?: string;
+      recipientPhone?: string;
+    }
+  ) => Promise<{
+    order: { id: number; status: string; total: number };
+    checkoutUrl: string;
+    redirectToCheckout: () => void;
+  }>;
+  createPaymentPreference: (
+    userEmail: string,
+    orderId?: string
+  ) => Promise<{
+    init_point?: string;
+    sandbox_init_point?: string;
+    id: string;
+  }>;
+  processTransparentPayment: (
+    orderId: string,
+    paymentData: {
+      payment_method_id: "pix" | "credit_card" | "debit_card";
+      token?: string;
+      issuer_id?: string;
+      installments?: number;
+      payer: {
+        email: string;
+        first_name?: string;
+        last_name?: string;
+        identification?: {
+          type: string;
+          number: string;
+        };
+      };
+    }
+  ) => Promise<unknown>;
+  getDeliveryWindows: () => {
+    weekdays: DeliveryWindow[];
+    weekends: DeliveryWindow[];
+  };
+  isWeekend: (date: Date) => boolean;
+  hasCustomItems: () => boolean;
+  getMinPreparationHours: () => number;
+  generateTimeSlots: (date: Date) => TimeSlot[];
+  getAvailableDates: () => AvailableDate[];
+  getDeliveryDateBounds: () => { minDate: Date; maxDate: Date };
+  formatDate: (date: Date) => string;
+  orderMetadata: Record<string, unknown>;
+  setOrderMetadata: (metadata: Record<string, unknown>) => void;
+} {
   const api = useApi();
   const { user } = useAuth();
 
@@ -198,6 +297,31 @@ export function useCart() {
     return localStorage.getItem("pendingOrderId");
   });
 
+  const calculateTotals = useCallback((items: CartItem[]): CartState => {
+    const safeItems = Array.isArray(items) ? items : [];
+
+    const total = safeItems.reduce((sum, item) => {
+      const itemTotal = item.effectivePrice * item.quantity;
+      const additionalsTotal =
+        item.additionals?.reduce(
+          (addSum, add) => addSum + add.price * item.quantity,
+          0
+        ) || 0;
+      return sum + itemTotal + additionalsTotal;
+    }, 0);
+
+    const itemCount = safeItems.reduce(
+      (count, item) => count + item.quantity,
+      0
+    );
+
+    return {
+      items: safeItems,
+      total,
+      itemCount,
+    };
+  }, []);
+
   useEffect(() => {
     if (typeof window === "undefined") return;
     if (!pendingOrderId) {
@@ -229,6 +353,138 @@ export function useCart() {
     debouncedSync(cart);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orderMetadata, pendingOrderId, user]);
+
+  // Carregar pedido pendente existente quando usuário faz login
+  useEffect(() => {
+    const loadPendingOrder = async () => {
+      if (!user) return;
+
+      try {
+        const pendingOrder = await api.getPendingOrder(user.id);
+        if (
+          pendingOrder &&
+          pendingOrder.items &&
+          pendingOrder.items.length > 0
+        ) {
+          console.log(
+            "📦 [useCart] Carregando pedido pendente existente:",
+            pendingOrder.id
+          );
+
+          // Converter itens do pedido para CartItems
+          const cartItems: CartItem[] = [];
+
+          for (const orderItem of pendingOrder.items) {
+            // Buscar produto completo
+            const product = await api.getProduct(orderItem.product_id);
+
+            // Buscar adicionais se existirem
+            const additionals =
+              orderItem.additionals && orderItem.additionals.length > 0
+                ? await Promise.all(
+                    orderItem.additionals.map(
+                      (add: { additional_id: string }) =>
+                        api.getAdditional(add.additional_id)
+                    )
+                  )
+                : [];
+
+            // Converter customizações do pedido para CartCustomizations
+            const customizations: CartCustomization[] = [];
+            if (
+              orderItem.customizations &&
+              orderItem.customizations.length > 0
+            ) {
+              for (const customization of orderItem.customizations) {
+                try {
+                  const data = JSON.parse(customization.value);
+                  if (data.customization_type === "TEXT") {
+                    customizations.push({
+                      customization_id: customization.customization_id,
+                      title: data.title || "Personalização",
+                      customization_type: "TEXT",
+                      is_required: false,
+                      price_adjustment: data.price_adjustment || 0,
+                      text: data.text || "",
+                    });
+                  } else if (data.customization_type === "MULTIPLE_CHOICE") {
+                    customizations.push({
+                      customization_id: customization.customization_id,
+                      title: data.title || "Personalização",
+                      customization_type: "MULTIPLE_CHOICE",
+                      is_required: false,
+                      price_adjustment: data.price_adjustment || 0,
+                      selected_option: data.selected_option,
+                      selected_option_label: data.selected_option_label,
+                    });
+                  } else if (data.customization_type === "IMAGES") {
+                    customizations.push({
+                      customization_id: customization.customization_id,
+                      title: data.title || "Personalização",
+                      customization_type: "IMAGES",
+                      is_required: false,
+                      price_adjustment: data.price_adjustment || 0,
+                      photos: data.photos || [],
+                    });
+                  }
+                } catch (error) {
+                  console.error("Erro ao parsear customização:", error);
+                }
+              }
+            }
+
+            const customizationTotal = customizations.reduce(
+              (sum, c) => sum + (c.price_adjustment || 0),
+              0
+            );
+
+            const baseEffective =
+              product.price * (1 - (product.discount || 0) / 100);
+            const effectivePrice = Number(
+              (baseEffective + customizationTotal).toFixed(2)
+            );
+
+            cartItems.push({
+              product_id: orderItem.product_id,
+              quantity: orderItem.quantity,
+              price: product.price,
+              effectivePrice,
+              discount: product.discount || 0,
+              additional_ids:
+                orderItem.additionals?.map(
+                  (add: { additional_id: string }) => add.additional_id
+                ) || [],
+              additionals,
+              customizations:
+                customizations.length > 0 ? customizations : undefined,
+              customization_total:
+                customizationTotal > 0 ? customizationTotal : undefined,
+              product,
+            });
+          }
+
+          // Carregar metadata do pedido
+          if (
+            pendingOrder.send_anonymously !== undefined ||
+            pendingOrder.complement
+          ) {
+            setOrderMetadata({
+              send_anonymously: pendingOrder.send_anonymously || false,
+              complement: pendingOrder.complement || undefined,
+            });
+          }
+
+          const updatedCart = calculateTotals(cartItems);
+          setCart(updatedCart);
+          setPendingOrderId(pendingOrder.id);
+        }
+      } catch (error) {
+        console.error("Erro ao carregar pedido pendente:", error);
+      }
+    };
+
+    loadPendingOrder();
+  }, [user, api, calculateTotals, setOrderMetadata]);
 
   const cartItemsToOrderItems = useCallback((items: CartItem[]) => {
     return items.map((item) => ({
@@ -281,6 +537,29 @@ export function useCart() {
         }
 
         if (!pendingOrderId) {
+          // Verificar se já existe um pedido pendente para evitar múltiplos
+          try {
+            const existingPending = await api.getPendingOrder(user.id);
+            if (existingPending) {
+              console.log(
+                "⚠️ [useCart] Já existe pedido pendente, usando existente:",
+                existingPending.id
+              );
+              setPendingOrderId(existingPending.id);
+              // Atualizar metadata se necessário
+              setOrderMetadata({
+                send_anonymously: !!existingPending.send_anonymously,
+                complement: existingPending.complement || undefined,
+              });
+              return;
+            }
+          } catch (error) {
+            console.error(
+              "Erro ao verificar pedido pendente existente:",
+              error
+            );
+          }
+
           const payload: {
             user_id: string;
             items: OrderItem[];
@@ -495,31 +774,6 @@ export function useCart() {
     init();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
-
-  const calculateTotals = useCallback((items: CartItem[]): CartState => {
-    const safeItems = Array.isArray(items) ? items : [];
-
-    const total = safeItems.reduce((sum, item) => {
-      const itemTotal = item.effectivePrice * item.quantity;
-      const additionalsTotal =
-        item.additionals?.reduce(
-          (addSum, add) => addSum + add.price * item.quantity,
-          0
-        ) || 0;
-      return sum + itemTotal + additionalsTotal;
-    }, 0);
-
-    const itemCount = safeItems.reduce(
-      (count, item) => count + item.quantity,
-      0
-    );
-
-    return {
-      items: safeItems,
-      total,
-      itemCount,
-    };
-  }, []);
 
   const addToCart = useCallback(
     async (

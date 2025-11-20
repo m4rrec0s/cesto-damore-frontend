@@ -70,11 +70,11 @@ export function Checkout({ user, onClose, isOpen = true }: CheckoutProps) {
     setIsProcessing(true);
     try {
       // Criar pedido
-      const order = await createOrder(
+      const order = (await createOrder(
         user.id,
         deliveryAddress,
         deliveryDate ? new Date(deliveryDate) : undefined
-      );
+      )) as { id: string };
 
       // Criar preferência de pagamento
       const preference = await createPaymentPreference(user.email, order.id);
