@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from "react";
+import { toast } from "sonner";
 import { useApi, Product, Additional, CustomizationTypeValue } from "./use-api";
 import { useAuth } from "./use-auth";
 import type { CustomizationValue } from "./use-customization";
@@ -573,6 +574,10 @@ export function useCart(): {
             send_anonymously: orderMetadata.send_anonymously || false,
             complement: orderMetadata.complement || undefined,
           };
+          console.log(
+            "📦 [syncCartToBackend] Payload para criar pedido draft:",
+            payload
+          );
           const order = await api.createOrder(payload);
           setPendingOrderId(order?.id || null);
           // Atualizar metadata local com os dados do servidor (caso defaults tenham sido definidos lá)
@@ -590,8 +595,35 @@ export function useCart(): {
             complement: orderMetadata.complement,
           });
         }
-      } catch (error) {
+      } catch (error: unknown) {
         console.error("Erro ao sincronizar carrinho com backend:", error);
+        // Se receber 403 (por exemplo: pedido cancelado, permissão negada), limpar pending order local
+        try {
+          const maybe = error as { response?: { status: number } };
+          const status = maybe?.response?.status;
+          if (status === 403 || status === 404) {
+            console.warn(
+              "Pedido pendente inválido/sem permissão - limpando rascunho local"
+            );
+            setPendingOrderId(null);
+            if (typeof window !== "undefined") {
+              localStorage.removeItem("pendingOrderId");
+            }
+            // Também reset metadata local
+            setOrderMetadata({
+              send_anonymously: false,
+              complement: undefined,
+            });
+            return;
+          }
+          if (status === 500) {
+            toast.error(
+              "Erro ao sincronizar o carrinho com o servidor. Tente novamente mais tarde."
+            );
+          }
+        } catch (e: unknown) {
+          // ignore
+        }
       }
     },
     [

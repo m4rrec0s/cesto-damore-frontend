@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
 import {
   useApi,
   Product as ApiProduct,
@@ -41,7 +41,7 @@ export default function Home() {
   const [products, setProducts] = useState<GridProduct[]>([]);
   const [feedData, setFeedData] = useState<PublicFeedResponse | null>(null);
   const [page, setPage] = useState<number>(1);
-  const [perPage] = useState<number>(2);
+  const [perPage] = useState<number>(3);
   const [sections, setSections] = useState<PublicFeedResponse["sections"]>([]);
   const [pagination, setPagination] = useState<{
     totalSections?: number;
@@ -49,6 +49,11 @@ export default function Home() {
     perPage?: number;
   } | null>(null);
   const [useFallback, setUseFallback] = useState(false);
+
+  const [scrollThreshold, setScrollThreshold] = useState<string>("1300px");
+
+  // Ref para o container do InfiniteScroll
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   const cachedData = useMemo(() => {
     if (typeof window === "undefined") return null;
@@ -65,6 +70,19 @@ export default function Home() {
       return null;
     }
   }, [api]);
+
+  useEffect(() => {
+    const computeThreshold = () => {
+      // Aumentar o threshold mínimo para garantir que carregue antes do footer
+      const minPx = 800; // Aumentado de 300px para 800px
+      const val = Math.max(minPx, Math.floor(window.innerHeight * 0.6)); // Aumentado de 0.4 para 0.6
+      setScrollThreshold(`${val}px`);
+    };
+
+    computeThreshold();
+    window.addEventListener("resize", computeThreshold);
+    return () => window.removeEventListener("resize", computeThreshold);
+  }, []);
 
   useEffect(() => {
     const loadData = async () => {
@@ -220,11 +238,15 @@ export default function Home() {
         )}
 
       {feedData && !useFallback ? (
-        <div className="space-y-8 pb-12 animate-fadeIn">
+        <div
+          className="space-y-8 pb-12 animate-fadeIn"
+          ref={scrollContainerRef}
+        >
           <InfiniteScroll
             dataLength={sections.length}
             next={() => loadMoreSections()}
             hasMore={sections.length < (pagination?.totalSections || 0)}
+            scrollThreshold={scrollThreshold}
             loader={
               <h4 className="text-center py-4 animate-pulse">
                 Carregando mais seções...

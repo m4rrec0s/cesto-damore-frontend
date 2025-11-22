@@ -397,6 +397,8 @@ export interface Order {
   created_at: string;
   updated_at: string;
   delivery_address?: string | null;
+  complement?: string | null;
+  send_anonymously?: boolean | null;
   delivery_city?: string | null;
   delivery_state?: string | null;
   delivery_date?: string | null;
@@ -1149,9 +1151,24 @@ class ApiService {
 
   updateOrderMetadata = async (
     id: string,
-    metadata: { send_anonymously?: boolean; complement?: string }
+    metadata: {
+      send_anonymously?: boolean;
+      complement?: string;
+      delivery_address?: string | null;
+      delivery_city?: string | null;
+      delivery_state?: string | null;
+      recipient_phone?: string | null;
+      delivery_date?: string | Date | null;
+    }
   ) => {
-    const res = await this.client.put(`/orders/${id}/metadata`, metadata);
+    const payload = { ...metadata } as {
+      delivery_date?: string | Date | null;
+      [key: string]: unknown;
+    };
+    if (payload.delivery_date instanceof Date) {
+      payload.delivery_date = payload.delivery_date.toISOString();
+    }
+    const res = await this.client.put(`/orders/${id}/metadata`, payload);
     this.clearCache("orders");
     return res.data;
   };

@@ -3,7 +3,8 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useAuth } from "@/app/hooks/use-auth";
 import { useCartContext } from "@/app/hooks/cart-context";
 // import { useCart } from "@/app/hooks/use-cart";
-import { useApi } from "@/app/hooks/use-api";
+import { motion, AnimatePresence, easeIn, easeOut } from "framer-motion";
+import { type Order, useApi } from "@/app/hooks/use-api";
 import { usePaymentManager } from "@/app/hooks/use-payment-manager";
 import type { CartCustomization } from "@/app/hooks/use-cart";
 import { Card } from "@/app/components/ui/card";
@@ -27,7 +28,6 @@ import {
   AlertCircle,
   Smartphone,
   MapPin,
-  ChevronLeftIcon,
   CalendarIcon,
   ShoppingCart,
   CheckCircle2,
@@ -42,7 +42,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { QRCodePIX } from "@/app/components/QRCodePIX";
+import { type PixData, QRCodePIX } from "@/app/components/QRCodePIX";
 import { PaymentStatusOverlay } from "@/app/components/PaymentStatusOverlay";
 import {
   formatPhoneNumber,
@@ -55,6 +55,7 @@ import {
 } from "@/app/components/credit-card-form";
 import { usePaymentPolling } from "@/app/hooks/use-payment-polling";
 import { useWebhookNotification } from "@/app/hooks/use-webhook-notification";
+import { PaymentMethodSelector } from "@/app/components/payment-method-selector";
 
 const ACCEPTED_CITIES = [
   "Campina Grande",
@@ -85,24 +86,6 @@ type PaymentStatusType = "" | "pending" | "success" | "failure";
 
 // Tipo para as etapas do checkout
 type CheckoutStep = 1 | 2 | 3;
-
-interface PixPaymentData {
-  qr_code: string;
-  qr_code_base64: string;
-  ticket_url: string;
-  amount: number;
-  expires_at: string;
-  payment_id: string;
-  mercado_pago_id: string;
-  status: string;
-  status_detail: string;
-  payer_info: {
-    id?: string;
-    email?: string;
-    first_name?: string;
-    last_name?: string;
-  };
-}
 
 /**
  * Calcula o preço final de um adicional considerando suas customizações
@@ -301,7 +284,7 @@ const ProductCard = ({
           <div className="absolute bottom-0 left-0 right-0 bg-purple-600/90 text-white text-[10px] text-center py-0.5 font-semibold">
             Personalizado
             <Image
-              src={previewUrl}
+              src={previewUrl || "/placeholder.svg"}
               alt={"Preview da personalização"}
               width={40}
               height={40}
@@ -500,6 +483,8 @@ const ProductCard = ({
 };
 
 export default function CarrinhoPage() {
+  const router = useRouter(); // Declare router here
+  const [currentOrderId, setCurrentOrderId] = useState<string | null>(null); // Declare currentOrderId here
   const { user, isLoading, login } = useAuth();
   const {
     getCepInfo,
@@ -509,6 +494,7 @@ export default function CarrinhoPage() {
     createCardToken,
     getCardIssuers,
     getOrder,
+    updateOrderMetadata,
   } = useApi();
   const {
     cart,
@@ -532,8 +518,77 @@ export default function CarrinhoPage() {
     isCanceling,
   } = usePaymentManager();
 
-  const [currentStep, setCurrentStep] = useState<CheckoutStep>(1);
+  const [showConfirmation, setShowConfirmation] = useState(false);
+  const [confirmedOrder, setConfirmedOrder] = useState<Order | null>(null);
+  const [currentStep, setCurrentStep] = useState<1 | 2 | 3>(1);
+  const [paymentStatus, setPaymentStatus] = useState<PaymentStatusType>("");
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [pixData, setPixData] = useState<PixData | null>(null);
+  const [paymentMethod, setPaymentMethod] = useState<"pix" | "card">();
+  const [paymentError, setPaymentError] = useState<string | null>(null);
   const [calendarOpen, setCalendarOpen] = useState(false);
+  const [isGeneratingPix, setIsGeneratingPix] = useState(false);
+
+  const OrderSummary = () => (
+    <Card className="bg-white border shadow-lg rounded-2xl sticky top-6">
+      <div className="p-6 border-b">
+        <h3 className="text-xl font-bold text-gray-900">Resumo do Pedido</h3>
+      </div>
+      <div className="p-6 space-y-4">
+        <div className="space-y-3">
+          <div className="flex justify-between text-sm">
+            <span className="text-gray-600">Subtotal</span>
+            <span className="font-medium">R$ {cartTotal.toFixed(2)}</span>
+          </div>
+          <div className="flex justify-between text-sm">
+            <span className="text-gray-600">Taxa de entrega</span>
+            <span className="font-medium">
+              {shippingCost === null
+                ? "Calcular"
+                : shippingCost === 0
+                ? "GRÁTIS"
+                : `R$ ${shippingCost.toFixed(2)}`}
+            </span>
+          </div>
+          {discountAmount > 0 && (
+            <div className="flex justify-between text-sm">
+              <span className="text-green-600 font-medium">Desconto</span>
+              <span className="text-green-600 font-semibold">
+                - R$ {discountAmount.toFixed(2)}
+              </span>
+            </div>
+          )}
+        </div>
+        <div className="border-t pt-4">
+          <div className="flex justify-between items-center">
+            <span className="text-lg font-bold">Total</span>
+            <span className="text-2xl font-bold text-rose-600">
+              R$ {grandTotal.toFixed(2)}
+            </span>
+          </div>
+        </div>
+        {paymentMethod && (
+          <div className="bg-rose-50 rounded-xl p-4 mt-4">
+            <div className="flex items-center gap-2 text-rose-700 font-medium">
+              {paymentMethod === "pix" ? (
+                <Smartphone className="h-5 w-5" />
+              ) : (
+                <CreditCard className="h-5 w-5" />
+              )}
+              <span className="capitalize">
+                {paymentMethod === "pix" ? "PIX" : "Cartão"}
+              </span>
+              {shippingCost !== null && shippingCost > 0 && (
+                <span className="text-xs">
+                  • Frete R$ {shippingCost.toFixed(2)}
+                </span>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    </Card>
+  );
 
   const isDateDisabled = useCallback(
     (date: Date): boolean => {
@@ -551,7 +606,6 @@ export default function CarrinhoPage() {
     },
     [getDeliveryDateBounds, generateTimeSlots]
   );
-  const [isProcessing, setIsProcessing] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(() => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -571,28 +625,68 @@ export default function CarrinhoPage() {
   const [sendAnonymously, setSendAnonymously] = useState(false);
   const [isSelfRecipient, setIsSelfRecipient] = useState(false);
   const [isLoadingCep, setIsLoadingCep] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState<"" | "pix" | "card">("");
-  const [pixData, setPixData] = useState<PixPaymentData | null>(null);
-  const [paymentStatus, setPaymentStatus] = useState<PaymentStatusType>("");
-  const [paymentError, setPaymentError] = useState<string | null>(null);
-  const [currentOrderId, setCurrentOrderId] = useState<string | null>(null);
-  // Verificando pedidos pendentes quando o usuário entra na página
-  const [checkingPendingOrder, setCheckingPendingOrder] = useState(true);
-  const [userDocument, setUserDocument] = useState<string>(""); // CPF/CNPJ do usuário
+  const [userDocument, setUserDocument] = useState<string>("");
 
-  // Ref para prevenir múltiplas aprovações de pagamento
   const paymentApprovedRef = useRef(false);
+  const pendingPaymentToastShownRef = useRef(false);
   const disconnectSSERef = useRef<(() => void) | null>(null);
-  // Ref para controlar se o polling já foi iniciado para este pedido
   const pollingStartedRef = useRef(false);
-  // Contador de desconexões SSE para só iniciar polling após falhas persistentes
   const sseDisconnectCountRef = useRef(0);
+  const pixGeneratedForOrderRef = useRef<string | null>(null);
 
-  // Reset polling ref quando orderId muda
   useEffect(() => {
     pollingStartedRef.current = false;
     sseDisconnectCountRef.current = 0;
   }, [currentOrderId]);
+
+  const mapPaymentStatus = useCallback(
+    (status?: string | null): PaymentStatusType => {
+      if (!status) return "";
+
+      switch (status.toLowerCase()) {
+        case "pending":
+        case "in_process":
+        case "pending_waiting_payment":
+        case "pending_waiting_transfer":
+        case "waiting_payment":
+          return "pending";
+        case "approved":
+        case "authorized":
+        case "accredited":
+          return "success";
+        case "rejected":
+        case "cancelled":
+        case "refunded":
+        case "charged_back":
+          return "failure";
+        default:
+          return "";
+      }
+    },
+    []
+  );
+
+  const handlePaymentSuccess = useCallback(
+    async (order: Order) => {
+      if (paymentApprovedRef.current) {
+        console.log("⚠️ Pagamento já aprovado, ignorando polling");
+        return;
+      }
+      paymentApprovedRef.current = true;
+      console.log("✅ Pagamento confirmado pelo webhook! orderId=", order.id);
+
+      setPaymentStatus("success");
+      localStorage.removeItem("pendingOrderId");
+      clearPendingOrder();
+      clearCart();
+
+      setConfirmedOrder(order);
+      setShowConfirmation(true);
+
+      toast.success("Pagamento confirmado! Pedido realizado com sucesso.");
+    },
+    [clearPendingOrder, clearCart]
+  );
 
   // Hook de polling de pagamento
   const {
@@ -604,26 +698,7 @@ export default function CarrinhoPage() {
     enabled: Boolean(currentOrderId && paymentStatus === "pending"),
     maxAttempts: 60, // 5 minutos
     intervalMs: 3000, // ⚡ 3 segundos (mais agressivo)
-    onSuccess: (order) => {
-      if (paymentApprovedRef.current) {
-        console.log("⚠️ Pagamento já aprovado, ignorando polling");
-        return;
-      }
-      paymentApprovedRef.current = true;
-      console.log("✅ Pagamento confirmado pelo webhook! orderId=", order.id);
-      setPaymentStatus("success");
-      // Limpar localStorage
-      localStorage.removeItem("pendingOrderId");
-      // Limpar pedido pendente do hook
-      clearPendingOrder();
-      // Limpar carrinho
-      clearCart();
-      toast.success("Pagamento confirmado! Pedido realizado com sucesso.");
-      // Aguardar 2 segundos antes de redirecionar
-      setTimeout(() => {
-        router.push("/pedidos");
-      }, 2000);
-    },
+    onSuccess: handlePaymentSuccess,
     onFailure: (order) => {
       console.log("❌ Pagamento rejeitado/cancelado orderId=", order.id);
       setPaymentStatus("failure");
@@ -661,36 +736,11 @@ export default function CarrinhoPage() {
     },
   });
 
-  const mapPaymentStatus = useCallback(
-    (status?: string | null): PaymentStatusType => {
-      if (!status) return "";
+  // Handler para navegar para a página de rastreamento do pedido
+  const handleTrackOrder = () => {
+    router.push("/pedidos");
+  };
 
-      switch (status.toLowerCase()) {
-        case "pending":
-        case "in_process":
-        case "pending_waiting_payment":
-        case "pending_waiting_transfer":
-        case "waiting_payment":
-          return "pending";
-        case "approved":
-        case "authorized":
-        case "accredited":
-          return "success";
-        case "rejected":
-        case "cancelled":
-        case "refunded":
-        case "charged_back":
-          return "failure";
-        default:
-          return "";
-      }
-    },
-    []
-  );
-
-  const router = useRouter();
-
-  // Memorizar callbacks do SSE para evitar recriações e reconexões do EventSource
   const sseOnConnected = useCallback(() => {
     console.log(
       "✅ Conectado ao webhook SSE para receber atualizações em tempo real"
@@ -703,10 +753,10 @@ export default function CarrinhoPage() {
   const sseOnDisconnected = useCallback(() => {
     sseDisconnectCountRef.current += 1;
     console.log(
-      `🔌 Desconectado do webhook SSE (${sseDisconnectCountRef.current}/3) - ${
+      `Disconnected from SSE (${sseDisconnectCountRef.current}/3) - ${
         sseDisconnectCountRef.current >= 3
-          ? "iniciando fallback via polling"
-          : "tentando reconectar"
+          ? "initiating polling fallback"
+          : "retrying connection"
       }`
     );
     if (sseDisconnectCountRef.current >= 3 && !pollingStartedRef.current) {
@@ -719,7 +769,7 @@ export default function CarrinhoPage() {
     (error: unknown) => {
       sseDisconnectCountRef.current += 1;
       console.error(
-        `❌ Erro no webhook SSE (${sseDisconnectCountRef.current}/3):`,
+        `❌ SSE Error (${sseDisconnectCountRef.current}/3):`,
         error
       );
       if (sseDisconnectCountRef.current >= 3 && !pollingStartedRef.current) {
@@ -904,58 +954,157 @@ export default function CarrinhoPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
-  // ✅ NOVO: Verificar se há pedido pendente e redirecionar para pagamento
+  const [checkingPendingOrder, setCheckingPendingOrder] = useState(true);
   useEffect(() => {
-    // Ao entrar na página, garantimos que checamos pendentes e direcionamos
     const detect = async () => {
       setCheckingPendingOrder(true);
       try {
         if (hasPendingOrder && pendingOrder) {
           console.log("🔔 Pedido pendente detectado:", pendingOrder.id);
 
-          // Salvar no estado e no localStorage imediatamente
           setCurrentOrderId(pendingOrder.id);
           localStorage.setItem("pendingOrderId", pendingOrder.id);
 
-          // Definir método de pagamento se disponível
           const orderPaymentMethod = pendingOrder.payment?.payment_method;
           setPaymentMethod(
             orderPaymentMethod === "pix"
               ? "pix"
               : orderPaymentMethod === "card"
               ? "card"
-              : ""
+              : undefined
           );
+          // Preencher campos do pedido (se houver)
+          if (pendingOrder.delivery_address) {
+            setAddress(pendingOrder.delivery_address);
+            // Tentar extrair número da casa do endereço
+            const numMatch = pendingOrder.delivery_address.match(
+              /\b(\d{1,4}[A-Za-z\-]*)\b/
+            );
+            if (numMatch) setHouseNumber(numMatch[1]);
+          }
+          if (typeof pendingOrder.complement === "string") {
+            setComplemento(pendingOrder.complement || "");
+            setOrderMetadata({
+              complement: pendingOrder.complement || undefined,
+            });
+          }
+          if (typeof pendingOrder.send_anonymously === "boolean") {
+            setSendAnonymously(Boolean(pendingOrder.send_anonymously));
+            setOrderMetadata({
+              send_anonymously: Boolean(pendingOrder.send_anonymously),
+            });
+          }
+          if (pendingOrder.recipient_phone) {
+            // Format: stored as +55XXXXXXXXXXX or 55xxxxxxxxx or only digits
+            const digits = pendingOrder.recipient_phone.replace(/\D/g, "");
+            // Save without country code (UI expects local number)
+            const localNumber = digits.startsWith("55")
+              ? digits.substring(2)
+              : digits;
+            setRecipientPhone(localNumber);
+          }
+          if (pendingOrder.delivery_city) {
+            setCity(pendingOrder.delivery_city);
+          }
+          if (pendingOrder.delivery_state) {
+            setState((pendingOrder.delivery_state || "").toUpperCase());
+          }
+          if (pendingOrder.delivery_date) {
+            try {
+              const dt = new Date(pendingOrder.delivery_date);
+              if (!isNaN(Number(dt))) {
+                setSelectedDate(
+                  new Date(dt.getFullYear(), dt.getMonth(), dt.getDate())
+                );
+                const hh = String(dt.getHours()).padStart(2, "0");
+                const mm = String(dt.getMinutes()).padStart(2, "0");
+                setSelectedTime(`${hh}:${mm}`);
+              }
+            } catch {
+              // ignore invalid date
+            }
+          }
+          // Preencher telefone do remetente (usuário) caso exista
+          if (pendingOrder.user?.phone) {
+            const userPhoneDigits = pendingOrder.user.phone.replace(/\D/g, "");
+            const localNumber = userPhoneDigits.startsWith("55")
+              ? userPhoneDigits.substring(2)
+              : userPhoneDigits;
+            setCustomerPhone(localNumber);
+          }
+          // Preencher CEP a partir do usuário, se disponível
+          if (pendingOrder.user?.zip_code) {
+            setZipCode(pendingOrder.user.zip_code.replace(/\D/g, ""));
+          }
 
-          // Forçar navegação para a etapa 3 (Pagamento)
-          setCurrentStep(3);
-          // Garantir a rolagem para o topo para foco no pagamento
+          // If the pending order has incomplete delivery data, force user to step 2
+          const hasAllDelivery =
+            pendingOrder.delivery_address &&
+            pendingOrder.recipient_phone &&
+            pendingOrder.delivery_city &&
+            pendingOrder.delivery_state;
+
+          if (hasAllDelivery) {
+            setCurrentStep(3);
+          } else {
+            // Prompt user to complete missing info before proceeding to payment
+            setCurrentStep(2);
+            toast.info(
+              "Seu pedido pendente possui informações incompletas. Complete os dados de entrega para prosseguir."
+            );
+          }
           window.scrollTo({ top: 0, behavior: "smooth" });
 
-          toast.info(
-            "Você tem um pedido pendente. Complete o pagamento ou cancele para criar um novo.",
-            { duration: 5000 }
-          );
+          if (pendingOrder.payment?.status === "PENDING") {
+            if (!pendingPaymentToastShownRef.current) {
+              toast.info("Seu pedido possui um pagamento pendente.", {
+                action: {
+                  label: "Ir para pagamento",
+                  onClick: () => {
+                    setCurrentOrderId(pendingOrder.id);
+                    setCurrentStep(3);
+                  },
+                },
+                duration: 10000,
+              });
+              pendingPaymentToastShownRef.current = true;
+            }
+          } else {
+            toast.info(
+              "Você tem um pedido pendente. Complete o pagamento ou cancele para criar um novo.",
+              {
+                duration: 5000,
+              }
+            );
+          }
         }
       } catch {
-        /* ignore */
       } finally {
-        // Sempre interrompe a verificação após a tentativa
         setCheckingPendingOrder(false);
       }
     };
 
     detect();
-  }, [hasPendingOrder, pendingOrder]);
+  }, [hasPendingOrder, pendingOrder, setOrderMetadata]);
 
-  const cartItems = Array.isArray(cart?.items) ? cart.items : [];
-  const hasImagesInCustomizations = cartItems.some((item) =>
-    Array.isArray(item.customizations)
-      ? item.customizations.some(
-          (c) => Array.isArray(c.photos) && c.photos.length > 0
-        )
-      : false
+  // Se não houver pedido pendente, desconectar o SSE e limpar pendingOrderId local
+  useEffect(() => {
+    if (!hasPendingOrder) {
+      try {
+        disconnectSSE?.();
+        localStorage.removeItem("pendingOrderId");
+        setCurrentOrderId(null);
+      } catch {
+        /* ignore */
+      }
+    }
+  }, [hasPendingOrder, disconnectSSE]);
+
+  const cartItems = useMemo(
+    () => (Array.isArray(cart?.items) ? cart.items : []),
+    [cart?.items]
   );
+
   const cartTotal = cart?.total || 0;
 
   const acceptedCities = useMemo(() => ACCEPTED_CITIES, []);
@@ -969,15 +1118,6 @@ export default function CarrinhoPage() {
     () => Boolean(shippingRule) && normalizedState === "pb",
     [shippingRule, normalizedState]
   );
-  const shippingOptions = useMemo(() => {
-    if (!isAddressServed || !shippingRule) {
-      return { pix: null, card: null };
-    }
-    return {
-      pix: shippingRule.pix,
-      card: shippingRule.card,
-    };
-  }, [isAddressServed, shippingRule]);
   const shippingCost = useMemo(() => {
     if (!paymentMethod || !isAddressServed || !shippingRule) {
       return null;
@@ -990,120 +1130,173 @@ export default function CarrinhoPage() {
     [cartTotal, shippingCost]
   );
 
-  useEffect(() => {
-    const generatePixPayment = async () => {
-      if (
-        paymentMethod === "pix" &&
-        currentOrderId &&
-        !pixData &&
-        !isProcessing &&
-        currentStep === 3
-      ) {
-        console.log("💳 Gerando pagamento PIX automaticamente...");
-        setIsProcessing(true);
-        setPaymentError(null);
+  const discountAmount = useMemo(() => {
+    const originalTotal = cartItems.reduce((sum, item) => {
+      const baseTotal = (item.effectivePrice ?? item.price) * item.quantity;
+      const additionalsTotal =
+        item.additionals?.reduce(
+          (a, add) =>
+            getAdditionalFinalPrice(add.id, add.price, item.customizations) *
+            item.quantity,
+          0
+        ) || 0;
+      return sum + baseTotal + additionalsTotal;
+    }, 0);
+    return originalTotal - cartTotal;
+  }, [cartItems, cartTotal]);
 
-        try {
-          if (!user) {
-            router.push("/login");
-            return;
-          }
+  const generatePixPayment = useCallback(async () => {
+    console.log("[v0] 💳 Gerando PIX - verificando condições:", {
+      paymentMethod,
+      currentOrderId,
+      pixData: !!pixData,
+      isProcessing,
+      isGeneratingPix,
+      currentStep,
+      pixGeneratedForOrder: pixGeneratedForOrderRef.current,
+    });
 
-          const paymentResponse = await createTransparentPayment({
-            orderId: currentOrderId,
-            paymentMethodId: "pix",
-            payerEmail: user.email || "",
-            payerName: user.name || "",
-            payerDocument: userDocument || "00000000000",
-            payerDocumentType: "CPF",
-          });
+    if (
+      paymentMethod === "pix" &&
+      currentOrderId &&
+      !pixData &&
+      !isProcessing &&
+      !isGeneratingPix &&
+      currentStep === 3 &&
+      pixGeneratedForOrderRef.current !== currentOrderId
+    ) {
+      console.log("[v0] 💳 Iniciando geração PIX...", {
+        orderId: currentOrderId,
+        paymentMethodId: "pix",
+        email: user?.email,
+      });
 
-          if (!paymentResponse?.success) {
-            throw new Error(
-              paymentResponse?.message || "Erro ao gerar pagamento PIX"
-            );
-          }
+      setIsProcessing(true);
+      setIsGeneratingPix(true);
+      setPaymentError(null);
 
-          const responseData =
-            paymentResponse.data || paymentResponse.point_of_interaction;
-
-          if (!responseData?.qr_code) {
-            console.error(
-              "Resposta inesperada do pagamento PIX:",
-              paymentResponse
-            );
-            throw new Error("Resposta inválida do servidor");
-          }
-
-          const rawStatus =
-            paymentResponse.status || responseData.status || "pending";
-          const normalizedStatus = mapPaymentStatus(rawStatus) || "pending";
-
-          setPixData({
-            qr_code: responseData.qr_code,
-            qr_code_base64: responseData.qr_code_base64 || "",
-            ticket_url: responseData.ticket_url || "",
-            amount:
-              Number(
-                responseData.amount ??
-                  responseData.transaction_amount ??
-                  cartTotal + (shippingCost ?? 0)
-              ) || cartTotal + (shippingCost ?? 0),
-            expires_at:
-              responseData.expires_at ||
-              responseData.expiration_date ||
-              responseData.expiration_time ||
-              new Date(Date.now() + 30 * 60 * 1000).toISOString(),
-            payment_id:
-              responseData.payment_id ||
-              paymentResponse.paymentId ||
-              currentOrderId,
-            mercado_pago_id:
-              responseData.mercado_pago_id ||
-              paymentResponse.mercadoPagoId ||
-              "",
-            status: rawStatus,
-            status_detail:
-              responseData.status_detail || paymentResponse.status_detail || "",
-            payer_info:
-              responseData.payer_info ||
-              ({
-                id: "",
-                email: user.email || "",
-                first_name: user.name || "",
-              } as PixPaymentData["payer_info"]),
-          });
-
-          setPaymentStatus(normalizedStatus);
-
-          toast.success("QR Code PIX gerado! Escaneie para pagar.");
-        } catch (error) {
-          console.error("Erro ao gerar pagamento PIX:", error);
-          const errorMessage =
-            error instanceof Error ? error.message : "Erro desconhecido";
-          setPaymentError(errorMessage);
-          toast.error(`Erro ao gerar PIX: ${errorMessage}`);
-        } finally {
-          setIsProcessing(false);
+      try {
+        if (!user) {
+          router.push("/login");
+          return;
         }
-      }
-    };
 
-    generatePixPayment();
+        const payload = {
+          orderId: currentOrderId,
+          paymentMethodId: "pix" as const,
+          payerEmail: user.email || "",
+          payerName: user.name || "",
+          payerDocument: userDocument || "00000000000",
+          payerDocumentType: "CPF" as const,
+        };
+
+        console.log("[v0] 📤 Enviando payload PIX:", payload);
+
+        const paymentResponse = await createTransparentPayment(payload);
+
+        console.log("[v0] 📥 Resposta PIX recebida:", {
+          success: paymentResponse?.success,
+          hasQrCode: !!paymentResponse?.data?.qr_code,
+          status: paymentResponse?.status,
+        });
+
+        if (!paymentResponse?.success) {
+          throw new Error(
+            paymentResponse?.message || "Erro ao gerar pagamento PIX"
+          );
+        }
+
+        const responseData =
+          paymentResponse.data || paymentResponse.point_of_interaction;
+
+        if (!responseData?.qr_code) {
+          console.error(
+            "[v0] ❌ Resposta inesperada do pagamento PIX:",
+            paymentResponse
+          );
+          throw new Error("Resposta inválida do servidor");
+        }
+
+        const rawStatus =
+          paymentResponse.status || responseData.status || "pending";
+        const normalizedStatus = mapPaymentStatus(rawStatus) || "pending";
+
+        setPixData({
+          qr_code: responseData.qr_code,
+          qr_code_base64: responseData.qr_code_base64 || "",
+          ticket_url: responseData.ticket_url || "",
+          amount:
+            Number(
+              responseData.amount ??
+                responseData.transaction_amount ??
+                cartTotal + (shippingCost ?? 0)
+            ) || cartTotal + (shippingCost ?? 0),
+          expires_at:
+            responseData.expires_at ||
+            responseData.expiration_date ||
+            responseData.expiration_time ||
+            new Date(Date.now() + 30 * 60 * 1000).toISOString(),
+          payment_id:
+            responseData.payment_id ||
+            paymentResponse.paymentId ||
+            currentOrderId,
+          mercado_pago_id:
+            responseData.mercado_pago_id || paymentResponse.mercadoPagoId || "",
+          status: rawStatus,
+          status_detail:
+            responseData.status_detail || paymentResponse.status_detail || "",
+          payer_info:
+            responseData.payer_info ||
+            ({
+              id: "",
+              email: user.email || "",
+              first_name: user.name || "",
+            } as PixData["payer_info"]),
+        });
+
+        setPaymentStatus(normalizedStatus);
+        pixGeneratedForOrderRef.current = currentOrderId; // Marcar como gerado para este pedido
+
+        console.log(
+          "[v0] ✅ PIX gerado com sucesso para ordem:",
+          currentOrderId
+        );
+        toast.success("QR Code PIX gerado! Escaneie para pagar.");
+      } catch (error) {
+        console.error("[v0] ❌ Erro ao gerar pagamento PIX:", error);
+        const errorMessage =
+          error instanceof Error ? error.message : "Erro desconhecido";
+        setPaymentError(errorMessage);
+        toast.error(`Erro ao gerar PIX: ${errorMessage}`);
+      } finally {
+        setIsProcessing(false);
+        setIsGeneratingPix(false);
+      }
+    } else {
+      console.log("[v0] ⚠️ PIX não foi gerado - condições não atendidas");
+    }
   }, [
-    router,
     paymentMethod,
     currentOrderId,
     pixData,
     isProcessing,
+    isGeneratingPix,
     currentStep,
     createTransparentPayment,
     user,
-    mapPaymentStatus,
     userDocument,
     cartTotal,
     shippingCost,
+    mapPaymentStatus,
+    router,
   ]);
+
+  useEffect(() => {
+    if (paymentMethod === "pix" && currentStep === 3) {
+      generatePixPayment();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [paymentMethod, currentStep]);
 
   const addressWarning = useMemo(() => {
     if (!city.trim()) return null;
@@ -1120,7 +1313,7 @@ export default function CarrinhoPage() {
 
   useEffect(() => {
     if (!isAddressServed && paymentMethod) {
-      setPaymentMethod("");
+      setPaymentMethod(undefined);
     }
   }, [isAddressServed, paymentMethod]);
 
@@ -1159,8 +1352,11 @@ export default function CarrinhoPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-background  flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="h-12 w-12 animate-spin text-rose-600 mx-auto mb-4" />
+          <p className="text-gray-600">Carregando seu carrinho...</p>
+        </div>
       </div>
     );
   }
@@ -1177,18 +1373,13 @@ export default function CarrinhoPage() {
       </div>
     );
   }
-
   if (!user) {
     return (
-      <div className="min-h-screen bg-background  flex items-center justify-center p-4">
-        <Card className="border-border bg-card p-8 text-center max-w-md">
-          <User className="h-16 w-16 mx-auto text-muted-foreground mb-4" />
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <Card className="max-w-md w-full p-8 text-center">
+          <User className="h-16 w-16 mx-auto text-gray-400 mb-4" />
           <h2 className="text-2xl font-bold mb-2">Faça login para continuar</h2>
-          <p className="text-muted-foreground mb-6">
-            Você precisa estar logado para acessar seu carrinho e finalizar
-            compras.
-          </p>
-          <Button asChild className="w-full bg-rose-600 hover:bg-rose-700">
+          <Button asChild className="mt-6 bg-rose-600 hover:bg-rose-700">
             <Link href="/login">Fazer Login</Link>
           </Button>
         </Card>
@@ -1196,14 +1387,8 @@ export default function CarrinhoPage() {
     );
   }
 
-  const handleCardPayment = async (cardData: CreditCardData) => {
-    console.log("🔍 handleCardPayment iniciado");
-    console.log("📊 Estado atual antes do pagamento:", {
-      currentOrderId,
-      paymentMethod,
-      cartItemsCount: cartItems.length,
-    });
-
+  // Moved handleCreditCardPayment here to be accessible by the CreditCardForm component
+  const handleCreditCardPayment = async (cardData: CreditCardData) => {
     setIsProcessing(true);
     setPaymentError(null);
 
@@ -1212,19 +1397,12 @@ export default function CarrinhoPage() {
     try {
       let orderId = currentOrderId;
 
-      console.log("🔍 Verificando currentOrderId:", orderId);
-
       if (!orderId) {
-        console.log(
-          "⚠️ currentOrderId está vazio, verificando localStorage..."
-        );
         const storedOrderId = localStorage.getItem("pendingOrderId");
-        console.log("📦 localStorage pendingOrderId:", storedOrderId);
 
         if (storedOrderId) {
           orderId = storedOrderId;
-          setCurrentOrderId(storedOrderId);
-          console.log("✅ OrderId recuperado do localStorage:", orderId);
+          setCurrentOrderId(orderId); // Fix: setCurrentOrderId is declared
         }
       }
 
@@ -1240,31 +1418,9 @@ export default function CarrinhoPage() {
         );
       }
 
-      console.log("✅ OrderId confirmado:", orderId);
-      console.log("💳 Processando pagamento com cartão...", {
-        orderId: orderId,
-        installments: cardData.installments,
-      });
-
-      // ============================================================
-      // Tokenização usando API do Mercado Pago via Backend
-      // Esta é a abordagem mais confiável para ambiente de produção
-      // ============================================================
       let cardTokenId: string | undefined = undefined;
 
       try {
-        console.log("💳 Criando token via backend do Mercado Pago...");
-        console.log("📋 Dados do cartão para tokenização (não sensíveis):", {
-          cardNumberLength: cardData.cardNumber.replace(/\s/g, "").length,
-          hasSecurityCode: !!cardData.securityCode,
-          expirationMonth: cardData.expirationMonth,
-          expirationYear: cardData.expirationYear,
-          hasCardholderName: !!cardData.cardholderName,
-          identificationType: cardData.identificationType,
-          hasIdentificationNumber: !!cardData.identificationNumber,
-        });
-
-        // Criar token usando o método autenticado do useApi
         const tokenData = await createCardToken({
           cardNumber: cardData.cardNumber.replace(/\s/g, ""),
           securityCode: cardData.securityCode.trim(),
@@ -1278,22 +1434,8 @@ export default function CarrinhoPage() {
           ),
         });
 
-        console.log("✅ Token criado via backend:", {
-          hasToken: !!tokenData.id,
-          lastFourMasked: tokenData.last_four_digits
-            ? `****${tokenData.last_four_digits}`
-            : "N/A",
-        });
-
-        // Extrair token
         cardTokenId = tokenData.id;
         const bin = tokenData.first_six_digits;
-
-        console.log("🎟️ Token extraído:", {
-          lastFourMasked: tokenData.last_four_digits
-            ? `****${tokenData.last_four_digits}`
-            : "N/A",
-        });
 
         if (!cardTokenId || !bin) {
           throw new Error(
@@ -1301,15 +1443,7 @@ export default function CarrinhoPage() {
           );
         }
 
-        console.log("✅ Token gerado com sucesso:", {
-          tokenLength: cardTokenId ? cardTokenId.length : 0,
-          tokenPreview: cardTokenId
-            ? `${String(cardTokenId).slice(0, 4)}****`
-            : "N/A",
-        });
-
-        // Detectar o payment_method_id baseado no BIN
-        let detectedPaymentMethod = "master"; // default
+        let detectedPaymentMethod = "master";
         const firstDigit = bin.charAt(0);
 
         if (firstDigit === "4") {
@@ -1322,29 +1456,17 @@ export default function CarrinhoPage() {
           detectedPaymentMethod = "elo";
         }
 
-        console.log("🔍 Payment method detectado:", {
-          binMasked: bin ? `${String(bin).slice(0, 2)}****` : "N/A",
-          firstDigit,
-          detectedPaymentMethod,
-        });
-
-        // Buscar issuer_id usando o BIN e o payment_method correto
-        console.log("🏦 Buscando emissor do cartão...");
         const issuerData = await getCardIssuers({
           bin: bin,
           paymentMethodId: detectedPaymentMethod,
         });
 
-        console.log("✅ Emissor encontrado:", issuerData);
-
         const issuerId = issuerData.issuer_id;
-        const paymentMethodId = issuerData.payment_method_id; // "master", "visa", etc.
+        const paymentMethodId = issuerData.payment_method_id;
 
         if (!issuerId) {
           console.warn("⚠️ Emissor não encontrado, continuando sem issuer_id");
         }
-
-        // Salvar issuer_id e payment_method_id no estado
         (
           cardData as unknown as { issuerId?: string; paymentMethodId?: string }
         ).issuerId = issuerId;
@@ -1365,48 +1487,20 @@ export default function CarrinhoPage() {
         throw new Error(getMessage(tokenError));
       }
 
-      console.log("📤 Enviando pagamento com os seguintes dados:");
-      console.log("  - orderId:", orderId);
-      console.log("  - cardToken: [REDACTED]", {
-        tokenLength: cardTokenId ? cardTokenId.length : 0,
-      });
-      console.log("  - paymentMethodId: credit_card");
-      console.log(
-        "  - payment_method_id:",
-        (cardData as unknown as { paymentMethodId?: string }).paymentMethodId
-      );
-      console.log("  - installments:", cardData.installments);
-      console.log(
-        "  - issuerId:",
-        (cardData as unknown as { issuerId?: string }).issuerId
-      );
-      console.log("  - cardholderName:", cardData.cardholderName);
-      console.log("  - identificationType:", cardData.identificationType);
-      console.log("  - identificationNumber (masked):", "***");
-
       const paymentResponse = await createTransparentPayment({
         orderId: orderId,
         paymentMethodId: "credit_card",
         installments: cardData.installments,
         payerEmail: cardData.email,
-        payerName: cardData.cardholderName, // IMPORTANTE: Usar o mesmo nome do titular
+        payerName: cardData.cardholderName,
         payerDocument: cardData.identificationNumber,
         payerDocumentType:
           cardData.identificationType === "CPF" ? "CPF" : "CNPJ",
         cardToken: cardTokenId,
-        cardholderName: cardData.cardholderName, // Nome do titular
+        cardholderName: cardData.cardholderName,
         issuer_id: (cardData as unknown as { issuerId?: string }).issuerId,
         payment_method_id: (cardData as unknown as { paymentMethodId?: string })
           .paymentMethodId,
-      });
-
-      console.log("📦 Resposta do pagamento:", {
-        success: paymentResponse?.success,
-        status: paymentResponse?.status,
-        paymentIdPreview: paymentResponse?.payment_id
-          ? `[REDACTED] len:${String(paymentResponse.payment_id).length}`
-          : undefined,
-        message: paymentResponse?.message,
       });
 
       if (!paymentResponse?.success) {
@@ -1418,19 +1512,13 @@ export default function CarrinhoPage() {
       const rawStatus = paymentResponse.status || "pending";
       const normalizedStatus = mapPaymentStatus(rawStatus) || "pending";
 
-      console.log(`📊 Status do pagamento: ${rawStatus} → ${normalizedStatus}`);
-
       setPaymentStatus(normalizedStatus);
 
       if (normalizedStatus === "success") {
         toast.success("Pagamento aprovado! Pedido confirmado.");
-        // Limpar localStorage
         localStorage.removeItem("pendingOrderId");
-        // Limpar pedido pendente do hook
         clearPendingOrder();
-        // Limpar carrinho
         clearCart();
-        // Aguarda 1 segundo antes de redirecionar
         setTimeout(() => {
           router.push("/pedidos");
         }, 1000);
@@ -1438,7 +1526,6 @@ export default function CarrinhoPage() {
         toast.info("Pagamento em análise. Aguardando confirmação...", {
           duration: 5000,
         });
-        // O hook de polling vai continuar verificando o status
       } else {
         throw new Error("Pagamento recusado. Verifique os dados do cartão.");
       }
@@ -1448,7 +1535,6 @@ export default function CarrinhoPage() {
         error instanceof Error ? error.message : "Erro desconhecido";
       setPaymentError(errorMessage);
 
-      // Se o erro for relacionado ao pedido não encontrado, limpar o localStorage
       if (errorMessage.includes("Pedido não encontrado")) {
         localStorage.removeItem("pendingOrderId");
         setCurrentOrderId(null);
@@ -1460,245 +1546,22 @@ export default function CarrinhoPage() {
     }
   };
 
-  // ⚠️ FUNÇÃO DESCONTINUADA - Agora o pedido é criado automaticamente ao avançar para etapa 3
-  // e o pagamento PIX é gerado automaticamente ao selecionar PIX
-  // Mantida comentada para referência
-  /*
-  const handleFinalizePurchase = async () => {
-    if (!zipCode.trim()) {
-      toast.error("Por favor, informe o CEP");
-      return;
-    }
-    if (!address.trim()) {
-      toast.error("Por favor, informe o endereço");
-      return;
-    }
-    if (!houseNumber.trim()) {
-      toast.error("Por favor, informe o número da casa");
-      return;
-    }
-    if (!city.trim()) {
-      toast.error("Por favor, informe a cidade");
-      return;
-    }
-    if (!state.trim()) {
-      toast.error("Por favor, informe o estado");
-      return;
-    }
-    if (!recipientPhone.trim()) {
-      toast.error("Por favor, informe o número do destinatário");
-      return;
-    }
-    if (!isValidPhone(recipientPhone)) {
-      toast.error(
-        "Por favor, informe um número de telefone válido para o destinatário"
-      );
-      return;
-    }
-    if (!selectedDate) {
-      toast.error("Por favor, selecione uma data de entrega");
-      return;
-    }
-    if (!selectedTime) {
-      toast.error("Por favor, selecione um horário de entrega");
-      return;
-    }
-
-    if (!isAddressServed) {
-      toast.error("Ainda não entregamos no endereço informado.");
-      return;
-    }
-
-    if (!paymentMethod) {
-      toast.error("Selecione uma forma de pagamento para continuar.");
-      return;
-    }
-
-    if (shippingCost === null) {
-      toast.error("Não foi possível calcular o frete para este endereço.");
-      return;
-    }
-
-    const fullAddress = `${address}, ${houseNumber} - ${neighborhood}, ${city}/${state} - CEP: ${zipCode}`;
-
-    let finalDeliveryDate: Date | null = null;
-    if (selectedDate && selectedTime) {
-      const [hours, minutes] = selectedTime.split(":").map(Number);
-      finalDeliveryDate = new Date(selectedDate);
-      finalDeliveryDate.setHours(hours, minutes, 0, 0);
-    }
-
-    setIsProcessing(true);
-    setPaymentError(null);
-    try {
-      const createdOrder = await createOrder(
-        user.id,
-        fullAddress,
-        finalDeliveryDate || undefined,
-        {
-          shippingCost,
-          paymentMethod,
-          grandTotal,
-          deliveryCity: city,
-          deliveryState: state,
-          recipientPhone: normalizePhoneForBackend(recipientPhone),
-          send_anonymously: sendAnonymously,
-          complement: complemento,
-        }
-      );
-
-      const createdOrderId = (() => {
-        if (createdOrder && typeof createdOrder === "object") {
-          if ("id" in createdOrder && createdOrder.id) {
-            return String(createdOrder.id);
-          }
-          if (
-            "order" in createdOrder &&
-            (createdOrder as { order?: { id?: string } }).order?.id
-          ) {
-            return String(
-              (createdOrder as { order?: { id?: string } }).order?.id
-            );
-          }
-        }
-        return "";
-      })();
-
-      if (!createdOrderId) {
-        throw new Error("Não foi possível identificar o pedido gerado.");
-      }
-
-      console.log("📦 Pedido criado - OrderId:", createdOrderId);
-      console.log("💾 Salvando no localStorage e state...");
-
-      // Salvar orderId no localStorage para persistência
-      localStorage.setItem("pendingOrderId", createdOrderId);
-
-      // Definir no estado
-      setCurrentOrderId(createdOrderId);
-
-      // Verificar se foi salvo corretamente
-      const savedOrderId = localStorage.getItem("pendingOrderId");
-      console.log("✅ Verificação - localStorage:", savedOrderId);
-      console.log("✅ Verificação - estado será:", createdOrderId);
-
-      if (paymentMethod === "card") {
-        console.log(
-          "💳 Método: Cartão - Aguardando preenchimento do formulário"
-        );
-        // Não precisa mais abrir dialog, o formulário já está na tela
-        setIsProcessing(false);
-        toast.info(
-          "Preencha os dados do cartão abaixo para finalizar o pagamento."
-        );
-        return;
-      }
-
-      if (paymentMethod === "pix") {
-        const paymentResponse = await createTransparentPayment({
-          orderId: createdOrderId,
-          paymentMethodId: "pix",
-          payerEmail: user.email || "",
-          payerName: user.name || "",
-          // Usar CPF do formulário de cartão se disponível, senão usar um genérico
-          payerDocument: userDocument || "00000000000",
-          payerDocumentType: "CPF",
-        });
-
-        if (!paymentResponse?.success) {
-          throw new Error(
-            paymentResponse?.message || "Erro ao gerar pagamento PIX"
-          );
-        }
-
-        const responseData =
-          paymentResponse.data || paymentResponse.point_of_interaction;
-
-        if (!responseData?.qr_code) {
-          console.error(
-            "Resposta inesperada do pagamento PIX:",
-            paymentResponse
-          );
-          throw new Error("Resposta inválida do servidor");
-        }
-
-        const rawStatus =
-          paymentResponse.status || responseData.status || "pending";
-        const normalizedStatus = mapPaymentStatus(rawStatus) || "pending";
-
-        setPixData({
-          qr_code: responseData.qr_code,
-          qr_code_base64: responseData.qr_code_base64 || "",
-          ticket_url: responseData.ticket_url || "",
-          amount: Number(responseData.amount ?? grandTotal) || grandTotal,
-          expires_at:
-            responseData.expires_at ||
-            responseData.expiration_date ||
-            responseData.expiration_time ||
-            new Date(Date.now() + 30 * 60 * 1000).toISOString(),
-          payment_id:
-            responseData.payment_id ||
-            paymentResponse.paymentId ||
-            createdOrderId,
-          mercado_pago_id:
-            responseData.mercado_pago_id || paymentResponse.mercadoPagoId || "",
-          status: rawStatus,
-          status_detail:
-            responseData.status_detail || paymentResponse.status_detail || "",
-          payer_info:
-            responseData.payer_info ||
-            ({
-              email: user.email || undefined,
-              first_name: user.name || undefined,
-            } as PixPaymentData["payer_info"]),
-        });
-
-        setPaymentStatus(normalizedStatus);
-
-        // Salvar orderId no localStorage
-        localStorage.setItem("pendingOrderId", createdOrderId);
-
-        // Não precisa mais abrir dialog, o QR Code já está na tela
-        toast.success(
-          "Pedido criado! Escaneie o QR Code abaixo para concluir o pagamento."
-        );
-      }
-    } catch (error) {
-      console.error("Erro ao processar pedido:", error);
-      const errorMessage =
-        error instanceof Error ? error.message : "Erro desconhecido";
-      setCurrentOrderId(null);
-      setPixData(null);
-      setPaymentStatus("");
-      setPaymentError(errorMessage);
-      // Limpar localStorage em caso de erro
-      localStorage.removeItem("pendingOrderId");
-      toast.error(`Erro ao processar pedido: ${errorMessage}`);
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-  */
-
   const originalTotal = cartItems.reduce((sum, item) => {
     const baseTotal = (item.effectivePrice ?? item.price) * item.quantity;
     const additionalsTotal =
       item.additionals?.reduce(
         (a, add) =>
-          a +
           getAdditionalFinalPrice(add.id, add.price, item.customizations) *
-            item.quantity,
+          item.quantity,
         0
       ) || 0;
     return sum + baseTotal + additionalsTotal;
   }, 0);
 
-  const discountAmount = originalTotal - cartTotal;
+  // const discountAmount = originalTotal - cartTotal; // Replaced with useMemo version above
 
-  // Validação da etapa 1 (carrinho)
   const canProceedToStep2 = cartItems.length > 0;
 
-  // Validação da etapa 2 (dados de entrega)
   const canProceedToStep3 =
     zipCode.trim().length === 8 &&
     address.trim() !== "" &&
@@ -1714,6 +1577,14 @@ export default function CarrinhoPage() {
     isAddressServed;
 
   const handleNextStep = async () => {
+    // Compute finalDeliveryDate at the beginning so it's available both for
+    // creating a new order and updating an existing one
+    let finalDeliveryDate: Date | null = null;
+    if (selectedDate && selectedTime) {
+      const [hours, minutes] = selectedTime.split(":").map(Number);
+      finalDeliveryDate = new Date(selectedDate);
+      finalDeliveryDate.setHours(hours, minutes, 0, 0);
+    }
     if (currentStep === 1 && canProceedToStep2) {
       setCurrentStep(2);
       window.scrollTo({ top: 0, behavior: "smooth" });
@@ -1740,25 +1611,31 @@ export default function CarrinhoPage() {
       }
 
       if (!currentOrderId && !hasPendingOrder) {
+        if (!recipientPhone.trim()) {
+          toast.error("Por favor, informe o número do destinatário");
+          return;
+        }
+        if (!isValidPhone(recipientPhone)) {
+          toast.error(
+            "Por favor, informe um número de telefone válido para o destinatário"
+          );
+          return;
+        }
+
         setIsProcessing(true);
         try {
           const fullAddress = `${address}, ${houseNumber} - ${neighborhood}, ${city}/${state} - CEP: ${zipCode}`;
 
-          let finalDeliveryDate: Date | null = null;
-          if (selectedDate && selectedTime) {
-            const [hours, minutes] = selectedTime.split(":").map(Number);
-            finalDeliveryDate = new Date(selectedDate);
-            finalDeliveryDate.setHours(hours, minutes, 0, 0);
-          }
+          // finalDeliveryDate already computed above
 
           const createdOrder = await createOrder(
             user.id,
             fullAddress,
             finalDeliveryDate || undefined,
             {
-              shippingCost: 0, // Será calculado quando o método de pagamento for selecionado
-              paymentMethod: "pix", // Valor padrão temporário
-              grandTotal: cartTotal, // Total sem frete ainda
+              shippingCost: 0,
+              paymentMethod: "pix",
+              grandTotal: cartTotal,
               deliveryCity: city,
               deliveryState: state,
               recipientPhone: normalizePhoneForBackend(recipientPhone),
@@ -1802,6 +1679,33 @@ export default function CarrinhoPage() {
         }
       }
 
+      // If there's an existing pending order, update its delivery info before proceeding
+      if (currentOrderId) {
+        try {
+          const fullAddress = `${address}, ${houseNumber} - ${neighborhood}, ${city}/${state} - CEP: ${zipCode}`;
+
+          await updateOrderMetadata(currentOrderId, {
+            delivery_address: fullAddress,
+            delivery_city: city,
+            delivery_state: state,
+            recipient_phone: normalizePhoneForBackend(recipientPhone),
+            delivery_date: finalDeliveryDate?.toISOString() || undefined,
+            send_anonymously: sendAnonymously,
+            complement: complemento,
+          });
+        } catch (err) {
+          console.error("Erro ao atualizar metadata do pedido pendente:", err);
+          // Se o pedido foi cancelado/removido no backend, remover local pending state e desconectar SSE
+          try {
+            localStorage.removeItem("pendingOrderId");
+            setCurrentOrderId(null);
+            disconnectSSE?.();
+          } catch {
+            // Ignore cleanup errors
+          }
+        }
+      }
+
       setCurrentStep(3);
       window.scrollTo({ top: 0, behavior: "smooth" });
     }
@@ -1814,1071 +1718,1273 @@ export default function CarrinhoPage() {
     }
   };
 
-  return (
-    <div className="min-h-screen bg-gray-50 relative">
-      {isProcessing && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-          <div className="w-full max-w-lg p-6 bg-white rounded-xl shadow-lg border">
-            <div className="flex items-center gap-4">
-              <Loader2 className="h-10 w-10 text-rose-600 animate-spin" />
-              <div className="flex-1">
-                <h3 className="text-lg font-semibold text-gray-900">
-                  Estamos preparando seu pedido...
-                </h3>
-                <p className="mt-1 text-sm text-gray-600">
-                  {hasImagesInCustomizations
-                    ? "Carregando suas imagens e preparando o pedido"
-                    : "Confirmando seu endereço e preparando a sacola"}
-                </p>
+  const stepVariants = {
+    hidden: { opacity: 0, y: 40 },
+    visible: {
+      opacity: 1,
+      y: 0,
+      transition: { duration: 0.5, ease: easeOut },
+    },
+    exit: {
+      opacity: 0,
+      y: -40,
+      transition: { duration: 0.3, ease: easeIn },
+    },
+  };
+
+  const OrderConfirmationTicket = ({
+    order,
+    onTrackOrder,
+  }: {
+    order: Order | null;
+    onTrackOrder: () => void;
+  }) => {
+    return (
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 0.5, ease: "easeOut" }}
+        className="w-full max-w-lg mx-auto"
+      >
+        {/* Animação de checkmark */}
+        <motion.div
+          initial={{ scale: 0 }}
+          animate={{ scale: 1 }}
+          transition={{
+            type: "spring",
+            stiffness: 200,
+            damping: 15,
+            delay: 0.2,
+          }}
+          className="flex justify-center mb-8"
+        >
+          <div className="relative w-24 h-24 bg-gradient-to-br from-green-400 to-green-600 rounded-full flex items-center justify-center shadow-2xl">
+            <motion.div
+              initial={{ pathLength: 0 }}
+              animate={{ pathLength: 1 }}
+              transition={{ duration: 0.6, delay: 0.4 }}
+            >
+              <CheckCircle2
+                className="w-16 h-16 text-white"
+                strokeWidth={1.5}
+              />
+            </motion.div>
+          </div>
+        </motion.div>
+
+        {/* Card do Ticket */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.3 }}
+        >
+          <Card className="bg-gradient-to-b from-white to-gray-50 border-2 border-gray-100 rounded-3xl overflow-hidden shadow-2xl">
+            {/* Topo do Ticket */}
+            <div className="relative bg-gradient-to-r from-rose-600 to-rose-700 px-6 py-8 text-white text-center">
+              <motion.h2
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.6 }}
+                className="text-3xl font-bold"
+              >
+                Pedido Confirmado! 🎉
+              </motion.h2>
+              <p className="text-rose-100 mt-2 text-sm">
+                Obrigado por sua compra
+              </p>
+            </div>
+
+            {/* Separador decorativo do ticket */}
+            <div className="relative h-6 bg-gray-50">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t-2 border-dashed border-gray-200"></div>
               </div>
             </div>
-          </div>
-        </div>
-      )}
-      {/* Header */}
-      <header className="border-b border-gray-200 bg-white shadow-sm">
-        <div className="mx-auto max-w-5xl px-4 py-5 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between">
-            <Link
-              href="/"
-              className="flex items-center gap-2 text-gray-700 hover:text-rose-600 transition-colors font-medium"
-            >
-              <ChevronLeftIcon className="h-5 w-5" />
-              <h1 className="text-xl font-bold">Finalizar Compra</h1>
-            </Link>
-            <Button
-              variant="ghost"
-              size="sm"
-              asChild
-              className={`text-rose-600 hover:text-rose-700 hover:bg-rose-50 font-semibold ${
-                isProcessing ? "pointer-events-none opacity-60" : ""
-              }`}
-              aria-disabled={isProcessing}
-            >
-              <Link href="/">Continuar Comprando</Link>
-            </Button>
-          </div>
-        </div>
-      </header>
 
-      <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
-        {cartItems.length === 0 ? (
-          <Card className="border-gray-100 bg-white p-12 text-center shadow-sm rounded-2xl">
-            <ShoppingCart className="h-20 w-20 mx-auto mb-4 text-gray-300" />
-            <h2 className="text-2xl font-bold mb-2 text-gray-900">
-              Seu carrinho está vazio
-            </h2>
-            <p className="text-gray-600 mb-6">
-              Adicione alguns produtos deliciosos do nosso catálogo!
-            </p>
-            <Button
-              onClick={() => router.push("/")}
-              className="bg-rose-600 hover:bg-rose-700 text-white px-8 py-3 rounded-xl font-bold"
-            >
-              Ver Produtos
-            </Button>
-          </Card>
-        ) : (
-          <>
-            {/* Stepper */}
-            <CheckoutStepper currentStep={currentStep} />
+            {/* Conteúdo do Ticket */}
+            <div className="px-6 py-8 space-y-6">
+              {/* Número do Pedido */}
+              <motion.div
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.7 }}
+                className="text-center"
+              >
+                <p className="text-xs uppercase tracking-widest text-gray-500 mb-2">
+                  Número do Pedido
+                </p>
+                <p className="text-2xl font-bold text-gray-900 font-mono">
+                  {order?.id?.toUpperCase() || "N/A"}
+                </p>
+              </motion.div>
 
-            {/* Etapa 1: Revisão do Carrinho */}
-            {currentStep === 1 && (
-              <div className="space-y-6 animate-in fade-in duration-300">
-                <Card className="bg-white p-6 lg:p-8 rounded-2xl shadow-sm border-gray-100">
-                  <h2 className="text-2xl font-bold mb-6 text-gray-900">
-                    Seus Produtos
-                  </h2>
-                  <div className="space-y-4">
-                    {cartItems.map((item, index) => (
-                      <ProductCard
-                        key={`${item.product_id}-${index}`}
-                        item={item}
-                        updateQuantity={updateQuantity}
-                        removeFromCart={removeFromCart}
-                        isProcessing={isProcessing}
-                        onEditCustomizations={handleEditCustomizations}
-                      />
-                    ))}
-                  </div>
-                </Card>
-
-                {/* Resumo Financeiro */}
-                <Card className="bg-white p-6 lg:p-8 rounded-2xl shadow-sm border-gray-100">
-                  <h3 className="text-xl font-bold mb-4 text-gray-900">
-                    Resumo do Pedido
-                  </h3>
-                  <div className="space-y-3 text-sm">
-                    <div className="flex justify-between items-center">
-                      <span className="text-gray-600">
-                        {discountAmount > 0
-                          ? "Subtotal dos produtos"
-                          : "Subtotal"}
-                      </span>
-                      <span className="font-semibold text-gray-900">
-                        R$ {originalTotal.toFixed(2)}
-                      </span>
-                    </div>
-                    {discountAmount > 0 && (
-                      <div className="flex justify-between items-center">
-                        <span className="text-green-600 font-medium">
-                          Desconto aplicado
-                        </span>
-                        <span className="text-green-600 font-semibold">
-                          - R$ {discountAmount.toFixed(2)}
-                        </span>
-                      </div>
-                    )}
-                    <div className="border-t border-gray-200 pt-3 mt-3">
-                      <div className="flex justify-between items-center">
-                        <span className="font-bold text-gray-900 text-lg">
-                          Total
-                        </span>
-                        <span className="font-bold text-rose-600 text-2xl">
-                          R$ {cartTotal.toFixed(2)}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </Card>
-
-                {/* Botão Próxima Etapa */}
-                <div className="flex justify-end">
-                  <Button
-                    onClick={handleNextStep}
-                    disabled={isProcessing || !canProceedToStep2}
-                    className="bg-rose-600 hover:bg-rose-700 text-white px-8 py-6 rounded-xl font-bold text-base shadow-lg hover:shadow-xl transition-all"
-                  >
-                    Prosseguir para Entrega
-                    <ArrowRight className="ml-2 h-5 w-5" />
-                  </Button>
+              {/* Informações do Cliente */}
+              <motion.div
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.8 }}
+                className="space-y-3 bg-gray-50 rounded-xl p-4"
+              >
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-gray-600 flex items-center gap-2">
+                    <User className="w-4 h-4 text-rose-600" />
+                    Cliente
+                  </span>
+                  <span className="font-semibold text-gray-900">
+                    {order?.user?.name || "N/A"}
+                  </span>
                 </div>
+                <div className="flex items-center justify-between text-sm border-t border-gray-200 pt-3">
+                  <span className="text-gray-600 flex items-center gap-2">
+                    <Smartphone className="w-4 h-4 text-rose-600" />
+                    Contato
+                  </span>
+                  <span className="font-semibold text-gray-900">
+                    {order?.recipient_phone || "N/A"}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-sm border-t border-gray-200 pt-3">
+                  <span className="text-gray-600 flex items-center gap-2">
+                    <MapPin className="w-4 h-4 text-rose-600" />
+                    Endereço
+                  </span>
+                  <span className="font-semibold text-gray-900 text-right">
+                    {order?.delivery_address || "N/A"}
+                  </span>
+                </div>
+              </motion.div>
+
+              {/* Resumo Financeiro */}
+              <motion.div
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.9 }}
+                className="space-y-2 border-t border-gray-200 pt-4"
+              >
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-600">Taxa de Entrega</span>
+                  <span className="font-medium text-gray-900">
+                    {order?.shipping_price === 0
+                      ? "GRÁTIS"
+                      : `R$ ${(order?.shipping_price || 0).toFixed(2)}`}
+                  </span>
+                </div>
+                {order?.discount && order?.discount > 0 && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-green-600 font-medium">Desconto</span>
+                    <span className="text-green-600 font-semibold">
+                      - R$ {order.discount.toFixed(2)}
+                    </span>
+                  </div>
+                )}
+                <div className="flex justify-between text-sm border-t border-gray-200 pt-3 mt-3">
+                  <span className="font-bold text-gray-900">Total</span>
+                  <span className="text-xl font-bold text-rose-600">
+                    R$ {(order?.total || 0).toFixed(2)}
+                  </span>
+                </div>
+              </motion.div>
+
+              {/* Status do Pedido */}
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 1 }}
+                className="bg-blue-50 rounded-xl p-4 text-center border border-blue-200"
+              >
+                <Badge className="bg-blue-100 text-blue-700 border-blue-300 mb-2 flex items-center gap-1 w-fit mx-auto">
+                  <CheckCircle2 className="w-3 h-3" />
+                  Pagamento Aprovado
+                </Badge>
+                <p className="text-xs text-blue-600 mt-2">
+                  Seu pedido foi recebido e está sendo preparado
+                </p>
+              </motion.div>
+            </div>
+
+            {/* Separador decorativo final */}
+            <div className="relative h-6 bg-gray-50">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t-2 border-dashed border-gray-200"></div>
               </div>
-            )}
+            </div>
 
-            {/* Etapa 2: Dados de Localização */}
-            {currentStep === 2 && (
-              <div className="space-y-6 animate-in fade-in duration-300">
-                <Card className="bg-white p-6 lg:p-8 rounded-2xl shadow-sm border-gray-100">
-                  <h2 className="text-2xl font-bold mb-6 text-gray-900 flex items-center gap-2">
-                    <MapPin className="h-6 w-6 text-rose-600" />
-                    Dados de Entrega
-                  </h2>
+            {/* Botão de ação */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 1.1 }}
+              className="px-6 py-6"
+            >
+              <Button
+                onClick={onTrackOrder}
+                className="w-full bg-gradient-to-r from-rose-600 to-rose-700 hover:from-rose-700 hover:to-rose-800 text-white py-6 rounded-xl font-bold text-base shadow-lg hover:shadow-xl transition-all"
+              >
+                <ArrowRight className="w-4 h-4 mr-2" />
+                Acompanhar Pedido
+              </Button>
+            </motion.div>
+          </Card>
+        </motion.div>
+      </motion.div>
+    );
+  };
 
-                  <div className="space-y-5">
-                    {/* Telefone */}
-                    <div>
-                      <label className="block text-sm font-bold text-gray-900 mb-2">
-                        📱 Seu Telefone (WhatsApp) *
-                      </label>
-                      <input
-                        type="tel"
-                        value={customerPhone}
-                        onChange={(e) => {
-                          const formatted = formatPhoneNumber(e.target.value);
-                          setCustomerPhone(formatted);
-                        }}
-                        placeholder="+55 (XX) XXXXX-XXXX"
-                        className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent transition-all"
-                      />
-                      {customerPhone.length > 0 &&
-                        !isValidPhone(customerPhone) && (
-                          <p className="text-xs text-red-600 mt-2 font-medium">
-                            ⚠️ Telefone incompleto
-                          </p>
-                        )}
-                    </div>
+  return (
+    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white">
+      {showConfirmation && confirmedOrder ? (
+        <div className="py-12 px-4">
+          <OrderConfirmationTicket
+            order={confirmedOrder}
+            onTrackOrder={handleTrackOrder}
+          />
+        </div>
+      ) : (
+        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 lg:py-12">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            {/* Main Content - 2/3 width */}
+            <div className="lg:col-span-2 space-y-6">
+              <CheckoutStepper currentStep={currentStep} />
 
-                    {/* Telefone do Destinatário */}
-                    <div>
-                      <label className="block text-sm font-bold text-gray-900 mb-2">
-                        🎁 Telefone do Destinatário *
-                      </label>
-                      <div className="mb-3">
-                        <label className="flex items-center gap-2 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={isSelfRecipient}
-                            onChange={(e) => {
-                              setIsSelfRecipient(e.target.checked);
-                              if (e.target.checked) {
-                                setRecipientPhone(customerPhone);
-                              }
-                            }}
-                            className="w-4 h-4 text-rose-600 border-gray-300 rounded focus:ring-rose-500"
+              <AnimatePresence mode="wait">
+                {/* Etapa 1: Revisão do Carrinho */}
+                {currentStep === 1 && (
+                  <motion.div
+                    key="step-1"
+                    variants={stepVariants}
+                    initial="hidden"
+                    animate="visible"
+                    exit="exit"
+                    className="space-y-6"
+                  >
+                    <Card className="bg-white p-6 lg:p-8 rounded-2xl shadow-sm border-gray-100">
+                      <h2 className="text-2xl font-bold mb-6 text-gray-900">
+                        Seus Produtos
+                      </h2>
+                      <div className="space-y-4">
+                        {cartItems.map((item, index) => (
+                          <ProductCard
+                            key={`${item.product_id}-${index}`}
+                            item={item}
+                            updateQuantity={updateQuantity}
+                            removeFromCart={removeFromCart}
+                            isProcessing={isProcessing}
+                            onEditCustomizations={handleEditCustomizations}
                           />
-                          <span className="text-sm text-gray-700">
-                            Eu vou receber
-                          </span>
-                        </label>
+                        ))}
                       </div>
-                      {!isSelfRecipient && (
-                        <>
+                    </Card>
+
+                    {/* Resumo Financeiro */}
+                    <Card className="bg-white p-6 lg:p-8 rounded-2xl shadow-sm border-gray-100">
+                      <h3 className="text-xl font-bold mb-4 text-gray-900">
+                        Resumo do Pedido
+                      </h3>
+                      <div className="space-y-3 text-sm">
+                        <div className="flex justify-between items-center">
+                          <span className="text-gray-600">
+                            {discountAmount > 0
+                              ? "Subtotal dos produtos"
+                              : "Subtotal"}
+                          </span>
+                          <span className="font-semibold text-gray-900">
+                            R$ {originalTotal.toFixed(2)}
+                          </span>
+                        </div>
+                        {discountAmount > 0 && (
+                          <div className="flex justify-between items-center">
+                            <span className="text-green-600 font-medium">
+                              Desconto aplicado
+                            </span>
+                            <span className="text-green-600 font-semibold">
+                              - R$ {discountAmount.toFixed(2)}
+                            </span>
+                          </div>
+                        )}
+                        <div className="border-t border-gray-200 pt-3 mt-3">
+                          <div className="flex justify-between items-center">
+                            <span className="font-bold text-gray-900 text-lg">
+                              Total
+                            </span>
+                            <span className="font-bold text-rose-600 text-2xl">
+                              R$ {cartTotal.toFixed(2)}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </Card>
+
+                    {/* Botão Próxima Etapa */}
+                    <div className="flex justify-end">
+                      <Button
+                        onClick={handleNextStep}
+                        disabled={isProcessing || !canProceedToStep2}
+                        className="bg-rose-600 hover:bg-rose-700 text-white px-8 py-6 rounded-xl font-bold text-base shadow-lg hover:shadow-xl transition-all"
+                      >
+                        Prosseguir para Entrega
+                        <ArrowRight className="ml-2 h-5 w-5" />
+                      </Button>
+                    </div>
+                  </motion.div>
+                )}
+
+                {/* Etapa 2: Entrega */}
+                {currentStep === 2 && (
+                  <motion.div
+                    key="step-2"
+                    variants={stepVariants}
+                    initial="hidden"
+                    animate="visible"
+                    exit="exit"
+                    className="space-y-6"
+                  >
+                    <Card className="bg-white p-6 lg:p-8 rounded-2xl shadow-sm border-gray-100">
+                      <h2 className="text-2xl font-bold mb-6 text-gray-900 flex items-center gap-2">
+                        <MapPin className="h-6 w-6 text-rose-600" />
+                        Dados de Entrega
+                      </h2>
+
+                      <div className="space-y-5">
+                        {/* Telefone */}
+                        <div>
+                          <label className="block text-sm font-bold text-gray-900 mb-2">
+                            📱 Seu Telefone (WhatsApp) *
+                          </label>
                           <input
                             type="tel"
-                            value={recipientPhone}
+                            value={customerPhone}
                             onChange={(e) => {
                               const formatted = formatPhoneNumber(
                                 e.target.value
                               );
-                              setRecipientPhone(formatted);
+                              setCustomerPhone(formatted);
                             }}
                             placeholder="+55 (XX) XXXXX-XXXX"
                             className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent transition-all"
                           />
-                          {recipientPhone.length > 0 &&
-                            !isValidPhone(recipientPhone) && (
+                          {customerPhone.length > 0 &&
+                            !isValidPhone(customerPhone) && (
                               <p className="text-xs text-red-600 mt-2 font-medium">
                                 ⚠️ Telefone incompleto
                               </p>
                             )}
-                          <div className="mt-3 flex items-center gap-3">
-                            <label className="inline-flex items-center">
+                        </div>
+
+                        {/* Telefone do Destinatário */}
+                        <div>
+                          <label className="block text-sm font-bold text-gray-900 mb-2">
+                            🎁 Telefone do Destinatário *
+                          </label>
+                          <div className="mb-3">
+                            <label className="flex items-center gap-2 cursor-pointer">
                               <input
                                 type="checkbox"
-                                checked={sendAnonymously}
+                                checked={isSelfRecipient}
                                 onChange={(e) => {
-                                  setSendAnonymously(e.target.checked);
-                                  setOrderMetadata({
-                                    send_anonymously: e.target.checked,
-                                  });
+                                  setIsSelfRecipient(e.target.checked);
+                                  if (e.target.checked) {
+                                    setRecipientPhone(customerPhone);
+                                  }
                                 }}
                                 className="w-4 h-4 text-rose-600 border-gray-300 rounded focus:ring-rose-500"
                               />
-                              <span className="ml-2 text-sm text-gray-700">
-                                Enviar anonimamente
+                              <span className="text-sm text-gray-700">
+                                Eu vou receber
                               </span>
                             </label>
                           </div>
-                        </>
-                      )}
-                    </div>
-
-                    {/* CEP */}
-                    <div>
-                      <label className="block text-sm font-bold text-gray-900 mb-2">
-                        📮 CEP *
-                      </label>
-                      <div className="relative">
-                        <input
-                          type="text"
-                          value={zipCode}
-                          onChange={(e) => {
-                            const value = e.target.value.replace(/\D/g, "");
-                            if (value.length <= 8) {
-                              setZipCode(value);
-                              if (value.length === 8) {
-                                handleCepSearch(value);
-                              } else {
-                                setAddress("");
-                                setNeighborhood("");
-                                setCity("");
-                                setState("");
-                              }
-                            }
-                          }}
-                          placeholder="00000000"
-                          className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent pr-10 transition-all"
-                          maxLength={8}
-                        />
-                        {isLoadingCep && (
-                          <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                            <Loader2 className="h-5 w-5 animate-spin text-rose-500" />
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Endereço e Número */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      <div className="md:col-span-2">
-                        <label className="block text-sm font-bold text-gray-900 mb-2">
-                          🏠 Endereço *
-                        </label>
-                        <input
-                          type="text"
-                          value={address}
-                          onChange={(e) => setAddress(e.target.value)}
-                          placeholder="Rua, Avenida..."
-                          className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent transition-all"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-bold text-gray-900 mb-2">
-                          Número *
-                        </label>
-                        <input
-                          type="text"
-                          value={houseNumber}
-                          onChange={(e) => setHouseNumber(e.target.value)}
-                          placeholder="123"
-                          className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent transition-all"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-bold text-gray-900 mb-2">
-                          Complemento
-                        </label>
-                        <input
-                          type="text"
-                          value={complemento}
-                          onChange={(e) => {
-                            setComplemento(e.target.value);
-                            setOrderMetadata({ complement: e.target.value });
-                          }}
-                          placeholder="Apt, bloco, ponto de referência"
-                          className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent transition-all"
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-bold text-gray-900 mb-2">
-                        🏘️ Bairro
-                      </label>
-                      <input
-                        type="text"
-                        value={neighborhood}
-                        onChange={(e) => setNeighborhood(e.target.value)}
-                        placeholder="Nome do bairro"
-                        className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent transition-all"
-                      />
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                      <div className="md:col-span-3">
-                        <label className="block text-sm font-bold text-gray-900 mb-2">
-                          🏙️ Cidade *
-                        </label>
-                        <input
-                          type="text"
-                          value={city}
-                          onChange={(e) => setCity(e.target.value)}
-                          placeholder="Cidade"
-                          className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent transition-all"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-bold text-gray-900 mb-2">
-                          Estado *
-                        </label>
-                        <input
-                          type="text"
-                          value={state}
-                          onChange={(e) =>
-                            setState(e.target.value.toUpperCase())
-                          }
-                          placeholder="UF"
-                          maxLength={2}
-                          className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent uppercase transition-all"
-                        />
-                      </div>
-                    </div>
-
-                    {/* Aviso de endereço */}
-                    {addressWarning && (
-                      <Alert className="border-red-200 bg-red-50">
-                        <AlertCircle className="h-4 w-4 text-red-600" />
-                        <AlertDescription className="text-red-700 text-sm">
-                          {addressWarning}
-                        </AlertDescription>
-                      </Alert>
-                    )}
-
-                    {/* Agendamento */}
-                    <div className="pt-4 border-t border-gray-200">
-                      <h3 className="text-lg font-bold mb-4 text-gray-900 flex items-center gap-2">
-                        <CalendarIcon className="h-5 w-5 text-rose-600" />
-                        Agendar Entrega
-                      </h3>
-
-                      <div className="bg-blue-50 rounded-xl border border-blue-200 p-4 mb-4">
-                        <p className="text-xs text-blue-800">
-                          ⏱️ <strong>Tempo de preparo:</strong>{" "}
-                          {getMinPreparationHours()}h
-                        </p>
-                      </div>
-
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                          <Label className="block text-sm font-bold text-gray-900 mb-2">
-                            Data *
-                          </Label>
-                          <Popover
-                            open={calendarOpen}
-                            onOpenChange={setCalendarOpen}
-                          >
-                            <PopoverTrigger asChild>
-                              <Button
-                                variant="outline"
-                                className="w-full justify-start text-left border-2 border-gray-200 hover:border-rose-300 rounded-xl py-6"
-                                disabled={isProcessing}
-                              >
-                                <CalendarIcon className="mr-2 h-4 w-4" />
-                                {selectedDate
-                                  ? selectedDate.toLocaleDateString("pt-BR")
-                                  : "Selecione uma data"}
-                              </Button>
-                            </PopoverTrigger>
-                            <PopoverContent
-                              className="w-full max-w-[200px] p-0"
-                              align="start"
-                            >
-                              <Calendar
-                                mode="single"
-                                selected={selectedDate}
-                                onSelect={(date) => {
-                                  if (date) {
-                                    setSelectedDate(date);
-                                    setSelectedTime("");
-                                  }
-                                  setCalendarOpen(false);
-                                }}
-                                disabled={isDateDisabled}
-                                className="rounded-md border"
-                              />
-                            </PopoverContent>
-                          </Popover>
-                        </div>
-
-                        {selectedDate && (
-                          <div>
-                            <Label className="block text-sm font-bold text-gray-900 mb-2">
-                              Horário *
-                            </Label>
-                            <select
-                              value={selectedTime}
-                              onChange={(e) => setSelectedTime(e.target.value)}
-                              title="Selecione o horário de entrega"
-                              aria-label="Horário de entrega"
-                              className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent transition-all"
-                            >
-                              <option value="">Selecione um horário</option>
-                              {generateTimeSlots(selectedDate).map((slot) => (
-                                <option key={slot.value} value={slot.value}>
-                                  {slot.label}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </Card>
-
-                {/* Resumo com frete */}
-                <Card className="bg-white p-6 rounded-2xl shadow-sm border-gray-100">
-                  <h3 className="text-lg font-bold mb-4 text-gray-900">
-                    Resumo do Pedido
-                  </h3>
-                  <div className="space-y-3 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">
-                        Subtotal dos produtos
-                      </span>
-                      <span className="font-semibold">
-                        R$ {cartTotal.toFixed(2)}
-                      </span>
-                    </div>
-
-                    {/* Mostrar opções de frete se endereço for válido */}
-                    {isAddressServed && shippingRule ? (
-                      <div className="border-t border-gray-200 pt-3 mt-3 space-y-2">
-                        <p className="text-xs font-bold text-gray-700 mb-2">
-                          📦 Taxa de entrega por forma de pagamento:
-                        </p>
-                        <div className="bg-green-50 rounded-lg p-3 border border-green-200">
-                          <div className="flex justify-between items-center">
-                            <span className="text-green-800 font-medium flex items-center gap-1">
-                              💳 PIX
-                            </span>
-                            <span className="font-bold text-green-700">
-                              {shippingRule.pix === 0
-                                ? "GRÁTIS 🎉"
-                                : `R$ ${shippingRule.pix.toFixed(2)}`}
-                            </span>
-                          </div>
-                        </div>
-                        <div className="bg-blue-50 rounded-lg p-3 border border-blue-200">
-                          <div className="flex justify-between items-center">
-                            <span className="text-blue-800 font-medium flex items-center gap-1">
-                              💳 Cartão de Crédito
-                            </span>
-                            <span className="font-bold text-blue-700">
-                              {shippingRule.card === 0
-                                ? "GRÁTIS 🎉"
-                                : `R$ ${shippingRule.card.toFixed(2)}`}
-                            </span>
-                          </div>
-                        </div>
-                        <p className="text-xs text-gray-500 mt-2 bg-gray-50 rounded-lg p-2">
-                          ℹ️ O valor final será calculado após selecionar a
-                          forma de pagamento na próxima etapa
-                        </p>
-                      </div>
-                    ) : (
-                      <div className="border-t border-gray-200 pt-3 mt-3">
-                        <div className="flex justify-between">
-                          <span className="text-gray-600">Taxa de entrega</span>
-                          <span className="font-semibold text-rose-600">
-                            Informe o endereço
-                          </span>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </Card>
-
-                {/* 🎨 REVISÃO DE CUSTOMIZAÇÕES */}
-                <CustomizationsReview cartItems={cart.items} />
-
-                {/* Botões de Navegação */}
-                <div className="flex justify-between gap-4">
-                  <Button
-                    onClick={handlePreviousStep}
-                    variant="outline"
-                    className="px-6 py-6 rounded-xl font-bold border-2"
-                    disabled={isProcessing}
-                  >
-                    <ArrowLeft className="mr-2 h-5 w-5" />
-                    Voltar
-                  </Button>
-                  <Button
-                    onClick={handleNextStep}
-                    disabled={isProcessing || !canProceedToStep3}
-                    className="bg-rose-600 hover:bg-rose-700 text-white px-8 py-6 rounded-xl font-bold shadow-lg hover:shadow-xl transition-all"
-                  >
-                    Prosseguir para Pagamento
-                    <ArrowRight className="ml-2 h-5 w-5" />
-                  </Button>
-                </div>
-              </div>
-            )}
-
-            {/* Etapa 3: Pagamento */}
-            {currentStep === 3 && (
-              <div className="space-y-6 animate-in fade-in duration-300">
-                {/* 🔄 Loading Overlay quando estiver processando */}
-                {isProcessing && !pixData && (
-                  <Card className="bg-gradient-to-br from-blue-50 to-indigo-50 p-8 rounded-2xl shadow-lg border-blue-200">
-                    <div className="flex flex-col items-center justify-center gap-4">
-                      <Loader2 className="h-12 w-12 text-blue-600 animate-spin" />
-                      <div className="text-center">
-                        <h3 className="text-xl font-bold text-blue-900 mb-2">
-                          Processando seu pagamento...
-                        </h3>
-                        <p className="text-sm text-blue-700">
-                          {paymentMethod === "pix"
-                            ? "Gerando QR Code PIX, aguarde um momento"
-                            : "Processando dados do cartão, aguarde"}
-                        </p>
-                      </div>
-                    </div>
-                  </Card>
-                )}
-
-                {/* Seleção de Método de Pagamento */}
-                <Card className="bg-white p-6 lg:p-8 rounded-2xl shadow-sm border-gray-100">
-                  <h2 className="text-2xl font-bold mb-6 text-gray-900 flex items-center gap-2">
-                    <CreditCard className="h-6 w-6 text-rose-600" />
-                    Forma de Pagamento
-                  </h2>
-
-                  <div className="grid grid-cols-2 sm:grid-cols-2 gap-3">
-                    <Button
-                      type="button"
-                      variant={paymentMethod === "pix" ? "default" : "outline"}
-                      aria-pressed={paymentMethod === "pix"}
-                      className={`py-8 text-base font-bold transition-all rounded-xl ${
-                        paymentMethod === "pix"
-                          ? "bg-rose-600 text-white hover:bg-rose-700 shadow-md border-0"
-                          : "border-2 border-gray-200 hover:border-rose-300 bg-white text-gray-700"
-                      }`}
-                      onClick={() => {
-                        setPaymentMethod("pix");
-                        setPaymentError(null);
-                      }}
-                    >
-                      <div className="flex flex-col items-center gap-2">
-                        <Smartphone className="h-8 w-8" />
-                        <span>PIX</span>
-                        {shippingOptions.pix !== null && (
-                          <span className="text-xs opacity-80">
-                            {shippingOptions.pix === 0
-                              ? "Frete GRÁTIS 🎉"
-                              : `Frete: R$ ${shippingOptions.pix.toFixed(2)}`}
-                          </span>
-                        )}
-                      </div>
-                    </Button>
-
-                    <Button
-                      type="button"
-                      variant={paymentMethod === "card" ? "default" : "outline"}
-                      aria-pressed={paymentMethod === "card"}
-                      className={`py-8 text-base font-bold transition-all rounded-xl ${
-                        paymentMethod === "card"
-                          ? "bg-rose-600 text-white hover:bg-rose-700 shadow-md border-0"
-                          : "border-2 border-gray-200 hover:border-rose-300 bg-white text-gray-700"
-                      }`}
-                      onClick={() => {
-                        setPaymentMethod("card");
-                        setPaymentError(null);
-                      }}
-                    >
-                      <div className="flex flex-col items-center gap-2">
-                        <CreditCard className="h-8 w-8" />
-                        <span>Cartão de Crédito</span>
-                        {shippingOptions.card !== null && (
-                          <span className="text-xs opacity-80">
-                            {shippingOptions.card === 0
-                              ? "Frete GRÁTIS 🎉"
-                              : `Frete: R$ ${shippingOptions.card.toFixed(2)}`}
-                          </span>
-                        )}
-                      </div>
-                    </Button>
-                  </div>
-
-                  {paymentError && (
-                    <Alert className="border-red-200 bg-red-50 mt-6">
-                      <AlertCircle className="h-4 w-4 text-red-600" />
-                      <AlertDescription className="text-red-700">
-                        {paymentError}
-                      </AlertDescription>
-                    </Alert>
-                  )}
-                </Card>
-
-                {/* Mostrar QR Code PIX se PIX foi selecionado E já gerado */}
-                {paymentMethod === "pix" && pixData && (
-                  <Card className="bg-white p-6 rounded-2xl shadow-sm border-gray-100 relative">
-                    {/* Indicador de polling */}
-                    {paymentStatus === "pending" &&
-                      pollingStatus === "polling" && (
-                        <Alert className="border-blue-200 bg-blue-50 mb-6">
-                          <Loader2 className="h-4 w-4 text-blue-600 animate-spin" />
-                          <AlertDescription className="text-blue-800 text-sm">
-                            <div className="flex flex-col gap-2">
-                              <span className="font-medium">
-                                Aguardando confirmação do pagamento...
-                              </span>
-                              <span className="text-xs">
-                                Verificação {pollingAttempts} de 60 • Isso pode
-                                levar alguns minutos
-                              </span>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                disabled={
-                                  isProcessing || pollingStatus === "polling"
-                                }
-                                onClick={async () => {
-                                  if (!currentOrderId) {
-                                    toast.error("ID do pedido não encontrado");
-                                    return;
-                                  }
-
-                                  console.log(
-                                    "🔍 [MANUAL CHECK] Verificando pagamento manualmente...",
-                                    {
-                                      orderId: currentOrderId,
-                                      currentPaymentStatus: paymentStatus,
-                                      currentPollingStatus: pollingStatus,
-                                    }
+                          {!isSelfRecipient && (
+                            <>
+                              <input
+                                type="tel"
+                                value={recipientPhone}
+                                onChange={(e) => {
+                                  const formatted = formatPhoneNumber(
+                                    e.target.value
                                   );
-
-                                  toast.info("Verificando pagamento...");
-
-                                  try {
-                                    const order = await getOrder(
-                                      currentOrderId
-                                    );
-
-                                    console.log(
-                                      "🔍 [MANUAL CHECK] Pedido recebido:",
-                                      {
-                                        orderId: order?.id,
-                                        orderStatus: order?.status,
-                                        paymentId: order?.payment?.id,
-                                        paymentStatus: order?.payment?.status,
-                                        paymentMercadoPagoId:
-                                          order?.payment?.mercado_pago_id,
-                                        webhookAttempts:
-                                          order?.payment?.webhook_attempts,
-                                        lastWebhookAt:
-                                          order?.payment?.last_webhook_at,
-                                      }
-                                    );
-
-                                    if (
-                                      order?.payment?.status === "APPROVED" ||
-                                      order?.payment?.status === "AUTHORIZED" ||
-                                      order?.status === "PAID"
-                                    ) {
-                                      console.log(
-                                        "✅ [MANUAL CHECK] PAGAMENTO CONFIRMADO!"
-                                      );
-                                      setPaymentStatus("success");
-                                      clearCart();
-                                      clearPendingOrder();
-                                      localStorage.removeItem("pendingOrderId");
-                                      toast.success(
-                                        "🎉 Pagamento confirmado!",
-                                        {
-                                          duration: 3000,
-                                        }
-                                      );
-                                      setTimeout(
-                                        () => router.push("/pedidos"),
-                                        2000
-                                      );
-                                    } else if (
-                                      order?.payment?.status === "REJECTED" ||
-                                      order?.payment?.status === "CANCELLED"
-                                    ) {
-                                      console.log(
-                                        "❌ [MANUAL CHECK] Pagamento rejeitado"
-                                      );
-                                      setPaymentStatus("failure");
-                                      toast.error("Pagamento foi rejeitado");
-                                    } else {
-                                      console.log(
-                                        "⏳ [MANUAL CHECK] Pagamento ainda pendente"
-                                      );
-                                      toast.warning(
-                                        "Pagamento ainda pendente. Continue aguardando.",
-                                        { duration: 4000 }
-                                      );
-                                    }
-                                  } catch (error) {
-                                    console.error(
-                                      "❌ [MANUAL CHECK] Erro ao verificar:",
-                                      error
-                                    );
-                                    toast.error("Erro ao verificar pagamento");
-                                  }
+                                  setRecipientPhone(formatted);
                                 }}
-                                className="mt-2 text-xs"
-                              >
-                                <RefreshCcw className="h-3 w-3 mr-1" />
-                                Verificar agora
-                              </Button>
-                            </div>
-                          </AlertDescription>
-                        </Alert>
-                      )}
+                                placeholder="+55 (XX) XXXXX-XXXX"
+                                className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent transition-all"
+                              />
+                              {recipientPhone.length > 0 &&
+                                !isValidPhone(recipientPhone) && (
+                                  <p className="text-xs text-red-600 mt-2 font-medium">
+                                    ⚠️ Telefone incompleto
+                                  </p>
+                                )}
+                              <div className="mt-3 flex items-center gap-3">
+                                <label className="inline-flex items-center">
+                                  <input
+                                    type="checkbox"
+                                    checked={sendAnonymously}
+                                    onChange={(e) => {
+                                      setSendAnonymously(e.target.checked);
+                                      setOrderMetadata({
+                                        send_anonymously: e.target.checked,
+                                      });
+                                    }}
+                                    className="w-4 h-4 text-rose-600 border-gray-300 rounded focus:ring-rose-500"
+                                  />
+                                  <span className="ml-2 text-sm text-gray-700">
+                                    Enviar anonimamente
+                                  </span>
+                                </label>
+                              </div>
+                            </>
+                          )}
+                        </div>
 
-                    {paymentStatus === "success" && (
-                      <Alert className="border-green-200 bg-green-50 mb-6">
-                        <CheckCircle2 className="h-4 w-4 text-green-600" />
-                        <AlertDescription className="text-green-800 text-sm font-medium">
-                          ✅ Pagamento confirmado! Redirecionando...
-                        </AlertDescription>
-                      </Alert>
-                    )}
-
-                    {/* Alert de timeout */}
-                    {pollingStatus === "timeout" && paymentError && (
-                      <Alert className="border-orange-200 bg-orange-50 mb-6">
-                        <AlertCircle className="h-4 w-4 text-orange-600" />
-                        <AlertTitle className="text-orange-900 font-semibold">
-                          Tempo de Espera Expirado
-                        </AlertTitle>
-                        <AlertDescription className="text-orange-800 text-sm">
-                          <div className="flex flex-col gap-3 mt-2">
-                            <p>{paymentError}</p>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => router.push("/pedidos")}
-                              className="border-orange-300 hover:bg-orange-100"
-                              disabled={isProcessing}
-                            >
-                              Verificar Meus Pedidos
-                            </Button>
+                        {/* CEP */}
+                        <div>
+                          <label className="block text-sm font-bold text-gray-900 mb-2">
+                            📮 CEP *
+                          </label>
+                          <div className="relative">
+                            <input
+                              type="text"
+                              value={zipCode}
+                              onChange={(e) => {
+                                const value = e.target.value.replace(/\D/g, "");
+                                if (value.length <= 8) {
+                                  setZipCode(value);
+                                  if (value.length === 8) {
+                                    handleCepSearch(value);
+                                  } else {
+                                    setAddress("");
+                                    setNeighborhood("");
+                                    setCity("");
+                                    setState("");
+                                  }
+                                }
+                              }}
+                              placeholder="00000000"
+                              className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent pr-10 transition-all"
+                              maxLength={8}
+                            />
+                            {isLoadingCep && (
+                              <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                                <Loader2 className="h-5 w-5 animate-spin text-rose-500" />
+                              </div>
+                            )}
                           </div>
-                        </AlertDescription>
-                      </Alert>
-                    )}
+                        </div>
 
-                    {currentOrderId && (
-                      <div className="text-sm text-gray-600 bg-gray-50 p-3 rounded-xl mb-4">
-                        <span className="font-medium text-gray-700">
-                          🆔 Código do pedido:
-                        </span>{" "}
-                        {currentOrderId}
+                        {/* Endereço e Número */}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          <div className="md:col-span-2">
+                            <label className="block text-sm font-bold text-gray-900 mb-2">
+                              🏠 Endereço *
+                            </label>
+                            <input
+                              type="text"
+                              value={address}
+                              onChange={(e) => setAddress(e.target.value)}
+                              placeholder="Rua, Avenida..."
+                              className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent transition-all"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-bold text-gray-900 mb-2">
+                              Número *
+                            </label>
+                            <input
+                              type="text"
+                              value={houseNumber}
+                              onChange={(e) => setHouseNumber(e.target.value)}
+                              placeholder="123"
+                              className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent transition-all"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-bold text-gray-900 mb-2">
+                              Complemento
+                            </label>
+                            <input
+                              type="text"
+                              value={complemento}
+                              onChange={(e) => {
+                                setComplemento(e.target.value);
+                                setOrderMetadata({
+                                  complement: e.target.value,
+                                });
+                              }}
+                              placeholder="Apt, bloco, ponto de referência"
+                              className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent transition-all"
+                            />
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-bold text-gray-900 mb-2">
+                            🏘️ Bairro
+                          </label>
+                          <input
+                            type="text"
+                            value={neighborhood}
+                            onChange={(e) => setNeighborhood(e.target.value)}
+                            placeholder="Nome do bairro"
+                            className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent transition-all"
+                          />
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                          <div className="md:col-span-3">
+                            <label className="block text-sm font-bold text-gray-900 mb-2">
+                              🏙️ Cidade *
+                            </label>
+                            <input
+                              type="text"
+                              value={city}
+                              onChange={(e) => setCity(e.target.value)}
+                              placeholder="Cidade"
+                              className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent transition-all"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-bold text-gray-900 mb-2">
+                              Estado *
+                            </label>
+                            <input
+                              type="text"
+                              value={state}
+                              onChange={(e) =>
+                                setState(e.target.value.toUpperCase())
+                              }
+                              placeholder="UF"
+                              maxLength={2}
+                              className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent uppercase transition-all"
+                            />
+                          </div>
+                        </div>
+
+                        {/* Aviso de endereço */}
+                        {addressWarning && (
+                          <Alert className="border-red-200 bg-red-50">
+                            <AlertCircle className="h-4 w-4 text-red-600" />
+                            <AlertDescription className="text-red-700 text-sm">
+                              {addressWarning}
+                            </AlertDescription>
+                          </Alert>
+                        )}
+
+                        {/* Agendamento */}
+                        <div className="pt-4 border-t border-gray-200">
+                          <h3 className="text-lg font-bold mb-4 text-gray-900 flex items-center gap-2">
+                            <CalendarIcon className="h-5 w-5 text-rose-600" />
+                            Agendar Entrega
+                          </h3>
+
+                          <div className="bg-blue-50 rounded-xl border border-blue-200 p-4 mb-4">
+                            <p className="text-xs text-blue-800">
+                              ⏱️ <strong>Tempo de preparo:</strong>{" "}
+                              {getMinPreparationHours()}h
+                            </p>
+                          </div>
+
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                              <Label className="block text-sm font-bold text-gray-900 mb-2">
+                                Data *
+                              </Label>
+                              <Popover
+                                open={calendarOpen}
+                                onOpenChange={setCalendarOpen}
+                              >
+                                <PopoverTrigger asChild>
+                                  <Button
+                                    variant="outline"
+                                    className="w-full justify-start text-left border-2 border-gray-200 hover:border-rose-300 rounded-xl py-6 bg-transparent"
+                                    disabled={isProcessing}
+                                  >
+                                    <CalendarIcon className="mr-2 h-4 w-4" />
+                                    {selectedDate
+                                      ? selectedDate.toLocaleDateString("pt-BR")
+                                      : "Selecione uma data"}
+                                  </Button>
+                                </PopoverTrigger>
+                                <PopoverContent
+                                  className="w-full max-w-[400px] min-w-[300px] p-0"
+                                  align="start"
+                                >
+                                  <Calendar
+                                    mode="single"
+                                    selected={selectedDate}
+                                    onSelect={(date: Date | undefined) => {
+                                      if (date) {
+                                        setSelectedDate(date);
+                                        setSelectedTime("");
+                                      }
+                                      setCalendarOpen(false);
+                                    }}
+                                    disabled={isDateDisabled}
+                                    className="rounded-md w-full border"
+                                  />
+                                </PopoverContent>
+                              </Popover>
+                            </div>
+
+                            {selectedDate && (
+                              <div>
+                                <Label className="block text-sm font-bold text-gray-900 mb-2">
+                                  Horário *
+                                </Label>
+                                <select
+                                  value={selectedTime}
+                                  onChange={(e) =>
+                                    setSelectedTime(e.target.value)
+                                  }
+                                  title="Selecione o horário de entrega"
+                                  aria-label="Horário de entrega"
+                                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent transition-all"
+                                >
+                                  <option value="">Selecione um horário</option>
+                                  {generateTimeSlots(selectedDate).map(
+                                    (slot) => (
+                                      <option
+                                        key={slot.value}
+                                        value={slot.value}
+                                      >
+                                        {slot.label}
+                                      </option>
+                                    )
+                                  )}
+                                </select>
+                              </div>
+                            )}
+                          </div>
+                        </div>
                       </div>
+                    </Card>
+
+                    {/* Resumo com frete */}
+                    <Card className="bg-white p-6 rounded-2xl shadow-sm border-gray-100">
+                      <h3 className="text-lg font-bold mb-4 text-gray-900">
+                        Resumo do Pedido
+                      </h3>
+                      <div className="space-y-3 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">
+                            Subtotal dos produtos
+                          </span>
+                          <span className="font-semibold">
+                            R$ {cartTotal.toFixed(2)}
+                          </span>
+                        </div>
+
+                        {/* Mostrar opções de frete se endereço for válido */}
+                        {isAddressServed && shippingRule ? (
+                          <div className="border-t border-gray-200 pt-3 mt-3 space-y-2">
+                            <p className="text-xs font-bold text-gray-700 mb-2">
+                              📦 Taxa de entrega por forma de pagamento:
+                            </p>
+                            <div className="bg-green-50 rounded-lg p-3 border border-green-200">
+                              <div className="flex justify-between items-center">
+                                <span className="text-green-800 font-medium flex items-center gap-1">
+                                  PIX
+                                </span>
+                                <span className="font-bold text-green-700">
+                                  {shippingRule.pix === 0
+                                    ? "GRÁTIS 🎉"
+                                    : `R$ ${shippingRule.pix.toFixed(2)}`}
+                                </span>
+                              </div>
+                            </div>
+                            <div className="bg-blue-50 rounded-lg p-3 border border-blue-200">
+                              <div className="flex justify-between items-center">
+                                <span className="text-blue-800 font-medium flex items-center gap-1">
+                                  Cartão de Crédito
+                                </span>
+                                <span className="font-bold text-blue-700">
+                                  {shippingRule.card === 0
+                                    ? "GRÁTIS 🎉"
+                                    : `R$ ${shippingRule.card.toFixed(2)}`}
+                                </span>
+                              </div>
+                            </div>
+                            <p className="text-xs text-gray-500 mt-2 bg-gray-50 rounded-lg p-2">
+                              ℹ️ O valor final será calculado após selecionar a
+                              forma de pagamento na próxima etapa
+                            </p>
+                          </div>
+                        ) : (
+                          <div className="border-t border-gray-200 pt-3 mt-3">
+                            <div className="flex justify-between">
+                              <span className="text-gray-600">
+                                Taxa de entrega
+                              </span>
+                              <span className="font-semibold text-rose-600">
+                                Informe o endereço
+                              </span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </Card>
+
+                    <CustomizationsReview cartItems={cart.items} />
+
+                    <div className="flex justify-between gap-4">
+                      <Button
+                        onClick={handlePreviousStep}
+                        variant="outline"
+                        className="px-6 py-6 rounded-xl font-bold border-2 bg-transparent"
+                        disabled={isProcessing}
+                      >
+                        <ArrowLeft className="mr-2 h-5 w-5" />
+                        Voltar
+                      </Button>
+                      <Button
+                        onClick={handleNextStep}
+                        disabled={isProcessing || !canProceedToStep3}
+                        className="bg-rose-600 hover:bg-rose-700 text-white px-8 py-6 rounded-xl font-bold shadow-lg hover:shadow-xl transition-all"
+                      >
+                        Prosseguir para Pagamento
+                        <ArrowRight className="ml-2 h-5 w-5" />
+                      </Button>
+                    </div>
+                  </motion.div>
+                )}
+
+                {/* Etapa 3: Pagamento */}
+                {currentStep === 3 && (
+                  <motion.div
+                    key="step-3"
+                    variants={stepVariants}
+                    initial="hidden"
+                    animate="visible"
+                    exit="exit"
+                    className="space-y-6"
+                  >
+                    {isProcessing && !pixData && (
+                      <motion.div
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="space-y-3"
+                      >
+                        <Card className="bg-gradient-to-br from-rose-50 to-orange-50 p-8 rounded-2xl shadow-md border border-rose-100">
+                          <div className="flex flex-col items-center justify-center gap-4">
+                            <motion.div
+                              animate={{ rotate: 360 }}
+                              transition={{
+                                duration: 2,
+                                repeat: Number.POSITIVE_INFINITY,
+                                ease: "linear",
+                              }}
+                            >
+                              <Loader2 className="h-12 w-12 text-rose-600" />
+                            </motion.div>
+                            <div className="text-center space-y-2">
+                              <h3 className="text-lg font-bold text-rose-900">
+                                {paymentMethod === "pix"
+                                  ? "Gerando QR Code PIX..."
+                                  : "Processando seu pagamento..."}
+                              </h3>
+                              <p className="text-sm text-rose-700">
+                                {paymentMethod === "pix"
+                                  ? "Aguarde enquanto geramos seu código QR"
+                                  : "Validando dados do seu cartão"}
+                              </p>
+                            </div>
+
+                            <div className="w-full mt-4">
+                              <div className="h-1 bg-rose-200 rounded-full overflow-hidden">
+                                <motion.div
+                                  className="h-full bg-gradient-to-r from-rose-500 to-orange-500"
+                                  animate={{ x: ["-100%", "100%"] }}
+                                  transition={{
+                                    duration: 1.5,
+                                    repeat: Number.POSITIVE_INFINITY,
+                                  }}
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        </Card>
+                      </motion.div>
                     )}
 
-                    {/* Container relativo para overlay */}
-                    <div className="relative flex flex-col items-center justify-center max-w-md mx-auto">
-                      <QRCodePIX
-                        pixData={{
-                          ...pixData,
-                          payer_info: {
-                            id: pixData.payer_info.id || "",
-                            email: pixData.payer_info.email || "",
-                            first_name: pixData.payer_info.first_name,
-                            last_name: pixData.payer_info.last_name,
-                          },
-                        }}
-                      />
+                    {/* Seleção de Método de Pagamento */}
+                    {!pixData && !isProcessing && (
+                      <Card className="bg-white p-6 lg:p-8 rounded-2xl shadow-sm border-gray-100">
+                        <h2 className="text-2xl font-bold mb-6 text-gray-900 flex items-center gap-2">
+                          <CreditCard className="h-6 w-6 text-rose-600" />
+                          Forma de Pagamento
+                        </h2>
 
-                      {/* Overlay de status sobre o QR Code */}
-                      {(pollingStatus === "success" ||
-                        pollingStatus === "failure" ||
-                        pollingStatus === "timeout" ||
-                        (pollingStatus === "pending" &&
-                          paymentStatus === "pending")) && (
-                        <PaymentStatusOverlay
-                          status={
-                            pollingStatus === "success"
-                              ? "success"
-                              : pollingStatus === "failure"
-                              ? "failure"
-                              : pollingStatus === "timeout"
-                              ? "timeout"
-                              : "pending"
-                          }
-                          paymentMethod="pix"
-                          showOverQRCode={true}
-                          onAnimationComplete={() => {
-                            if (pollingStatus === "success") {
-                              // Redirecionar para página de pedidos após animação
-                              router.push("/pedidos");
-                            }
+                        <PaymentMethodSelector
+                          selectedMethod={paymentMethod as "pix" | "card"}
+                          onMethodChange={(method) => {
+                            setPaymentMethod(method);
+                            setPaymentError(null);
                           }}
                         />
-                      )}
-                      {/* Ações rápidas: copiar link e abrir em nova aba (melhor UX mobile) */}
-                      <div className="mt-4 flex items-center justify-center gap-3 flex-wrap">
-                        <button
-                          className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-sm shadow-sm"
-                          onClick={async () => {
-                            try {
-                              await navigator.clipboard.writeText(
-                                pixData.ticket_url || pixData.qr_code || ""
-                              );
-                              toast.success("Link de pagamento copiado");
-                            } catch {
-                              toast.error("Não foi possível copiar o link");
-                            }
-                          }}
-                        >
-                          Copiar Link
-                        </button>
-                        <a
-                          className="px-3 py-2 border rounded-lg text-sm flex items-center gap-2"
-                          href={pixData.ticket_url || pixData.qr_code || "#"}
-                          target="_blank"
-                          rel="noreferrer"
-                          onClick={() => {
-                            // abrir em nova aba
-                          }}
-                        >
-                          Abrir Link
-                        </a>
-                      </div>
-                      <div className="mt-3 text-center text-xs text-gray-500">
-                        <div>
-                          Valor:{" "}
-                          <strong>
-                            R${" "}
-                            {pixData.amount
-                              ? pixData.amount.toFixed(2)
-                              : "0,00"}
-                          </strong>
-                        </div>
-                        <div>
-                          Expira em:{" "}
-                          {pixData.expires_at
-                            ? new Date(pixData.expires_at).toLocaleString()
-                            : "-"}
-                        </div>
-                      </div>
-                    </div>
-                  </Card>
-                )}
-
-                {/* Mostrar Formulário de Cartão se CARD foi selecionado */}
-                {paymentMethod === "card" && !pixData && (
-                  <Card className="bg-white p-6 rounded-2xl shadow-sm border-gray-100">
-                    {/* Aviso se o pedido não foi criado ainda */}
-                    {!currentOrderId &&
-                      !localStorage.getItem("pendingOrderId") && (
-                        <Alert className="border-rose-200 bg-rose-50 mb-6">
-                          <AlertCircle className="h-4 w-4 text-rose-600" />
-                          <AlertTitle className="text-rose-900">
-                            Atenção
-                          </AlertTitle>
-                          <AlertDescription className="text-rose-800 text-sm">
-                            Clique em &ldquo;Finalizar Compra&rdquo; primeiro
-                            para criar seu pedido antes de preencher os dados do
-                            cartão.
-                          </AlertDescription>
-                        </Alert>
-                      )}
-
-                    {paymentStatus === "pending" &&
-                      pollingStatus === "polling" && (
-                        <Alert className="border-blue-200 bg-blue-50 mb-6">
-                          <Loader2 className="h-4 w-4 text-blue-600 animate-spin" />
-                          <AlertDescription className="text-blue-800 text-sm">
-                            <div className="flex flex-col gap-1">
-                              <span className="font-medium">
-                                Aguardando confirmação do pagamento...
-                              </span>
-                              <span className="text-xs">
-                                Verificação {pollingAttempts} de 60 • Não feche
-                                esta página
-                              </span>
-                            </div>
-                          </AlertDescription>
-                        </Alert>
-                      )}
-
-                    <div className="max-w-md mx-auto">
-                      <div className="mb-4 text-sm text-gray-700">
-                        <div>
-                          Valor: <strong>R$ {grandTotal.toFixed(2)}</strong>
-                        </div>
-                        {currentOrderId && (
-                          <div className="text-xs text-gray-500 mt-1">
-                            Pedido: {currentOrderId}
-                          </div>
-                        )}
-                      </div>
-                      <CreditCardForm
-                        onSubmit={handleCardPayment}
-                        isProcessing={isProcessing}
-                        defaultEmail={user?.email}
-                        defaultName={user?.name}
-                      />
-                    </div>
-                  </Card>
-                )}
-
-                {/* Resumo Final */}
-                <Card className="bg-gradient-to-br from-rose-50 to-pink-50 p-6 rounded-2xl shadow-sm border-rose-200">
-                  <h3 className="font-bold text-lg mb-4 text-gray-900">
-                    Resumo do Pedido
-                  </h3>
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between">
-                      <span>Subtotal</span>
-                      <span className="font-semibold">
-                        R$ {cartTotal.toFixed(2)}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Taxa de entrega</span>
-                      <span className="font-semibold">
-                        {shippingCost === 0
-                          ? "GRÁTIS"
-                          : `R$ ${shippingCost?.toFixed(2)}`}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Forma de pagamento</span>
-                      <span className="font-semibold">
-                        {paymentMethod === "pix"
-                          ? "PIX"
-                          : paymentMethod === "card"
-                          ? "Cartão de Crédito"
-                          : "Não selecionado"}
-                      </span>
-                    </div>
-                    <div className="border-t border-rose-300 pt-3 mt-3">
-                      <div className="flex justify-between items-center">
-                        <span className="font-bold text-xl">Total</span>
-                        <span className="font-bold text-rose-600 text-3xl">
-                          R$ {grandTotal.toFixed(2)}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </Card>
-
-                {/* Botões Finais */}
-                <div className="flex flex-col sm:flex-row justify-between gap-4">
-                  <div className="flex gap-4">
-                    <Button
-                      onClick={handlePreviousStep}
-                      variant="outline"
-                      className="px-6 py-6 rounded-xl font-bold border-2"
-                      disabled={
-                        isProcessing ||
-                        paymentStatus === "pending" ||
-                        isCanceling
-                      }
-                    >
-                      <ArrowLeft className="mr-2 h-5 w-5" />
-                      Voltar
-                    </Button>
-
-                    {currentOrderId && (
-                      <Button
-                        onClick={async () => {
-                          const confirmed = window.confirm(
-                            "Tem certeza que deseja cancelar esta compra? Todos os dados serão perdidos."
-                          );
-
-                          if (confirmed) {
-                            const success = await handleCancelOrder();
-                            if (success) {
-                              setCurrentOrderId(null);
-                              setPixData(null);
-                              setPaymentStatus("");
-                              setPaymentError(null);
-                              setPaymentMethod("");
-                              setCurrentStep(1);
-                              window.scrollTo({ top: 0, behavior: "smooth" });
-                            }
-                          }
-                        }}
-                        variant="destructive"
-                        className="px-6 py-6 rounded-xl font-bold"
-                        disabled={
-                          isProcessing ||
-                          paymentStatus === "success" ||
-                          isCanceling
-                        }
-                      >
-                        {isCanceling ? (
-                          <>
-                            <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                            Cancelando...
-                          </>
-                        ) : (
-                          <>
-                            <XCircle className="mr-2 h-5 w-5" />
-                            Cancelar Compra
-                          </>
-                        )}
-                      </Button>
+                      </Card>
                     )}
-                  </div>
 
-                  {currentOrderId &&
-                    paymentMethod &&
-                    !pixData &&
-                    paymentMethod === "pix" && (
-                      <Alert className="border-blue-200 bg-blue-50">
-                        <Loader2 className="h-4 w-4 text-blue-600 animate-spin" />
-                        <AlertDescription className="text-blue-800 text-sm">
-                          Gerando QR Code PIX...
+                    {!isProcessing && paymentMethod && (
+                      <Card className="bg-white p-6 lg:p-8 rounded-2xl shadow-sm border-gray-100">
+                        {paymentMethod === "pix" && pixData ? (
+                          <div className="space-y-4">
+                            <h3 className="text-xl font-bold text-gray-900">
+                              Complete seu pagamento
+                            </h3>
+                            <QRCodePIX pixData={pixData} />
+                          </div>
+                        ) : paymentMethod === "card" ? (
+                          <div className="space-y-4">
+                            <h3 className="text-xl font-bold text-gray-900 mb-6">
+                              Dados do Cartão
+                            </h3>
+                            <CreditCardForm
+                              onSubmit={handleCreditCardPayment}
+                              isProcessing={isProcessing}
+                              defaultEmail={user?.email}
+                              defaultName={user?.name}
+                            />
+                          </div>
+                        ) : null}
+                      </Card>
+                    )}
+
+                    {paymentError && (
+                      <Alert className="border-red-200 bg-red-50 mt-6">
+                        <AlertCircle className="h-4 w-4 text-red-600" />
+                        <AlertDescription className="text-red-700">
+                          {paymentError}
                         </AlertDescription>
                       </Alert>
                     )}
-                </div>
-              </div>
-            )}
-          </>
-        )}
-      </div>
+
+                    {/* PIX Payment Details */}
+                    {paymentMethod === "pix" && pixData && (
+                      <Card className="bg-white p-6 rounded-2xl shadow-sm border-gray-100 relative">
+                        {paymentStatus === "pending" &&
+                          pollingStatus === "polling" && (
+                            <Alert className="border-blue-200 bg-blue-50 mb-6">
+                              <Loader2 className="h-4 w-4 text-blue-600 animate-spin" />
+                              <AlertDescription className="text-blue-800 text-sm">
+                                <div className="flex flex-col gap-2">
+                                  <span className="font-medium">
+                                    Aguardando confirmação do pagamento...
+                                  </span>
+                                  <span className="text-xs">
+                                    Verificação {pollingAttempts} de 60 • Isso
+                                    pode levar alguns minutos
+                                  </span>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={async () => {
+                                      if (!currentOrderId) {
+                                        toast.error(
+                                          "ID do pedido não encontrado"
+                                        );
+                                        return;
+                                      }
+
+                                      toast.info("Verificando pagamento...");
+
+                                      try {
+                                        const order = await getOrder(
+                                          currentOrderId
+                                        );
+
+                                        if (
+                                          order?.payment?.status ===
+                                            "APPROVED" ||
+                                          order?.payment?.status ===
+                                            "AUTHORIZED" ||
+                                          order?.status === "PAID"
+                                        ) {
+                                          setPaymentStatus("success");
+                                          clearCart();
+                                          clearPendingOrder();
+                                          localStorage.removeItem(
+                                            "pendingOrderId"
+                                          );
+                                          toast.success(
+                                            "🎉 Pagamento confirmado!",
+                                            {
+                                              duration: 3000,
+                                            }
+                                          );
+                                          setTimeout(
+                                            () => router.push("/pedidos"),
+                                            2000
+                                          );
+                                        } else if (
+                                          order?.payment?.status ===
+                                            "REJECTED" ||
+                                          order?.payment?.status === "CANCELLED"
+                                        ) {
+                                          console.log(
+                                            "❌ [MANUAL CHECK] Pagamento rejeitado"
+                                          );
+                                          setPaymentStatus("failure");
+                                          toast.error(
+                                            "Pagamento foi rejeitado"
+                                          );
+                                        } else {
+                                          console.log(
+                                            "⏳ [MANUAL CHECK] Pagamento ainda pendente"
+                                          );
+                                          toast.warning(
+                                            "Pagamento ainda pendente. Continue aguardando.",
+                                            {
+                                              duration: 4000,
+                                            }
+                                          );
+                                        }
+                                      } catch (error) {
+                                        console.error(
+                                          "❌ [MANUAL CHECK] Erro ao verificar:",
+                                          error
+                                        );
+                                        toast.error(
+                                          "Erro ao verificar pagamento"
+                                        );
+                                      }
+                                    }}
+                                    className="mt-2 text-xs"
+                                  >
+                                    <RefreshCcw className="h-3 w-3 mr-1" />
+                                    Verificar agora
+                                  </Button>
+                                </div>
+                              </AlertDescription>
+                            </Alert>
+                          )}
+
+                        {paymentStatus === "success" && (
+                          <Alert className="border-green-200 bg-green-50 mb-6">
+                            <CheckCircle2 className="h-4 w-4 text-green-600" />
+                            <AlertDescription className="text-green-800 text-sm font-medium">
+                              ✅ Pagamento confirmado! Redirecionando...
+                            </AlertDescription>
+                          </Alert>
+                        )}
+
+                        {/* Alert de timeout */}
+                        {pollingStatus === "timeout" && paymentError && (
+                          <Alert className="border-orange-200 bg-orange-50 mb-6">
+                            <AlertCircle className="h-4 w-4 text-orange-600" />
+                            <AlertTitle className="text-orange-900 font-semibold">
+                              Tempo de Espera Expirado
+                            </AlertTitle>
+                            <AlertDescription className="text-orange-800 text-sm">
+                              <div className="flex flex-col gap-3 mt-2">
+                                <p>{paymentError}</p>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => router.push("/pedidos")}
+                                  className="border-orange-300 hover:bg-orange-100"
+                                  disabled={isProcessing}
+                                >
+                                  Verificar Meus Pedidos
+                                </Button>
+                              </div>
+                            </AlertDescription>
+                          </Alert>
+                        )}
+
+                        {currentOrderId && (
+                          <div className="text-sm text-gray-600 bg-gray-50 p-3 rounded-xl mb-4">
+                            <span className="font-medium text-gray-700">
+                              🆔 Código do pedido:
+                            </span>{" "}
+                            {currentOrderId}
+                          </div>
+                        )}
+
+                        {/* Container relativo para overlay */}
+                        <div className="relative flex flex-col items-center justify-center max-w-md mx-auto">
+                          <QRCodePIX
+                            pixData={{
+                              ...pixData,
+                              payer_info: {
+                                id: pixData.payer_info.id || "",
+                                email: pixData.payer_info.email || "",
+                                first_name: pixData.payer_info.first_name,
+                                last_name: pixData.payer_info.last_name,
+                              },
+                            }}
+                          />
+
+                          {/* Overlay de status sobre o QR Code */}
+                          {(pollingStatus === "success" ||
+                            pollingStatus === "failure" ||
+                            pollingStatus === "timeout" ||
+                            (pollingStatus === "pending" &&
+                              paymentStatus === "pending")) && (
+                            <PaymentStatusOverlay
+                              status={
+                                pollingStatus === "success"
+                                  ? "success"
+                                  : pollingStatus === "failure"
+                                  ? "failure"
+                                  : pollingStatus === "timeout"
+                                  ? "timeout"
+                                  : "pending"
+                              }
+                              paymentMethod="pix"
+                              showOverQRCode={true}
+                              onAnimationComplete={() => {
+                                if (pollingStatus === "success") {
+                                  // Redirecionar para página de pedidos após animação
+                                  router.push("/pedidos");
+                                }
+                              }}
+                            />
+                          )}
+                          {/* Ações rápidas: copiar link e abrir em nova aba (melhor UX mobile) */}
+                          <div className="mt-4 flex items-center justify-center gap-3 flex-wrap">
+                            <button
+                              className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-sm shadow-sm"
+                              onClick={async () => {
+                                try {
+                                  await navigator.clipboard.writeText(
+                                    pixData.ticket_url || pixData.qr_code || ""
+                                  );
+                                  toast.success("Link de pagamento copiado");
+                                } catch {
+                                  toast.error("Não foi possível copiar o link");
+                                }
+                              }}
+                            >
+                              Copiar Link
+                            </button>
+                            <a
+                              className="px-3 py-2 border rounded-lg text-sm flex items-center gap-2"
+                              href={
+                                pixData.ticket_url || pixData.qr_code || "#"
+                              }
+                              target="_blank"
+                              rel="noreferrer"
+                              onClick={() => {
+                                // abrir em nova aba
+                              }}
+                            >
+                              Abrir Link
+                            </a>
+                          </div>
+                          <div className="mt-3 text-center text-xs text-gray-500">
+                            <div>
+                              Valor:{" "}
+                              <strong>
+                                R${" "}
+                                {pixData.amount
+                                  ? pixData.amount.toFixed(2)
+                                  : "0,00"}
+                              </strong>
+                            </div>
+                            <div>
+                              Expira em:{" "}
+                              {pixData.expires_at
+                                ? new Date(pixData.expires_at).toLocaleString()
+                                : "-"}
+                            </div>
+                          </div>
+                        </div>
+                      </Card>
+                    )}
+
+                    {/* Cartão de Crédito Form */}
+                    {paymentMethod === "card" && !pixData && (
+                      <Card className="bg-white p-6 lg:p-8 rounded-2xl shadow-sm border-gray-100">
+                        {/* Aviso se o pedido não foi criado ainda */}
+                        {!currentOrderId &&
+                          !localStorage.getItem("pendingOrderId") && (
+                            <Alert className="border-rose-200 bg-rose-50 mb-6">
+                              <AlertCircle className="h-4 w-4 text-rose-600" />
+                              <AlertTitle className="text-rose-900">
+                                Atenção
+                              </AlertTitle>
+                              <AlertDescription className="text-rose-800 text-sm">
+                                Clique em &ldquo;Finalizar Compra&rdquo;
+                                primeiro para criar seu pedido antes de
+                                preencher os dados do cartão.
+                              </AlertDescription>
+                            </Alert>
+                          )}
+
+                        {paymentStatus === "pending" &&
+                          pollingStatus === "polling" && (
+                            <Alert className="border-blue-200 bg-blue-50 mb-6">
+                              <Loader2 className="h-4 w-4 text-blue-600 animate-spin" />
+                              <AlertDescription className="text-blue-800 text-sm">
+                                <div className="flex flex-col gap-1">
+                                  <span className="font-medium">
+                                    Aguardando confirmação do pagamento...
+                                  </span>
+                                  <span className="text-xs">
+                                    Verificação {pollingAttempts} de 60 • Não
+                                    feche esta página
+                                  </span>
+                                </div>
+                              </AlertDescription>
+                            </Alert>
+                          )}
+
+                        <div className="max-w-md mx-auto">
+                          <div className="mb-4 text-sm text-gray-700">
+                            <div>
+                              Valor: <strong>R$ {grandTotal.toFixed(2)}</strong>
+                            </div>
+                            {currentOrderId && (
+                              <div className="text-xs text-gray-500 mt-1">
+                                Pedido: {currentOrderId}
+                              </div>
+                            )}
+                          </div>
+                          <CreditCardForm
+                            onSubmit={handleCreditCardPayment}
+                            isProcessing={isProcessing}
+                            defaultEmail={user?.email}
+                            defaultName={user?.name}
+                          />
+                        </div>
+                      </Card>
+                    )}
+
+                    {/* Resumo Final */}
+                    <Card className="bg-gradient-to-br from-rose-50 to-pink-50 p-6 rounded-2xl shadow-sm border-rose-200">
+                      <h3 className="font-bold text-lg mb-4 text-gray-900">
+                        Resumo do Pedido
+                      </h3>
+                      <div className="space-y-2 text-sm">
+                        <div className="flex justify-between">
+                          <span>Subtotal</span>
+                          <span className="font-semibold">
+                            R$ {cartTotal.toFixed(2)}
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Taxa de entrega</span>
+                          <span className="font-semibold">
+                            {shippingCost === 0
+                              ? "GRÁTIS"
+                              : `R$ ${shippingCost?.toFixed(2)}`}
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Forma de pagamento</span>
+                          <span className="font-semibold">
+                            {paymentMethod === "pix"
+                              ? "PIX"
+                              : paymentMethod === "card"
+                              ? "Cartão de Crédito"
+                              : "Não selecionado"}
+                          </span>
+                        </div>
+                        <div className="border-t border-rose-300 pt-3 mt-3">
+                          <div className="flex justify-between items-center">
+                            <span className="font-bold text-xl">Total</span>
+                            <span className="font-bold text-rose-600 text-3xl">
+                              R$ {grandTotal.toFixed(2)}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </Card>
+
+                    {/* Botões Finais */}
+                    <div className="flex flex-col sm:flex-row justify-between gap-4">
+                      <div className="flex gap-4">
+                        <Button
+                          onClick={handlePreviousStep}
+                          variant="outline"
+                          className="px-6 py-6 rounded-xl font-bold border-2 bg-transparent"
+                          disabled={
+                            isProcessing ||
+                            paymentStatus === "pending" ||
+                            isCanceling
+                          }
+                        >
+                          <ArrowLeft className="mr-2 h-5 w-5" />
+                          Voltar
+                        </Button>
+
+                        {currentOrderId && (
+                          <Button
+                            onClick={async () => {
+                              const confirmed = window.confirm(
+                                "Tem certeza que deseja cancelar esta compra? Todos os dados serão perdidos."
+                              );
+
+                              if (confirmed) {
+                                const success = await handleCancelOrder();
+                                if (success) {
+                                  setCurrentOrderId(null);
+                                  setPixData(null);
+                                  setPaymentStatus("");
+                                  setPaymentError(null);
+                                  setPaymentMethod(undefined);
+                                  setCurrentStep(1);
+                                  window.scrollTo({
+                                    top: 0,
+                                    behavior: "smooth",
+                                  });
+                                  try {
+                                    disconnectSSE?.();
+                                  } catch {}
+                                }
+                              }
+                            }}
+                            variant="destructive"
+                            className="px-6 py-6 rounded-xl font-bold"
+                            disabled={
+                              isProcessing ||
+                              paymentStatus === "success" ||
+                              isCanceling
+                            }
+                          >
+                            {isCanceling ? (
+                              <>
+                                <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                                Cancelando...
+                              </>
+                            ) : (
+                              <>
+                                <XCircle className="mr-2 h-5 w-5" />
+                                Cancelar Compra
+                              </>
+                            )}
+                          </Button>
+                        )}
+                      </div>
+
+                      {currentOrderId &&
+                        paymentMethod &&
+                        !pixData &&
+                        paymentMethod === "pix" && (
+                          <Alert className="border-blue-200 bg-blue-50">
+                            <Loader2 className="h-4 w-4 text-blue-600 animate-spin" />
+                            <AlertDescription className="text-blue-800 text-sm">
+                              Gerando QR Code PIX...
+                            </AlertDescription>
+                          </Alert>
+                        )}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+
+            <div className="lg:col-span-1">
+              <motion.div
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.5 }}
+                className="sticky top-6"
+              >
+                <OrderSummary />
+              </motion.div>
+            </div>
+          </div>
+        </main>
+      )}
     </div>
   );
 }

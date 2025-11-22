@@ -5,7 +5,6 @@ import { Tag, Gift, ChevronRight } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 import { ProductCard } from "../layout/product-card";
-import { Button } from "../ui/button";
 
 interface Product {
   id: string;
@@ -183,17 +182,6 @@ export default function FeedSection({ section }: FeedSectionProps) {
             </div>
           ))}
         </div>
-
-        {displayItems.length > 0 && hasMoreItems && (
-          <div className="text-center mt-10">
-            <Link href={viewAllUrl}>
-              <Button className="inline-flex items-center gap-2 px-8 py-3 bg-white border-2 border-rose-500 text-rose-600 font-semibold rounded-lg hover:bg-rose-50 hover:border-rose-600 transition-all duration-300 shadow-sm hover:shadow-md">
-                Ver todos os produtos
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-            </Link>
-          </div>
-        )}
       </div>
     </section>
   );

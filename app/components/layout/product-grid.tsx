@@ -1,5 +1,4 @@
 import { ChevronRight } from "lucide-react";
-import { Button } from "../ui/button";
 import { ProductCard } from "./product-card";
 import Link from "next/link";
 
@@ -56,17 +55,6 @@ export function ProductGrid({
             </div>
           ))}
         </div>
-
-        {hasMore && viewAllUrl && products.length > 0 && (
-          <div className="text-center mt-12">
-            <Link href={viewAllUrl}>
-              <Button className="inline-flex items-center gap-2 px-8 py-3 bg-white border-2 border-rose-500 text-rose-600 font-semibold rounded-lg hover:bg-rose-50 hover:border-rose-600 transition-all duration-300 shadow-sm hover:shadow-md">
-                Ver todos os produtos
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-            </Link>
-          </div>
-        )}
       </div>
     </section>
   );

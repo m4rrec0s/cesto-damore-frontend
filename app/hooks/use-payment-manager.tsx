@@ -2,26 +2,13 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "./use-auth";
-import { useApi } from "./use-api";
+import { Order, useApi } from "./use-api";
 import { toast } from "sonner";
-
-interface PendingOrder {
-  id: string;
-  status: string;
-  total: number;
-  grand_total: number;
-  payment?: {
-    id: string;
-    status: string;
-    payment_method: string;
-    mercado_pago_id?: string;
-  };
-}
 
 export function usePaymentManager() {
   const { user } = useAuth();
   const { getPendingOrder, cancelOrder } = useApi();
-  const [pendingOrder, setPendingOrder] = useState<PendingOrder | null>(null);
+  const [pendingOrder, setPendingOrder] = useState<Order | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isCanceling, setIsCanceling] = useState(false);
 

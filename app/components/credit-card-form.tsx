@@ -5,7 +5,6 @@ import type React from "react";
 import { useState, useEffect } from "react";
 import { Card } from "@/app/components/ui/card";
 import { Input } from "@/app/components/ui/input";
-import { Button } from "@/app/components/ui/button";
 import {
   Select,
   SelectContent,
@@ -13,16 +12,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/app/components/ui/select";
-import { CreditCard, Lock, Loader2, AlertCircle } from "lucide-react";
+import { Lock, Loader2, AlertCircle } from "lucide-react";
 import { Alert, AlertDescription } from "@/app/components/ui/alert";
 import {
   Field,
   FieldContent,
   FieldDescription,
   FieldError,
-  FieldGroup,
   FieldLabel,
 } from "@/app/components/ui/field";
+import { motion } from "framer-motion";
 
 export interface CreditCardData {
   cardNumber: string;
@@ -63,7 +62,7 @@ const validateCardNumber = (cardNumber: string): boolean => {
   let isEven = false;
 
   for (let i = cleanNumber.length - 1; i >= 0; i--) {
-    let digit = parseInt(cleanNumber[i], 10);
+    let digit = Number.parseInt(cleanNumber[i], 10);
 
     if (isEven) {
       digit *= 2;
@@ -110,19 +109,19 @@ const validateCPF = (cpf: string): boolean => {
 
   let sum = 0;
   for (let i = 0; i < 9; i++) {
-    sum += parseInt(cleanCPF[i]) * (10 - i);
+    sum += Number.parseInt(cleanCPF[i]) * (10 - i);
   }
   let remainder = (sum * 10) % 11;
   if (remainder === 10 || remainder === 11) remainder = 0;
-  if (remainder !== parseInt(cleanCPF[9])) return false;
+  if (remainder !== Number.parseInt(cleanCPF[9])) return false;
 
   sum = 0;
   for (let i = 0; i < 10; i++) {
-    sum += parseInt(cleanCPF[i]) * (11 - i);
+    sum += Number.parseInt(cleanCPF[i]) * (11 - i);
   }
-  remainder = (sum * 10) % 11;
-  if (remainder === 10 || remainder === 11) remainder = 0;
-  if (remainder !== parseInt(cleanCPF[10])) return false;
+  remainder = sum % 11;
+  const digit2 = remainder < 2 ? 0 : 11 - remainder;
+  if (digit2 !== Number.parseInt(cleanCPF[10])) return false;
 
   return true;
 };
@@ -138,21 +137,32 @@ const validateCNPJ = (cnpj: string): boolean => {
 
   let sum = 0;
   for (let i = 0; i < 12; i++) {
-    sum += parseInt(cleanCNPJ[i]) * weights1[i];
+    sum += Number.parseInt(cleanCNPJ[i]) * weights1[i];
   }
   let remainder = sum % 11;
   const digit1 = remainder < 2 ? 0 : 11 - remainder;
-  if (digit1 !== parseInt(cleanCNPJ[12])) return false;
+  if (digit1 !== Number.parseInt(cleanCNPJ[12])) return false;
 
   sum = 0;
   for (let i = 0; i < 13; i++) {
-    sum += parseInt(cleanCNPJ[i]) * weights2[i];
+    sum += Number.parseInt(cleanCNPJ[i]) * weights2[i];
   }
   remainder = sum % 11;
   const digit2 = remainder < 2 ? 0 : 11 - remainder;
-  if (digit2 !== parseInt(cleanCNPJ[13])) return false;
+  if (digit2 !== Number.parseInt(cleanCNPJ[13])) return false;
 
   return true;
+};
+
+const cardBrandIcons: Record<string, { label: string; gradient: string }> = {
+  visa: { label: "Visa", gradient: "from-blue-600 to-blue-500" },
+  mastercard: { label: "Mastercard", gradient: "from-red-600 to-orange-500" },
+  amex: { label: "American Express", gradient: "from-cyan-600 to-blue-500" },
+  elo: { label: "Elo", gradient: "from-purple-600 to-pink-500" },
+  hipercard: { label: "Hipercard", gradient: "from-red-600 to-orange-500" },
+  diners: { label: "Diners", gradient: "from-slate-700 to-slate-600" },
+  discover: { label: "Discover", gradient: "from-orange-500 to-yellow-500" },
+  unknown: { label: "Cartão", gradient: "from-gray-500 to-gray-400" },
 };
 
 export function CreditCardForm({
@@ -245,7 +255,7 @@ export function CreditCardForm({
     if (!expirationMonth) {
       newErrors.expirationMonth = "Mês é obrigatório";
     } else {
-      const month = parseInt(expirationMonth);
+      const month = Number.parseInt(expirationMonth);
       if (month < 1 || month > 12) {
         newErrors.expirationMonth = "Mês inválido";
       }
@@ -257,13 +267,13 @@ export function CreditCardForm({
     } else {
       const currentYear = new Date().getFullYear();
       const currentMonth = new Date().getMonth() + 1;
-      const year = parseInt(expirationYear);
+      const year = Number.parseInt(expirationYear);
 
       if (year < currentYear) {
         newErrors.expirationYear = "Cartão expirado";
       } else if (
         year === currentYear &&
-        parseInt(expirationMonth) < currentMonth
+        Number.parseInt(expirationMonth) < currentMonth
       ) {
         newErrors.expirationMonth = "Cartão expirado";
       }
@@ -341,26 +351,27 @@ export function CreditCardForm({
   const years = Array.from({ length: 15 }, (_, i) => currentYear + i);
 
   return (
-    <Card className="p-6">
-      <div className="flex items-center gap-2 mb-6">
-        <CreditCard className="h-5 w-5 text-rose-600" />
-        <h3 className="text-lg font-semibold text-gray-900">
-          Dados do Cartão de Crédito
-        </h3>
-      </div>
-
+    <Card className="p-8 bg-white border-slate-200 rounded-2xl shadow-md">
       {formError && (
-        <Alert className="border-red-200 bg-red-50 mb-6">
-          <AlertCircle className="h-4 w-4 text-red-600" />
-          <AlertDescription className="text-red-700 text-sm">
-            {formError}
-          </AlertDescription>
-        </Alert>
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+        >
+          <Alert className="mb-6 border-red-200 bg-red-50">
+            <AlertCircle className="h-4 w-4 text-red-600" />
+            <AlertDescription className="text-red-800">
+              {formError}
+            </AlertDescription>
+          </Alert>
+        </motion.div>
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <FieldGroup>
-          {/* Número do Cartão */}
+      <form onSubmit={handleSubmit} className="space-y-6">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+        >
           <Field>
             <FieldContent>
               <FieldLabel htmlFor="cardNumber">Número do Cartão *</FieldLabel>
@@ -375,28 +386,37 @@ export function CreditCardForm({
                   }
                   placeholder="0000 0000 0000 0000"
                   maxLength={19}
-                  className={errors.cardNumber ? "border-red-500" : ""}
+                  className={`pr-40 text-lg tracking-widest font-semibold ${
+                    errors.cardNumber ? "border-red-500" : ""
+                  }`}
                 />
                 {cardBrand !== "unknown" && (
-                  <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                    <span className="text-xs font-semibold text-muted-foreground uppercase">
-                      {cardBrand}
-                    </span>
-                  </div>
+                  <motion.div
+                    initial={{ scale: 0, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    className={`absolute right-3 top-1/2 -translate-y-1/2 px-4 py-2 rounded-lg bg-gradient-to-r ${cardBrandIcons[cardBrand].gradient} text-white text-sm font-bold shadow-lg`}
+                  >
+                    {cardBrandIcons[cardBrand].label}
+                  </motion.div>
                 )}
               </div>
               <FieldDescription>
-                Digite os 13 a 19 dígitos do cartão
+                Digite os 13 a 19 dígitos do seu cartão
               </FieldDescription>
               <FieldError>{errors.cardNumber}</FieldError>
             </FieldContent>
           </Field>
+        </motion.div>
 
-          {/* Nome do Titular */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.15 }}
+        >
           <Field>
             <FieldContent>
               <FieldLabel htmlFor="cardholderName">
-                Nome do Titular (como no cartão) *
+                Nome do Titular *
               </FieldLabel>
               <Input
                 id="cardholderName"
@@ -411,14 +431,19 @@ export function CreditCardForm({
                 className={errors.cardholderName ? "border-red-500" : ""}
               />
               <FieldDescription>
-                Nome completo como está impresso no cartão
+                Exatamente como aparece no cartão
               </FieldDescription>
               <FieldError>{errors.cardholderName}</FieldError>
             </FieldContent>
           </Field>
+        </motion.div>
 
-          {/* Data de Validade e CVV */}
-          <div className="grid grid-cols-3 gap-3">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+        >
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             <Field>
               <FieldContent>
                 <FieldLabel htmlFor="expirationMonth">Mês *</FieldLabel>
@@ -477,7 +502,7 @@ export function CreditCardForm({
                 <FieldLabel htmlFor="securityCode">CVV *</FieldLabel>
                 <Input
                   id="securityCode"
-                  type="text"
+                  type="password"
                   inputMode="numeric"
                   value={securityCode}
                   onChange={(e) =>
@@ -485,7 +510,7 @@ export function CreditCardForm({
                       e.target.value.replace(/\D/g, "").substring(0, 4)
                     )
                   }
-                  placeholder="123"
+                  placeholder="•••"
                   maxLength={4}
                   className={errors.securityCode ? "border-red-500" : ""}
                 />
@@ -493,8 +518,13 @@ export function CreditCardForm({
               </FieldContent>
             </Field>
           </div>
+        </motion.div>
 
-          {/* Tipo e Número de Documento */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.25 }}
+        >
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <Field>
               <FieldContent>
@@ -543,11 +573,16 @@ export function CreditCardForm({
               </FieldContent>
             </Field>
           </div>
+        </motion.div>
 
-          {/* Email */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
+        >
           <Field>
             <FieldContent>
-              <FieldLabel htmlFor="email">Email *</FieldLabel>
+              <FieldLabel htmlFor="email">Email para recibo *</FieldLabel>
               <Input
                 id="email"
                 type="email"
@@ -556,17 +591,19 @@ export function CreditCardForm({
                 placeholder="seu@email.com"
                 className={errors.email ? "border-red-500" : ""}
               />
-              <FieldDescription>
-                Enviaremos o comprovante para este email
-              </FieldDescription>
               <FieldError>{errors.email}</FieldError>
             </FieldContent>
           </Field>
+        </motion.div>
 
-          {/* Parcelas */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.35 }}
+        >
           <Field>
             <FieldContent>
-              <FieldLabel htmlFor="installments">Parcelas *</FieldLabel>
+              <FieldLabel htmlFor="installments">Parcelar em *</FieldLabel>
               <Select
                 value={installments.toString()}
                 onValueChange={(value) =>
@@ -579,49 +616,51 @@ export function CreditCardForm({
                 <SelectContent>
                   {Array.from({ length: 12 }, (_, i) => i + 1).map((num) => (
                     <SelectItem key={num} value={num.toString()}>
-                      {num}x {num === 1 ? "sem juros" : ""}
+                      {num}x {num === 1 ? "(sem juros)" : ""}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-              <FieldDescription>
-                Escolha em quantas vezes deseja pagar
-              </FieldDescription>
             </FieldContent>
           </Field>
-        </FieldGroup>
+        </motion.div>
 
-        {/* Informação de Segurança */}
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 flex items-start gap-2 mt-6">
-          <Lock className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0" />
-          <div className="text-xs text-blue-800">
-            <p className="font-medium mb-1">🔒 Pagamento 100% seguro</p>
-            <p>
-              Seus dados são criptografados e processados com segurança pelo
-              Mercado Pago. Não armazenamos informações do seu cartão.
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.4 }}
+          className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-start gap-3 mt-6"
+        >
+          <Lock className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
+          <div className="text-sm text-blue-800">
+            <p className="font-medium">Pagamento 100% seguro</p>
+            <p className="text-xs mt-1">
+              Seus dados são criptografados e protegidos
             </p>
           </div>
-        </div>
+        </motion.div>
 
-        {/* Botão de Submissão */}
-        <Button
+        {/* Submit Button */}
+        <motion.button
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.45 }}
           type="submit"
           disabled={isProcessing}
-          className="w-full bg-rose-600 hover:bg-rose-700 mt-6"
-          size="lg"
+          className="w-full mt-8 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white font-bold rounded-lg hover:from-blue-700 hover:to-blue-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
         >
           {isProcessing ? (
             <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              <Loader2 className="h-5 w-5 animate-spin" />
               Processando...
             </>
           ) : (
             <>
-              <CreditCard className="mr-2 h-4 w-4" />
+              <Lock className="h-5 w-5" />
               Confirmar Pagamento
             </>
           )}
-        </Button>
+        </motion.button>
       </form>
     </Card>
   );
