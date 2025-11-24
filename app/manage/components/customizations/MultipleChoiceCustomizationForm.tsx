@@ -8,6 +8,7 @@ import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
 import { Card } from "@/app/components/ui/card";
 import { Plus, Trash2 } from "lucide-react";
+import Image from "next/image";
 
 interface MultipleChoiceOption {
   id: string;
@@ -264,16 +265,16 @@ export default function MultipleChoiceCustomizationForm({
                     placeholder="Informação adicional sobre a opção..."
                   />
                 </div>
-                {/* Image for option */}
                 <div className="space-y-1">
                   <Label className="text-xs">Imagem (opcional)</Label>
                   <div className="flex items-center space-x-3">
                     {option.image_url ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
+                      <Image
                         src={option.image_url}
                         alt={`Preview da opção ${index + 1}`}
                         className="h-16 w-16 rounded object-cover border"
+                        width={64}
+                        height={64}
                       />
                     ) : (
                       <div className="h-16 w-16 rounded border bg-muted" />
