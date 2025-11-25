@@ -9,6 +9,7 @@ import { Badge } from "@/app/components/ui/badge";
 import Image from "next/image";
 import { Clock, CheckCircle, XCircle, Truck, Package } from "lucide-react";
 import { useWebhookNotification } from "@/app/hooks/use-webhook-notification";
+import { getInternalImageUrl } from "@/lib/image-helper";
 
 const statusConfig = {
   PENDING: {
@@ -122,7 +123,7 @@ export default function OrderDetailsPage() {
                   <div key={item.id} className="flex items-center gap-3">
                     {item.product?.image_url && (
                       <Image
-                        src={item.product.image_url}
+                        src={getInternalImageUrl(item.product.image_url)}
                         alt={item.product.name}
                         width={48}
                         height={48}

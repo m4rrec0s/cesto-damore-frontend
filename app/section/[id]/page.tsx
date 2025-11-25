@@ -14,6 +14,7 @@ import {
 import Link from "next/link";
 import Image from "next/image";
 import { cn } from "@/app/lib/utils";
+import { getInternalImageUrl } from "@/lib/image-helper";
 
 interface FeedItemCardProps {
   item: PublicFeedItem;
@@ -59,7 +60,7 @@ function FeedItemCard({ item }: FeedItemCardProps) {
         <div className="relative aspect-square overflow-hidden bg-gray-100">
           {productData.image_url ? (
             <Image
-              src={productData.image_url}
+              src={getInternalImageUrl(productData.image_url)}
               alt={custom_title || productData.name}
               fill
               className="object-cover group-hover:scale-110 transition-transform duration-300"
@@ -150,7 +151,7 @@ function FeedItemCard({ item }: FeedItemCardProps) {
       <div className="relative aspect-square overflow-hidden bg-gray-100">
         {additionalData.image_url ? (
           <Image
-            src={additionalData.image_url}
+            src={getInternalImageUrl(additionalData.image_url)}
             alt={custom_title || additionalData.name}
             fill
             className="object-cover group-hover:scale-110 transition-transform duration-300"

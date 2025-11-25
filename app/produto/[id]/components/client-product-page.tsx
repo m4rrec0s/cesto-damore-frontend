@@ -23,6 +23,7 @@ import {
 import type { SlotDef } from "@/app/types/personalization";
 import { Separator } from "@/app/components/ui/separator";
 import { ItemCustomizationModal } from "./itemCustomizationsModal";
+import { getInternalImageUrl } from "@/lib/image-helper";
 
 const formatCurrency = (value: number) =>
   value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -1085,7 +1086,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
                 />
               ) : (
                 <Image
-                  src={currentImageUrl}
+                  src={getInternalImageUrl(currentImageUrl)}
                   alt={currentName}
                   fill
                   className={cn(
@@ -1138,7 +1139,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
                     aria-label="Selecionar imagem do produto"
                   >
                     <Image
-                      src={product.image_url || "/placeholder.png"}
+                      src={getInternalImageUrl(product.image_url) || "/placeholder.png"}
                       alt={product.name || "Produto"}
                       fill
                       className="object-cover rounded-lg"
@@ -1167,7 +1168,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
                         aria-label={`Selecionar componente ${component.name}`}
                       >
                         <Image
-                          src={component.image_url || "/placeholder.png"}
+                          src={getInternalImageUrl(component.image_url) || "/placeholder.png"}
                           alt={component.name}
                           fill
                           className="object-cover rounded-lg"
@@ -1282,7 +1283,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
                                 <div className="w-12 h-12 relative rounded-md overflow-hidden flex-shrink-0">
                                   <Image
                                     src={
-                                      component.image_url || "/placeholder.png"
+                                      getInternalImageUrl(component.image_url) || "/placeholder.png"
                                     }
                                     alt={component.name}
                                     fill

@@ -36,6 +36,7 @@ import {
   DollarSign,
 } from "lucide-react";
 import { Input } from "@/app/components/ui/input";
+import { getInternalImageUrl } from "@/lib/image-helper";
 
 interface ProductAdditionalLink {
   additional_id: string;
@@ -686,7 +687,7 @@ export function ProductManager({
                   <div className="w-12 h-12 bg-gray-100 rounded-lg overflow-hidden">
                     {product.image_url ? (
                       <Image
-                        src={product.image_url}
+                        src={getInternalImageUrl(product.image_url)}
                         alt={product.name}
                         width={48}
                         height={48}

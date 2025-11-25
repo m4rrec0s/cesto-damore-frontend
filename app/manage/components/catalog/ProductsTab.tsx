@@ -31,6 +31,7 @@ import Image from "next/image";
 import { Textarea } from "@/app/components/ui/textarea";
 import { LoadingSpinner } from "@/app/components/LoadingSpinner";
 import { Pagination } from "@/app/components/ui/pagination";
+import { getInternalImageUrl } from "@/lib/image-helper";
 
 interface Item {
   id: string;
@@ -609,7 +610,7 @@ export function ProductsTab() {
                           {product.image_url ? (
                             <div className="relative w-12 h-12 rounded-md overflow-hidden">
                               <Image
-                                src={product.image_url}
+                                src={getInternalImageUrl(product.image_url)}
                                 alt={product.name}
                                 fill
                                 className="object-cover"

@@ -15,6 +15,7 @@ import { Badge } from "@/app/components/ui/badge";
 import { Plus, Search, Edit2, Trash2, Package, Upload, X } from "lucide-react";
 import { toast } from "sonner";
 import Image from "next/image";
+import { getInternalImageUrl } from "@/lib/image-helper";
 
 interface Item {
   id: string;
@@ -301,7 +302,7 @@ export function ItemsManager({ onUpdate }: ItemsManagerProps) {
                 <div className="w-16 h-16 rounded-lg bg-gray-100 flex items-center justify-center overflow-hidden flex-shrink-0">
                   {item.image_url ? (
                     <Image
-                      src={item.image_url}
+                      src={getInternalImageUrl(item.image_url)}
                       alt={item.name}
                       width={64}
                       height={64}

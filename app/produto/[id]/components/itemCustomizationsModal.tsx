@@ -38,6 +38,7 @@ import ClientPersonalizationEditor from "@/app/components/client-personalization
 import useApi from "@/app/hooks/use-api";
 import { ImageCropDialog } from "@/app/components/ui/image-crop-dialog";
 import Image from "next/image";
+import { getInternalImageUrl } from "@/lib/image-helper";
 
 interface Customization {
   id: string;
@@ -993,7 +994,7 @@ export function ItemCustomizationModal({
                 <div className="flex items-center gap-3">
                   <Checkbox checked={isSelected} className="border-2" />
                   <Image
-                    src={option.image_url || "/placeholder.png"}
+                    src={getInternalImageUrl(option.image_url) || "/placeholder.png"}
                     alt={option.label}
                     width={64}
                     height={64}

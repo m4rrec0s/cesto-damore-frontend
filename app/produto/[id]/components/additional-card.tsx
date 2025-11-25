@@ -6,6 +6,7 @@ import { ShoppingCart, Check, Palette } from "lucide-react";
 import Image from "next/image";
 import { toast } from "sonner";
 import { useState } from "react";
+import { getInternalImageUrl } from "@/lib/image-helper";
 
 interface AdditionalCardProps {
   additional: Additional;
@@ -96,7 +97,7 @@ const AdditionalCard = ({
 
       <div className="relative aspect-square overflow-hidden bg-gradient-to-br from-gray-50 to-gray-100 w-full max-w-[200px] mx-auto">
         <Image
-          src={additional.image_url || "/placeholder.png"}
+          src={getInternalImageUrl(additional.image_url) || "/placeholder.png"}
           alt={additional.name}
           fill
           className="object-cover"

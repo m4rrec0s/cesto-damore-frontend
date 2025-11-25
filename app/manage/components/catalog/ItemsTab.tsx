@@ -38,6 +38,7 @@ import { Checkbox } from "@/app/components/ui/checkbox";
 import { LoadingSpinner } from "@/app/components/LoadingSpinner";
 import CustomizationManager from "./CustomizationManager";
 import { Pagination } from "@/app/components/ui/pagination";
+import { getInternalImageUrl } from "@/lib/image-helper";
 
 interface Item {
   id: string;
@@ -318,7 +319,7 @@ export function ItemsTab() {
                         {item.image_url ? (
                           <div className="relative w-12 h-12 rounded-md overflow-hidden">
                             <Image
-                              src={item.image_url}
+                              src={getInternalImageUrl(item.image_url)}
                               alt={item.name}
                               fill
                               className="object-cover"

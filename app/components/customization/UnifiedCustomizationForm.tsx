@@ -21,6 +21,7 @@ import type {
 } from "@/app/types/customization";
 import type { LayoutBase, ImageData } from "@/app/types/personalization";
 import Image from "next/image";
+import { getInternalImageUrl } from "@/lib/image-helper";
 
 interface UnifiedCustomizationFormProps {
   itemId: string;
@@ -555,7 +556,7 @@ export function UnifiedCustomizationForm({
                             {imageUrl && (
                               <div className="aspect-square w-16 relative rounded overflow-hidden mr-4">
                                 <Image
-                                  src={imageUrl}
+                                  src={getInternalImageUrl(imageUrl)}
                                   alt={option.label}
                                   className="h-full w-full rounded object-cover"
                                   layout="fill"

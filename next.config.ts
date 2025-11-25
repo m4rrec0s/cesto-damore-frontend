@@ -11,11 +11,6 @@ const nextConfig: NextConfig = {
       },
       {
         protocol: "https",
-        hostname: "dcd856bd81b2.ngrok-free.app",
-        pathname: "/api/**",
-      },
-      {
-        protocol: "https",
         hostname: "drive.google.com",
         pathname: "/uc",
       },

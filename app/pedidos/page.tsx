@@ -18,6 +18,7 @@ import {
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { useApi } from "@/app/hooks/use-api";
+import { getInternalImageUrl } from "@/lib/image-helper";
 
 interface Order {
   id: string;
@@ -254,7 +255,7 @@ export default function PedidosPage() {
                           {item.product.image_url && (
                             <div className="relative w-12 h-12 sm:w-14 sm:h-14 rounded-lg overflow-hidden bg-white flex-shrink-0">
                               <Image
-                                src={item.product.image_url}
+                                src={getInternalImageUrl(item.product.image_url)}
                                 alt={item.product.name}
                                 fill
                                 className="object-cover"

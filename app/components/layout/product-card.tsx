@@ -1,6 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { cn } from "@/app/lib/utils";
+import { getInternalImageUrl } from "@/lib/image-helper";
 
 interface ProductCardProps {
   props: {
@@ -34,7 +35,7 @@ export function ProductCard({ props, className }: ProductCardProps) {
     >
       <div className="relative aspect-square overflow-hidden bg-gradient-to-br from-rose-50 via-pink-50 to-orange-50">
         <Image
-          src={props.image_url || "/placeholder.png"}
+          src={getInternalImageUrl(props.image_url) || "/placeholder.png"}
           alt={props.name}
           fill
           className="object-cover group-hover:scale-110 transition-transform duration-500"

@@ -56,6 +56,7 @@ import {
 import { usePaymentPolling } from "@/app/hooks/use-payment-polling";
 import { useWebhookNotification } from "@/app/hooks/use-webhook-notification";
 import { PaymentMethodSelector } from "@/app/components/payment-method-selector";
+import { getInternalImageUrl } from "@/lib/image-helper";
 
 const ACCEPTED_CITIES = [
   "Campina Grande",
@@ -267,7 +268,7 @@ const ProductCard = ({
   const layoutCustomization = item.customizations?.find(
     (c) => c.customization_type === "BASE_LAYOUT"
   );
-  const previewUrl = layoutCustomization?.text;
+  // const previewUrl = layoutCustomization?.text;
   const hasCustomizations =
     item.customizations && item.customizations.length > 0;
 
@@ -275,22 +276,11 @@ const ProductCard = ({
     <div className="flex gap-4 rounded-2xl bg-white p-5 shadow-sm border border-gray-100 transition-all hover:shadow-md">
       <div className="relative w-20 h-20 lg:w-24 lg:h-24 flex-shrink-0 rounded-xl overflow-hidden bg-gray-50">
         <Image
-          src={item.product.image_url || "/placeholder.png"}
+          src={getInternalImageUrl(item.product.image_url) || "/placeholder.png"}
           alt={item.product.name}
           fill
           className="object-cover"
         />
-        {previewUrl && (
-          <div className="absolute bottom-0 left-0 right-0 bg-purple-600/90 text-white text-[10px] text-center py-0.5 font-semibold">
-            Personalizado
-            <Image
-              src={previewUrl || "/placeholder.svg"}
-              alt={"Preview da personalização"}
-              width={40}
-              height={40}
-            />
-          </div>
-        )}
       </div>
 
       <div className="flex flex-1 flex-col justify-between min-w-0">

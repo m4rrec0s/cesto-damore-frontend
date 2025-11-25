@@ -19,6 +19,7 @@ const FeedBannerCarousel = dynamic(
 const FeedSection = dynamic(() => import("./components/feed/FeedSection"), {
   loading: () => <div className="h-36 bg-gray-100 animate-pulse" />,
 });
+import { getInternalImageUrl } from "@/lib/image-helper";
 import Image from "next/image";
 import InfiniteScroll from "react-infinite-scroll-component";
 
@@ -212,7 +213,7 @@ export default function Home() {
       <div className="fixed z-50 bg-white flex justify-center items-center inset-0 h-[100vh]">
         <div className="animate-pulse flex flex-col items-center">
           <Image
-            src="/logocestodamore.png"
+            src={getInternalImageUrl("/logocestodamore.png")}
             alt="Cesto d'Amore"
             className="w-14 h-14"
             width={56}

@@ -29,6 +29,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import Image from "next/image";
+import { getInternalImageUrl } from "@/lib/image-helper";
 
 interface Item {
   id: string;
@@ -450,7 +451,7 @@ export function IntegratedProductManager({
                 <div className="w-20 h-20 rounded-lg bg-gray-100 flex items-center justify-center overflow-hidden flex-shrink-0">
                   {product.image_url ? (
                     <Image
-                      src={product.image_url}
+                      src={getInternalImageUrl(product.image_url)}
                       alt={product.name}
                       width={80}
                       height={80}
@@ -784,7 +785,7 @@ export function IntegratedProductManager({
                           <div className="flex items-center gap-3">
                             {component.item?.image_url && (
                               <Image
-                                src={component.item.image_url}
+                                src={getInternalImageUrl(component.item.image_url)}
                                 alt={component.item.name}
                                 width={40}
                                 height={40}

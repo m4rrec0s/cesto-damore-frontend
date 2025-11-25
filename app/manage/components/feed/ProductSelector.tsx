@@ -6,6 +6,7 @@ import { useApi, Product, FeedSectionItem } from "@/app/hooks/use-api";
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import Image from "next/image";
+import { getInternalImageUrl } from "@/lib/image-helper";
 
 interface ProductSelectorProps {
   sectionId: string;
@@ -126,7 +127,7 @@ export default function ProductSelector({
                   {product.image_url && (
                     <div className="relative w-16 h-16 flex-shrink-0 rounded overflow-hidden bg-gray-100">
                       <Image
-                        src={product.image_url}
+                        src={getInternalImageUrl(product.image_url)}
                         alt={product.name}
                         fill
                         className="object-cover"
@@ -201,7 +202,7 @@ export default function ProductSelector({
                 {product.image_url && (
                   <div className="relative w-12 h-12 flex-shrink-0 rounded overflow-hidden bg-gray-100">
                     <Image
-                      src={product.image_url}
+                      src={getInternalImageUrl(product.image_url)}
                       alt={product.name}
                       fill
                       className="object-cover"

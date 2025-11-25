@@ -6,6 +6,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import Image from "next/image";
 import { cn } from "@/app/lib/utils";
 import { Button } from "../ui/button";
+import { getInternalImageUrl } from "@/lib/image-helper";
 
 interface FeedBannerCarouselProps {
   banners: PublicFeedBanner[];
@@ -56,7 +57,7 @@ export default function FeedBannerCarousel({
             >
               <div className="absolute inset-0 flex items-center justify-center overflow-hidden">
                 <Image
-                  src={banner.image_url || "banner-placeholder.png"}
+                  src={getInternalImageUrl(banner.image_url || "banner-placeholder.png")}
                   alt={banner.title}
                   fill
                   className="object-cover object-center"

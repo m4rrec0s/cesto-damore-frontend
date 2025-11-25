@@ -9,6 +9,7 @@ import { Label } from "@/app/components/ui/label";
 import { Card } from "@/app/components/ui/card";
 import { Plus, Trash2 } from "lucide-react";
 import Image from "next/image";
+import { getInternalImageUrl } from "@/lib/image-helper";
 
 interface MultipleChoiceOption {
   id: string;
@@ -270,7 +271,7 @@ export default function MultipleChoiceCustomizationForm({
                   <div className="flex items-center space-x-3">
                     {option.image_url ? (
                       <Image
-                        src={option.image_url}
+                        src={getInternalImageUrl(option.image_url)}
                         alt={`Preview da opção ${index + 1}`}
                         className="h-16 w-16 rounded object-cover border"
                         width={64}

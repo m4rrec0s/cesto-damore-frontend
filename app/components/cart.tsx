@@ -8,132 +8,121 @@ import { Trash2, Plus, Minus, ShoppingBag } from "lucide-react";
 import { useCart } from "@/app/hooks/use-cart";
 import type { CartCustomization } from "@/app/hooks/use-cart";
 import Image from "next/image";
+import { getInternalImageUrl } from "@/lib/image-helper";
+import { useRouter } from "next/navigation";
 
-interface CartProps {
-  onCheckout?: () => void;
-  className?: string;
-}
+export function Cart({ onClose }: { onClose?: () => void }) {
+  const { cart, removeFromCart, updateQuantity } = useCart();
+  const router = useRouter();
 
-export function Cart({ onCheckout, className = "" }: CartProps) {
-  const { cart, updateQuantity, removeFromCart } = useCart();
-  const [isExpanded, setIsExpanded] = useState(false);
+  const handleCheckout = () => {
+    if (onClose) onClose();
+    router.push("/checkout");
+  };
 
-  const renderCustomizationValue = (custom: CartCustomization) => {
-    switch (custom.customization_type) {
-      case "TEXT":
-        return custom.text?.trim() || "Mensagem não informada";
-      case "MULTIPLE_CHOICE":
-        return (
-          custom.selected_option_label ||
-          custom.selected_option ||
-          "Opção não selecionada"
-        );
+  const renderCustomizationValue = (customization: CartCustomization) => {
+    switch (customization.customization_type) {
       case "BASE_LAYOUT":
-        if (custom.selected_item) {
-          return `${custom.selected_item.original_item} → ${custom.selected_item.selected_item}`;
-        }
-        if (custom.text) {
-          return custom.text;
-        }
-        return "Layout selecionado";
+        return customization.selected_item_label || "Layout selecionado";
+      case "TEXT":
+        return customization.text || "";
+      case "MULTIPLE_CHOICE":
+        return customization.selected_option_label || customization.selected_option || "";
       case "IMAGES":
-        return `${custom.photos?.length || 0} foto(s)`;
+        return `${customization.photos?.length || 0} fotos`;
       default:
-        return "Personalização";
+        return "";
     }
   };
 
   if (cart.items.length === 0) {
     return (
-      <Card className={`p-6 text-center ${className}`}>
-        <ShoppingBag className="h-12 w-12 mx-auto text-gray-400 mb-4" />
-        <h3 className="text-lg font-semibold text-gray-900 mb-2">
+      <div className="flex flex-col items-center justify-center h-full p-8 text-center space-y-4">
+        <div className="bg-rose-50 p-4 rounded-full">
+          <ShoppingBag className="h-12 w-12 text-rose-400" />
+        </div>
+        <h3 className="text-xl font-semibold text-gray-900">
           Seu carrinho está vazio
         </h3>
-        <p className="text-gray-600">
-          Adicione produtos para começar suas compras
+        <p className="text-gray-500 max-w-[200px]">
+          Adicione alguns produtos deliciosos para começar!
         </p>
-      </Card>
+        <Button
+          onClick={onClose}
+          className="mt-4 bg-rose-600 hover:bg-rose-700 text-white"
+        >
+          Continuar Comprando
+        </Button>
+      </div>
     );
   }
 
   return (
-    <Card className={`p-6 ${className}`}>
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-xl font-semibold text-gray-900">
-          Carrinho ({cart.itemCount} itens)
-        </h2>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => setIsExpanded(!isExpanded)}
-        >
-          {isExpanded ? "Minimizar" : "Expandir"}
-        </Button>
-      </div>
-
-      <div className={`space-y-4 ${isExpanded ? "block" : "hidden"}`}>
-        {cart.items.map((item, index) => (
+    <Card className="flex flex-col h-full border-0 shadow-none bg-transparent">
+      <div className="flex-1 overflow-y-auto pr-2 space-y-4">
+        {cart.items.map((item) => (
           <div
-            key={`${item.product_id}-${index}`}
-            className="flex gap-4 p-4 border rounded-lg"
+            key={`${item.product_id}-${(item.additional_ids || []).join("-")}-${JSON.stringify(item.customizations)}`}
+            className="flex gap-4 bg-white p-3 rounded-xl border border-gray-100 shadow-sm"
           >
-            <div className="relative w-16 h-16 flex-shrink-0">
+            <div className="relative w-20 h-20 rounded-lg overflow-hidden flex-shrink-0 bg-gray-50">
               <Image
-                src={item.product.image_url || "/placeholder.png"}
+                src={getInternalImageUrl(item.product.image_url || "/placeholder.png")}
                 alt={item.product.name}
                 fill
-                className="object-cover rounded-md"
+                className="object-cover"
               />
             </div>
 
-            <div className="flex-1 min-w-0">
-              <h3 className="font-medium text-gray-900 truncate">
-                {item.product.name}
-              </h3>
+            <div className="flex-1 min-w-0 flex flex-col justify-between">
+              <div>
+                <h3 className="font-medium text-gray-900 truncate">
+                  {item.product.name}
+                </h3>
 
-              {item.additionals && item.additionals.length > 0 && (
-                <div className="mt-1 space-y-1">
-                  {item.additionals.map((add) => {
-                    return (
-                      <div
-                        key={add.id}
-                        className="flex items-center gap-1 flex-wrap"
-                      >
-                        <Badge
-                          variant="secondary"
-                          className="text-xs flex items-center gap-1"
+                {item.additionals && item.additionals.length > 0 && (
+                  <div className="mt-1 space-y-1">
+                    {item.additionals.map((add) => {
+                      return (
+                        <div
+                          key={add.id}
+                          className="flex items-center gap-1 flex-wrap"
                         >
-                          + {add.name} (+R$ {add.price.toFixed(2)})
-                        </Badge>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
+                          <Badge
+                            variant="secondary"
+                            className="text-xs flex items-center gap-1"
+                          >
+                            + {add.name} (+R$ {add.price.toFixed(2)})
+                          </Badge>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
 
-              {item.customizations && item.customizations.length > 0 && (
-                <div className="mt-2 space-y-1">
-                  {item.customizations.map((customization) => (
-                    <div
-                      key={customization.customization_id}
-                      className="flex items-start gap-2 rounded-md border border-dashed border-rose-200 bg-rose-50/70 px-2 py-1 text-xs"
-                    >
-                      <span className="font-semibold text-rose-700">
-                        {customization.title}:
-                      </span>
-                      <span className="flex-1 text-rose-900/80 line-clamp-2">
-                        {renderCustomizationValue(customization)}
-                      </span>
-                      {customization.price_adjustment ? (
-                        <span className="text-emerald-600 font-semibold whitespace-nowrap">
-                          +R$ {customization.price_adjustment.toFixed(2)}
+                {item.customizations && item.customizations.length > 0 && (
+                  <div className="mt-2 space-y-1">
+                    {item.customizations.map((customization) => (
+                      <div
+                        key={customization.customization_id}
+                        className="flex items-start gap-2 rounded-md border border-dashed border-rose-200 bg-rose-50/70 px-2 py-1 text-xs"
+                      >
+                        <span className="font-semibold text-rose-700">
+                          {customization.title}:
                         </span>
-                      ) : null}
-                    </div>
-                  ))}
-                </div>
-              )}
+                        <span className="flex-1 text-rose-900/80 line-clamp-2">
+                          {renderCustomizationValue(customization)}
+                        </span>
+                        {customization.price_adjustment ? (
+                          <span className="text-emerald-600 font-semibold whitespace-nowrap">
+                            +R$ {customization.price_adjustment.toFixed(2)}
+                          </span>
+                        ) : null}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
 
               <div className="flex items-center justify-between mt-2">
                 <div className="flex items-center gap-2">
@@ -215,7 +204,7 @@ export function Cart({ onCheckout, className = "" }: CartProps) {
         <Button
           className="w-full bg-rose-600 hover:bg-rose-700 text-white"
           size="lg"
-          onClick={onCheckout}
+          onClick={handleCheckout}
         >
           Finalizar Pedido
         </Button>

@@ -26,6 +26,7 @@ import { Toggle } from "@/app/components/ui/toggle";
 import { cn } from "@/app/lib/utils";
 import { useApi } from "@/app/hooks/use-api";
 import Image from "next/image";
+import { getInternalImageUrl } from "@/lib/image-helper";
 
 interface BannersTabProps {
   configurationId: string;
@@ -418,7 +419,7 @@ export default function BannersTab({
                   <div className="flex items-start gap-4">
                     <div className="relative w-32 h-20 flex-shrink-0 rounded overflow-hidden bg-gray-100">
                       <Image
-                        src={banner.image_url || "/banner-placeholder.png"}
+                        src={getInternalImageUrl(banner.image_url) || "/banner-placeholder.png"}
                         alt={banner.title}
                         fill
                         className="object-cover"
