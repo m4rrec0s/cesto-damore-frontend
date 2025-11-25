@@ -11,7 +11,6 @@ import { RefreshCw } from "lucide-react";
 import { DatabaseErrorFallback } from "./components/database-error-fallback";
 import dynamic from "next/dynamic";
 
-// Lazy load feed components to reduce initial JS bundle and speed up first paint
 const FeedBannerCarousel = dynamic(
   () => import("./components/feed/FeedBannerCarousel"),
   { loading: () => <div className="h-48 bg-gray-100 animate-pulse" /> }
@@ -53,7 +52,6 @@ export default function Home() {
 
   const [scrollThreshold, setScrollThreshold] = useState<string>("1300px");
 
-  // Ref para o container do InfiniteScroll
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   const cachedData = useMemo(() => {
@@ -74,10 +72,16 @@ export default function Home() {
 
   useEffect(() => {
     const computeThreshold = () => {
-      // Aumentar o threshold mínimo para garantir que carregue antes do footer
-      const minPx = 800; // Aumentado de 300px para 800px
-      const val = Math.max(minPx, Math.floor(window.innerHeight * 0.6)); // Aumentado de 0.4 para 0.6
-      setScrollThreshold(`${val}px`);
+      const isMobile = window.innerWidth < 768;
+      
+      if (isMobile) {
+        const val = Math.floor(window.innerHeight * 1.2);
+        setScrollThreshold(`${val}px`);
+      } else {
+        const minPx = 800;
+        const val = Math.max(minPx, Math.floor(window.innerHeight * 0.8));
+        setScrollThreshold(`${val}px`);
+      }
     };
 
     computeThreshold();
