@@ -57,6 +57,8 @@ import { usePaymentPolling } from "@/app/hooks/use-payment-polling";
 import { useWebhookNotification } from "@/app/hooks/use-webhook-notification";
 import { PaymentMethodSelector } from "@/app/components/payment-method-selector";
 import { getInternalImageUrl } from "@/lib/image-helper";
+import { LoadingPayment } from "@/app/components/LoadingPayment";
+import { OrderConfirmationTicket } from "@/app/components/OrderConfirmationTicket";
 
 const ACCEPTED_CITIES = [
   "Campina Grande",
@@ -1722,203 +1724,7 @@ export default function CarrinhoPage() {
     },
   };
 
-  const OrderConfirmationTicket = ({
-    order,
-    onTrackOrder,
-  }: {
-    order: Order | null;
-    onTrackOrder: () => void;
-  }) => {
-    return (
-      <motion.div
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ duration: 0.5, ease: "easeOut" }}
-        className="w-full max-w-lg mx-auto"
-      >
-        {/* Animação de checkmark */}
-        <motion.div
-          initial={{ scale: 0 }}
-          animate={{ scale: 1 }}
-          transition={{
-            type: "spring",
-            stiffness: 200,
-            damping: 15,
-            delay: 0.2,
-          }}
-          className="flex justify-center mb-8"
-        >
-          <div className="relative w-24 h-24 bg-gradient-to-br from-green-400 to-green-600 rounded-full flex items-center justify-center shadow-2xl">
-            <motion.div
-              initial={{ pathLength: 0 }}
-              animate={{ pathLength: 1 }}
-              transition={{ duration: 0.6, delay: 0.4 }}
-            >
-              <CheckCircle2
-                className="w-16 h-16 text-white"
-                strokeWidth={1.5}
-              />
-            </motion.div>
-          </div>
-        </motion.div>
 
-        {/* Card do Ticket */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.3 }}
-        >
-          <Card className="bg-gradient-to-b from-white to-gray-50 border-2 border-gray-100 rounded-3xl overflow-hidden shadow-2xl">
-            {/* Topo do Ticket */}
-            <div className="relative bg-gradient-to-r from-rose-600 to-rose-700 px-6 py-8 text-white text-center">
-              <motion.h2
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 0.6 }}
-                className="text-3xl font-bold"
-              >
-                Pedido Confirmado! 🎉
-              </motion.h2>
-              <p className="text-rose-100 mt-2 text-sm">
-                Obrigado por sua compra
-              </p>
-            </div>
-
-            {/* Separador decorativo do ticket */}
-            <div className="relative h-6 bg-gray-50">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t-2 border-dashed border-gray-200"></div>
-              </div>
-            </div>
-
-            {/* Conteúdo do Ticket */}
-            <div className="px-6 py-8 space-y-6">
-              {/* Número do Pedido */}
-              <motion.div
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.7 }}
-                className="text-center"
-              >
-                <p className="text-xs uppercase tracking-widest text-gray-500 mb-2">
-                  Número do Pedido
-                </p>
-                <p className="text-2xl font-bold text-gray-900 font-mono">
-                  {order?.id?.toUpperCase() || "N/A"}
-                </p>
-              </motion.div>
-
-              {/* Informações do Cliente */}
-              <motion.div
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.8 }}
-                className="space-y-3 bg-gray-50 rounded-xl p-4"
-              >
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-gray-600 flex items-center gap-2">
-                    <User className="w-4 h-4 text-rose-600" />
-                    Cliente
-                  </span>
-                  <span className="font-semibold text-gray-900">
-                    {order?.user?.name || "N/A"}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between text-sm border-t border-gray-200 pt-3">
-                  <span className="text-gray-600 flex items-center gap-2">
-                    <Smartphone className="w-4 h-4 text-rose-600" />
-                    Contato
-                  </span>
-                  <span className="font-semibold text-gray-900">
-                    {order?.recipient_phone || "N/A"}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between text-sm border-t border-gray-200 pt-3">
-                  <span className="text-gray-600 flex items-center gap-2">
-                    <MapPin className="w-4 h-4 text-rose-600" />
-                    Endereço
-                  </span>
-                  <span className="font-semibold text-gray-900 text-right">
-                    {order?.delivery_address || "N/A"}
-                  </span>
-                </div>
-              </motion.div>
-
-              {/* Resumo Financeiro */}
-              <motion.div
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.9 }}
-                className="space-y-2 border-t border-gray-200 pt-4"
-              >
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-600">Taxa de Entrega</span>
-                  <span className="font-medium text-gray-900">
-                    {order?.shipping_price === 0
-                      ? "GRÁTIS"
-                      : `R$ ${(order?.shipping_price || 0).toFixed(2)}`}
-                  </span>
-                </div>
-                {order?.discount && order?.discount > 0 && (
-                  <div className="flex justify-between text-sm">
-                    <span className="text-green-600 font-medium">Desconto</span>
-                    <span className="text-green-600 font-semibold">
-                      - R$ {order.discount.toFixed(2)}
-                    </span>
-                  </div>
-                )}
-                <div className="flex justify-between text-sm border-t border-gray-200 pt-3 mt-3">
-                  <span className="font-bold text-gray-900">Total</span>
-                  <span className="text-xl font-bold text-rose-600">
-                    R$ {(order?.total || 0).toFixed(2)}
-                  </span>
-                </div>
-              </motion.div>
-
-              {/* Status do Pedido */}
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 1 }}
-                className="bg-blue-50 rounded-xl p-4 text-center border border-blue-200"
-              >
-                <Badge className="bg-blue-100 text-blue-700 border-blue-300 mb-2 flex items-center gap-1 w-fit mx-auto">
-                  <CheckCircle2 className="w-3 h-3" />
-                  Pagamento Aprovado
-                </Badge>
-                <p className="text-xs text-blue-600 mt-2">
-                  Seu pedido foi recebido e está sendo preparado
-                </p>
-              </motion.div>
-            </div>
-
-            {/* Separador decorativo final */}
-            <div className="relative h-6 bg-gray-50">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t-2 border-dashed border-gray-200"></div>
-              </div>
-            </div>
-
-            {/* Botão de ação */}
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 1.1 }}
-              className="px-6 py-6"
-            >
-              <Button
-                onClick={onTrackOrder}
-                className="w-full bg-gradient-to-r from-rose-600 to-rose-700 hover:from-rose-700 hover:to-rose-800 text-white py-6 rounded-xl font-bold text-base shadow-lg hover:shadow-xl transition-all"
-              >
-                <ArrowRight className="w-4 h-4 mr-2" />
-                Acompanhar Pedido
-              </Button>
-            </motion.div>
-          </Card>
-        </motion.div>
-      </motion.div>
-    );
-  };
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white">
@@ -2447,51 +2253,7 @@ export default function CarrinhoPage() {
                     className="space-y-6"
                   >
                     {isProcessing && !pixData && (
-                      <motion.div
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className="space-y-3"
-                      >
-                        <Card className="bg-gradient-to-br from-rose-50 to-orange-50 p-8 rounded-2xl shadow-md border border-rose-100">
-                          <div className="flex flex-col items-center justify-center gap-4">
-                            <motion.div
-                              animate={{ rotate: 360 }}
-                              transition={{
-                                duration: 2,
-                                repeat: Number.POSITIVE_INFINITY,
-                                ease: "linear",
-                              }}
-                            >
-                              <Loader2 className="h-12 w-12 text-rose-600" />
-                            </motion.div>
-                            <div className="text-center space-y-2">
-                              <h3 className="text-lg font-bold text-rose-900">
-                                {paymentMethod === "pix"
-                                  ? "Gerando QR Code PIX..."
-                                  : "Processando seu pagamento..."}
-                              </h3>
-                              <p className="text-sm text-rose-700">
-                                {paymentMethod === "pix"
-                                  ? "Aguarde enquanto geramos seu código QR"
-                                  : "Validando dados do seu cartão"}
-                              </p>
-                            </div>
-
-                            <div className="w-full mt-4">
-                              <div className="h-1 bg-rose-200 rounded-full overflow-hidden">
-                                <motion.div
-                                  className="h-full bg-gradient-to-r from-rose-500 to-orange-500"
-                                  animate={{ x: ["-100%", "100%"] }}
-                                  transition={{
-                                    duration: 1.5,
-                                    repeat: Number.POSITIVE_INFINITY,
-                                  }}
-                                />
-                              </div>
-                            </div>
-                          </div>
-                        </Card>
-                      </motion.div>
+                      <LoadingPayment paymentMethod={paymentMethod} />
                     )}
 
                     {/* Seleção de Método de Pagamento */}
@@ -2512,30 +2274,6 @@ export default function CarrinhoPage() {
                       </Card>
                     )}
 
-                    {!isProcessing && paymentMethod && (
-                      <Card className="bg-white p-6 lg:p-8 rounded-2xl shadow-sm border-gray-100">
-                        {paymentMethod === "pix" && pixData ? (
-                          <div className="space-y-4">
-                            <h3 className="text-xl font-bold text-gray-900">
-                              Complete seu pagamento
-                            </h3>
-                            <QRCodePIX pixData={pixData} />
-                          </div>
-                        ) : paymentMethod === "card" ? (
-                          <div className="space-y-4">
-                            <h3 className="text-xl font-bold text-gray-900 mb-6">
-                              Dados do Cartão
-                            </h3>
-                            <CreditCardForm
-                              onSubmit={handleCreditCardPayment}
-                              isProcessing={isProcessing}
-                              defaultEmail={user?.email}
-                              defaultName={user?.name}
-                            />
-                          </div>
-                        ) : null}
-                      </Card>
-                    )}
 
                     {paymentError && (
                       <Alert className="border-red-200 bg-red-50 mt-6">
@@ -2728,37 +2466,6 @@ export default function CarrinhoPage() {
                               }}
                             />
                           )}
-                          {/* Ações rápidas: copiar link e abrir em nova aba (melhor UX mobile) */}
-                          <div className="mt-4 flex items-center justify-center gap-3 flex-wrap">
-                            <button
-                              className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-sm shadow-sm"
-                              onClick={async () => {
-                                try {
-                                  await navigator.clipboard.writeText(
-                                    pixData.ticket_url || pixData.qr_code || ""
-                                  );
-                                  toast.success("Link de pagamento copiado");
-                                } catch {
-                                  toast.error("Não foi possível copiar o link");
-                                }
-                              }}
-                            >
-                              Copiar Link
-                            </button>
-                            <a
-                              className="px-3 py-2 border rounded-lg text-sm flex items-center gap-2"
-                              href={
-                                pixData.ticket_url || pixData.qr_code || "#"
-                              }
-                              target="_blank"
-                              rel="noreferrer"
-                              onClick={() => {
-                                // abrir em nova aba
-                              }}
-                            >
-                              Abrir Link
-                            </a>
-                          </div>
                           <div className="mt-3 text-center text-xs text-gray-500">
                             <div>
                               Valor:{" "}
