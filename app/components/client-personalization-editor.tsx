@@ -103,7 +103,8 @@ export default function ClientPersonalizationEditor({
     canvas.height = layoutBase.height;
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.drawImage(baseImageRef.current, 0, 0, canvas.width, canvas.height);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
 
     const sortedSlots = [...layoutBase.slots].sort(
       (a, b) => (a.zIndex || 0) - (b.zIndex || 0)
@@ -183,6 +184,9 @@ export default function ClientPersonalizationEditor({
 
       ctx.restore();
     });
+
+    // Draw base image LAST so it overlays the slots
+    ctx.drawImage(baseImageRef.current, 0, 0, canvas.width, canvas.height);
   }, [layoutBase, uploadedImages]);
 
   const handleFileUpload = async (slotId: string, file: File) => {

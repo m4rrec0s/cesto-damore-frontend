@@ -175,6 +175,14 @@ export interface Components {
   item: Item;
 }
 
+export interface ProductComponent {
+  id: string;
+  product_id: string;
+  item_id: string;
+  quantity: number;
+  item: Item;
+}
+
 export interface CategoryProduct {
   category: {
     id: string;
@@ -192,7 +200,7 @@ export interface Product {
   categories: Category[];
   type_id: string;
   production_time?: number;
-  components?: string[];
+  components?: ProductComponent[];
   related_products?: Omit<Product, "components" | "related_products">[];
   created_at: string;
   updated_at: string;
@@ -285,6 +293,10 @@ export interface Item {
   updated_at: string;
   additionals: Additional[];
   customizations: Customization[];
+  layout_base?: {
+    id: string;
+    additional_time: number;
+  };
 }
 
 export interface Color {
@@ -340,19 +352,19 @@ export type CustomizationTypeValue =
 
 export type CustomizationAvailableOptions =
   | Array<{
-      label: string;
-      value: string;
-      price_adjustment?: number;
-    }>
+    label: string;
+    value: string;
+    price_adjustment?: number;
+  }>
   | {
-      items: Array<{
-        original_item: string;
-        available_substitutes: Array<{
-          item: string;
-          price_adjustment: number;
-        }>;
+    items: Array<{
+      original_item: string;
+      available_substitutes: Array<{
+        item: string;
+        price_adjustment: number;
       }>;
-    };
+    }>;
+  };
 
 export interface OrderItemAdditional {
   id: string;
@@ -1713,8 +1725,8 @@ class ApiService {
         console.error("📄 Data:", axiosError.response.data);
         throw new Error(
           axiosError.response.data?.error ||
-            axiosError.response.data?.message ||
-            "Erro na requisição"
+          axiosError.response.data?.message ||
+          "Erro na requisição"
         );
       }
       throw error;
@@ -1937,9 +1949,8 @@ class ApiService {
     page?: number,
     perPage?: number
   ): Promise<PublicFeedResponse> => {
-    const cacheKey = `publicFeed_${configId || "default"}_page_${
-      page ?? "all"
-    }_per_${perPage ?? "all"}`;
+    const cacheKey = `publicFeed_${configId || "default"}_page_${page ?? "all"
+      }_per_${perPage ?? "all"}`;
 
     // Retornar do cache se disponível
     if (ApiService.cache[cacheKey]) {

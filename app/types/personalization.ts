@@ -24,6 +24,7 @@ export interface LayoutBase {
   width: number; // px reais da imagem base
   height: number;
   slots: SlotDef[];
+  additional_time: number;
   created_at: string;
   updated_at: string;
 }
@@ -34,6 +35,7 @@ export interface CreateLayoutBaseInput {
   width: number;
   height: number;
   slots: SlotDef[];
+  additional_time?: number;
   image?: File; // Arquivo da imagem base
 }
 
@@ -42,6 +44,7 @@ export interface UpdateLayoutBaseInput {
   width?: number;
   height?: number;
   slots?: SlotDef[];
+  additional_time?: number;
   image?: File;
 }
 

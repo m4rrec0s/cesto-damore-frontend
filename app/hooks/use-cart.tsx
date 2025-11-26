@@ -1298,29 +1298,47 @@ export function useCart(): {
   }, [cart.items]);
 
   const getMinPreparationHours = useCallback((): number => {
-    let maxHours = 1; // Padrão para itens normais
+    let maxHours = 0; // Começar com 0 para somar corretamente
 
     cart.items.forEach((item) => {
-      // Verificar produto principal
-      if (/quadro|polaroid/i.test(item.product.name)) {
-        maxHours = Math.max(maxHours, 4); // 4 horas para produtos personalizados
+      let itemHours = item.product.production_time || 0;
+
+      // Verificar tempo adicional do layout base (se houver)
+      if (item.product.components) {
+        item.product.components.forEach((comp) => {
+          if (comp.item?.layout_base?.additional_time) {
+            itemHours += comp.item.layout_base.additional_time;
+          }
+        });
       }
-      if (/caneca|quebra.?cabeça/i.test(item.product.name)) {
-        maxHours = Math.max(maxHours, 24); // 24 horas para itens mais complexos
+
+      // Fallback/Legacy logic (mantendo compatibilidade com regex se não houver tempo definido no banco)
+      if (itemHours === 0) {
+        if (/quadro|polaroid/i.test(item.product.name)) {
+          itemHours = 4;
+        } else if (/caneca|quebra.?cabeça/i.test(item.product.name)) {
+          itemHours = 24;
+        } else {
+          itemHours = 1; // Padrão mínimo
+        }
       }
+
+      maxHours = Math.max(maxHours, itemHours);
 
       // Verificar adicionais
       item.additionals?.forEach((add) => {
+        let addHours = 0;
         if (/quadro|polaroid/i.test(add.name)) {
-          maxHours = Math.max(maxHours, 4);
+          addHours = 4;
         }
         if (/caneca|quebra.?cabeça/i.test(add.name)) {
-          maxHours = Math.max(maxHours, 24);
+          addHours = 24;
         }
+        maxHours = Math.max(maxHours, addHours);
       });
     });
 
-    return maxHours;
+    return maxHours || 1; // Garantir pelo menos 1 hora se tudo for 0
   }, [cart.items]);
 
   const parseTimeOnDate = (referenceDate: Date, time: string) => {

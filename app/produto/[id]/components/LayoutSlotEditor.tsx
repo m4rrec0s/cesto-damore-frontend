@@ -108,7 +108,7 @@ export function LayoutSlotEditor({
     canvas.height = layoutBase.height;
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.drawImage(baseImageRef.current, 0, 0, canvas.width, canvas.height);
+
 
     const sortedSlots = [...layoutBase.slots].sort(
       (a, b) => (a.zIndex || 0) - (b.zIndex || 0)
@@ -177,6 +177,10 @@ export function LayoutSlotEditor({
       ctx.restore();
     });
 
+    // Draw base image LAST so it overlays the slots (handling transparency)
+    ctx.drawImage(baseImageRef.current, 0, 0, canvas.width, canvas.height);
+
+
     // Atualizar preview URL
     try {
       const previewUrl = canvas.toDataURL("image/png");
@@ -186,12 +190,13 @@ export function LayoutSlotEditor({
     }
   }, [layoutBase, slotImages, onPreviewChange]);
 
-  // Atualizar preview quando slots mudarem
+  // Atualizar preview quando slots mudarem ou ao trocar de modo de visualização
   useEffect(() => {
     if (baseImageLoaded) {
+      console.log("🎨 Atualizando preview do canvas...");
       updateCanvasPreview();
     }
-  }, [slotImages, baseImageLoaded, updateCanvasPreview]);
+  }, [slotImages, baseImageLoaded, updateCanvasPreview, viewMode]);
 
   const fileToImageData = async (
     file: File,
@@ -360,7 +365,7 @@ export function LayoutSlotEditor({
 
     try {
       updateCanvasPreview();
-    } catch {}
+    } catch { }
 
     await new Promise((r) => setTimeout(r, 80));
 
@@ -553,42 +558,42 @@ export function LayoutSlotEditor({
                 textures={[
                   layoutBase.item_type?.toLowerCase() === "caneca"
                     ? {
-                        areaId: "main",
-                        imageUrl: previewTextureUrl,
-                        mapping: "cylinder" as const,
-                        cylinder: (() => {
-                          const CYLINDER_RADIUS = 0.46;
-                          const PRINT_AREA_HEIGHT = 0.95;
-                          const CYLINDER_HANDLE_GAP = Math.PI / 8;
-                          const FULL_WRAP_MAX_THETA =
-                            Math.PI * 2 - CYLINDER_HANDLE_GAP * 2;
+                      areaId: "main",
+                      imageUrl: previewTextureUrl,
+                      mapping: "cylinder" as const,
+                      cylinder: (() => {
+                        const CYLINDER_RADIUS = 0.46;
+                        const PRINT_AREA_HEIGHT = 0.95;
+                        const CYLINDER_HANDLE_GAP = Math.PI / 8;
+                        const FULL_WRAP_MAX_THETA =
+                          Math.PI * 2 - CYLINDER_HANDLE_GAP * 2;
 
-                          const widthMeters =
-                            (layoutBase.width / layoutBase.height) *
-                            PRINT_AREA_HEIGHT;
-                          let thetaLength = widthMeters / CYLINDER_RADIUS;
-                          if (!isFinite(thetaLength) || thetaLength <= 0) {
-                            thetaLength = Math.PI / 2;
-                          }
-                          thetaLength = Math.min(
-                            thetaLength,
-                            FULL_WRAP_MAX_THETA
-                          );
+                        const widthMeters =
+                          (layoutBase.width / layoutBase.height) *
+                          PRINT_AREA_HEIGHT;
+                        let thetaLength = widthMeters / CYLINDER_RADIUS;
+                        if (!isFinite(thetaLength) || thetaLength <= 0) {
+                          thetaLength = Math.PI / 2;
+                        }
+                        thetaLength = Math.min(
+                          thetaLength,
+                          FULL_WRAP_MAX_THETA
+                        );
 
-                          return {
-                            radius: CYLINDER_RADIUS,
-                            height: PRINT_AREA_HEIGHT,
-                            segments: 200,
-                            thetaStart: CYLINDER_HANDLE_GAP,
-                            thetaLength: thetaLength,
-                          };
-                        })(),
-                      }
+                        return {
+                          radius: CYLINDER_RADIUS,
+                          height: PRINT_AREA_HEIGHT,
+                          segments: 200,
+                          thetaStart: CYLINDER_HANDLE_GAP,
+                          thetaLength: thetaLength,
+                        };
+                      })(),
+                    }
                     : {
-                        areaId: "main",
-                        imageUrl: previewTextureUrl,
-                        mapping: "plane" as const,
-                      },
+                      areaId: "main",
+                      imageUrl: previewTextureUrl,
+                      mapping: "plane" as const,
+                    },
                 ]}
               />
             </div>

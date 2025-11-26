@@ -76,6 +76,7 @@ export default function LayoutBaseManager({
     width: 1000,
     height: 1000,
     slots: [],
+    additional_time: 0,
   });
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string>("");
@@ -108,6 +109,7 @@ export default function LayoutBaseManager({
           ...prev,
           width: 1000,
           height: 1000,
+          additional_time: 0,
         }));
       }
     }
@@ -180,6 +182,7 @@ export default function LayoutBaseManager({
       width: layout.width,
       height: layout.height,
       slots: layout.slots,
+      additional_time: layout.additional_time || 0,
     });
     // Normalizar possíveis URLs do Google Drive para download direto
     setImagePreview(getDirectImageUrl(layout.image_url));
@@ -194,6 +197,7 @@ export default function LayoutBaseManager({
       width: 1000,
       height: 1000,
       slots: [],
+      additional_time: 0,
     });
     setImageFile(null);
     setImagePreview("");
@@ -257,6 +261,23 @@ export default function LayoutBaseManager({
                       </select>
                       <p className="text-xs text-muted-foreground mt-1">
                         Escolha entre caneca ou quadro
+                      </p>
+                    </div>
+                    <div>
+                      <Label>Tempo Adicional (horas)</Label>
+                      <Input
+                        type="number"
+                        min="0"
+                        value={formData.additional_time || 0}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            additional_time: parseInt(e.target.value) || 0,
+                          })
+                        }
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Tempo extra de produção para este layout
                       </p>
                     </div>
                   </div>
@@ -488,11 +509,10 @@ export default function LayoutBaseManager({
                     </TableCell>
                     <TableCell>
                       <span
-                        className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${
-                          layout.item_type === "CANECA"
+                        className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${layout.item_type === "CANECA"
                             ? "bg-rose-100 text-rose-800"
                             : "bg-purple-100 text-purple-800"
-                        }`}
+                          }`}
                       >
                         {layout.item_type === "CANECA" ? "🍵" : "🖼️"}{" "}
                         {layout.item_type}
@@ -506,6 +526,11 @@ export default function LayoutBaseManager({
                         <p className="text-xs">
                           {(layout.width / layout.height).toFixed(2)}:1
                         </p>
+                        {layout.additional_time ? (
+                          <p className="text-xs font-medium text-amber-600">
+                            +{layout.additional_time}h produção
+                          </p>
+                        ) : null}
                       </div>
                     </TableCell>
                     <TableCell>
