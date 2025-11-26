@@ -20,7 +20,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Cesto d'Amore - Cestas de Presente em Campina Grande",
+  title: "Cesto d'Amore",
   description:
     "As melhores cestas de presente de Campina Grande e região! Feito com amor para você presentear quem você ama.",
 };

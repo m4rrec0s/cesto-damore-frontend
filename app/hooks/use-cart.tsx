@@ -92,9 +92,9 @@ const serializeCustomizations = (customizations?: CartCustomization[]) => {
     selected_option: customization.selected_option || null,
     selected_item: customization.selected_item
       ? {
-          original_item: customization.selected_item.original_item,
-          selected_item: customization.selected_item.selected_item,
-        }
+        original_item: customization.selected_item.original_item,
+        selected_item: customization.selected_item.selected_item,
+      }
       : null,
     photos:
       customization.photos?.map(
@@ -235,6 +235,7 @@ export function useCart(): {
   formatDate: (date: Date) => string;
   orderMetadata: Record<string, unknown>;
   setOrderMetadata: (metadata: Record<string, unknown>) => void;
+  getMaxProductionTime: () => number;
 } {
   const api = useApi();
   const { user } = useAuth();
@@ -367,30 +368,21 @@ export function useCart(): {
           pendingOrder.items &&
           pendingOrder.items.length > 0
         ) {
-          console.log(
-            "📦 [useCart] Carregando pedido pendente existente:",
-            pendingOrder.id
-          );
-
-          // Converter itens do pedido para CartItems
           const cartItems: CartItem[] = [];
 
           for (const orderItem of pendingOrder.items) {
-            // Buscar produto completo
             const product = await api.getProduct(orderItem.product_id);
 
-            // Buscar adicionais se existirem
             const additionals =
               orderItem.additionals && orderItem.additionals.length > 0
                 ? await Promise.all(
-                    orderItem.additionals.map(
-                      (add: { additional_id: string }) =>
-                        api.getAdditional(add.additional_id)
-                    )
+                  orderItem.additionals.map(
+                    (add: { additional_id: string }) =>
+                      api.getAdditional(add.additional_id)
                   )
+                )
                 : [];
 
-            // Converter customizações do pedido para CartCustomizations
             const customizations: CartCustomization[] = [];
             if (
               orderItem.customizations &&
@@ -498,7 +490,7 @@ export function useCart(): {
         price: add.price,
       })),
       customizations: item.customizations?.map((custom) => ({
-        customization_id: custom.customization_id || "default",
+        customization_id: custom.customization_id || undefined,
         customization_type: custom.customization_type,
         title: custom.title,
         customization_data: {
@@ -513,22 +505,15 @@ export function useCart(): {
 
   const syncCartToBackend = useCallback(
     async (currentCart: CartState) => {
-      if (!user) return; // Only sync when user is authenticated
+      if (!user) return;
 
       try {
-        console.log(
-          "🔁 syncCartToBackend - items:",
-          currentCart.items.length,
-          "pendingOrderId:",
-          pendingOrderId
-        );
         const itemsPayload = cartItemsToOrderItems(currentCart.items);
 
         if (itemsPayload.length === 0) {
           if (pendingOrderId) {
             await api.deleteOrder(pendingOrderId);
             setPendingOrderId(null);
-            // Limpar metadata local quando o pedido pendente for removido
             setOrderMetadata({
               send_anonymously: false,
               complement: undefined,
@@ -538,16 +523,10 @@ export function useCart(): {
         }
 
         if (!pendingOrderId) {
-          // Verificar se já existe um pedido pendente para evitar múltiplos
           try {
             const existingPending = await api.getPendingOrder(user.id);
             if (existingPending) {
-              console.log(
-                "⚠️ [useCart] Já existe pedido pendente, usando existente:",
-                existingPending.id
-              );
               setPendingOrderId(existingPending.id);
-              // Atualizar metadata se necessário
               setOrderMetadata({
                 send_anonymously: !!existingPending.send_anonymously,
                 complement: existingPending.complement || undefined,
@@ -574,13 +553,8 @@ export function useCart(): {
             send_anonymously: orderMetadata.send_anonymously || false,
             complement: orderMetadata.complement || undefined,
           };
-          console.log(
-            "📦 [syncCartToBackend] Payload para criar pedido draft:",
-            payload
-          );
           const order = await api.createOrder(payload);
           setPendingOrderId(order?.id || null);
-          // Atualizar metadata local com os dados do servidor (caso defaults tenham sido definidos lá)
           if (order) {
             setOrderMetadata({
               send_anonymously: !!order.send_anonymously,
@@ -589,7 +563,6 @@ export function useCart(): {
           }
         } else {
           await api.updateOrderItems(pendingOrderId, itemsPayload);
-          // Also update metadata if changed
           await api.updateOrderMetadata(pendingOrderId, {
             send_anonymously: orderMetadata.send_anonymously,
             complement: orderMetadata.complement,
@@ -602,14 +575,10 @@ export function useCart(): {
           const maybe = error as { response?: { status: number } };
           const status = maybe?.response?.status;
           if (status === 403 || status === 404) {
-            console.warn(
-              "Pedido pendente inválido/sem permissão - limpando rascunho local"
-            );
             setPendingOrderId(null);
             if (typeof window !== "undefined") {
               localStorage.removeItem("pendingOrderId");
             }
-            // Também reset metadata local
             setOrderMetadata({
               send_anonymously: false,
               complement: undefined,
@@ -636,7 +605,6 @@ export function useCart(): {
     ]
   );
 
-  // Debounce setup to avoid spamming the backend when cart changes fast
   const syncTimeoutRef = useRef<number | null>(null);
   const debouncedSync = useCallback(
     (currentCart: CartState) => {
@@ -654,7 +622,6 @@ export function useCart(): {
   useEffect(() => {
     if (typeof window !== "undefined") {
       try {
-        // Criar uma cópia do carrinho sem dados pesados (imagens base64)
         const cartToSave = {
           ...cart,
           items: cart.items.map((item) => ({
@@ -747,23 +714,23 @@ export function useCart(): {
 
                   const customizations = item.customizations
                     ? item.customizations.map((c) => {
-                        const parsed = (() => {
-                          try {
-                            return JSON.parse(c.value || "{}") as Record<
-                              string,
-                              unknown
-                            >;
-                          } catch {
-                            return {};
-                          }
-                        })();
+                      const parsed = (() => {
+                        try {
+                          return JSON.parse(c.value || "{}") as Record<
+                            string,
+                            unknown
+                          >;
+                        } catch {
+                          return {};
+                        }
+                      })();
 
-                        return {
-                          ...parsed,
-                          customization_id: c.customization_id,
-                          title: (parsed.title as string) || undefined,
-                        };
-                      })
+                      return {
+                        ...parsed,
+                        customization_id: c.customization_id,
+                        title: (parsed.title as string) || undefined,
+                      };
+                    })
                     : undefined;
 
                   return {
@@ -863,11 +830,11 @@ export function useCart(): {
             (item) =>
               item.product_id === productId &&
               serializeAdditionals(item.additional_ids) ===
-                targetAdditionalsKey &&
+              targetAdditionalsKey &&
               serializeAdditionalColors(item.additional_colors) ===
-                targetColorsKey &&
+              targetColorsKey &&
               serializeCustomizations(item.customizations) ===
-                targetCustomizationsKey
+              targetCustomizationsKey
           );
 
           let newItems: CartItem[];
@@ -924,9 +891,9 @@ export function useCart(): {
               item.product_id === productId &&
               serializeAdditionals(item.additional_ids) === targetAdditionals &&
               serializeAdditionalColors(item.additional_colors) ===
-                targetColors &&
+              targetColors &&
               serializeCustomizations(item.customizations) ===
-                targetCustomizations
+              targetCustomizations
             )
         );
         const updatedCart = calculateTotals(newItems);
@@ -969,7 +936,7 @@ export function useCart(): {
             item.product_id === productId &&
             serializeAdditionals(item.additional_ids) === targetAdditionals &&
             serializeCustomizations(item.customizations) ===
-              targetCustomizations &&
+            targetCustomizations &&
             serializeAdditionalColors(item.additional_colors) === targetColors
           ) {
             return { ...item, quantity };
@@ -1011,7 +978,7 @@ export function useCart(): {
             item.product_id === productId &&
             serializeAdditionals(item.additional_ids) === targetAdditionals &&
             serializeCustomizations(item.customizations) ===
-              targetOldCustomizations &&
+            targetOldCustomizations &&
             serializeAdditionalColors(item.additional_colors) === targetColors
         );
 
@@ -1201,7 +1168,6 @@ export function useCart(): {
         );
       }
 
-      console.log("✅ Pedido criado com sucesso:", order?.id);
       return order;
     },
     [cart, api]
@@ -1271,18 +1237,6 @@ export function useCart(): {
           },
         };
 
-        console.log("📤 Dados enviados ao Mercado Pago (resumido):", {
-          itemsCount: items.length,
-          payerEmail: requestBody.payer?.email ? "[REDACTED]" : undefined,
-          external_reference: requestBody.external_reference,
-        });
-
-        const token = process.env.NEXT_PUBLIC_MERCADOPAGO_ACCESS_TOKEN;
-        console.log("🔑 Token sendo usado (resumido):", {
-          tokenConfigured: !!token,
-          tokenLength: token?.length || 0,
-        });
-
         const response = await fetch(
           "https://api.mercadopago.com/checkout/preferences",
           {
@@ -1295,20 +1249,14 @@ export function useCart(): {
           }
         );
 
-        console.log("📥 Status da resposta (MP):", response.status);
-
         if (!response.ok) {
           const errorText = await response.text();
-          console.error("❌ Resposta de erro do Mercado Pago:", errorText);
           throw new Error(
             `Erro ao criar preferência: ${response.status} ${response.statusText} - ${errorText}`
           );
         }
 
         const preference = await response.json();
-        console.log(
-          "🎯 Preferência criada (Mercado Pago) - init_point sanitized available"
-        );
         return preference;
       } catch (error) {
         console.error("Erro ao criar preferência de pagamento:", error);
@@ -1774,5 +1722,11 @@ export function useCart(): {
     formatDate,
     orderMetadata,
     setOrderMetadata,
+    getMaxProductionTime: useCallback(() => {
+      if (!cart.items || cart.items.length === 0) return 0;
+      return Math.max(
+        ...cart.items.map((item) => item.product.production_time || 0)
+      );
+    }, [cart.items]),
   };
 }

@@ -32,6 +32,8 @@ import { Textarea } from "@/app/components/ui/textarea";
 import { LoadingSpinner } from "@/app/components/LoadingSpinner";
 import { Pagination } from "@/app/components/ui/pagination";
 import { getInternalImageUrl } from "@/lib/image-helper";
+import { RadioGroup } from "@/app/components/ui/radio-group";
+import { RadioGroupItem } from "@/app/components/ui/radio-group";
 
 interface Item {
   id: string;
@@ -62,6 +64,8 @@ export function ProductsTab() {
   const [types, setTypes] = useState<ProductType[]>([]);
   const [items, setItems] = useState<Item[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loadingProduct, setLoadingProduct] = useState(false);
+  const [productionMode, setProductionMode] = useState<"immediate" | "custom">("immediate");
   const [searchTerm, setSearchTerm] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -86,6 +90,7 @@ export function ProductsTab() {
     discount: 0,
     type_id: "",
     categories: [] as string[],
+    production_time: 0,
   });
 
   const loadData = useCallback(async () => {
@@ -142,6 +147,8 @@ export function ProductsTab() {
 
   const handleOpenModal = async (product?: Product) => {
     if (product) {
+      setShowModal(true);
+      setLoadingProduct(true);
       setEditingProduct(product);
       setFormData({
         name: product.name,
@@ -150,8 +157,12 @@ export function ProductsTab() {
         discount: product.discount || 0,
         type_id: product.type_id,
         categories: product.categories.map((c) => c.id),
+        production_time: product.production_time || 0,
       });
       setImagePreview(product.image_url || "");
+
+      // Set production mode based on time
+      setProductionMode((product.production_time || 0) <= 1 ? "immediate" : "custom");
 
       // Carregar componentes do produto
       try {
@@ -159,23 +170,20 @@ export function ProductsTab() {
           `/products/${product.id}/components`
         );
 
-        // A API retorna um objeto com { product_id, components: [], total_components }
-        // Precisamos extrair apenas o array de components
         const componentsArray = componentsData?.components || [];
 
         setComponents(componentsArray);
-        setOriginalComponents(componentsArray); // Salvar estado original
+        setOriginalComponents(componentsArray);
       } catch (error) {
         console.error("Erro ao carregar componentes:", error);
         setComponents([]);
         setOriginalComponents([]);
       }
+      setLoadingProduct(false);
 
-      // Carregar adicionais do produto
       try {
         const additionalsData = await api.getAdditionalsByProduct(product.id);
 
-        // Mapear para o formato esperado pelo formulário
         const additionalsArray = (
           additionalsData as Array<{
             id: string;
@@ -197,13 +205,15 @@ export function ProductsTab() {
         }));
 
         setAdditionals(additionalsArray);
-        setOriginalAdditionals(additionalsArray); // Salvar estado original
+        setOriginalAdditionals(additionalsArray);
       } catch (error) {
         console.error("Erro ao carregar adicionais:", error);
         setAdditionals([]);
         setOriginalAdditionals([]);
       }
     } else {
+      setLoadingProduct(false);
+      setShowModal(false);
       setEditingProduct(null);
       setFormData({
         name: "",
@@ -212,14 +222,15 @@ export function ProductsTab() {
         discount: 0,
         type_id: "",
         categories: [],
+        production_time: 1, // Default to 1 hour (immediate)
       });
+      setProductionMode("immediate");
       setImagePreview("");
       setComponents([]);
       setAdditionals([]);
       setOriginalComponents([]);
       setOriginalAdditionals([]);
     }
-    setShowModal(true);
   };
 
   const handleCloseModal = () => {
@@ -234,13 +245,11 @@ export function ProductsTab() {
   };
 
   const handleAddComponent = () => {
-    // Garantir que components é sempre um array
     const currentComponents = Array.isArray(components) ? components : [];
     setComponents([...currentComponents, { item_id: "", quantity: 1 }]);
   };
 
   const handleRemoveComponent = (index: number) => {
-    // Garantir que components é sempre um array
     const currentComponents = Array.isArray(components) ? components : [];
     setComponents(currentComponents.filter((_, i) => i !== index));
   };
@@ -250,7 +259,6 @@ export function ProductsTab() {
     field: "item_id" | "quantity",
     value: string | number
   ) => {
-    // Garantir que components é sempre um array
     const currentComponents = Array.isArray(components) ? components : [];
     const updated = [...currentComponents];
 
@@ -267,13 +275,11 @@ export function ProductsTab() {
   };
 
   const handleAddAdditional = () => {
-    // Garantir que additionals é sempre um array
     const currentAdditionals = Array.isArray(additionals) ? additionals : [];
     setAdditionals([...currentAdditionals, { item_id: "", custom_price: 0 }]);
   };
 
   const handleRemoveAdditional = (index: number) => {
-    // Garantir que additionals é sempre um array
     const currentAdditionals = Array.isArray(additionals) ? additionals : [];
     setAdditionals(currentAdditionals.filter((_, i) => i !== index));
   };
@@ -283,7 +289,6 @@ export function ProductsTab() {
     field: "item_id" | "custom_price",
     value: string | number
   ) => {
-    // Garantir que additionals é sempre um array
     const currentAdditionals = Array.isArray(additionals) ? additionals : [];
     const updated = [...currentAdditionals];
 
@@ -299,7 +304,6 @@ export function ProductsTab() {
     setAdditionals(updated);
   };
 
-  // Funções para filtrar itens disponíveis e evitar duplicatas
   const getAvailableComponentItems = (currentIndex: number) => {
     const selectedIds = components
       .map((c, idx) => (idx !== currentIndex ? c.item_id : null))
@@ -346,33 +350,32 @@ export function ProductsTab() {
         toast.success("Produto criado com sucesso!");
       }
 
-      // Sincronizar componentes (adicionar, atualizar e remover)
       if (editingProduct) {
         const validComponents = Array.isArray(components) ? components : [];
         const originalComponentsArray = Array.isArray(originalComponents)
           ? originalComponents
           : [];
 
-        // 1. Identificar componentes removidos
         const removedComponents = originalComponentsArray.filter(
           (original) =>
             !validComponents.some((current) => current.id === original.id)
         );
 
         // 2. Remover componentes deletados
-        for (const removed of removedComponents) {
-          if (removed.id) {
-            try {
-              await api.removeProductComponent(removed.id);
-              console.log(`✅ Componente ${removed.id} removido`);
-            } catch (error) {
-              console.error(
-                `❌ Erro ao remover componente ${removed.id}:`,
-                error
-              );
+        await Promise.all(
+          removedComponents.map(async (removed) => {
+            if (removed.id) {
+              try {
+                await api.removeProductComponent(removed.id);
+              } catch (error) {
+                console.error(
+                  `❌ Erro ao remover componente ${removed.id}:`,
+                  error
+                );
+              }
             }
-          }
-        }
+          })
+        );
 
         // 3. Adicionar novos componentes e atualizar existentes
         const componentsToProcess = validComponents.filter(
@@ -382,28 +385,26 @@ export function ProductsTab() {
             component.quantity > 0
         );
 
-        for (const component of componentsToProcess) {
-          try {
-            if (component.id) {
-              // Atualizar componente existente
-              await api.updateProductComponent(component.id, {
-                quantity: component.quantity,
-              });
-              console.log(`✅ Componente ${component.id} atualizado`);
-            } else {
-              // Adicionar novo componente
-              await api.addProductComponent(productId, {
-                item_id: component.item_id,
-                quantity: component.quantity,
-              });
-              console.log(
-                `✅ Novo componente adicionado: ${component.item_id}`
-              );
+        await Promise.all(
+          componentsToProcess.map(async (component) => {
+            try {
+              if (component.id) {
+                // Atualizar componente existente
+                await api.updateProductComponent(component.id, {
+                  quantity: component.quantity,
+                });
+              } else {
+                // Adicionar novo componente
+                await api.addProductComponent(productId, {
+                  item_id: component.item_id,
+                  quantity: component.quantity,
+                });
+              }
+            } catch (error) {
+              console.error(`❌ Erro ao processar componente:`, error);
             }
-          } catch (error) {
-            console.error(`❌ Erro ao processar componente:`, error);
-          }
-        }
+          })
+        );
       } else {
         // Produto novo - apenas adicionar componentes
         const validComponents = Array.isArray(components) ? components : [];
@@ -414,27 +415,26 @@ export function ProductsTab() {
             component.quantity > 0
         );
 
-        for (const component of componentsToSave) {
-          try {
-            await api.addProductComponent(productId, {
-              item_id: component.item_id,
-              quantity: component.quantity,
-            });
-            console.log(`✅ Componente adicionado: ${component.item_id}`);
-          } catch (error) {
-            console.error(`❌ Erro ao adicionar componente:`, error);
-          }
-        }
+        await Promise.all(
+          componentsToSave.map(async (component) => {
+            try {
+              await api.addProductComponent(productId, {
+                item_id: component.item_id,
+                quantity: component.quantity,
+              });
+            } catch (error) {
+              console.error(`❌ Erro ao adicionar componente:`, error);
+            }
+          })
+        );
       }
 
-      // Sincronizar adicionais (adicionar e remover)
       if (editingProduct) {
         const validAdditionals = Array.isArray(additionals) ? additionals : [];
         const originalAdditionalsArray = Array.isArray(originalAdditionals)
           ? originalAdditionals
           : [];
 
-        // 1. Identificar adicionais removidos
         const removedAdditionals = originalAdditionalsArray.filter(
           (original) =>
             !validAdditionals.some(
@@ -443,17 +443,18 @@ export function ProductsTab() {
         );
 
         // 2. Remover adicionais deletados
-        for (const removed of removedAdditionals) {
-          try {
-            await api.unlinkAdditionalFromProduct(removed.item_id, productId);
-            console.log(`✅ Adicional ${removed.item_id} desvinculado`);
-          } catch (error) {
-            console.error(
-              `❌ Erro ao desvincular adicional ${removed.item_id}:`,
-              error
-            );
-          }
-        }
+        await Promise.all(
+          removedAdditionals.map(async (removed) => {
+            try {
+              await api.unlinkAdditionalFromProduct(removed.item_id, productId);
+            } catch (error) {
+              console.error(
+                `❌ Erro ao desvincular adicional ${removed.item_id}:`,
+                error
+              );
+            }
+          })
+        );
 
         // 3. Adicionar novos adicionais (re-link sempre para atualizar custom_price)
         const additionalsToProcess = validAdditionals.filter(
@@ -463,23 +464,22 @@ export function ProductsTab() {
             additional.custom_price >= 0
         );
 
-        for (const additional of additionalsToProcess) {
-          try {
-            await api.linkAdditionalToProduct(
-              additional.item_id,
-              productId,
-              additional.custom_price
-            );
-            console.log(
-              `✅ Adicional ${additional.item_id} vinculado/atualizado com preço ${additional.custom_price}`
-            );
-          } catch (error) {
-            console.error(
-              `❌ Erro ao vincular adicional ${additional.item_id}:`,
-              error
-            );
-          }
-        }
+        await Promise.all(
+          additionalsToProcess.map(async (additional) => {
+            try {
+              await api.linkAdditionalToProduct(
+                additional.item_id,
+                productId,
+                additional.custom_price
+              );
+            } catch (error) {
+              console.error(
+                `❌ Erro ao vincular adicional ${additional.item_id}:`,
+                error
+              );
+            }
+          })
+        );
       } else {
         // Produto novo - apenas adicionar adicionais
         const validAdditionals = Array.isArray(additionals) ? additionals : [];
@@ -490,20 +490,19 @@ export function ProductsTab() {
             additional.custom_price >= 0
         );
 
-        for (const additional of additionalsToSave) {
-          try {
-            await api.linkAdditionalToProduct(
-              additional.item_id,
-              productId,
-              additional.custom_price
-            );
-            console.log(
-              `✅ Adicional adicionado: ${additional.item_id} com preço ${additional.custom_price}`
-            );
-          } catch (error) {
-            console.error(`❌ Erro ao adicionar adicional:`, error);
-          }
-        }
+        await Promise.all(
+          additionalsToSave.map(async (additional) => {
+            try {
+              await api.linkAdditionalToProduct(
+                additional.item_id,
+                productId,
+                additional.custom_price
+              );
+            } catch (error) {
+              console.error(`❌ Erro ao adicionar adicional:`, error);
+            }
+          })
+        );
       }
 
       await loadData();
@@ -590,7 +589,7 @@ export function ProductsTab() {
                   <TableHead>Categorias</TableHead>
                   <TableHead className="text-center">Preço</TableHead>
                   <TableHead className="text-center">Desconto</TableHead>
-                  <TableHead className="text-center">Componentes</TableHead>
+                  <TableHead className="text-center">Tempo de produção</TableHead>
                   <TableHead className="text-right">Ações</TableHead>
                 </TableRow>
               </TableHeader>
@@ -690,7 +689,10 @@ export function ProductsTab() {
                           )}
                         </TableCell>
                         <TableCell className="text-center">
-                          <span className="text-gray-400">-</span>
+                          {product.production_time && product.production_time > 1
+                            ? <Badge variant="secondary">{product.production_time} horas</Badge>
+                            : <Badge className="bg-green-500 text-white">Produção<br />imediata</Badge>
+                          }
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-2">
@@ -735,12 +737,14 @@ export function ProductsTab() {
           />
         </div>
 
-        {showModal && (
-          <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-              <div className="p-6">
-                <div className="flex justify-between items-center mb-6">
-                  <h2 className="text-2xl font-bold">
+        {showModal && (loadingProduct ? (
+            <LoadingSpinner />
+          ) : (
+            <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+              <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+                <div className="p-6">
+                  <div className="flex justify-between items-center mb-6">
+                    <h2 className="text-2xl font-bold">
                     {editingProduct ? "Editar Produto" : "Novo Produto"}
                   </h2>
                   <Button variant="ghost" size="sm" onClick={handleCloseModal}>
@@ -833,6 +837,52 @@ export function ProductsTab() {
                           })
                         }
                       />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="production_time">Tempo de produção</Label>
+                      <RadioGroup
+                        value={productionMode}
+                        onValueChange={(value: "immediate" | "custom") => {
+                          setProductionMode(value);
+                          if (value === "immediate") {
+                            setFormData({ ...formData, production_time: 1 });
+                          } else {
+                            // If switching to custom, ensure it's at least 2
+                            if (formData.production_time <= 1) {
+                              setFormData({ ...formData, production_time: 2 });
+                            }
+                          }
+                        }}
+                        className="flex space-x-4 mb-2"
+                      >
+                        <div className="flex items-center space-x-2">
+                          <RadioGroupItem value="immediate" id="production_immediate" />
+                          <Label htmlFor="production_immediate">Produção imediata (1 hora)</Label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <RadioGroupItem value="custom" id="production_custom" />
+                          <Label htmlFor="production_custom">Personalizado</Label>
+                        </div>
+                      </RadioGroup>
+
+                      {productionMode === "custom" && (
+                        <Input
+                          id="production_time"
+                          type="number"
+                          step="1"
+                          min="2"
+                          value={formData.production_time}
+                          onChange={(e) => {
+                            const val = parseInt(e.target.value);
+                            setFormData({
+                              ...formData,
+                              production_time: isNaN(val) ? 0 : val,
+                            });
+                          }}
+                          placeholder="Horas de produção"
+                        />
+                      )}
                     </div>
                   </div>
 
@@ -1282,7 +1332,7 @@ export function ProductsTab() {
               </div>
             </div>
           </div>
-        )}
+        ))}
       </CardContent>
     </Card>
   );

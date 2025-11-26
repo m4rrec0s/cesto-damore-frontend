@@ -79,10 +79,10 @@ const SHIPPING_RULES: Record<string, { pix: number; card: number }> = {
 const normalizeString = (value: string) =>
   value
     ? value
-        .normalize("NFD")
-        .replace(/[\u0300-\u036f]/g, "")
-        .trim()
-        .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .trim()
+      .toLowerCase()
     : "";
 
 type PaymentStatusType = "" | "pending" | "success" | "failure";
@@ -189,10 +189,9 @@ const formatCustomizationValue = (custom: CartCustomization) => {
         if (typeof custom.selected_item === "string") {
           return "Personalização de Layout Aplicada";
         }
-        return `${
-          (custom.selected_item as { selected_item?: string }).selected_item ||
+        return `${(custom.selected_item as { selected_item?: string }).selected_item ||
           "Layout Personalizado"
-        }`;
+          }`;
       }
       return "Layout Personalizado";
     case "IMAGES":
@@ -222,13 +221,12 @@ const CheckoutStepper = ({ currentStep }: { currentStep: CheckoutStep }) => {
             <div key={step.number} className="flex items-center flex-1">
               <div className="flex flex-col items-center flex-1">
                 <div
-                  className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${
-                    isCompleted
+                  className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${isCompleted
                       ? "bg-green-500 text-white"
                       : isActive
-                      ? "bg-rose-600 text-white shadow-lg"
-                      : "bg-gray-200 text-gray-500"
-                  }`}
+                        ? "bg-rose-600 text-white shadow-lg"
+                        : "bg-gray-200 text-gray-500"
+                    }`}
                 >
                   {isCompleted ? (
                     <CheckCircle2 className="h-6 w-6" />
@@ -237,18 +235,16 @@ const CheckoutStepper = ({ currentStep }: { currentStep: CheckoutStep }) => {
                   )}
                 </div>
                 <span
-                  className={`mt-2 text-xs font-semibold ${
-                    isActive ? "text-rose-600" : "text-gray-600"
-                  }`}
+                  className={`mt-2 text-xs font-semibold ${isActive ? "text-rose-600" : "text-gray-600"
+                    }`}
                 >
                   {step.label}
                 </span>
               </div>
               {index < steps.length - 1 && (
                 <div
-                  className={`h-1 flex-1 mx-2 rounded transition-all ${
-                    currentStep > step.number ? "bg-green-500" : "bg-gray-200"
-                  }`}
+                  className={`h-1 flex-1 mx-2 rounded transition-all ${currentStep > step.number ? "bg-green-500" : "bg-gray-200"
+                    }`}
                 />
               )}
             </div>
@@ -425,7 +421,7 @@ const ProductCard = ({
                           add.price,
                           item.customizations
                         ) *
-                          item.quantity,
+                        item.quantity,
                       0
                     ) || 0)
                   ).toFixed(2)}
@@ -442,7 +438,7 @@ const ProductCard = ({
                           add.price,
                           item.customizations
                         ) *
-                          item.quantity,
+                        item.quantity,
                       0
                     ) || 0)
                   ).toFixed(2)}
@@ -461,7 +457,7 @@ const ProductCard = ({
                         add.price,
                         item.customizations
                       ) *
-                        item.quantity,
+                      item.quantity,
                     0
                   ) || 0)
                 ).toFixed(2)}
@@ -499,6 +495,7 @@ export default function CarrinhoPage() {
     getMinPreparationHours,
     generateTimeSlots,
     getDeliveryDateBounds,
+    getMaxProductionTime,
   } = useCartContext();
 
   // Hook de gerenciamento de pagamento
@@ -538,10 +535,18 @@ export default function CarrinhoPage() {
               {shippingCost === null
                 ? "Calcular"
                 : shippingCost === 0
-                ? "GRÁTIS"
-                : `R$ ${shippingCost.toFixed(2)}`}
+                  ? "GRÁTIS"
+                  : `R$ ${shippingCost.toFixed(2)}`}
             </span>
           </div>
+          {getMaxProductionTime() > 1 && (
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-600">Tempo estimado de produção</span>
+              <span className="font-medium text-gray-900">
+                {getMaxProductionTime()} horas
+              </span>
+            </div>
+          )}
           {discountAmount > 0 && (
             <div className="flex justify-between text-sm">
               <span className="text-green-600 font-medium">Desconto</span>
@@ -745,10 +750,9 @@ export default function CarrinhoPage() {
   const sseOnDisconnected = useCallback(() => {
     sseDisconnectCountRef.current += 1;
     console.log(
-      `Disconnected from SSE (${sseDisconnectCountRef.current}/3) - ${
-        sseDisconnectCountRef.current >= 3
-          ? "initiating polling fallback"
-          : "retrying connection"
+      `Disconnected from SSE (${sseDisconnectCountRef.current}/3) - ${sseDisconnectCountRef.current >= 3
+        ? "initiating polling fallback"
+        : "retrying connection"
       }`
     );
     if (sseDisconnectCountRef.current >= 3 && !pollingStartedRef.current) {
@@ -822,8 +826,8 @@ export default function CarrinhoPage() {
     // Habilitar SSE enquanto houver um pedido pendente (evitar loops causados por toggles de enabled)
     enabled: Boolean(
       currentOrderId &&
-        paymentStatus !== "success" &&
-        paymentStatus !== "failure"
+      paymentStatus !== "success" &&
+      paymentStatus !== "failure"
     ),
     onPaymentUpdate: sseOnPaymentUpdate,
     onPaymentApproved: sseOnPaymentApproved,
@@ -962,8 +966,8 @@ export default function CarrinhoPage() {
             orderPaymentMethod === "pix"
               ? "pix"
               : orderPaymentMethod === "card"
-              ? "card"
-              : undefined
+                ? "card"
+                : undefined
           );
           // Preencher campos do pedido (se houver)
           if (pendingOrder.delivery_address) {
@@ -1029,7 +1033,10 @@ export default function CarrinhoPage() {
             setZipCode(pendingOrder.user.zip_code.replace(/\D/g, ""));
           }
 
-          // If the pending order has incomplete delivery data, force user to step 2
+          // If the pending order has incomplete delivery data, we populate the fields but DO NOT force the step change.
+          // The user should start at the cart to review items.
+
+          /* Auto-jump logic removed to fix "skipping first stage" issue
           const hasAllDelivery =
             pendingOrder.delivery_address &&
             pendingOrder.recipient_phone &&
@@ -1045,6 +1052,7 @@ export default function CarrinhoPage() {
               "Seu pedido pendente possui informações incompletas. Complete os dados de entrega para prosseguir."
             );
           }
+          */
           window.scrollTo({ top: 0, behavior: "smooth" });
 
           if (pendingOrder.payment?.status === "PENDING") {
@@ -1220,8 +1228,8 @@ export default function CarrinhoPage() {
           amount:
             Number(
               responseData.amount ??
-                responseData.transaction_amount ??
-                cartTotal + (shippingCost ?? 0)
+              responseData.transaction_amount ??
+              cartTotal + (shippingCost ?? 0)
             ) || cartTotal + (shippingCost ?? 0),
           expires_at:
             responseData.expires_at ||
@@ -2320,9 +2328,9 @@ export default function CarrinhoPage() {
 
                                         if (
                                           order?.payment?.status ===
-                                            "APPROVED" ||
+                                          "APPROVED" ||
                                           order?.payment?.status ===
-                                            "AUTHORIZED" ||
+                                          "AUTHORIZED" ||
                                           order?.status === "PAID"
                                         ) {
                                           setPaymentStatus("success");
@@ -2343,7 +2351,7 @@ export default function CarrinhoPage() {
                                           );
                                         } else if (
                                           order?.payment?.status ===
-                                            "REJECTED" ||
+                                          "REJECTED" ||
                                           order?.payment?.status === "CANCELLED"
                                         ) {
                                           console.log(
@@ -2446,26 +2454,26 @@ export default function CarrinhoPage() {
                             pollingStatus === "timeout" ||
                             (pollingStatus === "pending" &&
                               paymentStatus === "pending")) && (
-                            <PaymentStatusOverlay
-                              status={
-                                pollingStatus === "success"
-                                  ? "success"
-                                  : pollingStatus === "failure"
-                                  ? "failure"
-                                  : pollingStatus === "timeout"
-                                  ? "timeout"
-                                  : "pending"
-                              }
-                              paymentMethod="pix"
-                              showOverQRCode={true}
-                              onAnimationComplete={() => {
-                                if (pollingStatus === "success") {
-                                  // Redirecionar para página de pedidos após animação
-                                  router.push("/pedidos");
+                              <PaymentStatusOverlay
+                                status={
+                                  pollingStatus === "success"
+                                    ? "success"
+                                    : pollingStatus === "failure"
+                                      ? "failure"
+                                      : pollingStatus === "timeout"
+                                        ? "timeout"
+                                        : "pending"
                                 }
-                              }}
-                            />
-                          )}
+                                paymentMethod="pix"
+                                showOverQRCode={true}
+                                onAnimationComplete={() => {
+                                  if (pollingStatus === "success") {
+                                    // Redirecionar para página de pedidos após animação
+                                    router.push("/pedidos");
+                                  }
+                                }}
+                              />
+                            )}
                           <div className="mt-3 text-center text-xs text-gray-500">
                             <div>
                               Valor:{" "}
@@ -2571,8 +2579,8 @@ export default function CarrinhoPage() {
                             {paymentMethod === "pix"
                               ? "PIX"
                               : paymentMethod === "card"
-                              ? "Cartão de Crédito"
-                              : "Não selecionado"}
+                                ? "Cartão de Crédito"
+                                : "Não selecionado"}
                           </span>
                         </div>
                         <div className="border-t border-rose-300 pt-3 mt-3">
@@ -2625,7 +2633,7 @@ export default function CarrinhoPage() {
                                   });
                                   try {
                                     disconnectSSE?.();
-                                  } catch {}
+                                  } catch { }
                                 }
                               }
                             }}

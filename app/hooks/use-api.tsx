@@ -191,6 +191,7 @@ export interface Product {
   image_url?: string | null;
   categories: Category[];
   type_id: string;
+  production_time?: number;
   components?: string[];
   related_products?: Omit<Product, "components" | "related_products">[];
   created_at: string;

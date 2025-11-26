@@ -3,7 +3,7 @@
 import Image from "next/image";
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { toast } from "sonner";
-import { ShoppingCart, Minus, Plus, ChevronLeft } from "lucide-react";
+import { ShoppingCart, Minus, Plus, ChevronLeft, Clock } from "lucide-react";
 
 import { Button } from "@/app/components/ui/button";
 import { Badge } from "@/app/components/ui/badge";
@@ -203,22 +203,22 @@ const ClientProductPage = ({ id }: { id: string }) => {
             const photos =
               imagesData.previews && imagesData.previews.length > 0
                 ? await Promise.all(
-                    imagesData.previews.map(async (preview, index) => {
-                      // Tentar obter nome do arquivo se disponível
-                      const file = imagesData.files?.[index];
-                      const fileName = file?.name || `photo-${index + 1}.jpg`;
+                  imagesData.previews.map(async (preview, index) => {
+                    // Tentar obter nome do arquivo se disponível
+                    const file = imagesData.files?.[index];
+                    const fileName = file?.name || `photo-${index + 1}.jpg`;
 
-                      return {
-                        preview_url: preview,
-                        original_name: fileName,
-                        temp_file_id: `temp-${Date.now()}-${index}`,
-                        position: index,
-                        base64: preview, // ✅ preview já é base64 (data:image/...)
-                        mime_type: file?.type || "image/jpeg",
-                        size: file?.size || 0,
-                      };
-                    })
-                  )
+                    return {
+                      preview_url: preview,
+                      original_name: fileName,
+                      temp_file_id: `temp-${Date.now()}-${index}`,
+                      position: index,
+                      base64: preview, // ✅ preview já é base64 (data:image/...)
+                      mime_type: file?.type || "image/jpeg",
+                      size: file?.size || 0,
+                    };
+                  })
+                )
                 : [];
 
             return {
@@ -252,13 +252,11 @@ const ClientProductPage = ({ id }: { id: string }) => {
                 selected_item: layoutData.name || "Personalizado",
                 price_adjustment: priceAdjustment,
               },
-              selected_item_label: `${
-                layoutData.name || "Layout Personalizado"
-              }${
-                imageCount > 0
+              selected_item_label: `${layoutData.name || "Layout Personalizado"
+                }${imageCount > 0
                   ? ` (${imageCount} foto${imageCount > 1 ? "s" : ""})`
                   : ""
-              }`,
+                }`,
               text: layoutData.previewUrl,
             };
           }
@@ -382,22 +380,22 @@ const ClientProductPage = ({ id }: { id: string }) => {
             const photos =
               imagesData.previews && imagesData.previews.length > 0
                 ? await Promise.all(
-                    imagesData.previews.map(async (preview, index) => {
-                      // Tentar obter nome do arquivo se disponível
-                      const file = imagesData.files?.[index];
-                      const fileName = file?.name || `photo-${index + 1}.jpg`;
+                  imagesData.previews.map(async (preview, index) => {
+                    // Tentar obter nome do arquivo se disponível
+                    const file = imagesData.files?.[index];
+                    const fileName = file?.name || `photo-${index + 1}.jpg`;
 
-                      return {
-                        preview_url: preview,
-                        original_name: fileName,
-                        temp_file_id: `temp-${Date.now()}-${index}`,
-                        position: index,
-                        base64: preview, // ✅ preview já é base64 (data:image/...)
-                        mime_type: file?.type || "image/jpeg",
-                        size: file?.size || 0,
-                      };
-                    })
-                  )
+                    return {
+                      preview_url: preview,
+                      original_name: fileName,
+                      temp_file_id: `temp-${Date.now()}-${index}`,
+                      position: index,
+                      base64: preview, // ✅ preview já é base64 (data:image/...)
+                      mime_type: file?.type || "image/jpeg",
+                      size: file?.size || 0,
+                    };
+                  })
+                )
                 : [];
 
             console.log(
@@ -689,12 +687,12 @@ const ClientProductPage = ({ id }: { id: string }) => {
     if (baseLayoutCustomization) {
       const layoutData = baseLayoutCustomization.data as
         | {
-            id?: string;
-            name?: string;
-            model_url?: string;
-            item_type?: string;
-            previewUrl?: string;
-          }
+          id?: string;
+          name?: string;
+          model_url?: string;
+          item_type?: string;
+          previewUrl?: string;
+        }
         | undefined;
 
       // Verificar se tem dados necessários para 3D
@@ -904,22 +902,22 @@ const ClientProductPage = ({ id }: { id: string }) => {
             const photos =
               imagesData.previews && imagesData.previews.length > 0
                 ? await Promise.all(
-                    imagesData.previews.map(async (preview, index) => {
-                      // Tentar obter nome do arquivo se disponível
-                      const file = imagesData.files?.[index];
-                      const fileName = file?.name || `photo-${index + 1}.jpg`;
+                  imagesData.previews.map(async (preview, index) => {
+                    // Tentar obter nome do arquivo se disponível
+                    const file = imagesData.files?.[index];
+                    const fileName = file?.name || `photo-${index + 1}.jpg`;
 
-                      return {
-                        preview_url: preview,
-                        original_name: fileName,
-                        temp_file_id: `temp-${Date.now()}-${index}`,
-                        position: index,
-                        base64: preview, // ✅ preview já é base64 (data:image/...)
-                        mime_type: file?.type || "image/jpeg",
-                        size: file?.size || 0,
-                      };
-                    })
-                  )
+                    return {
+                      preview_url: preview,
+                      original_name: fileName,
+                      temp_file_id: `temp-${Date.now()}-${index}`,
+                      position: index,
+                      base64: preview, // ✅ preview já é base64 (data:image/...)
+                      mime_type: file?.type || "image/jpeg",
+                      size: file?.size || 0,
+                    };
+                  })
+                )
                 : [];
 
             console.log(
@@ -958,13 +956,11 @@ const ClientProductPage = ({ id }: { id: string }) => {
                 selected_item: layoutData.name || "Personalizado",
                 price_adjustment: 0,
               },
-              selected_item_label: `${
-                layoutData.name || "Layout Personalizado"
-              }${
-                imageCount > 0
+              selected_item_label: `${layoutData.name || "Layout Personalizado"
+                }${imageCount > 0
                   ? ` (${imageCount} foto${imageCount > 1 ? "s" : ""})`
                   : ""
-              }`,
+                }`,
               text: layoutData.previewUrl,
             });
           }
@@ -1238,98 +1234,111 @@ const ClientProductPage = ({ id }: { id: string }) => {
                   </span>
                 )}
               </div>
+              <div className={cn("flex w-fit items-center gap-2 text-sm bg-neutral-500 text-white mt-4 px-2 py-1 rounded-full",
+                product.production_time &&
+                  product.production_time > 1 ? "" : "bg-green-500"
+
+              )}>
+
+                <Clock className="w-4 h-4" />
+                <span>
+                  {product.production_time && product.production_time > 1
+                    ? `Tempo de produção: ${product.production_time} horas`
+                    : "Produção imediata"}
+                </span>
+              </div>
             </div>
 
             <div className="flex flex-col h-fit overflow-hidden">
               <div className="flex-1 overflow-y-auto space-y-6 pr-2">
                 {components.filter((c) => c.allows_customization).length >
                   0 && (
-                  <div className="space-y-4 border-t pt-4">
-                    <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-                      <span className="text-2xl">🎨</span>
-                      Personalizações Disponíveis
-                    </h3>
+                    <div className="space-y-4 border-t pt-4">
+                      <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                        <span className="text-2xl">🎨</span>
+                        Personalizações Disponíveis
+                      </h3>
 
-                    <div className="space-y-2">
-                      {components
-                        .filter((c) => c.allows_customization)
-                        .map((component) => {
-                          const hasCustomizations =
-                            itemCustomizations[component.id]?.length > 0;
-                          const requiredCount =
-                            component.customizations?.filter(
-                              (c) => c.isRequired
-                            ).length || 0;
-                          const totalCount =
-                            component.customizations?.length || 0;
+                      <div className="space-y-2">
+                        {components
+                          .filter((c) => c.allows_customization)
+                          .map((component) => {
+                            const hasCustomizations =
+                              itemCustomizations[component.id]?.length > 0;
+                            const requiredCount =
+                              component.customizations?.filter(
+                                (c) => c.isRequired
+                              ).length || 0;
+                            const totalCount =
+                              component.customizations?.length || 0;
 
-                          const hasBaseLayout = component.customizations?.some(
-                            (c) => c.type === "BASE_LAYOUT"
-                          );
+                            const hasBaseLayout = component.customizations?.some(
+                              (c) => c.type === "BASE_LAYOUT"
+                            );
 
-                          return (
-                            <Button
-                              key={component.id}
-                              onClick={() => {
-                                if (hasBaseLayout && hasCustomizations) {
-                                  setPreviewComponentId(component.id);
-                                }
-                                setActiveCustomizationModal(component.id);
-                              }}
-                              variant="outline"
-                              className="w-full justify-between h-auto py-3"
-                            >
-                              <div className="flex items-center gap-3">
-                                <div className="w-12 h-12 relative rounded-md overflow-hidden flex-shrink-0">
-                                  <Image
-                                    src={
-                                      getInternalImageUrl(component.image_url) || "/placeholder.png"
-                                    }
-                                    alt={component.name}
-                                    fill
-                                    className="object-cover"
-                                  />
-                                </div>
-                                <div className="text-left">
-                                  <p className="font-medium">
-                                    {component.name}
-                                  </p>
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-xs text-gray-500">
-                                      {totalCount} opç
-                                      {totalCount === 1 ? "ão" : "ões"}{" "}
-                                      disponíve
-                                      {totalCount === 1 ? "l" : "is"}
-                                    </span>
-                                    {requiredCount > 0 && (
-                                      <Badge
-                                        variant="destructive"
-                                        className="ml-2 text-xs text-white"
-                                      >
-                                        {requiredCount} obrigatória
-                                        {requiredCount === 1 ? "" : "s"}
-                                      </Badge>
-                                    )}
+                            return (
+                              <Button
+                                key={component.id}
+                                onClick={() => {
+                                  if (hasBaseLayout && hasCustomizations) {
+                                    setPreviewComponentId(component.id);
+                                  }
+                                  setActiveCustomizationModal(component.id);
+                                }}
+                                variant="outline"
+                                className="w-full justify-between h-auto py-3"
+                              >
+                                <div className="flex items-center gap-3">
+                                  <div className="w-12 h-12 relative rounded-md overflow-hidden flex-shrink-0">
+                                    <Image
+                                      src={
+                                        getInternalImageUrl(component.image_url) || "/placeholder.png"
+                                      }
+                                      alt={component.name}
+                                      fill
+                                      className="object-cover"
+                                    />
+                                  </div>
+                                  <div className="text-left">
+                                    <p className="font-medium">
+                                      {component.name}
+                                    </p>
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-xs text-gray-500">
+                                        {totalCount} opç
+                                        {totalCount === 1 ? "ão" : "ões"}{" "}
+                                        disponíve
+                                        {totalCount === 1 ? "l" : "is"}
+                                      </span>
+                                      {requiredCount > 0 && (
+                                        <Badge
+                                          variant="destructive"
+                                          className="ml-2 text-xs text-white"
+                                        >
+                                          {requiredCount} obrigatória
+                                          {requiredCount === 1 ? "" : "s"}
+                                        </Badge>
+                                      )}
+                                    </div>
                                   </div>
                                 </div>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                {hasCustomizations && (
-                                  <Badge
-                                    variant="default"
-                                    className="bg-green-500"
-                                  >
-                                    ✓ Personalizado
-                                  </Badge>
-                                )}
-                                <ChevronLeft className="w-5 h-5 rotate-180" />
-                              </div>
-                            </Button>
-                          );
-                        })}
+                                <div className="flex items-center gap-2">
+                                  {hasCustomizations && (
+                                    <Badge
+                                      variant="default"
+                                      className="bg-green-500"
+                                    >
+                                      ✓ Personalizado
+                                    </Badge>
+                                  )}
+                                  <ChevronLeft className="w-5 h-5 rotate-180" />
+                                </div>
+                              </Button>
+                            );
+                          })}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
               </div>
             </div>
             <div className="space-y-3">
@@ -1371,8 +1380,8 @@ const ClientProductPage = ({ id }: { id: string }) => {
                     {isItemInCart
                       ? "Já adicionado ao carrinho"
                       : `Adicionar por ${formatCurrency(
-                          totalPriceForQuantity
-                        )}`}
+                        totalPriceForQuantity
+                      )}`}
                   </>
                 )}
               </Button>
@@ -1451,7 +1460,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
                 {product.related_products.map((relatedProduct) => (
                   <ProductCard
                     key={relatedProduct.id}
-                    className="min-w-[150px]"
+                    className="w-[160px] md:w-[240px] flex-none"
                     props={{
                       id: relatedProduct.id,
                       name: relatedProduct.name,
