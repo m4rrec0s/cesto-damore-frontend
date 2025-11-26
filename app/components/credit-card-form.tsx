@@ -3,6 +3,7 @@
 import type React from "react";
 
 import { useState, useEffect } from "react";
+import Image from "next/image";
 import { Card } from "@/app/components/ui/card";
 import { Input } from "@/app/components/ui/input";
 import {
@@ -87,9 +88,6 @@ const detectCardBrand = (cardNumber: string): string => {
     mastercard: /^(5[1-5]|2[2-7])/,
     amex: /^3[47]/,
     elo: /^(4011|4312|4389|4514|4576|5041|5066|5067|6277|6362|6363|6500|6504|6505|6507|6509|6516|6550)/,
-    hipercard: /^(606282|3841)/,
-    diners: /^(36|38|30[0-5])/,
-    discover: /^(6011|65|64[4-9]|622)/,
   };
 
   for (const [brand, pattern] of Object.entries(patterns)) {
@@ -154,14 +152,30 @@ const validateCNPJ = (cnpj: string): boolean => {
   return true;
 };
 
-const cardBrandIcons: Record<string, { label: string; gradient: string }> = {
-  visa: { label: "Visa", gradient: "from-blue-600 to-blue-500" },
-  mastercard: { label: "Mastercard", gradient: "from-red-600 to-orange-500" },
-  amex: { label: "American Express", gradient: "from-cyan-600 to-blue-500" },
-  elo: { label: "Elo", gradient: "from-purple-600 to-pink-500" },
-  hipercard: { label: "Hipercard", gradient: "from-red-600 to-orange-500" },
-  diners: { label: "Diners", gradient: "from-slate-700 to-slate-600" },
-  discover: { label: "Discover", gradient: "from-orange-500 to-yellow-500" },
+const cardBrandIcons: Record<
+  string,
+  { label: string; svgPath?: string; gradient: string }
+> = {
+  visa: {
+    label: "Visa",
+    svgPath: "/visa.svg",
+    gradient: "from-blue-600 to-blue-500",
+  },
+  mastercard: {
+    label: "Mastercard",
+    svgPath: "/mastercard.svg",
+    gradient: "from-red-600 to-orange-500",
+  },
+  amex: {
+    label: "American Express",
+    svgPath: "/american-express.svg",
+    gradient: "from-cyan-600 to-blue-500",
+  },
+  elo: {
+    label: "Elo",
+    svgPath: "/elo.svg",
+    gradient: "from-purple-600 to-pink-500",
+  },
   unknown: { label: "Cartão", gradient: "from-gray-500 to-gray-400" },
 };
 
@@ -351,7 +365,7 @@ export function CreditCardForm({
   const years = Array.from({ length: 15 }, (_, i) => currentYear + i);
 
   return (
-    <Card className="p-8 bg-white border-slate-200 rounded-2xl shadow-md">
+    <Card className="p-8 bg-white border-slate-200 rounded-2xl shadow-md w-full">
       {formError && (
         <motion.div
           initial={{ opacity: 0, y: -10 }}
@@ -386,17 +400,30 @@ export function CreditCardForm({
                   }
                   placeholder="0000 0000 0000 0000"
                   maxLength={19}
-                  className={`pr-40 text-lg tracking-widest font-semibold ${
-                    errors.cardNumber ? "border-red-500" : ""
-                  }`}
+                  className={`pr-40 text-lg tracking-widest font-semibold ${errors.cardNumber ? "border-red-500" : ""
+                    }`}
                 />
                 {cardBrand !== "unknown" && (
                   <motion.div
                     initial={{ scale: 0, opacity: 0 }}
                     animate={{ scale: 1, opacity: 1 }}
-                    className={`absolute right-3 top-1/2 -translate-y-1/2 px-4 py-2 rounded-lg bg-gradient-to-r ${cardBrandIcons[cardBrand].gradient} text-white text-sm font-bold shadow-lg`}
+                    className="absolute right-3 -top-1.5 overflow-hidden"
                   >
-                    {cardBrandIcons[cardBrand].label}
+                    {cardBrandIcons[cardBrand].svgPath ? (
+                      <Image
+                        src={cardBrandIcons[cardBrand].svgPath!}
+                        alt={cardBrandIcons[cardBrand].label}
+                        width={46}
+                        height={25}
+                        className="object-contain"
+                      />
+                    ) : (
+                      <div
+                        className={`px-4 py-2 rounded-lg bg-gradient-to-r ${cardBrandIcons[cardBrand].gradient} text-white text-sm font-bold`}
+                      >
+                        {cardBrandIcons[cardBrand].label}
+                      </div>
+                    )}
                   </motion.div>
                 )}
               </div>

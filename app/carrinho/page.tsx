@@ -9,7 +9,6 @@ import { usePaymentManager } from "@/app/hooks/use-payment-manager";
 import type { CartCustomization } from "@/app/hooks/use-cart";
 import { Card } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
-import { Badge } from "@/app/components/ui/badge";
 import { Label } from "@/app/components/ui/label";
 import { Calendar } from "@/app/components/ui/calendar";
 import { Alert, AlertDescription, AlertTitle } from "@/app/components/ui/alert";
@@ -26,14 +25,12 @@ import {
   CreditCard,
   Loader2,
   AlertCircle,
-  Smartphone,
   MapPin,
   CalendarIcon,
   ShoppingCart,
   CheckCircle2,
   ArrowRight,
   ArrowLeft,
-  Edit2,
   XCircle,
   RefreshCcw,
 } from "lucide-react";
@@ -222,10 +219,10 @@ const CheckoutStepper = ({ currentStep }: { currentStep: CheckoutStep }) => {
               <div className="flex flex-col items-center flex-1">
                 <div
                   className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${isCompleted
-                      ? "bg-green-500 text-white"
-                      : isActive
-                        ? "bg-rose-600 text-white shadow-lg"
-                        : "bg-gray-200 text-gray-500"
+                    ? "bg-green-500 text-white"
+                    : isActive
+                      ? "bg-rose-600 text-white shadow-lg"
+                      : "bg-gray-200 text-gray-500"
                     }`}
                 >
                   {isCompleted ? (
@@ -263,16 +260,12 @@ const ProductCard = ({
   onEditCustomizations,
   isProcessing,
 }: ProductCardProps) => {
-  const layoutCustomization = item.customizations?.find(
-    (c) => c.customization_type === "BASE_LAYOUT"
-  );
-  // const previewUrl = layoutCustomization?.text;
   const hasCustomizations =
     item.customizations && item.customizations.length > 0;
 
   return (
-    <div className="flex gap-4 rounded-2xl bg-white p-5 shadow-sm border border-gray-100 transition-all hover:shadow-md">
-      <div className="relative w-20 h-20 lg:w-24 lg:h-24 flex-shrink-0 rounded-xl overflow-hidden bg-gray-50">
+    <div className="flex gap-6 py-6 border-b border-gray-100 last:border-0">
+      <div className="relative w-24 h-24 flex-shrink-0 rounded-xl overflow-hidden bg-gray-50">
         <Image
           src={getInternalImageUrl(item.product.image_url) || "/placeholder.png"}
           alt={item.product.name}
@@ -282,16 +275,33 @@ const ProductCard = ({
       </div>
 
       <div className="flex flex-1 flex-col justify-between min-w-0">
-        <div>
-          <h3 className="font-semibold text-base mb-1.5 line-clamp-2 text-gray-900">
-            {item.product.name}
-          </h3>
-          <p className="text-sm text-gray-500 mb-2 line-clamp-2">
-            {item.product.description}
-          </p>
+        <div className="flex justify-between items-start gap-4">
+          <div>
+            <h3 className="font-bold text-gray-900 text-lg leading-tight mb-1">
+              {item.product.name}
+            </h3>
+            <p className="text-sm text-gray-500 line-clamp-1">
+              {item.product.description}
+            </p>
+          </div>
+          <button
+            onClick={() =>
+              removeFromCart(
+                item.product_id,
+                item.additional_ids,
+                item.customizations
+              )
+            }
+            disabled={isProcessing}
+            className="text-gray-400 hover:text-red-500 transition-colors p-1"
+          >
+            <Trash2 className="h-5 w-5" />
+          </button>
+        </div>
 
+        <div className="mt-3 space-y-2">
           {item.additionals && item.additionals.length > 0 && (
-            <div className="mb-2 flex flex-wrap gap-1 lg:gap-2">
+            <div className="flex flex-wrap gap-2">
               {item.additionals.map((add) => {
                 const finalPrice = getAdditionalFinalPrice(
                   add.id,
@@ -299,170 +309,89 @@ const ProductCard = ({
                   item.customizations
                 );
                 return (
-                  <Badge
+                  <span
                     key={add.id}
-                    variant="secondary"
-                    className="text-xs flex items-center gap-1 bg-rose-50 text-rose-700 border-rose-200 font-medium"
+                    className="inline-flex items-center px-2 py-1 rounded-md bg-rose-50 text-rose-700 text-xs font-medium"
                   >
-                    + {add.name} (+R$ {finalPrice.toFixed(2)})
-                  </Badge>
+                    + {add.name}
+                  </span>
                 );
               })}
             </div>
           )}
 
           {item.customizations && item.customizations.length > 0 && (
-            <div className="mb-2">
-              <div className="flex items-center justify-between mb-1.5">
-                <span className="text-xs font-semibold text-gray-600">
-                  Personalizações:
-                </span>
-                {hasCustomizations && onEditCustomizations && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => onEditCustomizations(item)}
-                    disabled={isProcessing}
-                    className="h-6 px-2 text-xs text-purple-600 hover:text-purple-700 hover:bg-purple-50"
-                  >
-                    <Edit2 className="h-3 w-3 mr-1" />
-                    Editar
-                  </Button>
-                )}
-              </div>
-              <div className="space-y-1.5">
-                {item.customizations.map((customization) => (
-                  <div
-                    key={customization.customization_id}
-                    className="flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50/50 px-3 py-2 text-xs"
-                  >
-                    <span className="font-semibold text-rose-700">
-                      {customization.title}:
-                    </span>
-                    <span className="flex-1 text-rose-900/80 line-clamp-2">
-                      {formatCustomizationValue(customization)}
-                    </span>
-                    {customization.price_adjustment ? (
-                      <span className="text-emerald-600 font-semibold whitespace-nowrap">
-                        +R$ {customization.price_adjustment.toFixed(2)}
-                      </span>
-                    ) : null}
-                  </div>
-                ))}
-              </div>
+            <div className="space-y-1">
+              {item.customizations.map((customization) => (
+                <div
+                  key={customization.customization_id}
+                  className="text-xs text-gray-600 flex items-center gap-1"
+                >
+                  <span className="font-medium">{customization.title}:</span>
+                  <span className="truncate max-w-[200px]">
+                    {formatCustomizationValue(customization)}
+                  </span>
+                </div>
+              ))}
             </div>
           )}
         </div>
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2 rounded-lg bg-gray-50 border border-gray-200">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() =>
-                updateQuantity(
-                  item.product_id,
-                  item.quantity - 1,
-                  item.additional_ids,
-                  item.customizations
-                )
-              }
-              disabled={isProcessing || item.quantity <= 1}
-              className="h-9 w-9 hover:bg-gray-100 text-gray-700"
-            >
-              <Minus className="h-4 w-4" />
-            </Button>
-            <span className="w-10 text-center text-sm font-semibold text-gray-900">
-              {item.quantity}
-            </span>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() =>
-                updateQuantity(
-                  item.product_id,
-                  item.quantity + 1,
-                  item.additional_ids,
-                  item.customizations
-                )
-              }
-              disabled={isProcessing}
-              className="h-9 w-9 hover:bg-gray-100 text-gray-700"
-            >
-              <Plus className="h-4 w-4" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() =>
-                removeFromCart(
-                  item.product_id,
-                  item.additional_ids,
-                  item.customizations
-                )
-              }
-              disabled={isProcessing}
-              className="h-9 w-9 text-red-500 hover:text-red-600 hover:bg-red-50"
-            >
-              <Trash2 className="h-4 w-4" />
-            </Button>
-          </div>
-          <div className="text-right flex flex-col justify-between">
-            {item.discount && item.discount > 0 ? (
-              <div className="flex flex-col items-end gap-1">
-                <span className="text-xs text-gray-400 line-through">
-                  R${" "}
-                  {(
-                    (item.price ?? 0) * item.quantity +
-                    (item.additionals?.reduce(
-                      (sum: number, add) =>
-                        sum +
-                        getAdditionalFinalPrice(
-                          add.id,
-                          add.price,
-                          item.customizations
-                        ) *
-                        item.quantity,
-                      0
-                    ) || 0)
-                  ).toFixed(2)}
-                </span>
-                <span className="font-bold text-gray-900 text-lg">
-                  R${" "}
-                  {(
-                    (item.effectivePrice ?? item.price) * item.quantity +
-                    (item.additionals?.reduce(
-                      (sum: number, add) =>
-                        sum +
-                        getAdditionalFinalPrice(
-                          add.id,
-                          add.price,
-                          item.customizations
-                        ) *
-                        item.quantity,
-                      0
-                    ) || 0)
-                  ).toFixed(2)}
-                </span>
-              </div>
-            ) : (
-              <span className="font-bold text-gray-900 text-lg">
-                R${" "}
-                {(
-                  (item.effectivePrice ?? item.price) * item.quantity +
-                  (item.additionals?.reduce(
-                    (sum: number, add) =>
-                      sum +
-                      getAdditionalFinalPrice(
-                        add.id,
-                        add.price,
-                        item.customizations
-                      ) *
-                      item.quantity,
-                    0
-                  ) || 0)
-                ).toFixed(2)}
+
+        <div className="flex items-center justify-between mt-4">
+          <div className="flex items-center gap-3">
+            <div className="flex items-center border border-gray-200 rounded-lg p-1">
+              <button
+                onClick={() =>
+                  updateQuantity(
+                    item.product_id,
+                    item.quantity - 1,
+                    item.additional_ids,
+                    item.customizations
+                  )
+                }
+                disabled={isProcessing || item.quantity <= 1}
+                className="w-8 h-8 flex items-center justify-center text-gray-500 hover:bg-gray-100 rounded-md disabled:opacity-50"
+              >
+                <Minus className="h-3 w-3" />
+              </button>
+              <span className="w-8 text-center text-sm font-semibold text-gray-900">
+                {item.quantity}
               </span>
-            )}
+              <button
+                onClick={() =>
+                  updateQuantity(
+                    item.product_id,
+                    item.quantity + 1,
+                    item.additional_ids,
+                    item.customizations
+                  )
+                }
+                disabled={isProcessing}
+                className="w-8 h-8 flex items-center justify-center text-gray-500 hover:bg-gray-100 rounded-md disabled:opacity-50"
+              >
+                <Plus className="h-3 w-3" />
+              </button>
+            </div>
+          </div>
+
+          <div className="text-right">
+            <span className="font-bold text-gray-900 text-lg">
+              R${" "}
+              {(
+                (item.effectivePrice ?? item.price) * item.quantity +
+                (item.additionals?.reduce(
+                  (sum: number, add) =>
+                    sum +
+                    getAdditionalFinalPrice(
+                      add.id,
+                      add.price,
+                      item.customizations
+                    ) *
+                    item.quantity,
+                  0
+                ) || 0)
+              ).toFixed(2)}
+            </span>
           </div>
         </div>
       </div>
@@ -471,8 +400,8 @@ const ProductCard = ({
 };
 
 export default function CarrinhoPage() {
-  const router = useRouter(); // Declare router here
-  const [currentOrderId, setCurrentOrderId] = useState<string | null>(null); // Declare currentOrderId here
+  const router = useRouter();
+  const [currentOrderId, setCurrentOrderId] = useState<string | null>(null);
   const { user, isLoading, login } = useAuth();
   const {
     getCepInfo,
@@ -490,7 +419,6 @@ export default function CarrinhoPage() {
     removeFromCart,
     clearCart,
     setOrderMetadata,
-    // updateCustomizations, // Para implementação futura de edição completa
     createOrder,
     getMinPreparationHours,
     generateTimeSlots,
@@ -498,7 +426,6 @@ export default function CarrinhoPage() {
     getMaxProductionTime,
   } = useCartContext();
 
-  // Hook de gerenciamento de pagamento
   const {
     pendingOrder,
     hasPendingOrder,
@@ -519,70 +446,69 @@ export default function CarrinhoPage() {
   const [isGeneratingPix, setIsGeneratingPix] = useState(false);
 
   const OrderSummary = () => (
-    <Card className="bg-white border shadow-lg rounded-2xl sticky top-6">
-      <div className="p-6 border-b">
-        <h3 className="text-xl font-bold text-gray-900">Resumo do Pedido</h3>
+    <Card className="bg-white border-0 shadow-xl rounded-3xl sticky top-6 overflow-hidden">
+      <div className="bg-gray-900 p-6 text-white">
+        <h3 className="text-xl font-bold">Resumo do Pedido</h3>
+        <p className="text-gray-400 text-sm mt-1">
+          {currentStep === 1
+            ? "Revise seus itens antes de prosseguir"
+            : currentStep === 2
+              ? "Informe os dados de entrega"
+              : "Escolha a forma de pagamento"}
+        </p>
       </div>
-      <div className="p-6 space-y-4">
+
+      <div className="p-6 space-y-6">
         <div className="space-y-3">
           <div className="flex justify-between text-sm">
-            <span className="text-gray-600">Subtotal</span>
-            <span className="font-medium">R$ {cartTotal.toFixed(2)}</span>
+            <span className="text-gray-500">Subtotal</span>
+            <span className="font-bold text-gray-900">R$ {cartTotal.toFixed(2)}</span>
           </div>
           <div className="flex justify-between text-sm">
-            <span className="text-gray-600">Taxa de entrega</span>
-            <span className="font-medium">
+            <span className="text-gray-500">Entrega</span>
+            <span className="font-bold text-gray-900">
               {shippingCost === null
-                ? "Calcular"
+                ? "--"
                 : shippingCost === 0
                   ? "GRÁTIS"
                   : `R$ ${shippingCost.toFixed(2)}`}
             </span>
           </div>
-          {getMaxProductionTime() > 1 && (
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-600">Tempo estimado de produção</span>
-              <span className="font-medium text-gray-900">
-                {getMaxProductionTime()} horas
-              </span>
-            </div>
-          )}
           {discountAmount > 0 && (
             <div className="flex justify-between text-sm">
-              <span className="text-green-600 font-medium">Desconto</span>
-              <span className="text-green-600 font-semibold">
+              <span className="text-green-600">Desconto</span>
+              <span className="text-green-600 font-bold">
                 - R$ {discountAmount.toFixed(2)}
               </span>
             </div>
           )}
         </div>
-        <div className="border-t pt-4">
-          <div className="flex justify-between items-center">
-            <span className="text-lg font-bold">Total</span>
-            <span className="text-2xl font-bold text-rose-600">
+
+        <div className="border-t border-dashed border-gray-200 pt-4">
+          <div className="flex justify-between items-end">
+            <span className="text-gray-500 font-medium">Total</span>
+            <span className="text-3xl font-bold text-gray-900">
               R$ {grandTotal.toFixed(2)}
             </span>
           </div>
         </div>
-        {paymentMethod && (
-          <div className="bg-rose-50 rounded-xl p-4 mt-4">
-            <div className="flex items-center gap-2 text-rose-700 font-medium">
-              {paymentMethod === "pix" ? (
-                <Smartphone className="h-5 w-5" />
-              ) : (
-                <CreditCard className="h-5 w-5" />
-              )}
-              <span className="capitalize">
-                {paymentMethod === "pix" ? "PIX" : "Cartão"}
-              </span>
-              {shippingCost !== null && shippingCost > 0 && (
-                <span className="text-xs">
-                  • Frete R$ {shippingCost.toFixed(2)}
-                </span>
-              )}
-            </div>
-          </div>
-        )}
+
+        <Button
+          onClick={handleNextStep}
+          disabled={
+            isProcessing ||
+            (currentStep === 1 && !canProceedToStep2) ||
+            (currentStep === 2 && !canProceedToStep3) ||
+            (currentStep === 3 && !paymentMethod)
+          }
+          className="w-full bg-rose-600 hover:bg-rose-700 text-white py-6 rounded-xl font-bold text-lg shadow-lg hover:shadow-xl transition-all"
+        >
+          {currentStep === 1
+            ? "Checkout"
+            : currentStep === 2
+              ? "Ir para Pagamento"
+              : "Finalizar Pedido"}
+        </Button>
       </div>
     </Card>
   );
@@ -666,11 +592,9 @@ export default function CarrinhoPage() {
   const handlePaymentSuccess = useCallback(
     async (order: Order) => {
       if (paymentApprovedRef.current) {
-        console.log("⚠️ Pagamento já aprovado, ignorando polling");
         return;
       }
       paymentApprovedRef.current = true;
-      console.log("✅ Pagamento confirmado pelo webhook! orderId=", order.id);
 
       setPaymentStatus("success");
       localStorage.removeItem("pendingOrderId");
@@ -685,7 +609,6 @@ export default function CarrinhoPage() {
     [clearPendingOrder, clearCart]
   );
 
-  // Hook de polling de pagamento
   const {
     status: pollingStatus,
     attempts: pollingAttempts,
@@ -693,11 +616,10 @@ export default function CarrinhoPage() {
   } = usePaymentPolling({
     orderId: currentOrderId,
     enabled: Boolean(currentOrderId && paymentStatus === "pending"),
-    maxAttempts: 60, // 5 minutos
-    intervalMs: 3000, // ⚡ 3 segundos (mais agressivo)
+    maxAttempts: 60,
+    intervalMs: 3000,
     onSuccess: handlePaymentSuccess,
     onFailure: (order) => {
-      console.log("❌ Pagamento rejeitado/cancelado orderId=", order.id);
       setPaymentStatus("failure");
       setPaymentError(
         "Pagamento recusado. Por favor, verifique os dados e tente novamente."
@@ -705,7 +627,6 @@ export default function CarrinhoPage() {
       toast.error("Pagamento recusado. Verifique os dados do pagamento.");
     },
     onTimeout: () => {
-      console.log("⏱️ Timeout ao aguardar confirmação");
       setPaymentError(
         "O tempo de espera expirou. Verifique o status do seu pedido na página 'Meus Pedidos'."
       );
@@ -713,7 +634,6 @@ export default function CarrinhoPage() {
         "Ainda não recebemos a confirmação do pagamento. Você pode acompanhar o status na página de pedidos.",
         { duration: 8000 }
       );
-      // Oferecer opção de verificar pedidos
       setTimeout(() => {
         const shouldRedirect = confirm(
           "Deseja verificar o status do seu pedido agora?"
@@ -723,38 +643,19 @@ export default function CarrinhoPage() {
         }
       }, 2000);
     },
-    onPending: (order) => {
-      console.log(
-        "⏳ Pagamento em processamento... orderId=",
-        order.id,
-        "attempts=",
-        pollingAttempts
-      );
-    },
+    onPending: (order) => { },
   });
 
-  // Handler para navegar para a página de rastreamento do pedido
   const handleTrackOrder = () => {
     router.push("/pedidos");
   };
 
   const sseOnConnected = useCallback(() => {
-    console.log(
-      "✅ Conectado ao webhook SSE para receber atualizações em tempo real"
-    );
-    // Reset contador de desconexões quando conectar com sucesso
     sseDisconnectCountRef.current = 0;
-    // Não parar polling aqui, deixar como fallback
   }, []);
 
   const sseOnDisconnected = useCallback(() => {
     sseDisconnectCountRef.current += 1;
-    console.log(
-      `Disconnected from SSE (${sseDisconnectCountRef.current}/3) - ${sseDisconnectCountRef.current >= 3
-        ? "initiating polling fallback"
-        : "retrying connection"
-      }`
-    );
     if (sseDisconnectCountRef.current >= 3 && !pollingStartedRef.current) {
       pollingStartedRef.current = true;
       startPolling();
@@ -779,11 +680,9 @@ export default function CarrinhoPage() {
   const sseOnPaymentApproved = useCallback(
     (data: unknown) => {
       if (paymentApprovedRef.current) {
-        console.log("⚠️ Pagamento já aprovado, ignorando SSE");
         return;
       }
       paymentApprovedRef.current = true;
-      console.log("✅ Pagamento aprovado via webhook SSE!", data);
       setPaymentStatus("success");
       clearCart();
       clearPendingOrder();
@@ -813,12 +712,9 @@ export default function CarrinhoPage() {
   }, []);
 
   const sseOnPaymentPending = useCallback((data: unknown) => {
-    console.log("⏳ Pagamento pendente via webhook SSE", data);
   }, []);
 
-  // 🔔 Hook de notificações webhook em tempo real (SSE)
   const sseOnPaymentUpdate = useCallback((data: unknown) => {
-    console.log("🔔 SSE Message (onPaymentUpdate):", data);
   }, []);
 
   const { disconnect: disconnectSSE } = useWebhookNotification({
@@ -956,8 +852,6 @@ export default function CarrinhoPage() {
       setCheckingPendingOrder(true);
       try {
         if (hasPendingOrder && pendingOrder) {
-          console.log("🔔 Pedido pendente detectado:", pendingOrder.id);
-
           setCurrentOrderId(pendingOrder.id);
           localStorage.setItem("pendingOrderId", pendingOrder.id);
 
@@ -1042,7 +936,7 @@ export default function CarrinhoPage() {
             pendingOrder.recipient_phone &&
             pendingOrder.delivery_city &&
             pendingOrder.delivery_state;
-
+  
           if (hasAllDelivery) {
             setCurrentStep(3);
           } else {
@@ -1146,16 +1040,6 @@ export default function CarrinhoPage() {
   }, [cartItems, cartTotal]);
 
   const generatePixPayment = useCallback(async () => {
-    console.log("[v0] 💳 Gerando PIX - verificando condições:", {
-      paymentMethod,
-      currentOrderId,
-      pixData: !!pixData,
-      isProcessing,
-      isGeneratingPix,
-      currentStep,
-      pixGeneratedForOrder: pixGeneratedForOrderRef.current,
-    });
-
     if (
       paymentMethod === "pix" &&
       currentOrderId &&
@@ -1165,11 +1049,8 @@ export default function CarrinhoPage() {
       currentStep === 3 &&
       pixGeneratedForOrderRef.current !== currentOrderId
     ) {
-      console.log("[v0] 💳 Iniciando geração PIX...", {
-        orderId: currentOrderId,
-        paymentMethodId: "pix",
-        email: user?.email,
-      });
+      setIsProcessing(true);
+      setIsGeneratingPix(true);
 
       setIsProcessing(true);
       setIsGeneratingPix(true);
@@ -1190,15 +1071,7 @@ export default function CarrinhoPage() {
           payerDocumentType: "CPF" as const,
         };
 
-        console.log("[v0] 📤 Enviando payload PIX:", payload);
-
         const paymentResponse = await createTransparentPayment(payload);
-
-        console.log("[v0] 📥 Resposta PIX recebida:", {
-          success: paymentResponse?.success,
-          hasQrCode: !!paymentResponse?.data?.qr_code,
-          status: paymentResponse?.status,
-        });
 
         if (!paymentResponse?.success) {
           throw new Error(
@@ -1255,15 +1128,10 @@ export default function CarrinhoPage() {
         });
 
         setPaymentStatus(normalizedStatus);
-        pixGeneratedForOrderRef.current = currentOrderId; // Marcar como gerado para este pedido
+        pixGeneratedForOrderRef.current = currentOrderId;
 
-        console.log(
-          "[v0] ✅ PIX gerado com sucesso para ordem:",
-          currentOrderId
-        );
         toast.success("QR Code PIX gerado! Escaneie para pagar.");
       } catch (error) {
-        console.error("[v0] ❌ Erro ao gerar pagamento PIX:", error);
         const errorMessage =
           error instanceof Error ? error.message : "Erro desconhecido";
         setPaymentError(errorMessage);
@@ -1273,7 +1141,6 @@ export default function CarrinhoPage() {
         setIsGeneratingPix(false);
       }
     } else {
-      console.log("[v0] ⚠️ PIX não foi gerado - condições não atendidas");
     }
   }, [
     paymentMethod,
@@ -1779,56 +1646,7 @@ export default function CarrinhoPage() {
                       </div>
                     </Card>
 
-                    {/* Resumo Financeiro */}
-                    <Card className="bg-white p-6 lg:p-8 rounded-2xl shadow-sm border-gray-100">
-                      <h3 className="text-xl font-bold mb-4 text-gray-900">
-                        Resumo do Pedido
-                      </h3>
-                      <div className="space-y-3 text-sm">
-                        <div className="flex justify-between items-center">
-                          <span className="text-gray-600">
-                            {discountAmount > 0
-                              ? "Subtotal dos produtos"
-                              : "Subtotal"}
-                          </span>
-                          <span className="font-semibold text-gray-900">
-                            R$ {originalTotal.toFixed(2)}
-                          </span>
-                        </div>
-                        {discountAmount > 0 && (
-                          <div className="flex justify-between items-center">
-                            <span className="text-green-600 font-medium">
-                              Desconto aplicado
-                            </span>
-                            <span className="text-green-600 font-semibold">
-                              - R$ {discountAmount.toFixed(2)}
-                            </span>
-                          </div>
-                        )}
-                        <div className="border-t border-gray-200 pt-3 mt-3">
-                          <div className="flex justify-between items-center">
-                            <span className="font-bold text-gray-900 text-lg">
-                              Total
-                            </span>
-                            <span className="font-bold text-rose-600 text-2xl">
-                              R$ {cartTotal.toFixed(2)}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    </Card>
-
-                    {/* Botão Próxima Etapa */}
-                    <div className="flex justify-end">
-                      <Button
-                        onClick={handleNextStep}
-                        disabled={isProcessing || !canProceedToStep2}
-                        className="bg-rose-600 hover:bg-rose-700 text-white px-8 py-6 rounded-xl font-bold text-base shadow-lg hover:shadow-xl transition-all"
-                      >
-                        Prosseguir para Entrega
-                        <ArrowRight className="ml-2 h-5 w-5" />
-                      </Button>
-                    </div>
+                    {/* Resumo Financeiro removido daqui pois agora está no OrderSummary lateral */}
                   </motion.div>
                 )}
 
@@ -2354,17 +2172,11 @@ export default function CarrinhoPage() {
                                           "REJECTED" ||
                                           order?.payment?.status === "CANCELLED"
                                         ) {
-                                          console.log(
-                                            "❌ [MANUAL CHECK] Pagamento rejeitado"
-                                          );
                                           setPaymentStatus("failure");
                                           toast.error(
                                             "Pagamento foi rejeitado"
                                           );
                                         } else {
-                                          console.log(
-                                            "⏳ [MANUAL CHECK] Pagamento ainda pendente"
-                                          );
                                           toast.warning(
                                             "Pagamento ainda pendente. Continue aguardando.",
                                             {
@@ -2497,7 +2309,7 @@ export default function CarrinhoPage() {
 
                     {/* Cartão de Crédito Form */}
                     {paymentMethod === "card" && !pixData && (
-                      <Card className="bg-white p-6 lg:p-8 rounded-2xl shadow-sm border-gray-100">
+                      <Card className="bg-white w-full p-6 lg:p-8 rounded-2xl shadow-sm border-gray-100">
                         {/* Aviso se o pedido não foi criado ainda */}
                         {!currentOrderId &&
                           !localStorage.getItem("pendingOrderId") && (
@@ -2532,7 +2344,7 @@ export default function CarrinhoPage() {
                             </Alert>
                           )}
 
-                        <div className="max-w-md mx-auto">
+                        <div className="w-full">
                           <div className="mb-4 text-sm text-gray-700">
                             <div>
                               Valor: <strong>R$ {grandTotal.toFixed(2)}</strong>
@@ -2552,47 +2364,6 @@ export default function CarrinhoPage() {
                         </div>
                       </Card>
                     )}
-
-                    {/* Resumo Final */}
-                    <Card className="bg-gradient-to-br from-rose-50 to-pink-50 p-6 rounded-2xl shadow-sm border-rose-200">
-                      <h3 className="font-bold text-lg mb-4 text-gray-900">
-                        Resumo do Pedido
-                      </h3>
-                      <div className="space-y-2 text-sm">
-                        <div className="flex justify-between">
-                          <span>Subtotal</span>
-                          <span className="font-semibold">
-                            R$ {cartTotal.toFixed(2)}
-                          </span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span>Taxa de entrega</span>
-                          <span className="font-semibold">
-                            {shippingCost === 0
-                              ? "GRÁTIS"
-                              : `R$ ${shippingCost?.toFixed(2)}`}
-                          </span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span>Forma de pagamento</span>
-                          <span className="font-semibold">
-                            {paymentMethod === "pix"
-                              ? "PIX"
-                              : paymentMethod === "card"
-                                ? "Cartão de Crédito"
-                                : "Não selecionado"}
-                          </span>
-                        </div>
-                        <div className="border-t border-rose-300 pt-3 mt-3">
-                          <div className="flex justify-between items-center">
-                            <span className="font-bold text-xl">Total</span>
-                            <span className="font-bold text-rose-600 text-3xl">
-                              R$ {grandTotal.toFixed(2)}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    </Card>
 
                     {/* Botões Finais */}
                     <div className="flex flex-col sm:flex-row justify-between gap-4">

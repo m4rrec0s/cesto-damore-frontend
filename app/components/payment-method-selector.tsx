@@ -2,6 +2,7 @@
 
 import { Card } from "@/app/components/ui/card";
 import { motion } from "framer-motion";
+import Image from "next/image";
 
 interface PaymentMethodSelectorProps {
   selectedMethod: "pix" | "card";
@@ -10,17 +11,7 @@ interface PaymentMethodSelectorProps {
 
 // SVG Icons
 const PixIcon = () => (
-  <svg
-    className="w-8 h-8"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-  >
-    <rect x="3" y="3" width="18" height="18" rx="2" />
-    <path d="M9 9h6v6H9z" />
-    <path d="M9 3v6M15 3v6M9 15v6M15 15v6" />
-  </svg>
+  <Image src="/pix.svg" alt="PIX" width={24} height={24} />
 );
 
 const CardIcon = () => (
@@ -72,11 +63,10 @@ export function PaymentMethodSelector({
             className="relative text-left"
           >
             <Card
-              className={`p-5 h-full cursor-pointer transition-all duration-300 border-2 ${
-                isSelected
+              className={`p-5 h-full cursor-pointer transition-all duration-300 border-2 ${isSelected
                   ? `border-current bg-gradient-to-br ${method.color} bg-opacity-10`
                   : "border-gray-200 hover:border-gray-300"
-              }`}
+                }`}
             >
               {/* Selected Indicator */}
               {isSelected && (
@@ -94,11 +84,10 @@ export function PaymentMethodSelector({
 
               <div className="flex items-start gap-4">
                 <div
-                  className={`p-3 rounded-lg ${
-                    isSelected
+                  className={`p-3 rounded-lg ${isSelected
                       ? `bg-gradient-to-br ${method.color} text-white`
                       : "bg-gray-100 text-gray-600"
-                  }`}
+                    }`}
                 >
                   <Icon />
                 </div>

@@ -63,7 +63,6 @@ export function useWebhookNotification({
 }: UseWebhookNotificationOptions) {
   const eventSourceRef = useRef<EventSource | null>(null);
   const [isConnected, setIsConnected] = useState(false);
-  // Controle para reconexões com backoff exponencial
   const reconnectAttemptsRef = useRef(0);
   const reconnectTimeoutRef = useRef<number | null>(null);
   const connectRef = useRef<(() => void) | null>(null);
@@ -73,21 +72,12 @@ export function useWebhookNotification({
     (event: MessageEvent) => {
       try {
         const data: PaymentUpdateData = JSON.parse(event.data);
-        console.log("📨 SSE Message received:", {
-          type: data.type,
-          orderId: data.orderId,
-          status: data.status || null,
-        });
 
-        // Executar callback genérico
         onPaymentUpdate?.(data);
 
-        // Executar callbacks específicos baseados no tipo
         switch (data.type) {
           case "connected":
-            console.log("✅ SSE Connected to order:", data.orderId);
             setIsConnected(true);
-            // Reset reconnection attempts on successful connect
             reconnectAttemptsRef.current = 0;
             if (reconnectTimeoutRef.current) {
               clearTimeout(reconnectTimeoutRef.current as unknown as number);
@@ -97,9 +87,6 @@ export function useWebhookNotification({
             break;
 
           case "payment_update":
-            console.log("💳 Payment update:", data.status);
-
-            // Callbacks baseados no status do pagamento
             if (data.status === "approved") {
               onPaymentApproved?.(data);
             } else if (
@@ -121,9 +108,7 @@ export function useWebhookNotification({
               onError?.(data.error);
             }
             break;
-
           default:
-            console.log("ℹ️ Unknown SSE message type:", data.type);
         }
       } catch (error) {
         console.error("Error parsing SSE message:", error);
@@ -142,9 +127,7 @@ export function useWebhookNotification({
   const handleError = useCallback(
     (event: Event) => {
       console.error("❌ SSE Error:", event);
-      // Se a conexão foi fechada permanentemente, chamar onDisconnected
       if (eventSourceRef.current?.readyState === EventSource.CLOSED) {
-        console.log("🔌 SSE Connection closed");
         setIsConnected(false);
         onDisconnected?.();
         return;
@@ -153,10 +136,6 @@ export function useWebhookNotification({
       reconnectAttemptsRef.current += 1;
       const attempt = reconnectAttemptsRef.current;
       const backoffMs = Math.min(1000 * 2 ** (attempt - 1), 30000);
-
-      console.warn(
-        `🔁 SSE transient error - agendando reconexão em ${backoffMs}ms (tentativa ${attempt})`
-      );
 
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current as unknown as number);
@@ -167,7 +146,6 @@ export function useWebhookNotification({
         eventSourceRef.current?.close();
         eventSourceRef.current = null;
       } catch {
-        /* ignore */
       }
 
       reconnectTimeoutRef.current = window.setTimeout(() => {
@@ -185,25 +163,20 @@ export function useWebhookNotification({
 
   const connect = useCallback(() => {
     if (!orderId || !enabled) {
-      console.log("⏸️ SSE not enabled or no orderId");
       return;
     }
 
     if (eventSourceRef.current) {
-      console.log("ℹ️ SSE already connected");
       return;
     }
 
     const apiUrl = process.env.NEXT_PUBLIC_API_URL;
     const url = `${apiUrl}/webhooks/notifications/${orderId}`;
 
-    console.log("🔌 Connecting to SSE for orderId:", orderId);
-
     try {
       const eventSource = new EventSource(url);
 
       eventSource.onopen = () => {
-        console.log("✅ SSE connection opened (onopen)");
         setIsConnected(true);
         reconnectAttemptsRef.current = 0;
         if (reconnectTimeoutRef.current) {
@@ -218,7 +191,6 @@ export function useWebhookNotification({
 
       eventSourceRef.current = eventSource;
       lastConnectTimeRef.current = Date.now();
-      console.log("✅ SSE EventSource created");
 
       reconnectAttemptsRef.current = 0;
       if (reconnectTimeoutRef.current) {
@@ -243,10 +215,8 @@ export function useWebhookNotification({
         lastConnectTimeRef.current &&
         Date.now() - lastConnectTimeRef.current < 500
       ) {
-        console.warn("🔁 Suppressing immediate disconnect (recent connect)");
         return;
       }
-      console.log("🔌 Disconnecting SSE");
       eventSourceRef.current.close();
       eventSourceRef.current = null;
       setIsConnected(false);
@@ -260,12 +230,6 @@ export function useWebhookNotification({
   }, [onDisconnected]);
 
   useEffect(() => {
-    console.log(
-      "useWebhookNotification useEffect: orderId=",
-      orderId,
-      "enabled=",
-      enabled
-    );
     if (enabled && orderId) {
       connect();
     } else {
