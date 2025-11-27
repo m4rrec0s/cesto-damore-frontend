@@ -1377,25 +1377,7 @@ class ApiService {
    */
   getLayoutById = async (
     layoutId: string
-  ): Promise<{
-    id: string;
-    name: string;
-    item_type: string;
-    image_url: string;
-    width: number;
-    height: number;
-    slots: Array<{
-      id: string;
-      x: number;
-      y: number;
-      width: number;
-      height: number;
-      rotation?: number;
-      zIndex?: number;
-    }>;
-    created_at: string;
-    updated_at: string;
-  }> => {
+  ): Promise<import("../types/personalization").LayoutBase> => {
     const res = await this.client.get(`/layouts/${layoutId}`);
     return res.data;
   };
