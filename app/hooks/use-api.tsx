@@ -229,6 +229,7 @@ export interface ProductInput {
   image_url?: string | null;
   categories: string[];
   type_id: string;
+  production_time?: number;
 }
 export interface Additional {
   id: string;
@@ -1045,7 +1046,30 @@ class ApiService {
     payload: Partial<ProductInput>,
     imageFile?: File
   ): Promise<Product> => {
-    if (false && imageFile) {
+    if (imageFile) {
+      // Enviar como FormData com imagem
+      const formData = new FormData();
+      if (payload.name) formData.append("name", payload.name);
+      if (payload.description !== undefined)
+        formData.append("description", payload.description);
+      if (payload.price !== undefined)
+        formData.append("price", payload.price.toString());
+      if (payload.categories)
+        formData.append("categories", JSON.stringify(payload.categories));
+      if (payload.type_id) formData.append("type_id", payload.type_id);
+      if (payload.discount !== undefined)
+        formData.append("discount", payload.discount.toString());
+      if (payload.production_time !== undefined)
+        formData.append("production_time", payload.production_time.toString());
+      formData.append("image", imageFile);
+
+      const res = await this.client.post("/products", formData, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+      });
+      this.clearCache("products");
+      return res.data;
     } else {
       const res = await this.client.post("/products", payload);
       this.clearCache("products");
@@ -1070,6 +1094,8 @@ class ApiService {
       if (payload.type_id) formData.append("type_id", payload.type_id);
       if (payload.discount !== undefined)
         formData.append("discount", payload.discount.toString());
+      if (payload.production_time !== undefined)
+        formData.append("production_time", payload.production_time.toString());
       formData.append("image", imageFile);
 
       const res = await this.client.put(`/products/${id}`, formData, {
