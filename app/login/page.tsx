@@ -143,7 +143,7 @@ function LoginForm() {
         <div className="absolute bottom-10 left-10 right-10 p-4">
           <div className="flex flex-col">
             <h2 className="text-5xl font-extrabold text-white drop-shadow-lg mb-3 leading-tight">
-              Cesto d'Amore
+              Cesto d&apos;Amore
             </h2>
             <p className="text-white text-xl max-w-md drop-shadow-md">
               Presenteie quem você ama com os melhores produtos e preços da região.

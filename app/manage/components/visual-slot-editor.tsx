@@ -18,7 +18,6 @@ import {
   ArrowUp,
   ArrowDown,
   RotateCw,
-  Move,
 } from "lucide-react";
 import type { SlotDef } from "@/app/types/personalization";
 
@@ -797,8 +796,8 @@ export default function VisualSlotEditor({
                       <div
                         key={slot.id}
                         className={`p-2 rounded border cursor-pointer hover:bg-muted ${selectedSlot === slot.id
-                            ? "border-primary bg-muted"
-                            : ""
+                          ? "border-primary bg-muted"
+                          : ""
                           }`}
                         onClick={() => setSelectedSlot(slot.id)}
                       >
