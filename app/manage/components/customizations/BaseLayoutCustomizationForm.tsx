@@ -8,8 +8,8 @@ import { Checkbox } from "@/app/components/ui/checkbox";
 import { Badge } from "@/app/components/ui/badge";
 import { AlertCircle, Check } from "lucide-react";
 import { toast } from "sonner";
-import Image from "next/image";
 import { LoadingSpinner } from "@/app/components/LoadingSpinner";
+import { getDirectImageUrl } from "@/app/helpers/drive-normalize";
 
 /**
  * Interface para Layout Base
@@ -236,21 +236,34 @@ export default function BaseLayoutCustomizationForm({
               return (
                 <Card
                   key={layout.id}
-                  className={`p-4 cursor-pointer transition-all hover:shadow-md ${
-                    isSelected
-                      ? "border-purple-500 border-2 bg-purple-50"
-                      : "border-gray-200 hover:border-gray-300"
-                  }`}
+                  className={`p-4 cursor-pointer transition-all hover:shadow-md ${isSelected
+                    ? "border-purple-500 border-2 bg-purple-50"
+                    : "border-gray-200 hover:border-gray-300"
+                    }`}
                   onClick={() => toggleLayout(layout.id)}
                 >
                   {/* Preview Image */}
                   <div className="relative w-full h-40 mb-3 rounded-md overflow-hidden bg-gray-100">
                     {layout.image_url ? (
-                      <Image
-                        src={layout.image_url}
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={(() => {
+                          const url = layout.image_url;
+                          if (!url) return "";
+                          if (url.startsWith("data:")) return url;
+                          if (
+                            url.includes("drive.google.com") ||
+                            url.includes("drive.usercontent.google.com")
+                          ) {
+                            const normalizedUrl = getDirectImageUrl(url);
+                            return `/api/proxy-image?url=${encodeURIComponent(
+                              normalizedUrl
+                            )}`;
+                          }
+                          return url;
+                        })()}
                         alt={layout.name}
-                        fill
-                        className="object-cover"
+                        className="absolute inset-0 w-full h-full object-cover"
                       />
                     ) : (
                       <div className="flex items-center justify-center h-full text-gray-400">
