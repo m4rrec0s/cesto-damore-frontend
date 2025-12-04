@@ -25,15 +25,24 @@ import {
   TableHeader,
   TableRow,
 } from "@/app/components/ui/table";
-import { Plus, Search, Edit2, Trash2, Package, Upload, X } from "lucide-react";
+import {
+  Plus,
+  Search,
+  Edit2,
+  Trash2,
+  Package,
+  Upload,
+  X,
+  DollarSign,
+  Tag,
+  Clock,
+} from "lucide-react";
 import { toast } from "sonner";
 import Image from "next/image";
 import { Textarea } from "@/app/components/ui/textarea";
 import { LoadingSpinner } from "@/app/components/LoadingSpinner";
 import { Pagination } from "@/app/components/ui/pagination";
 import { getInternalImageUrl } from "@/lib/image-helper";
-import { RadioGroup } from "@/app/components/ui/radio-group";
-import { RadioGroupItem } from "@/app/components/ui/radio-group";
 
 interface Item {
   id: string;
@@ -65,7 +74,9 @@ export function ProductsTab() {
   const [items, setItems] = useState<Item[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadingProduct, setLoadingProduct] = useState(false);
-  const [productionMode, setProductionMode] = useState<"immediate" | "custom">("immediate");
+  const [productionMode, setProductionMode] = useState<"immediate" | "custom">(
+    "immediate"
+  );
   const [searchTerm, setSearchTerm] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -146,90 +157,100 @@ export function ProductsTab() {
   };
 
   const handleOpenModal = async (product?: Product) => {
-    if (product) {
-      setShowModal(true);
-      setLoadingProduct(true);
-      setEditingProduct(product);
-      setFormData({
-        name: product.name,
-        description: product.description || "",
-        price: product.price,
-        discount: product.discount || 0,
-        type_id: product.type_id,
-        categories: product.categories.map((c) => c.id),
-        production_time: product.production_time || 0,
-      });
-      setImagePreview(product.image_url || "");
+    try {
+      if (product) {
+        setShowModal(true);
+        setLoadingProduct(true);
+        setEditingProduct(product);
+        setFormData({
+          name: product.name,
+          description: product.description || "",
+          price: product.price,
+          discount: product.discount || 0,
+          type_id: product.type_id,
+          categories: product.categories.map((c) => c.id),
+          production_time: product.production_time || 0,
+        });
+        setImagePreview(product.image_url || "");
 
-      // Set production mode based on time
-      setProductionMode((product.production_time || 0) <= 1 ? "immediate" : "custom");
-
-      // Carregar componentes do produto
-      try {
-        const componentsData = await api.get(
-          `/products/${product.id}/components`
+        // Set production mode based on time
+        setProductionMode(
+          (product.production_time || 0) <= 1 ? "immediate" : "custom"
         );
 
-        const componentsArray = componentsData?.components || [];
+        // Carregar componentes do produto
+        try {
+          const componentsData = await api.get(
+            `/products/${product.id}/components`
+          );
 
-        setComponents(componentsArray);
-        setOriginalComponents(componentsArray);
-      } catch (error) {
-        console.error("Erro ao carregar componentes:", error);
+          const componentsArray = componentsData?.components || [];
+
+          setComponents(componentsArray);
+          setOriginalComponents(componentsArray);
+        } catch (error) {
+          console.error("Erro ao carregar componentes:", error);
+          setComponents([]);
+          setOriginalComponents([]);
+        }
+        setLoadingProduct(false);
+
+        try {
+          const additionalsData = await api.getAdditionalsByProduct(product.id);
+
+          const additionalsArray = (
+            additionalsData as Array<{
+              id: string;
+              name: string;
+              price: number;
+              stock_quantity?: number;
+              image_url?: string;
+            }>
+          ).map((additional) => ({
+            item_id: additional.id,
+            custom_price: additional.price,
+            item: {
+              id: additional.id,
+              name: additional.name,
+              stock_quantity: additional.stock_quantity || 0,
+              base_price: additional.price,
+              image_url: additional.image_url,
+            },
+          }));
+
+          setAdditionals(additionalsArray);
+          setOriginalAdditionals(additionalsArray);
+        } catch (error) {
+          console.error("Erro ao carregar adicionais:", error);
+          setAdditionals([]);
+          setOriginalAdditionals([]);
+        }
+      } else {
+        setShowModal(true);
+        setLoadingProduct(true);
+        setEditingProduct(null);
+        setFormData({
+          name: "",
+          description: "",
+          price: 0,
+          discount: 0,
+          type_id: "",
+          categories: [],
+          production_time: 1, // Default to 1 hour (immediate)
+        });
+        setProductionMode("immediate");
+        setImagePreview("");
         setComponents([]);
-        setOriginalComponents([]);
-      }
-      setLoadingProduct(false);
-
-      try {
-        const additionalsData = await api.getAdditionalsByProduct(product.id);
-
-        const additionalsArray = (
-          additionalsData as Array<{
-            id: string;
-            name: string;
-            price: number;
-            stock_quantity?: number;
-            image_url?: string;
-          }>
-        ).map((additional) => ({
-          item_id: additional.id,
-          custom_price: additional.price,
-          item: {
-            id: additional.id,
-            name: additional.name,
-            stock_quantity: additional.stock_quantity || 0,
-            base_price: additional.price,
-            image_url: additional.image_url,
-          },
-        }));
-
-        setAdditionals(additionalsArray);
-        setOriginalAdditionals(additionalsArray);
-      } catch (error) {
-        console.error("Erro ao carregar adicionais:", error);
         setAdditionals([]);
+        setOriginalComponents([]);
         setOriginalAdditionals([]);
       }
-    } else {
+    } catch (error) {
+      console.error("Erro ao abrir modal do produto:", error);
+      toast.error("Erro ao abrir modal do produto");
       setLoadingProduct(false);
-      setShowModal(false);
-      setEditingProduct(null);
-      setFormData({
-        name: "",
-        description: "",
-        price: 0,
-        discount: 0,
-        type_id: "",
-        categories: [],
-        production_time: 1, // Default to 1 hour (immediate)
-      });
-      setProductionMode("immediate");
-      setImagePreview("");
-      setComponents([]);
-      setAdditionals([]);
-      setOriginalComponents([]);
-      setOriginalAdditionals([]);
+    } finally {
+      setLoadingProduct(false);
     }
   };
 
@@ -337,7 +358,10 @@ export function ProductsTab() {
 
       // Fix: Add production_time to FormData
       if (formData.production_time !== undefined) {
-        productFormData.append("production_time", formData.production_time.toString());
+        productFormData.append(
+          "production_time",
+          formData.production_time.toString()
+        );
       }
 
       let productId: string;
@@ -517,7 +541,7 @@ export function ProductsTab() {
       const errorMessage =
         error instanceof Error && "response" in error
           ? (error as unknown as { response: { data: { error: string } } })
-            .response?.data?.error
+              .response?.data?.error
           : "Erro ao salvar produto";
       toast.error(errorMessage);
     } finally {
@@ -538,7 +562,7 @@ export function ProductsTab() {
       const errorMessage =
         error instanceof Error && "response" in error
           ? (error as unknown as { response: { data: { error: string } } })
-            .response?.data?.error
+              .response?.data?.error
           : "Erro ao excluir produto";
       toast.error(errorMessage);
     } finally {
@@ -594,7 +618,9 @@ export function ProductsTab() {
                   <TableHead>Categorias</TableHead>
                   <TableHead className="text-center">Preço</TableHead>
                   <TableHead className="text-center">Desconto</TableHead>
-                  <TableHead className="text-center">Tempo de produção</TableHead>
+                  <TableHead className="text-center">
+                    Tempo de produção
+                  </TableHead>
                   <TableHead className="text-right">Ações</TableHead>
                 </TableRow>
               </TableHeader>
@@ -609,126 +635,134 @@ export function ProductsTab() {
 
                 {!loading && products.length > 0
                   ? products.map((product) => (
-                    <TableRow key={product.id}>
-                      <TableCell>
-                        {product.image_url ? (
-                          <div className="relative w-12 h-12 rounded-md overflow-hidden">
-                            <Image
-                              src={getInternalImageUrl(product.image_url)}
-                              alt={product.name}
-                              fill
-                              className="object-cover"
-                            />
-                          </div>
-                        ) : (
-                          <div className="w-12 h-12 rounded-md bg-gray-100 flex items-center justify-center">
-                            <Package className="w-6 h-6 text-gray-400" />
-                          </div>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <div>
-                          <p className="font-medium">{product.name}</p>
-                          {product.description && (
-                            <p className="text-xs text-gray-500 truncate max-w-xs">
-                              {product.description}
-                            </p>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline">
-                          {types.find((t) => t.id === product.type_id)
-                            ?.name || "N/A"}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex flex-wrap gap-1">
-                          {product.categories.length > 0 ? (
-                            product.categories.map((cat) => (
-                              <Badge
-                                key={cat.id}
-                                variant="secondary"
-                                className="text-xs"
-                              >
-                                {cat.name}
-                              </Badge>
-                            ))
+                      <TableRow key={product.id}>
+                        <TableCell>
+                          {product.image_url ? (
+                            <div className="relative w-12 h-12 rounded-md overflow-hidden">
+                              <Image
+                                src={getInternalImageUrl(product.image_url)}
+                                alt={product.name}
+                                fill
+                                className="object-cover"
+                              />
+                            </div>
                           ) : (
-                            <span className="text-gray-500 text-xs">
-                              Sem categoria
-                            </span>
+                            <div className="w-12 h-12 rounded-md bg-gray-100 flex items-center justify-center">
+                              <Package className="w-6 h-6 text-gray-400" />
+                            </div>
                           )}
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <p className="font-semibold text-center">
-                          {product.price &&
+                        </TableCell>
+                        <TableCell>
+                          <div>
+                            <p className="font-medium">{product.name}</p>
+                            {product.description && (
+                              <p className="text-xs text-gray-500 truncate max-w-xs">
+                                {product.description}
+                              </p>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline">
+                            {types.find((t) => t.id === product.type_id)
+                              ?.name || "N/A"}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex flex-wrap gap-1">
+                            {product.categories.length > 0 ? (
+                              product.categories.map((cat) => (
+                                <Badge
+                                  key={cat.id}
+                                  variant="secondary"
+                                  className="text-xs"
+                                >
+                                  {cat.name}
+                                </Badge>
+                              ))
+                            ) : (
+                              <span className="text-gray-500 text-xs">
+                                Sem categoria
+                              </span>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <p className="font-semibold text-center">
+                            {product.price &&
                             product.discount &&
                             product.discount > 0 ? (
-                            <>
-                              <del className="text-gray-500">
-                                R$ {product.price.toFixed(2)}
-                              </del>
-                              <br />
-                              <span className="text-green-600 font-bold">
-                                R${" "}
-                                {(
-                                  product.price -
-                                  (product.price * product.discount) / 100
-                                ).toFixed(2)}
-                              </span>
-                            </>
+                              <>
+                                <del className="text-gray-500">
+                                  R$ {product.price.toFixed(2)}
+                                </del>
+                                <br />
+                                <span className="text-green-600 font-bold">
+                                  R${" "}
+                                  {(
+                                    product.price -
+                                    (product.price * product.discount) / 100
+                                  ).toFixed(2)}
+                                </span>
+                              </>
+                            ) : (
+                              `R$ ${product.price.toFixed(2)}`
+                            )}
+                          </p>
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {product.discount && product.discount > 0 ? (
+                            <Badge variant="destructive">
+                              -{product.discount}%
+                            </Badge>
                           ) : (
-                            `R$ ${product.price.toFixed(2)}`
+                            <span className="text-gray-400">-</span>
                           )}
-                        </p>
-                      </TableCell>
-                      <TableCell className="text-center">
-                        {product.discount && product.discount > 0 ? (
-                          <Badge variant="destructive">
-                            -{product.discount}%
-                          </Badge>
-                        ) : (
-                          <span className="text-gray-400">-</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-center">
-                        {product.production_time && product.production_time > 1
-                          ? <Badge variant="secondary">{product.production_time} horas</Badge>
-                          : <Badge className="bg-green-500 text-white">Produção<br />imediata</Badge>
-                        }
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleOpenModal(product)}
-                          >
-                            <Edit2 className="w-4 h-4" />
-                          </Button>
-                          <Button
-                            variant="destructive"
-                            size="sm"
-                            onClick={() => handleDelete(product.id)}
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {product.production_time &&
+                          product.production_time > 1 ? (
+                            <Badge variant="secondary">
+                              {product.production_time} horas
+                            </Badge>
+                          ) : (
+                            <Badge className="bg-green-500 text-white">
+                              Produção
+                              <br />
+                              imediata
+                            </Badge>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleOpenModal(product)}
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              onClick={() => handleDelete(product.id)}
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))
                   : !loading && (
-                    <TableRow>
-                      <TableCell
-                        colSpan={8}
-                        className="text-center py-8 text-gray-500"
-                      >
-                        Nenhum produto encontrado
-                      </TableCell>
-                    </TableRow>
-                  )}
+                      <TableRow>
+                        <TableCell
+                          colSpan={8}
+                          className="text-center py-8 text-gray-500"
+                        >
+                          Nenhum produto encontrado
+                        </TableCell>
+                      </TableRow>
+                    )}
               </TableBody>
             </Table>
           </div>
@@ -742,351 +776,351 @@ export function ProductsTab() {
           />
         </div>
 
-        {showModal && (loadingProduct ? (
-          <LoadingSpinner />
-        ) : (
-          <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-              <div className="p-6">
-                <div className="flex justify-between items-center mb-6">
-                  <h2 className="text-2xl font-bold">
-                    {editingProduct ? "Editar Produto" : "Novo Produto"}
-                  </h2>
-                  <Button variant="ghost" size="sm" onClick={handleCloseModal}>
-                    <X className="w-5 h-5" />
-                  </Button>
+        {showModal && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-xl max-w-5xl w-full max-h-[90vh] overflow-hidden shadow-2xl">
+              {loadingProduct ? (
+                <div className="min-h-[90vh] flex items-center justify-center">
+                  <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-500 border-t-transparent" />
                 </div>
-
-                <form onSubmit={handleSubmit} className="space-y-6">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="name">Nome *</Label>
-                      <Input
-                        id="name"
-                        value={formData.name}
-                        onChange={(e) =>
-                          setFormData({ ...formData, name: e.target.value })
-                        }
-                        required
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="type_id">Tipo *</Label>
-                      <select
-                        id="type_id"
-                        value={formData.type_id}
-                        onChange={(e) =>
-                          setFormData({ ...formData, type_id: e.target.value })
-                        }
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                        required
-                        aria-label="Selecionar tipo de produto"
-                      >
-                        <option value="">Selecione um tipo</option>
-                        {types.map((type) => (
-                          <option key={type.id} value={type.id}>
-                            {type.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
+              ) : (
+                <>
+                  {/* Header Fixo */}
+                  <div className="bg-white border-b px-6 py-4 flex items-center justify-between">
+                    <h2 className="text-xl font-bold text-gray-900">
+                      {editingProduct ? "Editar Produto" : "Novo Produto"}
+                    </h2>
+                    <Button
+                      onClick={handleCloseModal}
+                      className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                    >
+                      <X className="w-5 h-5" />
+                    </Button>
                   </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="description">Descrição</Label>
-                    <Textarea
-                      id="description"
-                      value={formData.description}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          description: e.target.value,
-                        })
-                      }
-                      rows={3}
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="price">Preço *</Label>
-                      <Input
-                        id="price"
-                        type="number"
-                        step="0.01"
-                        value={formData.price}
-                        onChange={(e) =>
-                          setFormData({
-                            ...formData,
-                            price: parseFloat(e.target.value),
-                          })
-                        }
-                        required
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="discount">Desconto (%)</Label>
-                      <Input
-                        id="discount"
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        max="100"
-                        value={formData.discount}
-                        onChange={(e) =>
-                          setFormData({
-                            ...formData,
-                            discount: parseFloat(e.target.value),
-                          })
-                        }
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="production_time">Tempo de produção</Label>
-                      <RadioGroup
-                        value={productionMode}
-                        onValueChange={(value: "immediate" | "custom") => {
-                          setProductionMode(value);
-                          if (value === "immediate") {
-                            setFormData({ ...formData, production_time: 1 });
-                          } else {
-                            // If switching to custom, ensure it's at least 2
-                            if (formData.production_time <= 1) {
-                              setFormData({ ...formData, production_time: 2 });
-                            }
-                          }
-                        }}
-                        className="flex space-x-4 mb-2"
-                      >
-                        <div className="flex items-center space-x-2">
-                          <RadioGroupItem value="immediate" id="production_immediate" />
-                          <Label htmlFor="production_immediate">Produção imediata (1 hora)</Label>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <RadioGroupItem value="custom" id="production_custom" />
-                          <Label htmlFor="production_custom">Personalizado</Label>
-                        </div>
-                      </RadioGroup>
-
-                      {productionMode === "custom" && (
+                  {/* Conteúdo com Scroll */}
+                  <div className="overflow-y-auto max-h-[calc(90vh-140px)] p-6 space-y-6">
+                    {/* Informações Básicas */}
+                    <div className="grid md:grid-cols-2 gap-4">
+                      <div>
+                        <Label className="block text-sm font-medium text-gray-700 mb-1">
+                          Nome *
+                        </Label>
                         <Input
-                          id="production_time"
-                          type="number"
-                          step="1"
-                          min="2"
-                          value={formData.production_time}
-                          onChange={(e) => {
-                            const val = parseInt(e.target.value);
+                          type="text"
+                          value={formData.name}
+                          onChange={(e) =>
+                            setFormData({ ...formData, name: e.target.value })
+                          }
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+                          required
+                        />
+                      </div>
+
+                      <div>
+                        <Label className="block text-sm font-medium text-gray-700 mb-1">
+                          Tipo *
+                        </Label>
+                        <select
+                          title="Tipo de Produto"
+                          value={formData.type_id}
+                          onChange={(e) =>
                             setFormData({
                               ...formData,
-                              production_time: isNaN(val) ? 0 : val,
-                            });
-                          }}
-                          placeholder="Horas de produção"
-                        />
-                      )}
+                              type_id: e.target.value,
+                            })
+                          }
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+                          required
+                        >
+                          <option value="">Selecione</option>
+                          {types.map((type) => (
+                            <option key={type.id} value={type.id}>
+                              {type.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
                     </div>
-                  </div>
 
-                  {/* Visualização do Preço Final */}
-                  {formData.price > 0 && (
-                    <div className="bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-200 rounded-lg p-4">
-                      <div className="flex items-center justify-between">
-                        <div className="space-y-1">
-                          <p className="text-sm font-medium text-gray-600">
-                            Visualização do Preço
-                          </p>
-                          <div className="flex items-center gap-3">
-                            {formData.discount > 0 ? (
-                              <>
-                                <span className="text-lg text-gray-500 line-through">
-                                  R$ {formData.price.toFixed(2)}
-                                </span>
-                                <Badge
-                                  variant="destructive"
-                                  className="text-xs"
-                                >
-                                  -{formData.discount}%
-                                </Badge>
-                                <span className="text-2xl font-bold text-green-600">
-                                  R${" "}
-                                  {(
-                                    formData.price -
-                                    (formData.price * formData.discount) / 100
-                                  ).toFixed(2)}
-                                </span>
-                              </>
-                            ) : (
-                              <span className="text-2xl font-bold text-gray-900">
-                                R$ {formData.price.toFixed(2)}
-                              </span>
-                            )}
-                          </div>
-                          {formData.discount > 0 && (
-                            <p className="text-xs text-green-700 mt-1">
-                              Economia de R${" "}
-                              {(
-                                (formData.price * formData.discount) /
-                                100
-                              ).toFixed(2)}
-                            </p>
-                          )}
+                    <div>
+                      <Label className="block text-sm font-medium text-gray-700 mb-1">
+                        Descrição
+                      </Label>
+                      <Textarea
+                        value={formData.description}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            description: e.target.value,
+                          })
+                        }
+                        rows={3}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition resize-none"
+                      />
+                    </div>
+
+                    {/* Preço e Desconto */}
+                    <div className="grid md:grid-cols-3 gap-4">
+                      <div>
+                        <Label className="block text-sm font-medium text-gray-700 mb-1">
+                          <DollarSign className="w-4 h-4 inline mr-1" />
+                          Preço *
+                        </Label>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          value={formData.price}
+                          onChange={(e) =>
+                            setFormData({
+                              ...formData,
+                              price: parseFloat(e.target.value) || 0,
+                            })
+                          }
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+                          required
+                        />
+                      </div>
+
+                      <div>
+                        <Label className="block text-sm font-medium text-gray-700 mb-1">
+                          <Tag className="w-4 h-4 inline mr-1" />
+                          Desconto (%)
+                        </Label>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          max="100"
+                          value={formData.discount}
+                          onChange={(e) =>
+                            setFormData({
+                              ...formData,
+                              discount: parseFloat(e.target.value) || 0,
+                            })
+                          }
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+                        />
+                      </div>
+
+                      <div>
+                        <Label className="block text-sm font-medium text-gray-700 mb-1">
+                          <Clock className="w-4 h-4 inline mr-1" />
+                          Produção
+                        </Label>
+                        <div className="flex gap-2">
+                          <Button
+                            type="button"
+                            onClick={() => {
+                              setProductionMode("immediate");
+                              setFormData({ ...formData, production_time: 1 });
+                            }}
+                            className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition ${
+                              productionMode === "immediate"
+                                ? "bg-blue-500 text-white"
+                                : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                            }`}
+                          >
+                            Imediato
+                          </Button>
+                          <Button
+                            type="button"
+                            onClick={() => {
+                              setProductionMode("custom");
+                              if (formData.production_time <= 1) {
+                                setFormData({
+                                  ...formData,
+                                  production_time: 2,
+                                });
+                              }
+                            }}
+                            className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition ${
+                              productionMode === "custom"
+                                ? "bg-blue-500 text-white"
+                                : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                            }`}
+                          >
+                            Custom
+                          </Button>
                         </div>
-                        {formData.discount > 0 && (
-                          <div className="text-right">
-                            <p className="text-xs text-gray-500">Preço Final</p>
-                            <p className="text-3xl font-bold text-green-600">
-                              R${" "}
-                              {(
-                                formData.price -
-                                (formData.price * formData.discount) / 100
-                              ).toFixed(2)}
-                            </p>
-                          </div>
+                        {productionMode === "custom" && (
+                          <Input
+                            type="number"
+                            min="2"
+                            value={formData.production_time}
+                            onChange={(e) =>
+                              setFormData({
+                                ...formData,
+                                production_time: parseInt(e.target.value) || 0,
+                              })
+                            }
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg mt-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+                            placeholder="Horas"
+                          />
                         )}
                       </div>
                     </div>
-                  )}
 
-                  <div className="space-y-2">
-                    <Label>Categorias</Label>
-                    <div className="flex flex-wrap gap-2">
-                      {categories.map((cat) => (
-                        <Badge
-                          key={cat.id}
-                          variant={
-                            formData.categories.includes(cat.id)
-                              ? "default"
-                              : "outline"
-                          }
-                          className="cursor-pointer"
-                          onClick={() => handleCategoryToggle(cat.id)}
-                        >
-                          {cat.name}
-                        </Badge>
-                      ))}
+                    {formData.price > 0 && (
+                      <div className="bg-gradient-to-br from-green-50 to-emerald-50 border border-green-200 rounded-xl p-4">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-xs font-medium text-gray-600 mb-1">
+                              Preço Final
+                            </p>
+                            <div className="flex items-center gap-2">
+                              {formData.discount > 0 && (
+                                <span className="text-sm text-gray-500 line-through">
+                                  R$ {formData.price.toFixed(2)}
+                                </span>
+                              )}
+                              <span className="text-2xl font-bold text-green-600">
+                                R${" "}
+                                {(
+                                  formData.price -
+                                  (formData.price * formData.discount) / 100
+                                ).toFixed(2)}
+                              </span>
+                              {formData.discount > 0 && (
+                                <span className="px-2 py-1 bg-red-500 text-white text-xs font-bold rounded">
+                                  -{formData.discount}%
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          {formData.discount > 0 && (
+                            <div className="text-right">
+                              <p className="text-xs text-gray-600">Economia</p>
+                              <p className="text-lg font-bold text-green-600">
+                                R${" "}
+                                {(
+                                  (formData.price * formData.discount) /
+                                  100
+                                ).toFixed(2)}
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Categorias */}
+                    <div>
+                      <Label className="block text-sm font-medium text-gray-700 mb-2">
+                        Categorias
+                      </Label>
+                      <div className="flex flex-wrap gap-2">
+                        {categories.map((cat) => (
+                          <button
+                            key={cat.id}
+                            type="button"
+                            onClick={() => handleCategoryToggle(cat.id)}
+                            className={`px-3 py-1.5 rounded-full text-sm font-medium transition ${
+                              formData.categories.includes(cat.id)
+                                ? "bg-blue-500 text-white"
+                                : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                            }`}
+                          >
+                            {cat.name}
+                          </button>
+                        ))}
+                      </div>
                     </div>
-                  </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="image">Imagem</Label>
-                    <div className="flex items-center gap-4">
-                      <label
-                        htmlFor="image"
-                        className="cursor-pointer inline-flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors"
-                      >
-                        <Upload className="w-4 h-4" />
-                        Escolher Imagem
-                      </label>
-                      <input
-                        id="image"
-                        type="file"
-                        accept="image/*"
-                        onChange={handleImageChange}
-                        className="hidden"
-                      />
-                      {imagePreview && (
-                        <div className="relative w-20 h-20 rounded-md overflow-hidden">
-                          <Image
+                    {/* Imagem */}
+                    <div>
+                      <Label className="block text-sm font-medium text-gray-700 mb-2">
+                        Imagem
+                      </Label>
+                      <div className="flex items-center gap-4">
+                        <Label className="cursor-pointer inline-flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition font-medium text-sm">
+                          <Upload className="w-4 h-4" />
+                          Escolher
+                          <Input
+                            type="file"
+                            accept="image/*"
+                            onChange={handleImageChange}
+                            className="hidden"
+                          />
+                        </Label>
+                        {imagePreview && (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
                             src={imagePreview}
                             alt="Preview"
-                            fill
-                            className="object-cover"
+                            className="w-16 h-16 rounded-lg object-cover"
                           />
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="space-y-4 border-t pt-4 mt-6">
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <Label className="text-lg font-semibold">
-                          Componentes do Produto
-                        </Label>
-                        <p className="text-sm text-gray-500 mt-1">
-                          Defina quais itens são necessários para produzir este
-                          produto. O estoque do produto será calculado
-                          automaticamente.
-                        </p>
+                        )}
                       </div>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={handleAddComponent}
-                      >
-                        <Plus className="w-4 h-4 mr-2" />
-                        Adicionar Item
-                      </Button>
                     </div>
 
-                    {components.length > 0 ? (
-                      <div className="space-y-3">
-                        {components.map((component, index) => {
-                          const availableItems =
-                            getAvailableComponentItems(index);
-                          const selectedItem = items.find(
-                            (item) => item.id === component.item_id
-                          );
+                    {/* Componentes */}
+                    <div className="border-t pt-6">
+                      <div className="flex items-center justify-between mb-4">
+                        <div>
+                          <h3 className="font-semibold text-gray-900">
+                            Componentes
+                          </h3>
+                          <p className="text-xs text-gray-500 mt-0.5">
+                            Itens necessários para produção
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleAddComponent}
+                          className="inline-flex items-center gap-1 px-3 py-1.5 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition text-sm font-medium"
+                        >
+                          <Plus className="w-4 h-4" />
+                          Adicionar
+                        </button>
+                      </div>
 
-                          return (
-                            <div
-                              key={index}
-                              className="flex gap-3 items-start p-4 bg-gray-50 border border-gray-200 rounded-lg hover:border-gray-300 transition-colors"
-                            >
-                              <div className="flex-1 space-y-2">
-                                <Label className="text-sm font-medium">
-                                  Item Componente *
-                                </Label>
-                                <select
-                                  value={component.item_id}
-                                  onChange={(e) =>
-                                    handleComponentChange(
-                                      index,
-                                      "item_id",
-                                      e.target.value
-                                    )
-                                  }
-                                  className={`w-full px-3 py-2 border rounded-md ${!component.item_id
-                                      ? "border-rose-300 bg-rose-50"
-                                      : "border-gray-300"
+                      {components.length > 0 ? (
+                        <div className="space-y-2">
+                          {components.map((component, index) => {
+                            const availableItems =
+                              getAvailableComponentItems(index);
+                            const selectedItem = items.find(
+                              (item) => item.id === component.item_id
+                            );
+
+                            return (
+                              <div
+                                key={index}
+                                className="flex gap-2 items-start p-3 bg-gray-50 rounded-lg border border-gray-200"
+                              >
+                                <div className="flex-1">
+                                  <select
+                                    title="Item do Componente"
+                                    value={component.item_id}
+                                    onChange={(e) =>
+                                      handleComponentChange(
+                                        index,
+                                        "item_id",
+                                        e.target.value
+                                      )
+                                    }
+                                    className={`w-full px-3 py-2 text-sm border rounded-lg outline-none transition ${
+                                      !component.item_id
+                                        ? "border-red-300 bg-red-50"
+                                        : "border-gray-300"
                                     }`}
-                                  aria-label="Selecionar item componente"
-                                >
-                                  <option value="">⚠️ Selecione um item</option>
-                                  {component.item_id && selectedItem && (
-                                    <option
-                                      key={selectedItem.id}
-                                      value={selectedItem.id}
-                                    >
-                                      {selectedItem.name} • R${" "}
-                                      {selectedItem.base_price.toFixed(2)} •
-                                      Estoque: {selectedItem.stock_quantity}
-                                    </option>
-                                  )}
-                                  {availableItems.map((item) => (
-                                    <option key={item.id} value={item.id}>
-                                      {item.name} • R${" "}
-                                      {item.base_price.toFixed(2)} • Estoque:{" "}
-                                      {item.stock_quantity}
-                                    </option>
-                                  ))}
-                                </select>
-                                {!component.item_id && (
-                                  <p className="text-xs text-rose-600">
-                                    Selecione um item antes de salvar
-                                  </p>
-                                )}
-                              </div>
-
-                              <div className="w-32 space-y-2">
-                                <Label className="text-sm font-medium">
-                                  Qtd. Necessária *
-                                </Label>
+                                  >
+                                    <option value="">Selecione um item</option>
+                                    {component.item_id && selectedItem && (
+                                      <option value={selectedItem.id}>
+                                        {selectedItem.name} • R${" "}
+                                        {selectedItem.base_price.toFixed(2)}
+                                      </option>
+                                    )}
+                                    {availableItems.map((item) => (
+                                      <option key={item.id} value={item.id}>
+                                        {item.name} • R${" "}
+                                        {item.base_price.toFixed(2)}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </div>
                                 <Input
                                   type="number"
                                   min="1"
@@ -1098,157 +1132,96 @@ export function ProductsTab() {
                                       e.target.value
                                     )
                                   }
-                                  className="text-center font-semibold"
+                                  className="w-20 px-3 py-2 text-sm text-center font-semibold border border-gray-300 rounded-lg outline-none"
                                 />
-                              </div>
-
-                              <div className="pt-7">
                                 <Button
                                   type="button"
-                                  variant="ghost"
-                                  size="sm"
                                   onClick={() => handleRemoveComponent(index)}
-                                  className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                                  className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition"
                                 >
                                   <Trash2 className="w-4 h-4" />
                                 </Button>
                               </div>
-                            </div>
-                          );
-                        })}
-
-                        <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
-                          <p className="text-sm text-blue-800">
-                            💡 <strong>Dica:</strong> O estoque do produto será
-                            calculado automaticamente com base na
-                            disponibilidade dos componentes.
-                            {components.length > 0 &&
-                              !components.every((c) => c.item_id) && (
-                                <span className="block mt-1 text-rose-700 font-medium">
-                                  ⚠️ Selecione um item para cada componente
-                                  antes de salvar.
-                                </span>
-                              )}
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <div className="text-center py-8 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
+                          <Package className="w-10 h-10 mx-auto mb-2 text-gray-400" />
+                          <p className="text-sm text-gray-600">
+                            Nenhum componente
                           </p>
                         </div>
-                      </div>
-                    ) : (
-                      <div className="text-center py-8 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
-                        <Package className="w-12 h-12 mx-auto mb-3 text-gray-400" />
-                        <p className="text-gray-700 font-medium">
-                          Nenhum componente adicionado
-                        </p>
-                        <p className="text-sm text-gray-500 mt-1 mb-4">
-                          Adicione itens que compõem este produto
-                        </p>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={handleAddComponent}
-                        >
-                          <Plus className="w-4 h-4 mr-2" />
-                          Adicionar Primeiro Item
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Seção de Adicionais */}
-                  <div className="space-y-4 border-t pt-4 mt-6">
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <Label className="text-lg font-semibold">
-                          Adicionais do Produto
-                        </Label>
-                        <p className="text-sm text-gray-500 mt-1">
-                          Defina itens opcionais que podem ser adicionados ao
-                          produto com preços personalizados diferentes do valor
-                          base.
-                        </p>
-                      </div>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={handleAddAdditional}
-                      >
-                        <Plus className="w-4 h-4 mr-2" />
-                        Adicionar Adicional
-                      </Button>
+                      )}
                     </div>
 
-                    {additionals.length > 0 ? (
-                      <div className="space-y-3">
-                        {additionals.map((additional, index) => {
-                          const availableItems =
-                            getAvailableAdditionalItems(index);
-                          const selectedItem = items.find(
-                            (item) => item.id === additional.item_id
-                          );
+                    {/* Adicionais */}
+                    <div className="border-t pt-6">
+                      <div className="flex items-center justify-between mb-4">
+                        <div>
+                          <h3 className="font-semibold text-gray-900">
+                            Adicionais
+                          </h3>
+                          <p className="text-xs text-gray-500 mt-0.5">
+                            Itens opcionais com preços customizados
+                          </p>
+                        </div>
+                        <Button
+                          type="button"
+                          onClick={handleAddAdditional}
+                          className="inline-flex items-center gap-1 px-3 py-1.5 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition text-sm font-medium"
+                        >
+                          <Plus className="w-4 h-4" />
+                          Adicionar
+                        </Button>
+                      </div>
 
-                          return (
-                            <div
-                              key={index}
-                              className="flex gap-3 items-start p-4 bg-gray-50 border border-gray-200 rounded-lg hover:border-gray-300 transition-colors"
-                            >
-                              <div className="flex-1 space-y-2">
-                                <Label className="text-sm font-medium">
-                                  Item Adicional *
-                                </Label>
-                                <select
-                                  value={additional.item_id}
-                                  onChange={(e) =>
-                                    handleAdditionalChange(
-                                      index,
-                                      "item_id",
-                                      e.target.value
-                                    )
-                                  }
-                                  className={`w-full px-3 py-2 border rounded-md ${!additional.item_id
-                                      ? "border-rose-300 bg-rose-50"
-                                      : "border-gray-300"
+                      {additionals.length > 0 ? (
+                        <div className="space-y-2">
+                          {additionals.map((additional, index) => {
+                            const availableItems =
+                              getAvailableAdditionalItems(index);
+                            const selectedItem = items.find(
+                              (item) => item.id === additional.item_id
+                            );
+
+                            return (
+                              <div
+                                key={index}
+                                className="flex gap-2 items-start p-3 bg-gray-50 rounded-lg border border-gray-200"
+                              >
+                                <div className="flex-1">
+                                  <select
+                                    title="Item do Adicional"
+                                    value={additional.item_id}
+                                    onChange={(e) =>
+                                      handleAdditionalChange(
+                                        index,
+                                        "item_id",
+                                        e.target.value
+                                      )
+                                    }
+                                    className={`w-full px-3 py-2 text-sm border rounded-lg outline-none transition ${
+                                      !additional.item_id
+                                        ? "border-red-300 bg-red-50"
+                                        : "border-gray-300"
                                     }`}
-                                  aria-label="Selecionar item adicional"
-                                >
-                                  <option value="">⚠️ Selecione um item</option>
-                                  {additional.item_id && selectedItem && (
-                                    <option
-                                      key={selectedItem.id}
-                                      value={selectedItem.id}
-                                    >
-                                      {selectedItem.name} • Preço Base: R${" "}
-                                      {selectedItem.base_price.toFixed(2)}
-                                    </option>
-                                  )}
-                                  {availableItems.map((item) => (
-                                    <option key={item.id} value={item.id}>
-                                      {item.name} • Preço Base: R${" "}
-                                      {item.base_price.toFixed(2)}
-                                    </option>
-                                  ))}
-                                </select>
-                                {!additional.item_id && (
-                                  <p className="text-xs text-rose-600">
-                                    Selecione um item antes de salvar
-                                  </p>
-                                )}
-                                {selectedItem &&
-                                  additional.custom_price !==
-                                  selectedItem.base_price && (
-                                    <p className="text-xs text-blue-600">
-                                      💡 Preço customizado: R${" "}
-                                      {additional.custom_price.toFixed(2)}{" "}
-                                      (Base: R${" "}
-                                      {selectedItem.base_price.toFixed(2)})
-                                    </p>
-                                  )}
-                              </div>
-
-                              <div className="w-40 space-y-2">
-                                <Label className="text-sm font-medium">
-                                  Preço Personalizado *
-                                </Label>
+                                  >
+                                    <option value="">Selecione um item</option>
+                                    {additional.item_id && selectedItem && (
+                                      <option value={selectedItem.id}>
+                                        {selectedItem.name} • Base: R${" "}
+                                        {selectedItem.base_price.toFixed(2)}
+                                      </option>
+                                    )}
+                                    {availableItems.map((item) => (
+                                      <option key={item.id} value={item.id}>
+                                        {item.name} • Base: R${" "}
+                                        {item.base_price.toFixed(2)}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </div>
                                 <Input
                                   type="number"
                                   min="0"
@@ -1261,81 +1234,54 @@ export function ProductsTab() {
                                       e.target.value
                                     )
                                   }
-                                  className="text-center font-semibold"
+                                  className="w-28 px-3 py-2 text-sm text-center font-semibold border border-gray-300 rounded-lg outline-none"
                                   placeholder="0.00"
                                 />
-                              </div>
-
-                              <div className="pt-7">
                                 <Button
                                   type="button"
-                                  variant="ghost"
-                                  size="sm"
                                   onClick={() => handleRemoveAdditional(index)}
-                                  className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                                  className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition"
                                 >
                                   <Trash2 className="w-4 h-4" />
                                 </Button>
                               </div>
-                            </div>
-                          );
-                        })}
-
-                        <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
-                          <p className="text-sm text-blue-800">
-                            💡 <strong>Dica:</strong> O preço personalizado
-                            permite que você cobre um valor diferente do preço
-                            base do item quando ele for vendido como adicional
-                            deste produto.
-                            {additionals.length > 0 &&
-                              !additionals.every((a) => a.item_id) && (
-                                <span className="block mt-1 text-rose-700 font-medium">
-                                  ⚠️ Selecione um item para cada adicional antes
-                                  de salvar.
-                                </span>
-                              )}
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <div className="text-center py-8 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
+                          <Package className="w-10 h-10 mx-auto mb-2 text-gray-400" />
+                          <p className="text-sm text-gray-600">
+                            Nenhum adicional
                           </p>
                         </div>
-                      </div>
-                    ) : (
-                      <div className="text-center py-8 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
-                        <Package className="w-12 h-12 mx-auto mb-3 text-gray-400" />
-                        <p className="text-gray-700 font-medium">
-                          Nenhum adicional configurado
-                        </p>
-                        <p className="text-sm text-gray-500 mt-1 mb-4">
-                          Adicione itens opcionais com preços personalizados
-                        </p>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={handleAddAdditional}
-                        >
-                          <Plus className="w-4 h-4 mr-2" />
-                          Adicionar Primeiro Adicional
-                        </Button>
-                      </div>
-                    )}
+                      )}
+                    </div>
                   </div>
 
-                  <div className="flex justify-end gap-3 pt-4 border-t">
+                  {/* Footer Fixo */}
+                  <div className="bg-white border-t px-6 py-4 flex justify-end gap-3">
                     <Button
                       type="button"
-                      variant="outline"
                       onClick={handleCloseModal}
+                      className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition font-medium"
                     >
                       Cancelar
                     </Button>
-                    <Button type="submit" disabled={loading}>
-                      {loading ? "Salvando..." : "Salvar Produto"}
+                    <Button
+                      type="button"
+                      onClick={handleSubmit}
+                      disabled={loading}
+                      className="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {loading ? "Salvando..." : "Salvar"}
                     </Button>
                   </div>
-                </form>
-              </div>
+                </>
+              )}
             </div>
           </div>
-        ))}
+        )}
       </CardContent>
     </Card>
   );

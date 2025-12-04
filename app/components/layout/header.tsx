@@ -25,6 +25,7 @@ import { useAuth } from "../../hooks/use-auth";
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { CartSheet } from "../cart-sheet";
+import { useCartSheet } from "./app-wrapper";
 import {
   Dialog,
   DialogHeader,
@@ -37,7 +38,7 @@ import {
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "../ui/sheet";
 
 export function SiteHeader() {
-  const [isCartOpen, setIsCartOpen] = useState(false);
+  const { isOpen: isCartOpen, setIsOpen: setIsCartOpen } = useCartSheet();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
   const [isClient, setIsClient] = useState(false);

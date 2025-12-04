@@ -11,6 +11,7 @@ export interface CartCustomization extends CustomizationValue {
   price_adjustment?: number;
   selected_option_label?: string;
   selected_item_label?: string;
+  label_selected?: string;
 }
 
 interface OrderAdditionalItem {
@@ -92,10 +93,14 @@ const serializeCustomizations = (customizations?: CartCustomization[]) => {
     selected_option: customization.selected_option || null,
     selected_item: customization.selected_item
       ? {
-        original_item: customization.selected_item.original_item,
-        selected_item: customization.selected_item.selected_item,
-      }
+          original_item: customization.selected_item.original_item,
+          selected_item: customization.selected_item.selected_item,
+        }
       : null,
+    // ✅ Include label fields for BASE_LAYOUT duplicate detection
+    label_selected: customization.label_selected || null,
+    selected_item_label: customization.selected_item_label || null,
+    selected_option_label: customization.selected_option_label || null,
     photos:
       customization.photos?.map(
         (photo) =>
@@ -136,7 +141,7 @@ const calculateCustomizationTotal = (
   );
 };
 
-export function useCart(): {
+interface CartContextType {
   cart: CartState;
   addToCart: (
     productId: string,
@@ -236,7 +241,9 @@ export function useCart(): {
   orderMetadata: Record<string, unknown>;
   setOrderMetadata: (metadata: Record<string, unknown>) => void;
   getMaxProductionTime: () => number;
-} {
+}
+
+export function useCart(): CartContextType {
   const api = useApi();
   const { user } = useAuth();
 
@@ -298,6 +305,8 @@ export function useCart(): {
     if (typeof window === "undefined") return null;
     return localStorage.getItem("pendingOrderId");
   });
+
+  const isInitializedRef = useRef<boolean>(false);
 
   const calculateTotals = useCallback((items: CartItem[]): CartState => {
     const safeItems = Array.isArray(items) ? items : [];
@@ -376,11 +385,11 @@ export function useCart(): {
             const additionals =
               orderItem.additionals && orderItem.additionals.length > 0
                 ? await Promise.all(
-                  orderItem.additionals.map(
-                    (add: { additional_id: string }) =>
-                      api.getAdditional(add.additional_id)
+                    orderItem.additionals.map(
+                      (add: { additional_id: string }) =>
+                        api.getAdditional(add.additional_id)
+                    )
                   )
-                )
                 : [];
 
             const customizations: CartCustomization[] = [];
@@ -409,6 +418,8 @@ export function useCart(): {
                       price_adjustment: data.price_adjustment || 0,
                       selected_option: data.selected_option,
                       selected_option_label: data.selected_option_label,
+                      label_selected:
+                        data.label_selected || data.selected_option_label,
                     });
                   } else if (data.customization_type === "IMAGES") {
                     customizations.push({
@@ -418,6 +429,21 @@ export function useCart(): {
                       is_required: false,
                       price_adjustment: data.price_adjustment || 0,
                       photos: data.photos || [],
+                    });
+                  } else if (data.customization_type === "BASE_LAYOUT") {
+                    customizations.push({
+                      customization_id: customization.customization_id,
+                      title: data.title || "Layout",
+                      customization_type: "BASE_LAYOUT",
+                      is_required: false,
+                      price_adjustment: data.price_adjustment || 0,
+                      text: data.text || "",
+                      selected_option: data.selected_option,
+                      selected_option_label: data.selected_option_label,
+                      label_selected:
+                        data.label_selected ||
+                        data.selected_item_label ||
+                        data.selected_option_label,
                     });
                   }
                 } catch (error) {
@@ -470,9 +496,17 @@ export function useCart(): {
           const updatedCart = calculateTotals(cartItems);
           setCart(updatedCart);
           setPendingOrderId(pendingOrder.id);
+
+          // ✅ Marcar como inicializado APÓS carregar o pedido
+          isInitializedRef.current = true;
+        } else {
+          // ✅ Mesmo sem pedido pendente, marcar como inicializado
+          isInitializedRef.current = true;
         }
       } catch (error) {
         console.error("Erro ao carregar pedido pendente:", error);
+        // ✅ Mesmo com erro, marcar como inicializado para não bloquear o app
+        isInitializedRef.current = true;
       }
     };
 
@@ -498,26 +532,54 @@ export function useCart(): {
           photos: custom.photos,
           selected_option: custom.selected_option,
           selected_item: custom.selected_item,
+          // ✅ CRITICAL: Include all label fields for BASE_LAYOUT and other types
+          selected_option_label: custom.selected_option_label,
+          selected_item_label: custom.selected_item_label,
+          label_selected: custom.label_selected,
+          price_adjustment: custom.price_adjustment,
         },
       })),
     }));
   }, []);
 
+  const syncLockRef = useRef<boolean>(false);
+
   const syncCartToBackend = useCallback(
     async (currentCart: CartState) => {
       if (!user) return;
 
+      if (!isInitializedRef.current) {
+        return;
+      }
+
+      if (syncLockRef.current) {
+        return;
+      }
+
+      syncLockRef.current = true;
       try {
         const itemsPayload = cartItemsToOrderItems(currentCart.items);
 
         if (itemsPayload.length === 0) {
           if (pendingOrderId) {
-            await api.deleteOrder(pendingOrderId);
-            setPendingOrderId(null);
-            setOrderMetadata({
-              send_anonymously: false,
-              complement: undefined,
-            });
+            try {
+              const serverOrder = await api.getOrder(pendingOrderId);
+              const status = serverOrder?.status;
+              if (status && (status === "PENDING" || status === "pending")) {
+                await api.deleteOrder(pendingOrderId);
+                setPendingOrderId(null);
+                setOrderMetadata({
+                  send_anonymously: false,
+                  complement: undefined,
+                });
+              } else {
+              }
+            } catch (error) {
+              console.error(
+                "Erro ao verificar/deletar pedido pendente:",
+                error
+              );
+            }
           }
           return;
         }
@@ -590,9 +652,12 @@ export function useCart(): {
               "Erro ao sincronizar o carrinho com o servidor. Tente novamente mais tarde."
             );
           }
-        } catch (e: unknown) {
+        } catch {
           // ignore
         }
+      } finally {
+        // ✅ Sempre liberar o lock
+        syncLockRef.current = false;
       }
     },
     [
@@ -714,32 +779,38 @@ export function useCart(): {
 
                   const customizations = item.customizations
                     ? item.customizations.map((c) => {
-                      const parsed = (() => {
-                        try {
-                          return JSON.parse(c.value || "{}") as Record<
-                            string,
-                            unknown
-                          >;
-                        } catch {
-                          return {};
-                        }
-                      })();
+                        const parsed = (() => {
+                          try {
+                            return JSON.parse(c.value || "{}") as Record<
+                              string,
+                              unknown
+                            >;
+                          } catch {
+                            return {};
+                          }
+                        })();
 
-                      return {
-                        ...parsed,
-                        customization_id: c.customization_id,
-                        title: (parsed.title as string) || undefined,
-                      };
-                    })
+                        return {
+                          ...parsed,
+                          customization_id: c.customization_id,
+                          title: (parsed.title as string) || undefined,
+                        };
+                      })
                     : undefined;
 
                   return {
                     product_id: item.product_id,
                     quantity: item.quantity,
                     price: item.price,
+                    // If server returns an effectivePrice already computed, use it.
                     effectivePrice:
-                      (item.effectivePrice || item.price) +
-                      (item.customization_total || 0),
+                      item.effectivePrice !== undefined
+                        ? item.effectivePrice
+                        : Number(
+                            (
+                              item.price + (item.customization_total || 0)
+                            ).toFixed(2)
+                          ),
                     additionals,
                     customizations,
                     product: item.product,
@@ -830,40 +901,44 @@ export function useCart(): {
             (item) =>
               item.product_id === productId &&
               serializeAdditionals(item.additional_ids) ===
-              targetAdditionalsKey &&
+                targetAdditionalsKey &&
               serializeAdditionalColors(item.additional_colors) ===
-              targetColorsKey &&
+                targetColorsKey &&
               serializeCustomizations(item.customizations) ===
-              targetCustomizationsKey
+                targetCustomizationsKey
           );
 
-          let newItems: CartItem[];
+          let newItems: CartItem[] = [...currentItems];
           if (existingIndex >= 0) {
             newItems = [...currentItems];
-            newItems[existingIndex].quantity += quantity;
+            // Update existing item
+            const updatedItem = { ...newItems[existingIndex] };
+            updatedItem.quantity += quantity;
             const existingBaseEffective =
-              newItems[existingIndex].price *
-              (1 - (newItems[existingIndex].discount || 0) / 100);
-            newItems[existingIndex].effectivePrice = Number(
+              updatedItem.price * (1 - (updatedItem.discount || 0) / 100);
+            updatedItem.effectivePrice = Number(
               (existingBaseEffective + customizationTotal).toFixed(2)
             );
-            newItems[existingIndex].customization_total = customizationTotal;
-            newItems[existingIndex].customizations =
+            updatedItem.customization_total = customizationTotal;
+            updatedItem.customizations =
               customizationEntries.length > 0
-                ? cloneCustomizations(customizationEntries)
+                ? customizationEntries
                 : undefined;
+            newItems[existingIndex] = updatedItem;
           } else {
-            newItems = [...currentItems, newItem];
+            // Push new item
+            newItems.push(newItem);
           }
 
           const updatedCart = calculateTotals(newItems);
-          // Sincronizar com backend (se aplicável)
           debouncedSync(updatedCart);
           return updatedCart;
         });
+
+        toast.success("Produto adicionado ao carrinho!");
       } catch (error) {
-        console.error("Erro ao adicionar produto ao carrinho:", error);
-        throw error;
+        console.error("Erro ao adicionar ao carrinho:", error);
+        toast.error("Erro ao adicionar produto ao carrinho");
       }
     },
     [api, calculateTotals, debouncedSync]
@@ -876,6 +951,9 @@ export function useCart(): {
       customizations?: CartCustomization[],
       additionalColors?: Record<string, string>
     ) => {
+      // ✅ OPTIMISTIC UPDATE: Store the item being removed for potential rollback
+      let removedItem: CartItem | null = null;
+
       setCart((prevCart) => {
         const currentItems = Array.isArray(prevCart.items)
           ? prevCart.items
@@ -885,23 +963,96 @@ export function useCart(): {
         const targetColors = serializeAdditionalColors(additionalColors);
         const targetCustomizations = serializeCustomizations(customizations);
 
+        // Find the item being removed for potential rollback
+        removedItem =
+          currentItems.find(
+            (item) =>
+              item.product_id === productId &&
+              serializeAdditionals(item.additional_ids) === targetAdditionals &&
+              serializeAdditionalColors(item.additional_colors) ===
+                targetColors &&
+              serializeCustomizations(item.customizations) ===
+                targetCustomizations
+          ) || null;
+
         const newItems = currentItems.filter(
           (item) =>
             !(
               item.product_id === productId &&
               serializeAdditionals(item.additional_ids) === targetAdditionals &&
               serializeAdditionalColors(item.additional_colors) ===
-              targetColors &&
+                targetColors &&
               serializeCustomizations(item.customizations) ===
-              targetCustomizations
+                targetCustomizations
             )
         );
         const updatedCart = calculateTotals(newItems);
-        debouncedSync(updatedCart);
+
+        // ✅ OPTIMISTIC: Sync immediately without debounce for deletions
+        void (async () => {
+          try {
+            await syncCartToBackend(updatedCart);
+
+            // If cart is empty and we have a pending order, delete it from backend
+            if (updatedCart.items.length === 0 && pendingOrderId) {
+              try {
+                const serverOrder = await api.getOrder(pendingOrderId);
+                const status = serverOrder?.status;
+                if (status && (status === "PENDING" || status === "pending")) {
+                  // ✅ EXPLICITLY DELETE the pending order from backend
+                  try {
+                    await api.deleteOrder(pendingOrderId);
+                    console.log(
+                      `✅ [removeFromCart] Pedido rascunho ${pendingOrderId} deletado`
+                    );
+                  } catch (deleteErr) {
+                    console.error(
+                      `❌ [removeFromCart] Erro ao deletar pedido rascunho ${pendingOrderId}:`,
+                      deleteErr
+                    );
+                    // Even if delete fails, clear the local pending order
+                    // so it doesn't get stuck
+                  }
+                  setPendingOrderId(null);
+                  if (typeof window !== "undefined") {
+                    localStorage.removeItem("pendingOrderId");
+                  }
+                  setOrderMetadata({
+                    send_anonymously: false,
+                    complement: undefined,
+                  });
+                }
+              } catch (err) {
+                console.error(
+                  "Erro ao verificar pedido pendente ao remover item do carrinho:",
+                  err
+                );
+              }
+            }
+          } catch (err) {
+            // ✅ ROLLBACK: If sync fails, restore the item
+            console.error("Erro ao sincronizar remoção com backend:", err);
+            if (removedItem) {
+              setCart((prev) => {
+                const restoredItems = [...prev.items, removedItem!];
+                toast.error("Erro ao remover item. Tente novamente.");
+                return calculateTotals(restoredItems);
+              });
+            }
+          }
+        })();
+
         return updatedCart;
       });
     },
-    [calculateTotals, debouncedSync]
+    [
+      calculateTotals,
+      syncCartToBackend,
+      api,
+      pendingOrderId,
+      setPendingOrderId,
+      setOrderMetadata,
+    ]
   );
 
   const updateQuantity = useCallback(
@@ -936,7 +1087,7 @@ export function useCart(): {
             item.product_id === productId &&
             serializeAdditionals(item.additional_ids) === targetAdditionals &&
             serializeCustomizations(item.customizations) ===
-            targetCustomizations &&
+              targetCustomizations &&
             serializeAdditionalColors(item.additional_colors) === targetColors
           ) {
             return { ...item, quantity };
@@ -978,7 +1129,7 @@ export function useCart(): {
             item.product_id === productId &&
             serializeAdditionals(item.additional_ids) === targetAdditionals &&
             serializeCustomizations(item.customizations) ===
-            targetOldCustomizations &&
+              targetOldCustomizations &&
             serializeAdditionalColors(item.additional_colors) === targetColors
         );
 
@@ -1159,7 +1310,8 @@ export function useCart(): {
       setPendingOrderId(null);
       try {
         if (typeof window !== "undefined") {
-          localStorage.removeItem("cart_pending_order_id");
+          // Consistent key: 'pendingOrderId' is used elsewhere
+          localStorage.removeItem("pendingOrderId");
         }
       } catch (err) {
         console.warn(

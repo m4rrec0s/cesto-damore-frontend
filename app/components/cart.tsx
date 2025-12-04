@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import { Button } from "@/app/components/ui/button";
 import { Card } from "@/app/components/ui/card";
 import { Badge } from "@/app/components/ui/badge";
@@ -23,11 +22,20 @@ export function Cart({ onClose }: { onClose?: () => void }) {
   const renderCustomizationValue = (customization: CartCustomization) => {
     switch (customization.customization_type) {
       case "BASE_LAYOUT":
-        return customization.selected_item_label || "Layout selecionado";
+        return (
+          customization.label_selected ||
+          customization.selected_item_label ||
+          "Layout selecionado"
+        );
       case "TEXT":
         return customization.text || "";
       case "MULTIPLE_CHOICE":
-        return customization.selected_option_label || customization.selected_option || "";
+        return (
+          customization.label_selected ||
+          customization.selected_option_label ||
+          customization.selected_option ||
+          ""
+        );
       case "IMAGES":
         return `${customization.photos?.length || 0} fotos`;
       default:
@@ -62,12 +70,16 @@ export function Cart({ onClose }: { onClose?: () => void }) {
       <div className="flex-1 overflow-y-auto pr-2 space-y-4">
         {cart.items.map((item) => (
           <div
-            key={`${item.product_id}-${(item.additional_ids || []).join("-")}-${JSON.stringify(item.customizations)}`}
+            key={`${item.product_id}-${(item.additional_ids || []).join(
+              "-"
+            )}-${JSON.stringify(item.customizations)}`}
             className="flex gap-4 bg-white p-3 rounded-xl border border-gray-100 shadow-sm"
           >
             <div className="relative w-20 h-20 rounded-lg overflow-hidden flex-shrink-0 bg-gray-50">
               <Image
-                src={getInternalImageUrl(item.product.image_url || "/placeholder.png")}
+                src={getInternalImageUrl(
+                  item.product.image_url || "/placeholder.png"
+                )}
                 alt={item.product.name}
                 fill
                 className="object-cover"

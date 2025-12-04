@@ -52,12 +52,6 @@ export async function GET(request: NextRequest) {
     // Detectar tipo de conteúdo
     const contentType = response.headers.get("content-type") || "image/png";
 
-    console.log(
-      `✅ Imagem carregada: ${(buffer.length / 1024).toFixed(
-        0
-      )}KB (${contentType})`
-    );
-
     // Retornar imagem com headers corretos
     return new NextResponse(buffer, {
       status: 200,

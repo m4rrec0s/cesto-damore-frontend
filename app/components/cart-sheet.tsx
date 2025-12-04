@@ -37,6 +37,7 @@ export function CartSheet({ isOpen, onClose, onCheckout }: CartSheetProps) {
         return custom.text?.trim() || "Mensagem não informada";
       case "MULTIPLE_CHOICE":
         return (
+          custom.label_selected ||
           custom.selected_option_label ||
           custom.selected_option ||
           "Opção não selecionada"

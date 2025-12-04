@@ -217,6 +217,27 @@ export function OrdersManager() {
     [api, loadOrders, notifyCustomer, refreshCounts, statusFilter]
   );
 
+  const handleDeleteCanceledOrders = useCallback(async () => {
+    const confirmed = window.confirm("Excluir todos os pedidos cancelados?");
+    if (!confirmed) return;
+    setUpdatingOrders((prev) => ({ ...prev, ["deleteAll"]: true }));
+    try {
+      await api.deleteAllCanceledOrders();
+      toast.success("Pedido cancelado excluído");
+      await Promise.all([loadOrders(statusFilter, true), refreshCounts(true)]);
+    } catch (error: unknown) {
+      console.error("Erro ao excluir pedido cancelado", error);
+      toast.error(
+        extractErrorMessage(
+          error,
+          "Não foi possível excluir o pedido cancelado"
+        )
+      );
+    } finally {
+      setUpdatingOrders((prev) => ({ ...prev, ["deleteAll"]: false }));
+    }
+  }, [api, loadOrders, refreshCounts, statusFilter]);
+
   const groupedOrders = useMemo(() => orders ?? [], [orders]);
 
   return (
@@ -241,6 +262,17 @@ export function OrdersManager() {
             />
             Notificar cliente a cada atualização
           </label>
+
+          <Button
+            variant="secondary"
+            onClick={() => handleDeleteCanceledOrders()}
+            disabled={updatingOrders["deleteAll"]}
+            className="gap-2"
+          >
+            <XCircle className="h-4 w-4" />
+            Excluir pedidos cancelados
+          </Button>
+
           <Button
             variant="outline"
             size="sm"
@@ -580,10 +612,7 @@ export function OrdersManager() {
                                             ✓
                                           </span>
                                           Opção:{" "}
-                                          {String(
-                                            customData.selected_option_label ||
-                                              customData.selected_option
-                                          )}
+                                          {String(customData.selected_option)}
                                         </p>
                                       )}
 
@@ -609,7 +638,6 @@ export function OrdersManager() {
                                                 selected_item?: string;
                                               }
                                             )?.selected_item ||
-                                              customData.selected_item_label ||
                                               "Layout personalizado"
                                           )}
                                         </p>

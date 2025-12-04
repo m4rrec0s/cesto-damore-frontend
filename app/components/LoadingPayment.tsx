@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Loader2, CreditCard, Smartphone } from "lucide-react";
+import { CreditCard, Smartphone } from "lucide-react";
 import { Card } from "@/app/components/ui/card";
 
 interface LoadingPaymentProps {

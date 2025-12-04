@@ -292,8 +292,8 @@ export function ItemCustomizationInline({
           setCustomizationData((prev) => ({
             ...prev,
             [baseLayoutCustom.id]: {
-              id: layoutId,
-              name: layout.name,
+              layout_id: layoutId,
+              layout_name: layout.name,
             },
           }));
         }
@@ -312,7 +312,7 @@ export function ItemCustomizationInline({
       let customizationType: CustomizationType;
       switch (custom.type) {
         case "BASE_LAYOUT":
-          customizationType = CustomizationType.LAYOUT_BASE;
+          customizationType = CustomizationType.BASE_LAYOUT;
           break;
         case "TEXT":
           customizationType = CustomizationType.TEXT;
@@ -327,13 +327,21 @@ export function ItemCustomizationInline({
           return;
       }
 
+      const baseData = { ...data, _customizationName: custom.name } as Record<
+        string,
+        unknown
+      >;
+
+      // Ensure selectedLayoutId is present for BASE_LAYOUT
+      const selectedLayoutIdField =
+        ((baseData as Record<string, unknown>).layout_id as string) ||
+        ((baseData as Record<string, unknown>).id as string);
+
       result.push({
         ruleId: custom.id,
         customizationType,
-        data: {
-          ...data,
-          _customizationName: custom.name,
-        } as Record<string, unknown>,
+        selectedLayoutId: selectedLayoutIdField || undefined,
+        data: baseData,
       });
     });
 

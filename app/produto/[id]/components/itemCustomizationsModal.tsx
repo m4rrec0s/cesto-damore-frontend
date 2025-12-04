@@ -318,7 +318,7 @@ export function ItemCustomizationModal({
               result.push({
                 ruleId: custom.id,
                 customizationRuleId: custom.id,
-                customizationType: CustomizationType.LAYOUT_BASE,
+                customizationType: CustomizationType.BASE_LAYOUT,
                 selectedLayoutId: layoutData.layout_id,
                 data: {
                   id: layoutData.layout_id,
@@ -447,8 +447,6 @@ export function ItemCustomizationModal({
             ...prev,
             [currentCustomizationId]: filesData,
           }));
-
-          console.log("🔵 [Modal] Arquivo adicionado com sucesso!");
         })
         .catch((error) => {
           console.error("Erro ao processar imagem cortada:", error);
@@ -529,22 +527,29 @@ export function ItemCustomizationModal({
           });
         } else if (custom.type === "BASE_LAYOUT" && data) {
           const layoutData = data as {
+            id?: string;
             layout_id?: string;
+            name?: string;
             layout_name?: string;
             model_url?: string;
             images?: ImageData[];
             previewUrl?: string;
             item_type?: string;
           };
-          if (layoutData.layout_id) {
+
+          // ✅ CRITICAL FIX: Check for both 'id' and 'layout_id'
+          const layoutId = layoutData.id || layoutData.layout_id;
+          const layoutName = layoutData.name || layoutData.layout_name || "";
+
+          if (layoutId) {
             result.push({
               ruleId: custom.id,
               customizationRuleId: custom.id,
-              customizationType: CustomizationType.LAYOUT_BASE,
-              selectedLayoutId: layoutData.layout_id,
+              customizationType: CustomizationType.BASE_LAYOUT,
+              selectedLayoutId: layoutId,
               data: {
-                id: layoutData.layout_id,
-                name: layoutData.layout_name || "",
+                id: layoutId,
+                name: layoutName,
                 model_url: layoutData.model_url,
                 item_type: layoutData.item_type,
                 images: layoutData.images || [],
@@ -553,6 +558,8 @@ export function ItemCustomizationModal({
                 _priceAdjustment: custom.price || 0,
               } as unknown as Record<string, unknown>,
             });
+          } else {
+            console.warn("⚠️ [handleSave] BASE_LAYOUT sem ID:", layoutData);
           }
         } else if (custom.type === "IMAGES" && data) {
           const filesData = data as Array<{
@@ -724,9 +731,6 @@ export function ItemCustomizationModal({
                             imageLoaded ? "opacity-100" : "opacity-0"
                           }`}
                           onLoad={() => {
-                            console.log(
-                              `✅ [Layout ${fullLayout.name}] Imagem carregada!`
-                            );
                             setImageLoadStates((prev) => ({
                               ...prev,
                               [layoutKey]: true,
@@ -994,7 +998,10 @@ export function ItemCustomizationModal({
                 <div className="flex items-center gap-3">
                   <Checkbox checked={isSelected} className="border-2" />
                   <Image
-                    src={getInternalImageUrl(option.image_url) || "/placeholder.png"}
+                    src={
+                      getInternalImageUrl(option.image_url) ||
+                      "/placeholder.png"
+                    }
                     alt={option.label}
                     width={64}
                     height={64}

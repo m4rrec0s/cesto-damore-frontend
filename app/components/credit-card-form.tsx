@@ -2,7 +2,7 @@
 
 import type React from "react";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Image from "next/image";
 import { Card } from "@/app/components/ui/card";
 import { Input } from "@/app/components/ui/input";
@@ -23,6 +23,7 @@ import {
   FieldLabel,
 } from "@/app/components/ui/field";
 import { motion } from "framer-motion";
+import { useApi } from "@/app/hooks/use-api";
 
 export interface CreditCardData {
   cardNumber: string;
@@ -34,6 +35,8 @@ export interface CreditCardData {
   identificationNumber: string;
   email: string;
   installments: number;
+  issuer_id?: string;
+  payment_method_id?: string;
 }
 
 interface CreditCardFormProps {
@@ -41,6 +44,7 @@ interface CreditCardFormProps {
   isProcessing?: boolean;
   defaultEmail?: string;
   defaultName?: string;
+  amount: number;
 }
 
 interface ValidationErrors {
@@ -184,6 +188,7 @@ export function CreditCardForm({
   isProcessing = false,
   defaultEmail = "",
   defaultName = "",
+  amount,
 }: CreditCardFormProps) {
   const [cardNumber, setCardNumber] = useState("");
   const [cardholderName, setCardholderName] = useState(defaultName);
@@ -197,15 +202,82 @@ export function CreditCardForm({
   const [errors, setErrors] = useState<ValidationErrors>({});
   const [cardBrand, setCardBrand] = useState<string>("unknown");
   const [formError, setFormError] = useState<string | null>(null);
+  const [installmentsList, setInstallmentsList] = useState<
+    Array<{
+      installments: number;
+      recommended_installments?: boolean;
+      installment_rate?: number;
+      discount?: number;
+      installment_amount?: number;
+      total_amount?: number;
+      recommended_message?: string;
+    }>
+  >([]);
+  const [issuerId, setIssuerId] = useState<string | null>(null);
+  const [paymentMethodId, setPaymentMethodId] = useState<string | null>(null);
+
+  const api = useApi();
+
+  const generateDefaultInstallments = useCallback(() => {
+    const defaultList = [];
+    for (let i = 1; i <= 12; i++) {
+      defaultList.push({
+        installments: i,
+        recommended_message: `${i}x de ${(amount / i).toLocaleString("pt-BR", {
+          style: "currency",
+          currency: "BRL",
+        })}`,
+        installment_amount: amount / i,
+        total_amount: amount,
+      });
+    }
+    setInstallmentsList(defaultList);
+  }, [amount]);
+
+  const fetchInstallments = useCallback(
+    async (bin: string) => {
+      try {
+        const response = await api.getInstallments(amount, bin);
+        if (response.success && response.payer_costs) {
+          setInstallmentsList(response.payer_costs);
+          setIssuerId(response.issuer?.id);
+          setPaymentMethodId(response.payment_method_id);
+
+          // Resetar seleção se não for válida
+          if (
+            !response.payer_costs.find(
+              (i: { installments: number }) => i.installments === installments
+            )
+          ) {
+            setInstallments(1);
+          }
+        }
+      } catch (error) {
+        console.error("Erro ao buscar parcelas:", error);
+        // Fallback para parcelas padrão se falhar
+        generateDefaultInstallments();
+      }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [amount, installments, generateDefaultInstallments]
+  );
 
   useEffect(() => {
     if (cardNumber) {
       const brand = detectCardBrand(cardNumber);
       setCardBrand(brand);
+
+      // Buscar parcelas se tivermos pelo menos 6 dígitos (BIN)
+      const cleanNumber = cardNumber.replace(/\s/g, "");
+      if (cleanNumber.length >= 6) {
+        const bin = cleanNumber.substring(0, 6);
+        fetchInstallments(bin);
+      }
     } else {
       setCardBrand("unknown");
+      setInstallmentsList([]);
     }
-  }, [cardNumber]);
+  }, [cardNumber, amount, installments, fetchInstallments]);
 
   // Formatação do número do cartão (XXXX XXXX XXXX XXXX)
   const formatCardNumber = (value: string) => {
@@ -350,6 +422,8 @@ export function CreditCardForm({
         identificationNumber: cleanIdentification,
         email: email.trim(),
         installments,
+        issuer_id: issuerId || undefined,
+        payment_method_id: paymentMethodId || undefined,
       });
     } catch (error) {
       console.error("Erro ao processar pagamento:", error);
@@ -400,8 +474,9 @@ export function CreditCardForm({
                   }
                   placeholder="0000 0000 0000 0000"
                   maxLength={19}
-                  className={`pr-40 text-lg tracking-widest font-semibold ${errors.cardNumber ? "border-red-500" : ""
-                    }`}
+                  className={`pr-40 text-lg tracking-widest font-semibold ${
+                    errors.cardNumber ? "border-red-500" : ""
+                  }`}
                 />
                 {cardBrand !== "unknown" && (
                   <motion.div
@@ -633,19 +708,39 @@ export function CreditCardForm({
               <FieldLabel htmlFor="installments">Parcelar em *</FieldLabel>
               <Select
                 value={installments.toString()}
-                onValueChange={(value) =>
-                  setInstallments(Number.parseInt(value))
-                }
+                onValueChange={(value) => setInstallments(parseInt(value))}
               >
-                <SelectTrigger id="installments">
-                  <SelectValue />
+                <SelectTrigger id="installments" className="w-full">
+                  <SelectValue placeholder="Selecione as parcelas" />
                 </SelectTrigger>
                 <SelectContent>
-                  {Array.from({ length: 12 }, (_, i) => i + 1).map((num) => (
-                    <SelectItem key={num} value={num.toString()}>
-                      {num}x {num === 1 ? "(sem juros)" : ""}
+                  {installmentsList.length > 0 ? (
+                    installmentsList.map(
+                      (option: {
+                        installments: number;
+                        recommended_installments?: boolean;
+                        installment_rate?: number;
+                        installment_amount?: number;
+                        recommended_message?: string;
+                      }) => (
+                        <SelectItem
+                          key={option.installments}
+                          value={option.installments.toString()}
+                        >
+                          {/* ✅ USAR recommended_message que já vem formatado com juros */}
+                          {option.recommended_message ||
+                            `${option.installments}x de R$ ${(
+                              option.installment_amount ||
+                              amount / option.installments
+                            ).toFixed(2)}`}
+                        </SelectItem>
+                      )
+                    )
+                  ) : (
+                    <SelectItem value="1">
+                      1x de R$ {amount.toFixed(2)}
                     </SelectItem>
-                  ))}
+                  )}
                 </SelectContent>
               </Select>
             </FieldContent>

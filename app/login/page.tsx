@@ -4,10 +4,9 @@ import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
-import { Card } from "@/app/components/ui/card";
 import { useAuth } from "@/app/hooks/use-auth";
 import { useApi } from "@/app/hooks/use-api";
-import { AlertCircle, Mail, Lock, LogIn } from "lucide-react";
+import { AlertCircle, Mail, Lock } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 
@@ -71,7 +70,7 @@ function LoginForm() {
         error instanceof Error
           ? error.message
           : (error as { response?: { data?: { message?: string } } })?.response
-            ?.data?.message || "Erro ao fazer login";
+              ?.data?.message || "Erro ao fazer login";
       setError(errorMessage);
     } finally {
       setIsLoading(false);
@@ -94,7 +93,7 @@ function LoginForm() {
         error instanceof Error
           ? error.message
           : (error as { response?: { data?: { message?: string } } })?.response
-            ?.data?.message || "Erro ao criar conta";
+              ?.data?.message || "Erro ao criar conta";
       setError(errorMessage);
     } finally {
       setIsLoading(false);
@@ -146,7 +145,8 @@ function LoginForm() {
               Cesto d&apos;Amore
             </h2>
             <p className="text-white text-xl max-w-md drop-shadow-md">
-              Presenteie quem você ama com os melhores produtos e preços da região.
+              Presenteie quem você ama com os melhores produtos e preços da
+              região.
             </p>
           </div>
         </div>
@@ -155,7 +155,12 @@ function LoginForm() {
         <div className="w-full max-w-md">
           <div className="text-center mb-8">
             <div className="flex items-center justify-center mx-auto mb-4">
-              <Image src="/logocestodamore.png" alt="Logo" width={64} height={64} />
+              <Image
+                src="/logocestodamore.png"
+                alt="Logo"
+                width={64}
+                height={64}
+              />
             </div>
             <h1 className="text-3xl font-bold text-gray-900 mb-2">
               {isRegistering ? "Criar Conta" : "Entrar"}
@@ -169,10 +174,11 @@ function LoginForm() {
 
           {reasonMessage && (
             <div
-              className={`mb-6 p-4 rounded-lg flex items-center gap-2 ${reasonMessage.type === "warning"
-                ? "bg-yellow-50 border border-yellow-200 text-yellow-700"
-                : "bg-red-50 border border-red-200 text-red-700"
-                }`}
+              className={`mb-6 p-4 rounded-lg flex items-center gap-2 ${
+                reasonMessage.type === "warning"
+                  ? "bg-yellow-50 border border-yellow-200 text-yellow-700"
+                  : "bg-red-50 border border-red-200 text-red-700"
+              }`}
             >
               <AlertCircle className="h-4 w-4 flex-shrink-0" />
               <span className="text-sm">{reasonMessage.message}</span>

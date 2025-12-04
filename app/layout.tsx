@@ -4,10 +4,9 @@ import Script from "next/script";
 import "./globals.css";
 import "./animations.css";
 import { AuthProvider } from "./hooks/use-auth";
-import { CartProvider } from "./hooks/cart-context";
 import ClientLayout from "./components/layout/client-layout";
-import TokenMonitor from "./components/auth/token-monitor";
 import { Toaster } from "./components/ui/sonner";
+import AppWrapper from "./components/layout/app-wrapper";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -44,11 +43,9 @@ export default function RootLayout({
           strategy="beforeInteractive"
         />
         <AuthProvider>
-          <CartProvider>
-            <TokenMonitor>
-              <ClientLayout>{children}</ClientLayout>
-            </TokenMonitor>
-          </CartProvider>
+          <AppWrapper>
+            <ClientLayout>{children}</ClientLayout>
+          </AppWrapper>
         </AuthProvider>
         <Toaster position="top-center" richColors />
       </body>

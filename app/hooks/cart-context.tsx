@@ -12,6 +12,7 @@ import {
 
 interface CartContextType {
   cart: CartState;
+  onCartItemAdded?: () => void;
   addToCart: (
     productId: string,
     quantity?: number,
@@ -115,11 +116,30 @@ interface CartContextType {
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
 
-export function CartProvider({ children }: { children: ReactNode }) {
+export function CartProvider({
+  children,
+  onCartItemAdded,
+}: {
+  children: ReactNode;
+  onCartItemAdded?: () => void;
+}) {
   const cartHook = useCart();
 
+  // Criar um wrapper para addToCart que chama a callback
+  const wrappedAddToCart: typeof cartHook.addToCart = async (...args) => {
+    await cartHook.addToCart(...args);
+    onCartItemAdded?.();
+  };
+
+  // Adicionar callback e wrapper ao objeto do hook
+  const contextValue: CartContextType = {
+    ...cartHook,
+    addToCart: wrappedAddToCart,
+    onCartItemAdded,
+  };
+
   return (
-    <CartContext.Provider value={cartHook}>{children}</CartContext.Provider>
+    <CartContext.Provider value={contextValue}>{children}</CartContext.Provider>
   );
 }
 

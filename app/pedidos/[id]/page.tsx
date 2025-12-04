@@ -3,7 +3,12 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/app/hooks/use-auth";
-import { useApi, Order } from "@/app/hooks/use-api";
+import {
+  useApi,
+  Order,
+  OrderItemCustomizationSummary,
+  OrderItemDetailed,
+} from "@/app/hooks/use-api";
 import { useParams } from "next/navigation";
 import { Badge } from "@/app/components/ui/badge";
 import Image from "next/image";
@@ -43,7 +48,29 @@ export default function OrderDetailsPage() {
   const { id } = useParams() as { id: string };
   const { user, isLoading: authLoading } = useAuth();
   const router = useRouter();
-  const { getOrder } = useApi();
+  const api = useApi();
+  const apiAny = api as unknown as {
+    getOrder: (id: string) => Promise<Order | null>;
+    listOrderCustomizations: (orderId: string) => Promise<{
+      orderId: string;
+      items: Array<{
+        id: string;
+        customizations: OrderItemCustomizationSummary[];
+      }>;
+    }>;
+    pollOrderCustomizations: (
+      orderId: string,
+      onUpdate: (cust: {
+        items: Array<{
+          id: string;
+          customizations: OrderItemCustomizationSummary[];
+        }>;
+      }) => void,
+      interval?: number
+    ) => () => void;
+    stopOrderCustomizationsPolling: (orderId: string) => void;
+  };
+  const { getOrder, listOrderCustomizations } = apiAny;
 
   const [order, setOrder] = useState<Order | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -61,6 +88,33 @@ export default function OrderDetailsPage() {
         setIsLoading(true);
         const data = await getOrder(id);
         setOrder(data || null);
+        try {
+          const cust = (await listOrderCustomizations(id)) as {
+            orderId: string;
+            items: Array<{
+              id: string;
+              customizations: OrderItemCustomizationSummary[];
+            }>;
+          };
+          if (cust && cust.items && data) {
+            const itemsMap = new Map(cust.items.map((i) => [i.id, i]));
+            const newOrder = { ...data } as Order & {
+              items: OrderItemDetailed[];
+            };
+            newOrder.items = newOrder.items.map((it) => {
+              const remote = itemsMap.get(it.id) as
+                | { customizations: OrderItemCustomizationSummary[] }
+                | undefined;
+              if (remote) {
+                it.customizations = remote.customizations;
+              }
+              return it;
+            });
+            setOrder(newOrder);
+          }
+        } catch {
+          // ignore
+        }
       } catch (error) {
         console.error("Erro ao buscar pedido:", error);
       } finally {
@@ -68,10 +122,10 @@ export default function OrderDetailsPage() {
       }
     };
     fetch();
-  }, [id, getOrder]);
+  }, [id, getOrder, listOrderCustomizations]);
 
   const sseOnPaymentApproved = useCallback(() => {
-    getOrder(id).then((o) => setOrder(o || null));
+    getOrder(id).then((o: Order | null) => setOrder(o || null));
   }, [getOrder, id]);
 
   useWebhookNotification({
@@ -138,6 +192,28 @@ export default function OrderDetailsPage() {
                         {item.quantity}x • R${" "}
                         {item.price.toFixed(2).replace(".", ",")}
                       </div>
+                      {item.customizations &&
+                        item.customizations.length > 0 && (
+                          <div className="mt-2 text-xs text-gray-600">
+                            {item.customizations.map((c) => (
+                              <div key={c.id} className="mt-1">
+                                <div className="font-medium text-gray-700">
+                                  {c.title}
+                                </div>
+                                {c.google_drive_url && (
+                                  <a
+                                    href={c.google_drive_url}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="text-rose-600 underline"
+                                  >
+                                    Ver arquivo final
+                                  </a>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        )}
                     </div>
                   </div>
                 ))}
@@ -165,46 +241,67 @@ export default function OrderDetailsPage() {
           </div>
 
           {/* Timeline */}
-          <div className="mt-6">
-            <div className="flex items-center gap-4 justify-between">
-              {(["PENDING", "PAID", "SHIPPED", "DELIVERED"] as const).map(
-                (s, idx) => {
-                  const cfg = statusConfig[s as keyof typeof statusConfig];
-                  const isActive =
-                    (s === "PENDING" && order.status === "PENDING") ||
-                    (s === "PAID" &&
-                      (order.status === "PAID" ||
-                        order.status === "SHIPPED" ||
-                        order.status === "DELIVERED")) ||
-                    (s === "SHIPPED" &&
-                      (order.status === "SHIPPED" ||
-                        order.status === "DELIVERED")) ||
-                    (s === "DELIVERED" && order.status === "DELIVERED");
-
-                  return (
-                    <div key={s} className="flex-1 text-center">
-                      <div
-                        className={`mx-auto w-8 h-8 rounded-full ${
-                          isActive ? "bg-rose-500" : "bg-gray-200"
-                        }`}
-                      />
-                      <div
-                        className={`text-xs ${
-                          isActive ? "text-gray-900" : "text-gray-400"
-                        } mt-2`}
-                      >
-                        {cfg.label}
-                      </div>
-                      {idx < 3 && (
+          <div className="mt-8">
+            <h3 className="font-semibold text-gray-700 mb-4">
+              Status do Pedido
+            </h3>
+            <div className="relative">
+              {/* Background line */}
+              <div className="absolute top-4 left-0 right-0 h-1 bg-gray-200 rounded mx-2"></div>
+              {/* Colored line */}
+              {(() => {
+                const statuses = ["PENDING", "PAID", "SHIPPED", "DELIVERED"];
+                const currentIndex = statuses.indexOf(order.status);
+                const lineWidth =
+                  currentIndex < 3
+                    ? `${((currentIndex + 0.8) / 3) * 100}%`
+                    : "100%";
+                return (
+                  <div
+                    className="absolute top-4 left-0 h-1 bg-rose-500 rounded mx-2"
+                    style={{ width: lineWidth }}
+                  ></div>
+                );
+              })()}
+              {/* Dots and labels */}
+              <div className="flex justify-between relative">
+                {(["PENDING", "PAID", "SHIPPED", "DELIVERED"] as const).map(
+                  (s, idx) => {
+                    const cfg = statusConfig[s];
+                    const statuses = [
+                      "PENDING",
+                      "PAID",
+                      "SHIPPED",
+                      "DELIVERED",
+                    ];
+                    const currentIndex = statuses.indexOf(order.status);
+                    const isActive = idx <= currentIndex;
+                    const Icon = cfg.icon;
+                    return (
+                      <div key={s} className="flex flex-col items-center">
                         <div
-                          className="h-0.5 bg-gray-200 mx-auto mt-2"
-                          style={{ width: "60%" }}
-                        />
-                      )}
-                    </div>
-                  );
-                }
-              )}
+                          className={`w-10 h-10 rounded-full flex items-center justify-center border-2 ${
+                            isActive
+                              ? "bg-rose-500 border-rose-500 text-white"
+                              : "bg-white border-gray-300 text-gray-400"
+                          }`}
+                        >
+                          <Icon className="w-5 h-5" />
+                        </div>
+                        <div
+                          className={`text-xs mt-2 text-center ${
+                            isActive
+                              ? "text-gray-900 font-medium"
+                              : "text-gray-400"
+                          }`}
+                        >
+                          {cfg.label}
+                        </div>
+                      </div>
+                    );
+                  }
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -217,9 +314,6 @@ export default function OrderDetailsPage() {
             </h4>
             <p className="mt-2 text-sm text-gray-600">
               {order.delivery_address}
-            </p>
-            <p className="text-sm text-gray-600 mt-1">
-              {order.delivery_city} - {order.delivery_state}
             </p>
           </div>
 

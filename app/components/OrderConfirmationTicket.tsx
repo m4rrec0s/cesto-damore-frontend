@@ -17,17 +17,17 @@ export function OrderConfirmationTicket({
 }: OrderConfirmationTicketProps) {
   const formattedDate = order?.delivery_date
     ? new Date(order.delivery_date).toLocaleDateString("pt-BR", {
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-    })
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+      })
     : "N/A";
 
   const formattedTime = order?.delivery_date
     ? new Date(order.delivery_date).toLocaleTimeString("pt-BR", {
-      hour: "2-digit",
-      minute: "2-digit",
-    })
+        hour: "2-digit",
+        minute: "2-digit",
+      })
     : "N/A";
 
   return (
@@ -51,9 +51,9 @@ export function OrderConfirmationTicket({
                 damping: 15,
                 delay: 0.2,
               }}
-              className="w-16 h-16 mx-auto bg-yellow-100 rounded-full flex items-center justify-center mb-6"
+              className="w-16 h-16 mx-auto bg-green-100 rounded-full flex items-center justify-center mb-6"
             >
-              <PartyPopper className="w-8 h-8 text-yellow-600" />
+              <PartyPopper className="w-8 h-8 text-green-600" />
             </motion.div>
 
             <h1 className="text-3xl font-bold text-gray-900">Obrigado!</h1>
@@ -115,14 +115,13 @@ export function OrderConfirmationTicket({
             <div className="bg-gray-50 rounded-xl p-4 flex items-center gap-4">
               <div className="flex -space-x-2">
                 <div className="w-8 h-8 rounded-full bg-red-500 opacity-80" />
-                <div className="w-8 h-8 rounded-full bg-yellow-500 opacity-80" />
+                <div className="w-8 h-8 rounded-full bg-green-500 opacity-80" />
               </div>
               <div className="flex-1">
                 <p className="text-sm font-bold text-gray-900">
-                  {order?.payment_method === "pix" ? "Pagamento via PIX" : "Cartão de Crédito"}
-                </p>
-                <p className="text-xs text-gray-500">
-                  {order?.payment_method === "pix" ? "Processado instantaneamente" : "**** **** **** 4242"}
+                  {order?.payment_method === "pix"
+                    ? "Pagamento via PIX"
+                    : "Cartão de Crédito"}
                 </p>
               </div>
             </div>

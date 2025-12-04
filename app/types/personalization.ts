@@ -18,6 +18,7 @@ export interface SlotDef {
 export interface LayoutBase {
   id: string;
   name: string;
+  title: string;
   item_type: string; // "caneca" | "quadro" | ...
   image_url: string; // URL da imagem base
   model_url?: string; // URL do modelo 3D (opcional)

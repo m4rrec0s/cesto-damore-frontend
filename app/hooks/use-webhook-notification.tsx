@@ -40,8 +40,8 @@ interface UseWebhookNotificationOptions {
  *   enabled: Boolean(currentOrderId),
  *   onPaymentApproved: (data) => {
  *     console.log("✅ Pagamento aprovado!", data);
- *     setPaymentStatus("success");
- *     router.push(`/pedidos/${data.orderId}`);
+ *     // Ao invés de redirecionar, podemos mostrar um ticket de confirmação
+ *     // (OrderConfirmationTicket) ou abrir um modal com o resumo do pedido.
  *   },
  *   onPaymentRejected: (data) => {
  *     console.log("❌ Pagamento rejeitado", data);
@@ -145,8 +145,7 @@ export function useWebhookNotification({
       try {
         eventSourceRef.current?.close();
         eventSourceRef.current = null;
-      } catch {
-      }
+      } catch {}
 
       reconnectTimeoutRef.current = window.setTimeout(() => {
         try {

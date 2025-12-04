@@ -154,7 +154,8 @@ export function CustomizationsReview({ cartItems }: CustomizationsReviewProps) {
                             custom.selected_option && (
                               <span>
                                 Opção:{" "}
-                                {custom.selected_option_label ||
+                                {custom.label_selected ||
+                                  custom.selected_option_label ||
                                   custom.selected_option}
                               </span>
                             )}

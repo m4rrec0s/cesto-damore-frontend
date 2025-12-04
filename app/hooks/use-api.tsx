@@ -353,19 +353,19 @@ export type CustomizationTypeValue =
 
 export type CustomizationAvailableOptions =
   | Array<{
-    label: string;
-    value: string;
-    price_adjustment?: number;
-  }>
+      label: string;
+      value: string;
+      price_adjustment?: number;
+    }>
   | {
-    items: Array<{
-      original_item: string;
-      available_substitutes: Array<{
-        item: string;
-        price_adjustment: number;
+      items: Array<{
+        original_item: string;
+        available_substitutes: Array<{
+          item: string;
+          price_adjustment: number;
+        }>;
       }>;
-    }>;
-  };
+    };
 
 export interface OrderItemAdditional {
   id: string;
@@ -1170,11 +1170,25 @@ class ApiService {
     send_anonymously?: boolean;
     complement?: string;
   }) => {
-    console.log("📡 Enviando pedido para o backend:", payload);
-    const res = await this.client.post("/orders", payload);
-    console.log("✅ Resposta do backend:", res.data);
-    this.clearCache("orders");
-    return res.data;
+    try {
+      // Defensive: strip base64 content from customizations before sending order
+      const sanitized = this.stripBase64FromOrderPayload(
+        payload as Record<string, unknown>
+      );
+      console.log("📡 Enviando pedido para o backend (sanitized):", sanitized);
+      const res = await this.client.post("/orders", sanitized);
+      console.log("✅ Resposta do backend:", res.data);
+      this.clearCache("orders");
+      return res.data;
+    } catch (error: unknown) {
+      console.error("API.createOrder failed:", {
+        payload,
+        error:
+          (error as unknown as { response?: { data?: unknown } })?.response
+            ?.data || error,
+      });
+      throw error;
+    }
   };
   deleteOrder = async (id: string) => {
     const res = await this.client.delete(`/orders/${id}`);
@@ -1182,10 +1196,28 @@ class ApiService {
     return res.data;
   };
 
-  updateOrderItems = async (id: string, items: OrderItemInput[]) => {
-    const res = await this.client.put(`/orders/${id}/items`, { items });
+  deleteAllCanceledOrders = async () => {
+    const res = await this.client.delete("/orders/canceled");
     this.clearCache("orders");
     return res.data;
+  };
+
+  updateOrderItems = async (id: string, items: OrderItemInput[]) => {
+    try {
+      const res = await this.client.put(`/orders/${id}/items`, { items });
+      this.clearCache("orders");
+      return res.data;
+    } catch (error: unknown) {
+      // Log payload and richer error data for debugging
+      console.error("API.updateOrderItems failed", {
+        id,
+        items,
+        error:
+          (error as unknown as { response?: { data?: unknown } })?.response
+            ?.data || error,
+      });
+      throw error;
+    }
   };
 
   updateOrderMetadata = async (
@@ -1342,12 +1374,6 @@ class ApiService {
     return res.data;
   };
 
-  // ===== New Customization API Methods =====
-
-  /**
-   * Busca configuração de customização para um item (produto ou adicional)
-   * GET /items/:itemId/customizations (rota pública no backend)
-   */
   getItemCustomizations = async (
     itemId: string
   ): Promise<import("../types/customization").CustomizationConfigResponse> => {
@@ -1357,10 +1383,6 @@ class ApiService {
     return res.data;
   };
 
-  /**
-   * Busca customizações por referência (compatibilidade)
-   * GET /customizations/reference/:referenceId
-   */
   getCustomizationsByReference = async (
     referenceId: string
   ): Promise<{
@@ -1373,10 +1395,6 @@ class ApiService {
     return res.data;
   };
 
-  /**
-   * Valida customizações antes de salvar
-   * POST /customizations/validate
-   */
   validateCustomizationsV2 = async (payload: {
     itemId: string;
     inputs: import("../types/customization").CustomizationInput[];
@@ -1385,10 +1403,6 @@ class ApiService {
     return res.data;
   };
 
-  /**
-   * Gera preview de customização 3D
-   * POST /customizations/preview
-   */
   generatePreview = async (payload: {
     layoutId: string;
     customizations: import("../types/customization").CustomizationInput[];
@@ -1397,10 +1411,6 @@ class ApiService {
     return res.data;
   };
 
-  /**
-   * Busca informações completas de um layout por ID
-   * GET /admin/layouts/:layoutId
-   */
   getLayoutById = async (
     layoutId: string
   ): Promise<import("../types/personalization").LayoutBase> => {
@@ -1408,10 +1418,38 @@ class ApiService {
     return res.data;
   };
 
-  /**
-   * Lista customizações de um pedido
-   * GET /orders/:orderId/customizations
-   */
+  // Simple poller state
+  private activePollers: Record<string, number> = {};
+
+  pollOrderCustomizations(
+    orderId: string,
+    onUpdate: (customizations: unknown[]) => void,
+    interval = 10000
+  ) {
+    if (typeof window === "undefined") return () => {};
+    if (this.activePollers[orderId]) clearInterval(this.activePollers[orderId]);
+    const id = window.setInterval(async () => {
+      try {
+        const res = await this.client.get(`/orders/${orderId}/customizations`);
+        onUpdate(res.data);
+      } catch {
+        // swallow polling errors
+      }
+    }, interval);
+    this.activePollers[orderId] = id;
+    return () => {
+      clearInterval(id);
+      delete this.activePollers[orderId];
+    };
+  }
+
+  stopOrderCustomizationsPolling(orderId: string) {
+    if (this.activePollers[orderId]) {
+      clearInterval(this.activePollers[orderId]);
+      delete this.activePollers[orderId];
+    }
+  }
+
   listOrderCustomizations = async (
     orderId: string
   ): Promise<{
@@ -1442,10 +1480,212 @@ class ApiService {
     return res.data;
   };
 
-  /**
-   * Salva customização de um item do pedido
-   * POST /orders/:orderId/items/:itemId/customizations
-   */
+  // Helper: recursively remove base64 fields and data URIs from an object
+  private stripBase64FromCustomizationPayload(
+    payload: import("../types/customization").SaveOrderItemCustomizationPayload
+  ) {
+    // deep clone
+    const clone = JSON.parse(JSON.stringify(payload));
+
+    function removeBase64(obj: unknown) {
+      if (!obj || typeof obj !== "object") return;
+      const record = obj as Record<string, unknown>;
+      for (const key of Object.keys(record)) {
+        const val = record[key];
+        if (typeof val === "string") {
+          // remove data URIs (data:*;base64,)
+          if (val.startsWith("data:") || val.startsWith("blob:")) {
+            delete record[key];
+            continue;
+          }
+        }
+        if (key === "base64" || key === "base64Data") {
+          delete record[key];
+          continue;
+        }
+        if (Array.isArray(val)) {
+          val.forEach((v) => removeBase64(v));
+        } else if (typeof val === "object") {
+          removeBase64(val);
+        }
+      }
+    }
+
+    // Remove from final art(s)
+    if (clone.finalArtwork) {
+      delete clone.finalArtwork.base64;
+      delete clone.finalArtwork.base64Data;
+    }
+    if (clone.finalArtworks && Array.isArray(clone.finalArtworks)) {
+      clone.finalArtworks.forEach((a: unknown) => {
+        if (typeof a === "object" && a !== null) {
+          delete (a as Record<string, unknown>).base64;
+          delete (a as Record<string, unknown>).base64Data;
+        }
+      });
+    }
+
+    if (clone.data) removeBase64(clone.data);
+
+    return clone as import("../types/customization").SaveOrderItemCustomizationPayload;
+  }
+
+  // Sanitize entire order payload before sending to backend
+  private stripBase64FromOrderPayload(payload: Record<string, unknown>) {
+    const clone = JSON.parse(JSON.stringify(payload));
+
+    // ✅ For IMAGES and BASE_LAYOUT customizations, we MUST keep base64 data for backend extraction
+    // This function will:
+    // 1. Keep base64 in photos array of IMAGES customizations
+    // 2. Keep base64 in text field of BASE_LAYOUT customizations
+    // 3. Remove preview_url (blob: URLs) but keep base64
+    // 4. Remove base64 from other customization types (TEXT, MULTIPLE_CHOICE)
+
+    function removeBase64(
+      obj: unknown,
+      isImageCustomization: boolean = false,
+      isBaseLayoutCustomization: boolean = false
+    ) {
+      if (!obj || typeof obj !== "object") return;
+      const record = obj as Record<string, unknown>;
+      for (const key of Object.keys(record)) {
+        const val = record[key];
+
+        // For IMAGES customizations, handle photos array specially
+        if (isImageCustomization && key === "photos" && Array.isArray(val)) {
+          val.forEach((photo: unknown) => {
+            if (typeof photo === "object" && photo !== null) {
+              const p = photo as Record<string, unknown>;
+              // Keep: base64, original_name, temp_file_id, mime_type, size, position
+              // Remove: preview_url (blob URLs), preview (blob URLs)
+              if (
+                typeof p.preview_url === "string" &&
+                p.preview_url.startsWith("blob:")
+              ) {
+                delete p.preview_url;
+              }
+              if (
+                typeof p.preview === "string" &&
+                p.preview.startsWith("blob:")
+              ) {
+                delete p.preview;
+              }
+              // ✅ KEEP base64 for IMAGES - NÃO deletar base64!
+            }
+          });
+          continue; // ← IMPORTANTE: Pula para próximo key, não processa novamente
+        }
+
+        // For BASE_LAYOUT customizations, keep text field with base64 (canvas preview)
+        if (
+          isBaseLayoutCustomization &&
+          key === "text" &&
+          typeof val === "string" &&
+          val.startsWith("data:")
+        ) {
+          // ✅ KEEP text field with base64 for BASE_LAYOUT
+          continue; // ← IMPORTANTE: Pula para próximo key
+        }
+
+        // For non-photos/non-text fields, remove strings starting with data: or blob:
+        if (typeof val === "string") {
+          if (val.startsWith("data:") || val.startsWith("blob:")) {
+            delete record[key];
+            continue;
+          }
+        }
+
+        // For non-IMAGES/non-BASE_LAYOUT customizations, remove base64 fields
+        if (
+          !isImageCustomization &&
+          !isBaseLayoutCustomization &&
+          (key === "base64" || key === "base64Data")
+        ) {
+          delete record[key];
+          continue;
+        }
+
+        // ✅ NÃO PROCESSAR PHOTOS NOVAMENTE para IMAGES
+        // Se é IMAGES e é photos, já foi processado acima com continue
+        if (isImageCustomization && key === "photos") {
+          continue; // ← PROTEÇÃO EXTRA: Garante que não processa novamente
+        }
+
+        if (Array.isArray(val)) {
+          val.forEach((item) =>
+            removeBase64(item, isImageCustomization, isBaseLayoutCustomization)
+          );
+        } else if (typeof val === "object") {
+          removeBase64(val, isImageCustomization, isBaseLayoutCustomization);
+        }
+      }
+    }
+
+    // ✅ NOVO: Processar SaveOrderItemCustomizationPayload direta (customizationType, data fields)
+    const isImages = clone.customizationType === "IMAGES";
+    const isBaseLayout = clone.customizationType === "BASE_LAYOUT";
+
+    if (isImages || isBaseLayout) {
+      if (clone.data && typeof clone.data === "object") {
+        removeBase64(clone.data, isImages, isBaseLayout);
+      }
+      if (clone.finalArtwork && typeof clone.finalArtwork === "object") {
+        removeBase64(clone.finalArtwork, isImages, isBaseLayout);
+      }
+      if (clone.finalArtworks && Array.isArray(clone.finalArtworks)) {
+        clone.finalArtworks.forEach((artwork: unknown) => {
+          if (typeof artwork === "object") {
+            removeBase64(artwork, isImages, isBaseLayout);
+          }
+        });
+      }
+    }
+
+    if (Array.isArray(clone.items)) {
+      clone.items.forEach((it: unknown) => {
+        const item = it as Record<string, unknown>;
+        if (!item.customizations) return;
+        // ✅ Handle both 'value' (from backend) and 'customization_data' (from cart)
+        (item.customizations as unknown[]).forEach((c: unknown) => {
+          const customization = c as Record<string, unknown>;
+
+          // Determine customization type
+          const isImages = customization.customization_type === "IMAGES";
+          const isBaseLayout =
+            customization.customization_type === "BASE_LAYOUT";
+
+          try {
+            // Handle 'value' field (when customizations come from backend)
+            if (typeof customization.value === "string") {
+              const parsed = JSON.parse(customization.value as string);
+              removeBase64(parsed, isImages, isBaseLayout);
+              customization.value = JSON.stringify(parsed);
+            } else if (typeof customization.value === "object") {
+              removeBase64(customization.value, isImages, isBaseLayout);
+            }
+
+            // ✅ Handle 'customization_data' field (when customizations come from cart)
+            if (
+              customization.customization_data &&
+              typeof customization.customization_data === "object"
+            ) {
+              removeBase64(
+                customization.customization_data,
+                isImages,
+                isBaseLayout
+              );
+            }
+          } catch {
+            // ignore parse error and try to clean shallow fields
+            removeBase64(customization, isImages, isBaseLayout);
+          }
+        });
+      });
+    }
+
+    return clone;
+  }
+
   saveOrderItemCustomization = async (
     orderId: string,
     itemId: string,
@@ -1460,17 +1700,69 @@ class ApiService {
     created_at: string;
     updated_at: string;
   }> => {
+    // ✅ CORRIGIDO: Usar stripBase64FromOrderPayload para manter base64 em IMAGES/BASE_LAYOUT
+    // Em vez de stripBase64FromCustomizationPayload que Remove TODOS os base64
+    const payloadSanitized = this.stripBase64FromOrderPayload(
+      payload as unknown as Record<string, unknown>
+    ) as import("../types/customization").SaveOrderItemCustomizationPayload;
+
+    // 🔍 DEBUG: Log do payload sendo enviado
+    console.log(
+      "🔍 [saveOrderItemCustomization] Payload sendo enviado:",
+      JSON.stringify(payloadSanitized, null, 2).substring(0, 1000)
+    );
+
+    // 🔍 DEBUG: Verificar se tem base64 em photos
+    if (
+      payloadSanitized.customizationType === "IMAGES" &&
+      payloadSanitized.data?.photos
+    ) {
+      const photos = Array.isArray(payloadSanitized.data.photos)
+        ? payloadSanitized.data.photos
+        : [];
+      const photoCount = photos.length;
+      const photosWithBase64 = photos.filter(
+        (p: Record<string, unknown>) => p.base64
+      ).length;
+      console.log(
+        `🖼️  [saveOrderItemCustomization] Fotos: ${photoCount} total, ${photosWithBase64} com base64`
+      );
+      photos.forEach((photo: Record<string, unknown>, idx: number) => {
+        console.log(
+          `   [${idx}] ${
+            photo.original_name
+          }: base64=${!!photo.base64}, preview_url=${photo.preview_url}`
+        );
+      });
+    }
+
+    if (
+      payloadSanitized.customizationType === "BASE_LAYOUT" &&
+      payloadSanitized.selectedLayoutId
+    ) {
+      try {
+        const layout = await this.getLayoutById(
+          payloadSanitized.selectedLayoutId
+        );
+        if (layout && layout.title) {
+          payloadSanitized.data = payloadSanitized.data || {};
+          (payloadSanitized.data as Record<string, unknown>)[
+            "selected_layout_title"
+          ] = layout.title;
+        }
+      } catch {
+        // ignore - backend will compute label when possible
+      }
+    }
+
     const res = await this.client.post(
       `/orders/${orderId}/items/${itemId}/customizations`,
-      payload
+      payloadSanitized
     );
+    console.log(`✅ [saveOrderItemCustomization] Response:`, res.data);
     return res.data;
   };
 
-  /**
-   * Upload de imagem para preview de customização
-   * POST /customization/upload-image
-   */
   uploadCustomizationImage = async (
     imageFile: File
   ): Promise<{
@@ -1494,17 +1786,42 @@ class ApiService {
   };
 
   /**
-   * Deleta imagem de customização
-   * DELETE /customization/image/:filename
+   * Upload de imagem temporária para VPS (durante customização)
+   * POST /api/temp/upload
+   * Retorna: { success, filename, url, size, mimeType, originalName }
    */
+  uploadTempImage = async (
+    imageFile: File
+  ): Promise<{
+    success: boolean;
+    filename: string;
+    url: string;
+    size: number;
+    mimeType: string;
+    originalName: string;
+  }> => {
+    const formData = new FormData();
+    formData.append("image", imageFile);
+
+    const res = await this.client.post("/temp/upload", formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+    return res.data;
+  };
+
+  /**
+   * Deleta um arquivo temporário específico
+   * DELETE /api/temp/files/:filename (admin only)
+   */
+  deleteTempFile = async (filename: string): Promise<{ success: boolean }> => {
+    const res = await this.client.delete(`/temp/files/${filename}`);
+    return res.data;
+  };
+
   deleteCustomizationImage = async (filename: string): Promise<void> => {
     await this.client.delete(`/customization/image/${filename}`);
   };
 
-  /**
-   * Lista todos os constraints
-   * GET /admin/constraints
-   */
   listAllConstraints = async (): Promise<
     Array<{
       id: string;
@@ -1524,10 +1841,6 @@ class ApiService {
     return res.data;
   };
 
-  /**
-   * Busca constraints de um item específico
-   * GET /admin/constraints/item/:itemType/:itemId
-   */
   getConstraintsByItem = async (
     itemType: "PRODUCT" | "ADDITIONAL",
     itemId: string
@@ -1552,10 +1865,6 @@ class ApiService {
     return res.data;
   };
 
-  /**
-   * Busca produtos/adicionais para autocomplete
-   * GET /admin/constraints/search?q=termo
-   */
   searchItemsForConstraints = async (
     query: string
   ): Promise<{
@@ -1578,10 +1887,6 @@ class ApiService {
     return res.data;
   };
 
-  /**
-   * Cria um novo constraint
-   * POST /admin/constraints
-   */
   createConstraint = async (payload: {
     target_item_id: string;
     target_item_type: "PRODUCT" | "ADDITIONAL";
@@ -1733,8 +2038,8 @@ class ApiService {
         console.error("📄 Data:", axiosError.response.data);
         throw new Error(
           axiosError.response.data?.error ||
-          axiosError.response.data?.message ||
-          "Erro na requisição"
+            axiosError.response.data?.message ||
+            "Erro na requisição"
         );
       }
       throw error;
@@ -1798,6 +2103,19 @@ class ApiService {
     paymentMethodId?: string;
   }) => {
     const res = await this.client.post("/mercadopago/get-issuers", payload);
+    return res.data;
+  };
+
+  getInstallments = async (
+    amount: number,
+    bin: string,
+    paymentMethodId?: string
+  ) => {
+    const res = await this.client.post("/mercadopago/get-installments", {
+      amount,
+      bin,
+      paymentMethodId,
+    });
     return res.data;
   };
 
@@ -1957,8 +2275,9 @@ class ApiService {
     page?: number,
     perPage?: number
   ): Promise<PublicFeedResponse> => {
-    const cacheKey = `publicFeed_${configId || "default"}_page_${page ?? "all"
-      }_per_${perPage ?? "all"}`;
+    const cacheKey = `publicFeed_${configId || "default"}_page_${
+      page ?? "all"
+    }_per_${perPage ?? "all"}`;
 
     // Retornar do cache se disponível
     if (ApiService.cache[cacheKey]) {

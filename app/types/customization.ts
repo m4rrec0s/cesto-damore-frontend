@@ -21,7 +21,7 @@ export enum CustomizationType {
   IMAGES = "IMAGES",
   TEXT = "TEXT",
   MULTIPLE_CHOICE = "MULTIPLE_CHOICE",
-  LAYOUT_BASE = "LAYOUT_BASE",
+  BASE_LAYOUT = "BASE_LAYOUT",
 }
 
 /**
@@ -364,11 +364,11 @@ export interface CustomizationRule {
 
 export type CustomizationAvailableOptions =
   | Array<{
-      id?: string;
-      label: string;
-      value: string;
-      price_adjustment?: number;
-    }>
+    id?: string;
+    label: string;
+    value: string;
+    price_adjustment?: number;
+  }>
   | Record<string, unknown>;
 
 export interface CustomizationRuleInput {
