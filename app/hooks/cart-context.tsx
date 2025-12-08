@@ -112,6 +112,14 @@ interface CartContextType {
   orderMetadata: Record<string, unknown>;
   setOrderMetadata: (metadata: Record<string, unknown>) => void;
   getMaxProductionTime: () => number;
+  isDateDisabledInCalendar: (date: Date) => boolean;
+  getProductionTimeline: () => {
+    productionHours: number;
+    productionEndsAt: Date;
+    earliestPickupTime: Date;
+    formattedProductionEnds: string;
+    formattedPickup: string;
+  };
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined);

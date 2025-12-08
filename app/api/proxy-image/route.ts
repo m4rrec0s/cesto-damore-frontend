@@ -25,7 +25,6 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    console.log(`🔄 Proxy: Carregando imagem do Google Drive...`);
 
     // Fazer requisição para o Google Drive
     const response = await fetch(imageUrl, {

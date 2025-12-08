@@ -12,7 +12,6 @@ import { Badge } from "@/app/components/ui/badge";
 import { Card } from "@/app/components/ui/card";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
-import { Checkbox } from "@/app/components/ui/checkbox";
 import {
   Upload,
   X,
@@ -22,7 +21,11 @@ import {
   Loader2,
   Sparkles,
   ImageIcon,
+  Check,
+  Clock,
 } from "lucide-react";
+import { motion } from "motion/react";
+import { AnimatedFramesLoader } from "@/app/components/ui/animated-frames-loader";
 import { toast } from "sonner";
 import {
   CustomizationType,
@@ -53,6 +56,7 @@ interface Customization {
       name: string;
       model_url?: string;
       image_url?: string;
+      additional_time?: number;
       slots?: SlotDef[];
     }>;
     fields?: Array<{
@@ -119,7 +123,13 @@ export function ItemCustomizationModal({
   const [layoutsWithImages, setLayoutsWithImages] = useState<
     Record<
       string,
-      { id: string; name: string; image_url: string; slots?: SlotDef[] }
+      {
+        id: string;
+        name: string;
+        image_url: string;
+        slots?: SlotDef[];
+        additional_time?: number;
+      }
     >
   >({});
   // Local cache for fetched full layouts to avoid repeated network calls
@@ -273,33 +283,75 @@ export function ItemCustomizationModal({
   );
 
   const handleLayoutComplete = useCallback(
-    (images: ImageData[], previewUrl: string) => {
+    async (images: ImageData[], previewUrl: string) => {
       const baseLayoutCustom = customizations.find(
         (c) => c.type === "BASE_LAYOUT"
       );
       if (!baseLayoutCustom) return;
 
-      const existingData =
-        (customizationData[baseLayoutCustom.id] as Record<string, unknown>) ||
-        {};
-
-      const updatedData = {
-        ...customizationData,
-        [baseLayoutCustom.id]: {
-          ...existingData,
-          images,
-          previewUrl,
-        },
-      };
-
-      setCustomizationData(updatedData);
-
-      if (onPreviewChange) {
-        onPreviewChange(previewUrl);
-      }
-
       setLoading(true);
       try {
+        let uploadedPreviewUrl = previewUrl;
+
+        if (previewUrl.startsWith("data:")) {
+          const response = await fetch(previewUrl);
+          const blob = await response.blob();
+          const file = new File([blob], "canvas-preview.png", {
+            type: "image/png",
+          });
+
+          const formData = new FormData();
+          formData.append("image", file);
+
+          const uploadResponse = await fetch(
+            `${API_URL}/customization/upload-image`,
+            {
+              method: "POST",
+              body: formData,
+              headers: {
+                Authorization: `Bearer ${
+                  localStorage.getItem("appToken") ||
+                  localStorage.getItem("token")
+                }`,
+              },
+            }
+          );
+
+          if (!uploadResponse.ok) {
+            throw new Error("Erro ao fazer upload da preview do canvas");
+          }
+
+          const uploadedFile = (await uploadResponse.json()) as {
+            url?: string;
+            imageUrl?: string;
+            preview_url?: string;
+          };
+          uploadedPreviewUrl =
+            uploadedFile.url ||
+            uploadedFile.imageUrl ||
+            uploadedFile.preview_url ||
+            previewUrl;
+        }
+
+        const existingData =
+          (customizationData[baseLayoutCustom.id] as Record<string, unknown>) ||
+          {};
+
+        const updatedData = {
+          ...customizationData,
+          [baseLayoutCustom.id]: {
+            ...existingData,
+            images,
+            previewUrl: uploadedPreviewUrl,
+          },
+        };
+
+        setCustomizationData(updatedData);
+
+        if (onPreviewChange) {
+          onPreviewChange(uploadedPreviewUrl);
+        }
+
         const result: CustomizationInput[] = [];
 
         customizations.forEach((custom) => {
@@ -315,6 +367,8 @@ export function ItemCustomizationModal({
               previewUrl?: string;
             };
             if (layoutData.layout_id) {
+              // Get additional_time from cached full layout
+              const cachedLayout = layoutCacheRef.current[layoutData.layout_id];
               result.push({
                 ruleId: custom.id,
                 customizationRuleId: custom.id,
@@ -326,8 +380,15 @@ export function ItemCustomizationModal({
                   model_url: layoutData.model_url,
                   item_type: layoutData.item_type,
                   images: layoutData.images || [],
-                  previewUrl: layoutData.previewUrl,
+                  image: {
+                    preview_url: uploadedPreviewUrl,
+                  },
+                  previewUrl: uploadedPreviewUrl,
                   _customizationName: custom.name,
+                  additional_time:
+                    cachedLayout?.additional_time ||
+                    fullLayoutBase?.additional_time ||
+                    0,
                 } as unknown as Record<string, unknown>,
               });
             }
@@ -348,7 +409,14 @@ export function ItemCustomizationModal({
         setLoading(false);
       }
     },
-    [customizations, customizationData, onPreviewChange, onComplete, onClose]
+    [
+      customizations,
+      customizationData,
+      onPreviewChange,
+      onComplete,
+      onClose,
+      fullLayoutBase?.additional_time,
+    ]
   );
 
   const handleBackToSelection = useCallback(() => {
@@ -500,148 +568,6 @@ export function ItemCustomizationModal({
     []
   );
 
-  const handleSave = useCallback(() => {
-    setLoading(true);
-    try {
-      const result: CustomizationInput[] = [];
-      const errors: string[] = [];
-
-      customizations.forEach((custom) => {
-        const data = customizationData[custom.id];
-
-        if (custom.isRequired && !data) {
-          errors.push(`${custom.name} é obrigatório`);
-          return;
-        }
-
-        if (custom.type === "TEXT" && data) {
-          result.push({
-            ruleId: custom.id,
-            customizationRuleId: custom.id,
-            customizationType: CustomizationType.TEXT,
-            data: {
-              ...data,
-              _customizationName: custom.name,
-              _priceAdjustment: custom.price || 0,
-            } as Record<string, unknown>,
-          });
-        } else if (custom.type === "BASE_LAYOUT" && data) {
-          const layoutData = data as {
-            id?: string;
-            layout_id?: string;
-            name?: string;
-            layout_name?: string;
-            model_url?: string;
-            images?: ImageData[];
-            previewUrl?: string;
-            item_type?: string;
-          };
-
-          // ✅ CRITICAL FIX: Check for both 'id' and 'layout_id'
-          const layoutId = layoutData.id || layoutData.layout_id;
-          const layoutName = layoutData.name || layoutData.layout_name || "";
-
-          if (layoutId) {
-            result.push({
-              ruleId: custom.id,
-              customizationRuleId: custom.id,
-              customizationType: CustomizationType.BASE_LAYOUT,
-              selectedLayoutId: layoutId,
-              data: {
-                id: layoutId,
-                name: layoutName,
-                model_url: layoutData.model_url,
-                item_type: layoutData.item_type,
-                images: layoutData.images || [],
-                previewUrl: layoutData.previewUrl,
-                _customizationName: custom.name,
-                _priceAdjustment: custom.price || 0,
-              } as unknown as Record<string, unknown>,
-            });
-          } else {
-            console.warn("⚠️ [handleSave] BASE_LAYOUT sem ID:", layoutData);
-          }
-        } else if (custom.type === "IMAGES" && data) {
-          const filesData = data as Array<{
-            file: File;
-            preview: string;
-            position: number;
-            base64?: string;
-            mime_type?: string;
-            size?: number;
-          }>;
-
-          const maxImages =
-            custom.customization_data.base_layout?.max_images || 10;
-
-          const requiredImages = custom.isRequired ? maxImages : 0;
-
-          if (custom.isRequired && filesData.length < requiredImages) {
-            errors.push(
-              `${custom.name} requer exatamente ${requiredImages} imagem(ns). Você adicionou apenas ${filesData.length}.`
-            );
-            return;
-          }
-
-          if (filesData.length > maxImages) {
-            errors.push(
-              `${custom.name} permite no máximo ${maxImages} imagem(ns)`
-            );
-            return;
-          }
-
-          if (filesData.length > 0) {
-            result.push({
-              ruleId: custom.id,
-              customizationRuleId: custom.id,
-              customizationType: CustomizationType.IMAGES,
-              data: {
-                files: filesData.map((item) => item.file),
-                previews: filesData.map((item) => item.base64 || item.preview),
-                count: filesData.length,
-                _customizationName: custom.name,
-                _priceAdjustment: custom.price || 0,
-              } as unknown as Record<string, unknown>,
-            });
-          }
-        } else if (custom.type === "MULTIPLE_CHOICE" && data) {
-          const selectedData = data as { id?: string; label?: string };
-          const selectedOption = custom.customization_data.options?.find(
-            (opt) => opt.id === selectedData.id
-          );
-          const optionPriceAdjustment = selectedOption?.price_adjustment || 0;
-
-          result.push({
-            ruleId: custom.id,
-            customizationRuleId: custom.id,
-            customizationType: CustomizationType.MULTIPLE_CHOICE,
-            data: {
-              ...(data as Record<string, unknown>),
-              _customizationName: custom.name,
-              _priceAdjustment:
-                custom.price + optionPriceAdjustment || custom.price || 0,
-            } as Record<string, unknown>,
-          });
-        }
-      });
-
-      if (errors.length > 0) {
-        setLoading(false);
-        toast.error(errors.join("\n"));
-        return;
-      }
-
-      onComplete(result.length > 0, result);
-      toast.success("Personalização salva!");
-      onClose();
-    } catch (error) {
-      console.error("Erro ao salvar:", error);
-      toast.error("Erro ao salvar personalização");
-    } finally {
-      setLoading(false);
-    }
-  }, [customizations, customizationData, onComplete, onClose]);
-
   const renderBaseLayoutSelection = (customization: Customization) => {
     const layouts = customization.customization_data.layouts || [];
 
@@ -754,11 +680,20 @@ export function ItemCustomizationModal({
                       </div>
                     )}
 
-                    {/* Badge de slots */}
                     {hasSlots && (
-                      <div className="absolute top-3 left-3 bg-purple-600 text-white rounded-full px-3 py-1 text-xs font-semibold shadow-lg flex items-center gap-1">
-                        <ImageIcon className="h-3 w-3" />
-                        Permite fotos
+                      <div className="absolute top-3 left-3 flex items-center gap-2">
+                        <div className="bg-purple-600 text-white rounded-full px-3 py-1 text-xs font-semibold shadow-lg flex items-center gap-1">
+                          <ImageIcon className="h-3 w-3" />
+                          Permite fotos
+                        </div>
+                        {fullLayout.additional_time ? (
+                          <div>
+                            <div className="bg-purple-600 text-white rounded-full px-3 py-1 text-xs font-semibold shadow-lg flex items-center gap-1">
+                              <Clock className="h-3 w-3" />+
+                              {fullLayout.additional_time} min
+                            </div>
+                          </div>
+                        ) : null}
                       </div>
                     )}
 
@@ -806,24 +741,49 @@ export function ItemCustomizationModal({
 
     return (
       <div className="space-y-4">
-        <div className="flex items-center gap-3">
-          <div className="p-2 rounded-lg bg-blue-100">
-            <Type className="h-5 w-5 text-blue-600" />
-          </div>
-          <div>
-            <Label className="text-lg font-bold text-gray-900">
-              {customization.name}
-              {customization.isRequired && (
-                <Badge variant="destructive" className="ml-2 text-xs">
-                  Obrigatório
-                </Badge>
+        {/* Cabeçalho com vibe papel antigo */}
+        <div className="p-4 rounded-lg bg-gradient-to-br from-amber-50 via-yellow-50 to-orange-50 border-2 border-amber-200 shadow-sm relative overflow-hidden">
+          {/* Texture papel antigo */}
+          <div
+            className="absolute inset-0 opacity-5 pointer-events-none"
+            style={{
+              backgroundImage:
+                'url(\'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><filter id="noise"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="4"/></filter><rect width="100" height="100" filter="url(%23noise)" opacity="0.8"/></svg>\')',
+            }}
+          />
+
+          <div className="flex items-center gap-3 relative z-10">
+            <div className="p-2 rounded-lg bg-amber-100 shadow-sm">
+              <Type className="h-5 w-5 text-amber-700" />
+            </div>
+            <div>
+              <Label
+                className="text-lg font-bold text-amber-900"
+                style={{
+                  textShadow: "1px 1px 2px rgba(0,0,0,0.05)",
+                  fontFamily: '"Georgia", serif',
+                }}
+              >
+                {customization.name}
+                {customization.isRequired && (
+                  <Badge variant="destructive" className="ml-2 text-xs">
+                    Obrigatório
+                  </Badge>
+                )}
+              </Label>
+              {customization.description && (
+                <p
+                  className="text-sm text-amber-800 mt-1"
+                  style={{
+                    fontStyle: "italic",
+                    fontFamily: '"Georgia", serif',
+                    opacity: 0.8,
+                  }}
+                >
+                  {customization.description}
+                </p>
               )}
-            </Label>
-            {customization.description && (
-              <p className="text-sm text-gray-600 mt-1">
-                {customization.description}
-              </p>
-            )}
+            </div>
           </div>
         </div>
 
@@ -835,7 +795,13 @@ export function ItemCustomizationModal({
 
           return (
             <div key={field.id} className="space-y-2">
-              <Label htmlFor={field.id} className="font-medium">
+              <Label
+                htmlFor={field.id}
+                className="font-medium text-amber-900"
+                style={{
+                  fontFamily: '"Georgia", serif',
+                }}
+              >
                 {field.label}
               </Label>
               <Input
@@ -847,16 +813,94 @@ export function ItemCustomizationModal({
                 onChange={(e) =>
                   handleTextChange(customization.id, field.id, e.target.value)
                 }
-                className="font-medium"
+                className="bg-gradient-to-b from-yellow-50 to-white border-amber-200 focus:border-amber-500 focus:ring-amber-200 text-gray-800 placeholder:text-amber-400 shadow-inner"
+                style={{
+                  fontFamily: '"Georgia", serif',
+                  letterSpacing: "0.5px",
+                }}
               />
               {field.max_length && (
-                <p className="text-xs text-gray-500">
+                <p
+                  className="text-xs text-amber-700"
+                  style={{ fontFamily: '"Georgia", serif' }}
+                >
                   {value.length}/{field.max_length} caracteres
                 </p>
               )}
             </div>
           );
         })}
+
+        {/* Botão de Confirmar para Texto */}
+        <motion.div
+          className="fixed bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-white via-white to-transparent border-t-2 border-amber-200 shadow-2xl"
+          initial={{ opacity: 0, y: 100 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ type: "spring", stiffness: 300, damping: 30 }}
+        >
+          <div className="max-w-6xl mx-auto flex gap-3">
+            <Button
+              variant="outline"
+              onClick={() =>
+                setCustomizationData((prev) => ({
+                  ...prev,
+                  [customization.id]: {},
+                }))
+              }
+              className="flex-1"
+              disabled={loading}
+            >
+              Limpar
+            </Button>
+            <Button
+              onClick={() => {
+                const result: CustomizationInput[] = [];
+                const data = customizationData[customization.id] as
+                  | Record<string, string>
+                  | undefined;
+
+                if (data && Object.keys(data).length > 0) {
+                  const textParts = fields
+                    .map((f) => `${f.label}: ${data[f.id] || ""}`)
+                    .join("\n");
+
+                  result.push({
+                    ruleId: customization.id,
+                    customizationType: CustomizationType.TEXT,
+                    data: {
+                      text: textParts,
+                      fields: data,
+                      _customizationName: customization.name,
+                      _priceAdjustment: customization.price || 0,
+                    } as unknown as Record<string, unknown>,
+                  });
+                }
+
+                onComplete(result.length > 0, result);
+                toast.success("Texto confirmado!");
+                onClose();
+              }}
+              className="flex-1 gap-2 bg-amber-600 hover:bg-amber-700 text-white"
+              disabled={
+                loading ||
+                !(
+                  customizationData[customization.id] &&
+                  Object.values(
+                    (customizationData[customization.id] as Record<
+                      string,
+                      string
+                    >) || {}
+                  )
+                    .join("")
+                    .trim().length >= 3
+                )
+              }
+            >
+              <CheckCircle2 className="h-4 w-4" />
+              Confirmar
+            </Button>
+          </div>
+        </motion.div>
       </div>
     );
   };
@@ -866,44 +910,49 @@ export function ItemCustomizationModal({
     const maxImages =
       customization.customization_data.base_layout?.max_images || 10;
     const canAddMore = currentFiles.length < maxImages;
+    const hasImages = currentFiles.length > 0;
 
     return (
-      <div className="space-y-4">
-        <div className="flex items-center gap-3">
-          <div className="p-2 rounded-lg bg-green-100">
-            <Upload className="h-5 w-5 text-green-600" />
-          </div>
-          <div>
-            <Label className="text-lg font-bold text-gray-900">
-              {customization.name}
-              {customization.isRequired && (
-                <Badge variant="destructive" className="ml-2 text-xs">
-                  Obrigatório
-                </Badge>
+      <div className="space-y-4 pb-5">
+        <div className="p-4 rounded-lg bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-300 shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-green-200">
+              <Upload className="h-5 w-5 text-green-700" />
+            </div>
+            <div>
+              <Label className="text-lg font-bold text-green-900">
+                {customization.name}
+                {customization.isRequired && (
+                  <Badge variant="destructive" className="ml-2 text-xs">
+                    Obrigatório
+                  </Badge>
+                )}
+              </Label>
+              {customization.description && (
+                <p className="text-sm text-green-800 mt-1">
+                  {customization.description}
+                </p>
               )}
-            </Label>
-            {customization.description && (
-              <p className="text-sm text-gray-600 mt-1">
-                {customization.description}
-              </p>
-            )}
-            <p className="text-xs text-gray-500 mt-1">
-              {currentFiles.length}/{maxImages} imagens
-            </p>
+            </div>
           </div>
+          <p className="text-xs text-green-700 mt-2 ml-11">
+            {currentFiles.length}/{maxImages} imagens
+          </p>
         </div>
 
         {canAddMore && (
           <label
             htmlFor={`file-${customization.id}`}
-            className="flex flex-col items-center justify-center border-2 border-dashed border-gray-300 rounded-xl p-8 cursor-pointer hover:border-green-400 hover:bg-green-50 transition-all"
+            className="flex flex-col items-center justify-center border-2 border-dashed border-green-400 rounded-xl p-8 cursor-pointer hover:border-green-600 hover:bg-green-50/80 transition-all bg-green-50/40"
           >
-            <Upload className="h-10 w-10 text-gray-400 mb-2" />
-            <p className="text-sm font-medium text-gray-700">
-              Clique para adicionar imagens
+            <div>
+              <Upload className="h-12 w-12 text-green-600 mb-2" />
+            </div>
+            <p className="text-sm font-semibold text-green-900">
+              Clique para adicionar fotos
             </p>
-            <p className="text-xs text-gray-500 mt-1">
-              PNG, JPG ou WEBP (máx. 10MB)
+            <p className="text-xs text-green-700 mt-1">
+              PNG, JPG ou WEBP (máx. 10MB cada)
             </p>
             <input
               id={`file-${customization.id}`}
@@ -919,11 +968,13 @@ export function ItemCustomizationModal({
         )}
 
         {currentFiles.length > 0 && (
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-4 gap-3">
             {currentFiles.map((file, index) => (
-              <div
+              <motion.div
                 key={index}
-                className="relative group aspect-square rounded-lg overflow-hidden border-2 border-gray-200"
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="relative group aspect-square rounded-lg overflow-hidden border-2 border-green-300 shadow-md hover:shadow-lg transition-shadow"
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
@@ -939,9 +990,77 @@ export function ItemCustomizationModal({
                 >
                   <X className="h-3 w-3" />
                 </Button>
-              </div>
+              </motion.div>
             ))}
           </div>
+        )}
+
+        {hasImages && currentFiles.length === maxImages && (
+          <motion.div
+            className="fixed bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-white via-white to-transparent border-t-2 border-green-200 shadow-2xl"
+            initial={{ opacity: 0, y: 100 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ type: "spring", stiffness: 300, damping: 30 }}
+          >
+            <div className="max-w-6xl mx-auto flex gap-3">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setUploadingFiles((prev) => ({
+                    ...prev,
+                    [customization.id]: [],
+                  }));
+                  setCustomizationData((prev) => ({
+                    ...prev,
+                    [customization.id]: undefined,
+                  }));
+                }}
+                className="flex-1"
+              >
+                Limpar
+              </Button>
+              <Button
+                onClick={() => {
+                  const result: CustomizationInput[] = [];
+                  const filesData = customizationData[customization.id] as
+                    | Array<{
+                        file: File;
+                        preview: string;
+                        position: number;
+                        base64?: string;
+                        mime_type?: string;
+                        size?: number;
+                      }>
+                    | undefined;
+
+                  if (filesData && filesData.length > 0) {
+                    result.push({
+                      ruleId: customization.id,
+                      customizationRuleId: customization.id,
+                      customizationType: CustomizationType.IMAGES,
+                      data: {
+                        files: filesData.map((item) => item.file),
+                        previews: filesData.map(
+                          (item) => item.base64 || item.preview
+                        ),
+                        count: filesData.length,
+                        _customizationName: customization.name,
+                        _priceAdjustment: customization.price || 0,
+                      } as unknown as Record<string, unknown>,
+                    });
+                  }
+
+                  onComplete(result.length > 0, result);
+                  toast.success("Imagens confirmadas!");
+                  onClose();
+                }}
+                className="flex-1 gap-2 bg-green-600 hover:bg-green-700"
+              >
+                <CheckCircle2 className="h-4 w-4" />
+                Confirmar
+              </Button>
+            </div>
+          </motion.div>
         )}
       </div>
     );
@@ -950,87 +1069,170 @@ export function ItemCustomizationModal({
   const renderMultipleChoiceCustomization = (customization: Customization) => {
     const options = customization.customization_data.options || [];
     const data = customizationData[customization.id] as
-      | { id?: string }
+      | { id?: string; label?: string }
       | undefined;
     const selectedId = data?.id;
+    const selectedLabel = data?.label;
 
     return (
-      <div className="space-y-4">
-        <div className="flex items-center gap-3">
-          <div className="p-2 rounded-lg bg-rose-100">
-            <CheckCircle2 className="h-5 w-5 text-rose-600" />
-          </div>
-          <div>
-            <Label className="text-lg font-bold text-gray-900">
-              {customization.name}
-              {customization.isRequired && (
-                <Badge
-                  variant="destructive"
-                  className="ml-2 text-xs text-white"
-                >
-                  Obrigatório
-                </Badge>
+      <div className="space-y-4 pb-5">
+        <div className="p-4 rounded-lg bg-gradient-to-r from-rose-50 to-pink-50 border-2 border-rose-300 shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-rose-200">
+              <CheckCircle2 className="h-5 w-5 text-rose-700" />
+            </div>
+            <div>
+              <Label className="text-lg font-bold text-rose-900">
+                {customization.name}
+                {customization.isRequired && (
+                  <Badge
+                    variant="destructive"
+                    className="ml-2 text-xs text-white"
+                  >
+                    Obrigatório
+                  </Badge>
+                )}
+              </Label>
+              {customization.description && (
+                <p className="text-sm text-rose-800 mt-1">
+                  {customization.description}
+                </p>
               )}
-            </Label>
-            {customization.description && (
-              <p className="text-sm text-gray-600 mt-1">
-                {customization.description}
-              </p>
-            )}
+            </div>
           </div>
         </div>
 
-        <div className="space-y-2">
+        <div className="h-[40vh] space-y-2 overflow-y-auto px-5">
           {options.map((option) => {
             const isSelected = selectedId === option.id;
             return (
-              <Card
+              <motion.div
                 key={option.id}
-                className={`p-4 cursor-pointer transition-all ${
-                  isSelected
-                    ? "border-2 border-rose-500 bg-rose-50"
-                    : "border-2 border-gray-200 hover:border-rose-300 hover:bg-rose-50/50"
-                }`}
-                onClick={() =>
-                  handleOptionSelect(customization.id, option.id, option.label)
-                }
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
               >
-                <div className="flex items-center gap-3">
-                  <Checkbox checked={isSelected} className="border-2" />
-                  <Image
-                    src={
-                      getInternalImageUrl(option.image_url) ||
-                      "/placeholder.png"
-                    }
-                    alt={option.label}
-                    width={64}
-                    height={64}
-                    quality={90}
-                    className="w-16 h-16 object-cover rounded-md border"
-                  />
-                  <div className="flex-1">
-                    <p className="font-semibold text-gray-900">
-                      {option.label}
-                    </p>
-                    {option.description && (
-                      <p className="text-xs text-gray-600 mt-1">
-                        {option.description}
+                <Card
+                  className={`p-4 cursor-pointer transition-all ${
+                    isSelected
+                      ? "border-2 border-rose-500 bg-gradient-to-r from-rose-50 to-pink-50 shadow-md"
+                      : "border-2 border-rose-200 hover:border-rose-400 hover:bg-rose-50/30"
+                  }`}
+                  onClick={() =>
+                    handleOptionSelect(
+                      customization.id,
+                      option.id,
+                      option.label
+                    )
+                  }
+                >
+                  <div className="flex items-center gap-3">
+                    <motion.div
+                      initial={false}
+                      animate={{
+                        scale: isSelected ? 1.2 : 1,
+                        backgroundColor: isSelected
+                          ? "rgb(244 63 94)"
+                          : "rgb(254 226 226)",
+                      }}
+                      className="flex-shrink-0 w-6 h-6 rounded-full border-2 border-rose-300 flex items-center justify-center"
+                    >
+                      {isSelected && <Check className="h-4 w-4 text-white" />}
+                    </motion.div>
+                    <Image
+                      src={
+                        getInternalImageUrl(option.image_url) ||
+                        "/placeholder.png"
+                      }
+                      alt={option.label}
+                      width={64}
+                      height={64}
+                      quality={90}
+                      className="w-16 h-16 object-cover rounded-md border-2 border-rose-200"
+                    />
+                    <div className="flex-1">
+                      <p
+                        className={`font-semibold ${
+                          isSelected ? "text-rose-900" : "text-rose-800"
+                        }`}
+                      >
+                        {option.label}
                       </p>
+                      {option.description && (
+                        <p className="text-xs text-rose-700 mt-1">
+                          {option.description}
+                        </p>
+                      )}
+                    </div>
+                    {option.price_adjustment && option.price_adjustment > 0 && (
+                      <Badge
+                        variant="outline"
+                        className="text-rose-700 border-rose-300 bg-rose-50"
+                      >
+                        +R$ {option.price_adjustment.toFixed(2)}
+                      </Badge>
                     )}
                   </div>
-                  {option.price_adjustment && option.price_adjustment > 0 && (
-                    <Badge
-                      variant="outline"
-                      className="text-rose-700 border-rose-300"
-                    >
-                      +R$ {option.price_adjustment.toFixed(2)}
-                    </Badge>
-                  )}
-                </div>
-              </Card>
+                </Card>
+              </motion.div>
             );
           })}
         </div>
+
+        {selectedId && selectedLabel && (
+          <motion.div
+            className="fixed bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-white via-white to-transparent border-t-2 border-rose-200 shadow-2xl"
+            initial={{ opacity: 0, y: 100 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ type: "spring", stiffness: 300, damping: 30 }}
+          >
+            <div className="max-w-6xl mx-auto flex gap-3">
+              <Button
+                variant="outline"
+                onClick={() =>
+                  setCustomizationData((prev) => ({
+                    ...prev,
+                    [customization.id]: {},
+                  }))
+                }
+                className="flex-1"
+              >
+                Voltar
+              </Button>
+              <Button
+                onClick={() => {
+                  const result: CustomizationInput[] = [];
+                  customizations.forEach((custom) => {
+                    const data = customizationData[custom.id];
+                    if (custom.type === "MULTIPLE_CHOICE" && data) {
+                      const choiceData = data as {
+                        id?: string;
+                        label?: string;
+                      };
+                      if (choiceData.id) {
+                        result.push({
+                          ruleId: custom.id,
+                          customizationType: CustomizationType.MULTIPLE_CHOICE,
+                          data: {
+                            id: choiceData.id,
+                            label: choiceData.label || "",
+                            _customizationName: custom.name,
+                          } as unknown as Record<string, unknown>,
+                        });
+                      }
+                    }
+                  });
+                  onComplete(result.length > 0, result);
+                  toast.success("Opção selecionada!");
+                  onClose();
+                }}
+                className="flex-1 gap-2 bg-rose-600 hover:bg-rose-700"
+              >
+                <CheckCircle2 className="h-4 w-4" />
+                Confirmar
+              </Button>
+            </div>
+          </motion.div>
+        )}
       </div>
     );
   };
@@ -1038,6 +1240,12 @@ export function ItemCustomizationModal({
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-6xl max-h-[95vh] overflow-y-auto">
+        {loading && (
+          <div className="fixed inset-0 bg-white/95 backdrop-blur-sm rounded-lg flex items-center justify-center z-[60]">
+            <AnimatedFramesLoader />
+          </div>
+        )}
+
         <DialogHeader>
           <DialogTitle className="text-2xl font-bold">
             {step === "selection"
@@ -1080,31 +1288,6 @@ export function ItemCustomizationModal({
                 }
                 return null;
               })}
-
-              {customizations.every((c) => c.type !== "BASE_LAYOUT") && (
-                <div className="flex justify-end gap-3 pt-6 border-t">
-                  <Button variant="outline" onClick={onClose}>
-                    Cancelar
-                  </Button>
-                  <Button
-                    onClick={handleSave}
-                    disabled={loading}
-                    className="gap-2"
-                  >
-                    {loading ? (
-                      <>
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        Salvando...
-                      </>
-                    ) : (
-                      <>
-                        <CheckCircle2 className="h-4 w-4" />
-                        Salvar Personalização
-                      </>
-                    )}
-                  </Button>
-                </div>
-              )}
             </div>
           ) : (
             <div>

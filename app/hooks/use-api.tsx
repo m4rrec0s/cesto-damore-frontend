@@ -155,6 +155,7 @@ export interface User {
   name: string;
   email: string;
   phone?: string | null;
+  document?: string | null;
   address?: string | null;
   city?: string | null;
   state?: string | null;
@@ -1511,19 +1512,20 @@ class ApiService {
       }
     }
 
-    // Remove from final art(s)
-    if (clone.finalArtwork) {
-      delete clone.finalArtwork.base64;
-      delete clone.finalArtwork.base64Data;
-    }
-    if (clone.finalArtworks && Array.isArray(clone.finalArtworks)) {
-      clone.finalArtworks.forEach((a: unknown) => {
-        if (typeof a === "object" && a !== null) {
-          delete (a as Record<string, unknown>).base64;
-          delete (a as Record<string, unknown>).base64Data;
-        }
-      });
-    }
+    // ✅ MANTER base64 em finalArtwork/finalArtworks para o backend processar
+    // O backend irá converter para arquivo e depois remover o base64 antes de salvar no banco
+    // if (clone.finalArtwork) {
+    //   delete clone.finalArtwork.base64;
+    //   delete clone.finalArtwork.base64Data;
+    // }
+    // if (clone.finalArtworks && Array.isArray(clone.finalArtworks)) {
+    //   clone.finalArtworks.forEach((a: unknown) => {
+    //     if (typeof a === "object" && a !== null) {
+    //       delete (a as Record<string, unknown>).base64;
+    //       delete (a as Record<string, unknown>).base64Data;
+    //     }
+    //   });
+    // }
 
     if (clone.data) removeBase64(clone.data);
 
@@ -1534,156 +1536,94 @@ class ApiService {
   private stripBase64FromOrderPayload(payload: Record<string, unknown>) {
     const clone = JSON.parse(JSON.stringify(payload));
 
-    // ✅ For IMAGES and BASE_LAYOUT customizations, we MUST keep base64 data for backend extraction
+    // ✅ For IMAGES and BASE_LAYOUT customizations, we now REMOVE base64 data
+    // We only store file paths (URLs) in the database.
     // This function will:
-    // 1. Keep base64 in photos array of IMAGES customizations
-    // 2. Keep base64 in text field of BASE_LAYOUT customizations
-    // 3. Remove preview_url (blob: URLs) but keep base64
-    // 4. Remove base64 from other customization types (TEXT, MULTIPLE_CHOICE)
+    // 1. Remove base64 fields
+    // 2. Remove strings starting with data: or blob:
+    // 3. Remove preview_url if it's a blob: URL
 
-    function removeBase64(
-      obj: unknown,
-      isImageCustomization: boolean = false,
-      isBaseLayoutCustomization: boolean = false
-    ) {
+    function removeBase64(obj: unknown) {
       if (!obj || typeof obj !== "object") return;
       const record = obj as Record<string, unknown>;
       for (const key of Object.keys(record)) {
         const val = record[key];
 
-        // For IMAGES customizations, handle photos array specially
-        if (isImageCustomization && key === "photos" && Array.isArray(val)) {
-          val.forEach((photo: unknown) => {
-            if (typeof photo === "object" && photo !== null) {
-              const p = photo as Record<string, unknown>;
-              // Keep: base64, original_name, temp_file_id, mime_type, size, position
-              // Remove: preview_url (blob URLs), preview (blob URLs)
-              if (
-                typeof p.preview_url === "string" &&
-                p.preview_url.startsWith("blob:")
-              ) {
-                delete p.preview_url;
-              }
-              if (
-                typeof p.preview === "string" &&
-                p.preview.startsWith("blob:")
-              ) {
-                delete p.preview;
-              }
-              // ✅ KEEP base64 for IMAGES - NÃO deletar base64!
-            }
-          });
-          continue; // ← IMPORTANTE: Pula para próximo key, não processa novamente
+        // Recursively handle photos array in IMAGES or other arrays
+        if (Array.isArray(val)) {
+          val.forEach((item) => removeBase64(item));
+          continue;
         }
 
-        // For BASE_LAYOUT customizations, keep text field with base64 (canvas preview)
-        if (
-          isBaseLayoutCustomization &&
-          key === "text" &&
-          typeof val === "string" &&
-          val.startsWith("data:")
-        ) {
-          // ✅ KEEP text field with base64 for BASE_LAYOUT
-          continue; // ← IMPORTANTE: Pula para próximo key
+        // Recursively handle nested objects
+        if (val && typeof val === "object") {
+          removeBase64(val);
+          continue;
         }
 
-        // For non-photos/non-text fields, remove strings starting with data: or blob:
-        if (typeof val === "string") {
-          if (val.startsWith("data:") || val.startsWith("blob:")) {
-            delete record[key];
-            continue;
-          }
-        }
-
-        // For non-IMAGES/non-BASE_LAYOUT customizations, remove base64 fields
-        if (
-          !isImageCustomization &&
-          !isBaseLayoutCustomization &&
-          (key === "base64" || key === "base64Data")
-        ) {
+        // Remove base64/base64Data keys
+        if (key === "base64" || key === "base64Data") {
           delete record[key];
           continue;
         }
 
-        // ✅ NÃO PROCESSAR PHOTOS NOVAMENTE para IMAGES
-        // Se é IMAGES e é photos, já foi processado acima com continue
-        if (isImageCustomization && key === "photos") {
-          continue; // ← PROTEÇÃO EXTRA: Garante que não processa novamente
-        }
-
-        if (Array.isArray(val)) {
-          val.forEach((item) =>
-            removeBase64(item, isImageCustomization, isBaseLayoutCustomization)
-          );
-        } else if (typeof val === "object") {
-          removeBase64(val, isImageCustomization, isBaseLayoutCustomization);
+        // Remove strings starting with data: or blob:
+        if (typeof val === "string") {
+          if (val.startsWith("data:") || val.startsWith("blob:")) {
+            // For 'text' field in 'BASE_LAYOUT', if it's base64, we delete it.
+            // Ideally it should have been replaced by a URL by the caller.
+            delete record[key];
+            continue;
+          }
         }
       }
     }
 
-    // ✅ NOVO: Processar SaveOrderItemCustomizationPayload direta (customizationType, data fields)
-    const isImages = clone.customizationType === "IMAGES";
-    const isBaseLayout = clone.customizationType === "BASE_LAYOUT";
-
-    if (isImages || isBaseLayout) {
-      if (clone.data && typeof clone.data === "object") {
-        removeBase64(clone.data, isImages, isBaseLayout);
-      }
-      if (clone.finalArtwork && typeof clone.finalArtwork === "object") {
-        removeBase64(clone.finalArtwork, isImages, isBaseLayout);
-      }
-      if (clone.finalArtworks && Array.isArray(clone.finalArtworks)) {
-        clone.finalArtworks.forEach((artwork: unknown) => {
-          if (typeof artwork === "object") {
-            removeBase64(artwork, isImages, isBaseLayout);
-          }
-        });
-      }
+    // Process top-level data fields
+    if (clone.data && typeof clone.data === "object") {
+      removeBase64(clone.data);
+    }
+    if (clone.finalArtwork && typeof clone.finalArtwork === "object") {
+      removeBase64(clone.finalArtwork);
+    }
+    if (clone.finalArtworks && Array.isArray(clone.finalArtworks)) {
+      clone.finalArtworks.forEach((artwork: unknown) => {
+        removeBase64(artwork);
+      });
     }
 
     if (Array.isArray(clone.items)) {
       clone.items.forEach((it: unknown) => {
         const item = it as Record<string, unknown>;
         if (!item.customizations) return;
-        // ✅ Handle both 'value' (from backend) and 'customization_data' (from cart)
+
         (item.customizations as unknown[]).forEach((c: unknown) => {
           const customization = c as Record<string, unknown>;
-
-          // Determine customization type
-          const isImages = customization.customization_type === "IMAGES";
-          const isBaseLayout =
-            customization.customization_type === "BASE_LAYOUT";
-
           try {
-            // Handle 'value' field (when customizations come from backend)
+            // Handle 'value' field
             if (typeof customization.value === "string") {
               const parsed = JSON.parse(customization.value as string);
-              removeBase64(parsed, isImages, isBaseLayout);
+              removeBase64(parsed);
               customization.value = JSON.stringify(parsed);
             } else if (typeof customization.value === "object") {
-              removeBase64(customization.value, isImages, isBaseLayout);
+              removeBase64(customization.value);
             }
 
-            // ✅ Handle 'customization_data' field (when customizations come from cart)
+            // Handle 'customization_data' field
             if (
               customization.customization_data &&
               typeof customization.customization_data === "object"
             ) {
-              removeBase64(
-                customization.customization_data,
-                isImages,
-                isBaseLayout
-              );
+              removeBase64(customization.customization_data);
             }
           } catch {
-            // ignore parse error and try to clean shallow fields
-            removeBase64(customization, isImages, isBaseLayout);
+            removeBase64(customization);
           }
         });
       });
     }
 
-    return clone;
+    return clone as import("../types/customization").SaveOrderItemCustomizationPayload;
   }
 
   saveOrderItemCustomization = async (
@@ -1807,6 +1747,27 @@ class ApiService {
       headers: { "Content-Type": "multipart/form-data" },
     });
     return res.data;
+  };
+
+  /**
+   * Valida se uma imagem temporária ainda existe no servidor
+   * Tenta fazer um HEAD request ou GET simples para verificar
+   * Retorna true se a imagem existe, false caso contrário
+   */
+  validateTempImageExists = async (imageUrl: string): Promise<boolean> => {
+    if (!imageUrl) return false;
+    try {
+      // Fazer request simples com timeout curto
+      await Promise.race([
+        this.client.head(imageUrl),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error("timeout")), 3000)
+        ),
+      ]);
+      return true;
+    } catch {
+      return false;
+    }
   };
 
   /**
@@ -2005,11 +1966,29 @@ class ApiService {
     issuer_id?: string;
     payment_method_id?: string; // payment_method_id específico do MP (master, visa, etc)
   }) => {
-    const res = await this.client.post(
-      "/payment/transparent-checkout",
-      payload
-    );
-    return res.data;
+    try {
+      const res = await this.client.post(
+        "/payment/transparent-checkout",
+        payload
+      );
+      return res.data;
+    } catch (error: unknown) {
+      // Extract friendly error message from backend response
+      if (axios.isAxiosError(error) && error.response?.data) {
+        const responseData = error.response.data as {
+          error?: string;
+          details?: string;
+          status_detail?: string;
+        };
+
+        // Prioritize the 'error' field which contains the friendly message
+        const friendlyMessage = responseData.error || responseData.details;
+        if (friendlyMessage) {
+          throw new Error(friendlyMessage);
+        }
+      }
+      throw error;
+    }
   };
 
   getOrderForCheckout = async (orderId: string) => {

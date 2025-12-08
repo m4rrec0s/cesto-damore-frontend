@@ -299,11 +299,12 @@ export default function LayoutBaseManager({
                     {imagePreview && (
                       <div className="mt-3 p-3 border rounded-lg bg-muted/30">
                         <div className="flex gap-4">
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img
+                          <Image
                             src={imagePreview}
                             alt="Preview"
                             className="w-32 h-32 object-contain border rounded bg-white"
+                            width={128}
+                            height={128}
                           />
                           <div className="flex-1 space-y-1">
                             <p className="text-sm font-medium">
@@ -509,10 +510,11 @@ export default function LayoutBaseManager({
                     </TableCell>
                     <TableCell>
                       <span
-                        className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${layout.item_type === "CANECA"
+                        className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${
+                          layout.item_type === "CANECA"
                             ? "bg-rose-100 text-rose-800"
                             : "bg-purple-100 text-purple-800"
-                          }`}
+                        }`}
                       >
                         {layout.item_type === "CANECA" ? "🍵" : "🖼️"}{" "}
                         {layout.item_type}

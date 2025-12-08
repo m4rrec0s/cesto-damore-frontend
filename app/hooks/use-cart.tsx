@@ -12,6 +12,7 @@ export interface CartCustomization extends CustomizationValue {
   selected_option_label?: string;
   selected_item_label?: string;
   label_selected?: string;
+  additional_time?: number;
 }
 
 interface OrderAdditionalItem {
@@ -234,13 +235,21 @@ interface CartContextType {
   isWeekend: (date: Date) => boolean;
   hasCustomItems: () => boolean;
   getMinPreparationHours: () => number;
+  getMaxProductionTime: () => number;
   generateTimeSlots: (date: Date) => TimeSlot[];
   getAvailableDates: () => AvailableDate[];
+  isDateDisabledInCalendar: (date: Date) => boolean;
   getDeliveryDateBounds: () => { minDate: Date; maxDate: Date };
+  getProductionTimeline: () => {
+    productionHours: number;
+    productionEndsAt: Date;
+    earliestPickupTime: Date;
+    formattedProductionEnds: string;
+    formattedPickup: string;
+  };
   formatDate: (date: Date) => string;
   orderMetadata: Record<string, unknown>;
   setOrderMetadata: (metadata: Record<string, unknown>) => void;
-  getMaxProductionTime: () => number;
 }
 
 export function useCart(): CartContextType {
@@ -444,6 +453,7 @@ export function useCart(): CartContextType {
                         data.label_selected ||
                         data.selected_item_label ||
                         data.selected_option_label,
+                      additional_time: data.additional_time || 0,
                     });
                   }
                 } catch (error) {
@@ -537,6 +547,7 @@ export function useCart(): CartContextType {
           selected_item_label: custom.selected_item_label,
           label_selected: custom.label_selected,
           price_adjustment: custom.price_adjustment,
+          additional_time: custom.additional_time || 0,
         },
       })),
     }));
@@ -671,6 +682,11 @@ export function useCart(): CartContextType {
   );
 
   const syncTimeoutRef = useRef<number | null>(null);
+
+  // ✅ CACHE para otimizar performance do Calendar
+  // Evita recalcular timeSlots para datas já verificadas
+  const dateDisabledCacheRef = useRef<Map<string, boolean>>(new Map());
+
   const debouncedSync = useCallback(
     (currentCart: CartState) => {
       if (typeof window === "undefined") return;
@@ -683,6 +699,12 @@ export function useCart(): CartContextType {
     },
     [syncCartToBackend]
   );
+
+  // ✅ Limpar cache de datas desabilitadas quando o carrinho muda
+  // Pois a data de entrega mais cedo pode ter mudado
+  useEffect(() => {
+    dateDisabledCacheRef.current.clear();
+  }, [cart]);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -702,6 +724,11 @@ export function useCart(): CartContextType {
                 custom.customization_type === "BASE_LAYOUT"
                   ? undefined // Remover preview URL do layout
                   : custom.text,
+              // ✅ PRESERVAR additional_time do BASE_LAYOUT
+              additional_time:
+                custom.customization_type === "BASE_LAYOUT"
+                  ? custom.additional_time
+                  : undefined,
             })),
           })),
         };
@@ -911,7 +938,6 @@ export function useCart(): CartContextType {
           let newItems: CartItem[] = [...currentItems];
           if (existingIndex >= 0) {
             newItems = [...currentItems];
-            // Update existing item
             const updatedItem = { ...newItems[existingIndex] };
             updatedItem.quantity += quantity;
             const existingBaseEffective =
@@ -926,7 +952,6 @@ export function useCart(): CartContextType {
                 : undefined;
             newItems[existingIndex] = updatedItem;
           } else {
-            // Push new item
             newItems.push(newItem);
           }
 
@@ -951,7 +976,6 @@ export function useCart(): CartContextType {
       customizations?: CartCustomization[],
       additionalColors?: Record<string, string>
     ) => {
-      // ✅ OPTIMISTIC UPDATE: Store the item being removed for potential rollback
       let removedItem: CartItem | null = null;
 
       setCart((prevCart) => {
@@ -963,7 +987,6 @@ export function useCart(): CartContextType {
         const targetColors = serializeAdditionalColors(additionalColors);
         const targetCustomizations = serializeCustomizations(customizations);
 
-        // Find the item being removed for potential rollback
         removedItem =
           currentItems.find(
             (item) =>
@@ -988,18 +1011,15 @@ export function useCart(): CartContextType {
         );
         const updatedCart = calculateTotals(newItems);
 
-        // ✅ OPTIMISTIC: Sync immediately without debounce for deletions
         void (async () => {
           try {
             await syncCartToBackend(updatedCart);
 
-            // If cart is empty and we have a pending order, delete it from backend
             if (updatedCart.items.length === 0 && pendingOrderId) {
               try {
                 const serverOrder = await api.getOrder(pendingOrderId);
                 const status = serverOrder?.status;
                 if (status && (status === "PENDING" || status === "pending")) {
-                  // ✅ EXPLICITLY DELETE the pending order from backend
                   try {
                     await api.deleteOrder(pendingOrderId);
                     console.log(
@@ -1010,8 +1030,6 @@ export function useCart(): CartContextType {
                       `❌ [removeFromCart] Erro ao deletar pedido rascunho ${pendingOrderId}:`,
                       deleteErr
                     );
-                    // Even if delete fails, clear the local pending order
-                    // so it doesn't get stuck
                   }
                   setPendingOrderId(null);
                   if (typeof window !== "undefined") {
@@ -1449,263 +1467,356 @@ export function useCart(): CartContextType {
     });
   }, [cart.items]);
 
-  const getMinPreparationHours = useCallback((): number => {
-    let maxHours = 0; // Começar com 0 para somar corretamente
+  // Helper functions for Brazil Timezone
+  const createBrazilDate = useCallback(
+    (
+      year: number,
+      month: number,
+      day: number,
+      hour: number,
+      minute: number
+    ): Date => {
+      // Construct ISO string with fixed -03:00 offset
+      const y = year;
+      const m = String(month + 1).padStart(2, "0");
+      const d = String(day).padStart(2, "0");
+      const h = String(hour).padStart(2, "0");
+      const min = String(minute).padStart(2, "0");
+      return new Date(`${y}-${m}-${d}T${h}:${min}:00-03:00`);
+    },
+    []
+  );
+
+  const getBrazilTimeComponents = useCallback((date: Date) => {
+    // Return components as if in Sao_Paulo
+    const str = date.toLocaleString("en-US", {
+      timeZone: "America/Sao_Paulo",
+      hour12: false,
+    });
+    const [datePart, timePart] = str.split(", ");
+    const [month, day, year] = datePart.split("/").map(Number);
+    const [hour, minute, second] = timePart.split(":").map(Number);
+    return { year, month: month - 1, day, hour, minute, second: second || 0 };
+  }, []);
+
+  /**
+   * ✅ CORRIGIDO: Calcula o tempo MÁXIMO de produção considerando:
+   * 1. product.production_time
+   * 2. additional_time de BASE_LAYOUT selecionado (stored em customization.additional_time)
+   * 3. additional_time de componentes (comp.item.layout_base.additional_time)
+   * 4. additional_time de adicionais (add.layout_base.additional_time)
+   * 5. Toma o MÁXIMO entre todos (não soma)
+   *
+   * O tempo retornado é o tempo REAL de produção em horas.
+   * A consideração dos horários de funcionamento é feita em getEarliestDeliveryDateTime()
+   */
+  const getMaxProductionTime = useCallback((): number => {
+    let maxTime = 0;
 
     cart.items.forEach((item) => {
-      let itemHours = item.product.production_time || 0;
+      // 1. Base do produto
+      const productTime = item.product.production_time || 0;
+      let itemMaxTime = productTime;
 
-      // Verificar tempo adicional do layout base (se houver)
+      // 2. ✅ CORRIGIDO: Buscar additional_time do BASE_LAYOUT selecionado
+      // O additional_time é armazenado direto na customização (vem de client-product-page.tsx)
+      if (item.customizations) {
+        item.customizations.forEach((custom) => {
+          if (custom.customization_type === "BASE_LAYOUT") {
+            // Verificar se existe additional_time (já vem preenchido do BASE_LAYOUT selecionado)
+            const baseLayoutTime = custom.additional_time || 0;
+            if (baseLayoutTime > 0) {
+              itemMaxTime = Math.max(itemMaxTime, baseLayoutTime);
+            }
+          }
+        });
+      }
+
+      // 3. Verificar componentes do produto (que podem ter layout_base)
       if (item.product.components) {
         item.product.components.forEach((comp) => {
           if (comp.item?.layout_base?.additional_time) {
-            itemHours += comp.item.layout_base.additional_time;
+            itemMaxTime = Math.max(
+              itemMaxTime,
+              comp.item.layout_base.additional_time
+            );
           }
         });
       }
 
-      // Fallback/Legacy logic (mantendo compatibilidade com regex se não houver tempo definido no banco)
-      if (itemHours === 0) {
-        if (/quadro|polaroid/i.test(item.product.name)) {
-          itemHours = 4;
-        } else if (/caneca|quebra.?cabeça/i.test(item.product.name)) {
-          itemHours = 24;
-        } else {
-          itemHours = 1; // Padrão mínimo
-        }
-      }
+      maxTime = Math.max(maxTime, itemMaxTime);
 
-      maxHours = Math.max(maxHours, itemHours);
-
-      // Verificar adicionais
-      item.additionals?.forEach((add) => {
-        let addHours = 0;
-        if (/quadro|polaroid/i.test(add.name)) {
-          addHours = 4;
-        }
-        if (/caneca|quebra.?cabeça/i.test(add.name)) {
-          addHours = 24;
-        }
-        maxHours = Math.max(maxHours, addHours);
-      });
+      // 4. Adicionais podem ter seu próprio layout_base
+      // (Nota: Por enquanto, a estrutura de adicionais não inclui layout_base)
+      // item.additionals?.forEach((add) => {
+      //   if (add.item?.layout_base?.additional_time) {
+      //     maxTime = Math.max(maxTime, add.item.layout_base.additional_time);
+      //   }
+      // });
     });
 
-    return maxHours || 1; // Garantir pelo menos 1 hora se tudo for 0
+    return maxTime > 0 ? maxTime : 1; // Garantir pelo menos 1 hora
   }, [cart.items]);
 
-  const parseTimeOnDate = (referenceDate: Date, time: string) => {
-    const [hourStr, minuteStr] = time.split(":");
-    const hours = parseInt(hourStr ?? "0", 10);
-    const minutes = parseInt(minuteStr ?? "0", 10);
+  // ✅ Alias para compatibilidade com código anterior
+  const getMinPreparationHours = useCallback((): number => {
+    return getMaxProductionTime();
+  }, [getMaxProductionTime]);
 
-    const result = new Date(referenceDate);
-    result.setHours(hours, minutes, 0, 0);
-    return result;
-  };
+  // Removed legacy getBrazilTime and parseTimeOnDate as they are replaced by new helpers
 
   const isWithinServiceHours = useCallback(
     (date: Date): boolean => {
+      // Logic: Convert 'date' to Brazil time components to check against window strings
+      const { hour, minute } = getBrazilTimeComponents(date);
+      const currentMinutes = hour * 60 + minute;
+
+      const isWknd = isWeekend(date);
       const windows = getDeliveryWindows();
-      const relevantWindows = isWeekend(date)
-        ? windows.weekends
-        : windows.weekdays;
+      const relevantWindows = isWknd ? windows.weekends : windows.weekdays;
 
       return relevantWindows.some((window) => {
-        const windowStart = parseTimeOnDate(date, window.start);
-        const windowEnd = parseTimeOnDate(date, window.end);
-        return date >= windowStart && date <= windowEnd;
+        const [startH, startM] = window.start.split(":").map(Number);
+        const [endH, endM] = window.end.split(":").map(Number);
+
+        const startTotal = startH * 60 + startM;
+        const endTotal = endH * 60 + endM;
+
+        return currentMinutes >= startTotal && currentMinutes <= endTotal;
       });
     },
-    [getDeliveryWindows, isWeekend]
+    [getDeliveryWindows, isWeekend, getBrazilTimeComponents]
   );
 
-  const getNextServiceWindowStart = useCallback(
-    (from: Date): Date | null => {
+  /**
+   * Calcula os minutos restantes no período de funcionamento atual
+   * ou retorna 0 se não estiver em horário comercial
+   */
+  const getRemainingMinutesInCurrentWindow = useCallback(
+    (date: Date): number => {
+      const { hour, minute } = getBrazilTimeComponents(date);
+      const currentMinutes = hour * 60 + minute;
+
+      const isWknd = isWeekend(date);
       const windows = getDeliveryWindows();
+      const relevantWindows = isWknd ? windows.weekends : windows.weekdays;
 
-      for (let offset = 0; offset < 14; offset++) {
-        const candidateDate = new Date(from);
-        candidateDate.setHours(0, 0, 0, 0);
-        candidateDate.setDate(candidateDate.getDate() + offset);
+      for (const window of relevantWindows) {
+        const [startH, startM] = window.start.split(":").map(Number);
+        const [endH, endM] = window.end.split(":").map(Number);
 
-        const relevantWindows = isWeekend(candidateDate)
-          ? windows.weekends
-          : windows.weekdays;
+        const startTotal = startH * 60 + startM;
+        const endTotal = endH * 60 + endM;
 
-        for (const window of relevantWindows) {
-          const windowStart = parseTimeOnDate(candidateDate, window.start);
-          const windowEnd = parseTimeOnDate(candidateDate, window.end);
-
-          if (offset === 0) {
-            if (from < windowStart) {
-              return windowStart;
-            }
-
-            if (from >= windowStart && from < windowEnd) {
-              return from;
-            }
-          } else {
-            return windowStart;
-          }
+        if (currentMinutes >= startTotal && currentMinutes <= endTotal) {
+          return endTotal - currentMinutes;
         }
       }
-
-      return null;
+      return 0;
     },
-    [getDeliveryWindows, isWeekend]
+    [getBrazilTimeComponents, isWeekend, getDeliveryWindows]
   );
+
+  /**
+   * Retorna o próximo horário de início de funcionamento após a data especificada
+   */
+  const getNextServiceWindowStart = useCallback(
+    (afterDate: Date): Date => {
+      const candidate = new Date(afterDate);
+      candidate.setSeconds(0, 0);
+
+      // Procurar até 14 dias à frente
+      const limit = new Date(candidate);
+      limit.setDate(limit.getDate() + 14);
+
+      while (candidate < limit) {
+        const { year, month, day, hour, minute } =
+          getBrazilTimeComponents(candidate);
+        const currentMinutes = hour * 60 + minute;
+        const isWknd = isWeekend(candidate);
+        const windows = getDeliveryWindows();
+        const relevantWindows = isWknd ? windows.weekends : windows.weekdays;
+
+        // Procurar uma janela que comece após o horário atual
+        for (const window of relevantWindows) {
+          const [startH, startM] = window.start.split(":").map(Number);
+          const startTotal = startH * 60 + startM;
+
+          // Se a janela começa após o horário atual neste dia
+          if (startTotal > currentMinutes) {
+            return createBrazilDate(year, month, day, startH, startM);
+          }
+        }
+
+        // Tentar o próximo dia às 00:00
+        const nextDay = createBrazilDate(year, month, day + 1, 0, 0);
+        const nextDayComponents = getBrazilTimeComponents(nextDay);
+        const nextIsWknd = isWeekend(nextDay);
+        const nextWindows = nextIsWknd
+          ? getDeliveryWindows().weekends
+          : getDeliveryWindows().weekdays;
+
+        if (nextWindows.length > 0) {
+          const [startH, startM] = nextWindows[0].start.split(":").map(Number);
+          return createBrazilDate(
+            nextDayComponents.year,
+            nextDayComponents.month,
+            nextDayComponents.day,
+            startH,
+            startM
+          );
+        }
+
+        // Avançar um dia
+        candidate.setTime(candidate.getTime() + 24 * 60 * 60 * 1000);
+      }
+
+      // Fallback
+      const { year, month, day } = getBrazilTimeComponents(candidate);
+      return createBrazilDate(year, month, day + 1, 8, 0);
+    },
+    [getBrazilTimeComponents, isWeekend, getDeliveryWindows, createBrazilDate]
+  );
+
+
 
   const getEarliestDeliveryDateTime = useCallback(() => {
     const now = new Date();
-    const minHours = getMinPreparationHours();
-    let earliest = new Date(now.getTime() + minHours * 60 * 60 * 1000);
+    let remainingProductionMinutes = getMinPreparationHours() * 60;
 
-    if (!isWithinServiceHours(now)) {
-      const nextWindowStart = getNextServiceWindowStart(now);
+    // Começar do momento atual
+    let current = new Date(now);
 
-      if (nextWindowStart) {
-        const prepAfterWindow = new Date(
-          nextWindowStart.getTime() + 60 * 60 * 1000
-        );
+    // Se não estiver em horário comercial, ir para o próximo início
+    if (!isWithinServiceHours(current)) {
+      current = getNextServiceWindowStart(current);
+    }
 
-        if (prepAfterWindow > earliest) {
-          earliest = prepAfterWindow;
+    // Limite de busca: 14 dias
+    const limit = new Date(now);
+    limit.setDate(limit.getDate() + 14);
+
+    while (remainingProductionMinutes > 0 && current < limit) {
+      // Quanto tempo resta na janela atual?
+      const remainingInWindow = getRemainingMinutesInCurrentWindow(current);
+
+      if (remainingInWindow > 0) {
+        if (remainingInWindow >= remainingProductionMinutes) {
+          // Produção termina dentro desta janela
+          current = new Date(
+            current.getTime() + remainingProductionMinutes * 60 * 1000
+          );
+          remainingProductionMinutes = 0;
+        } else {
+          // Consumir todo o tempo restante da janela
+          remainingProductionMinutes -= remainingInWindow;
+          current = new Date(current.getTime() + remainingInWindow * 60 * 1000);
+          // Ir para a próxima janela de funcionamento
+          current = getNextServiceWindowStart(current);
         }
+      } else {
+        // Não está em janela de funcionamento, ir para a próxima
+        current = getNextServiceWindowStart(current);
       }
     }
 
-    return earliest;
-  }, [getMinPreparationHours, getNextServiceWindowStart, isWithinServiceHours]);
+    // Alinhar ao próximo intervalo de 30 min
+    const { year, month, day, hour, minute } = getBrazilTimeComponents(current);
+    const remainder = minute % 30;
+    let alignedMinute = minute;
+    let alignedHour = hour;
+    if (remainder !== 0) {
+      alignedMinute = minute + (30 - remainder);
+      if (alignedMinute >= 60) {
+        alignedMinute -= 60;
+        alignedHour += 1;
+      }
+    }
+
+    let result = createBrazilDate(year, month, day, alignedHour, alignedMinute);
+
+    // Verificar se o resultado está dentro do horário de funcionamento
+    if (!isWithinServiceHours(result)) {
+      result = getNextServiceWindowStart(result);
+    }
+
+    return result;
+  }, [
+    getMinPreparationHours,
+    isWithinServiceHours,
+    getRemainingMinutesInCurrentWindow,
+    getNextServiceWindowStart,
+    getBrazilTimeComponents,
+    createBrazilDate,
+  ]);
 
   const generateTimeSlots = useCallback(
-    (date: Date): TimeSlot[] => {
+    (baseDate: Date): TimeSlot[] => {
+      // baseDate: data selecionada no calendário
+      const { year, month, day } = getBrazilTimeComponents(baseDate);
+
+      // Construir objeto Date representando o meio-dia no Brasil para verificar se é FDS
+      const checkDate = createBrazilDate(year, month, day, 12, 0);
+      const isWknd = isWeekend(checkDate);
+
       const windows = getDeliveryWindows();
-      const isWeekendDay = isWeekend(date);
-      const relevantWindows = isWeekendDay
-        ? windows.weekends
-        : windows.weekdays;
+      const relevantWindows = isWknd ? windows.weekends : windows.weekdays;
+
       const slots: TimeSlot[] = [];
-      const now = new Date();
-      const earliestTime = getEarliestDeliveryDateTime();
-      const earliestTimestamp = earliestTime.getTime();
-      const isNowWithinService = isWithinServiceHours(now);
+      const earliestTime = getEarliestDeliveryDateTime(); // Absolute timestamp of earliest valid slot
 
       relevantWindows.forEach((window) => {
-        const startTime = window.start.split(":");
-        const endTime = window.end.split(":");
-        const startHour = parseInt(startTime[0]);
-        const startMinute = parseInt(startTime[1]);
-        const endHour = parseInt(endTime[0]);
-        const endMinute = parseInt(endTime[1]) || 0;
+        const [startH, startM] = window.start.split(":").map(Number);
+        const [endH, endM] = window.end.split(":").map(Number);
 
-        // Converter tudo para minutos para facilitar os cálculos
-        const windowStartMinutes = startHour * 60 + startMinute;
-        const windowEndMinutes = endHour * 60 + endMinute;
+        // Construir Inicio e Fim da janela absolute timestamps
+        const windowStart = createBrazilDate(year, month, day, startH, startM);
+        const windowEnd = createBrazilDate(year, month, day, endH, endM);
 
-        // Gerar slots de 1 hora
-        const possibleSlots = [];
+        const iter = new Date(windowStart);
 
-        // 1. Slots seguindo o padrão da janela (ex: 7:30-8:30, 8:30-9:30...)
-        let currentMinutes = windowStartMinutes;
+        while (iter < windowEnd) {
+          const slotStart = new Date(iter);
+          const slotEnd = new Date(iter.getTime() + 60 * 60 * 1000); // 1 hora de duração
 
-        while (currentMinutes < windowEndMinutes) {
-          let nextSlotMinutes = currentMinutes + 60;
-          if (nextSlotMinutes > windowEndMinutes) {
-            nextSlotMinutes = windowEndMinutes;
-          }
-
-          possibleSlots.push({
-            start: currentMinutes,
-            end: nextSlotMinutes,
-          });
-
-          currentMinutes = nextSlotMinutes;
-        }
-
-        for (let hour = startHour; hour < endHour; hour++) {
-          const slotStart = hour * 60;
-          const slotEnd = (hour + 1) * 60;
-
-          if (slotStart >= windowStartMinutes && slotEnd <= windowEndMinutes) {
-            possibleSlots.push({
-              start: slotStart,
-              end: slotEnd,
+          // O slot é válido se começar DEPOIS ou IGUAL ao earliestTime
+          if (slotStart >= earliestTime) {
+            const startStr = slotStart.toLocaleTimeString("pt-BR", {
+              timeZone: "America/Sao_Paulo",
+              hour: "2-digit",
+              minute: "2-digit",
             });
-          } else if (
-            slotStart >= windowStartMinutes &&
-            slotStart < windowEndMinutes
-          ) {
-            possibleSlots.push({
-              start: slotStart,
-              end: windowEndMinutes,
+            const endStr = slotEnd.toLocaleTimeString("pt-BR", {
+              timeZone: "America/Sao_Paulo",
+              hour: "2-digit",
+              minute: "2-digit",
+            });
+
+            slots.push({
+              value: slotStart.toISOString(),
+              label: `${startStr} - ${endStr}`,
             });
           }
+
+          // Incremento: 30 minutos
+          iter.setTime(iter.getTime() + 30 * 60 * 1000);
         }
-
-        const uniqueSlots = possibleSlots
-          .filter(
-            (slot, index, arr) =>
-              arr.findIndex(
-                (s) => s.start === slot.start && s.end === slot.end
-              ) === index
-          )
-          .sort((a, b) => a.start - b.start);
-
-        uniqueSlots.forEach((slot) => {
-          const slotStartHour = Math.floor(slot.start / 60);
-          const slotStartMin = slot.start % 60;
-          const slotEndHour = Math.floor(slot.end / 60);
-          const slotEndMin = slot.end % 60;
-          const slotStart = `${slotStartHour
-            .toString()
-            .padStart(2, "0")}:${slotStartMin.toString().padStart(2, "0")}`;
-          const slotEnd = `${slotEndHour
-            .toString()
-            .padStart(2, "0")}:${slotEndMin.toString().padStart(2, "0")}`;
-
-          const slotStartDateTime = new Date(date);
-          slotStartDateTime.setHours(slotStartHour, slotStartMin, 0, 0);
-
-          const isToday = date.toDateString() === now.toDateString();
-
-          if (isToday) {
-            const slotEndDateTime = new Date(date);
-            slotEndDateTime.setHours(slotEndHour, slotEndMin, 0, 0);
-            const isSlotValid = isNowWithinService
-              ? slotEndDateTime.getTime() >= earliestTimestamp
-              : slotStartDateTime.getTime() >= earliestTimestamp;
-
-            if (isSlotValid) {
-              slots.push({
-                value: slotStart,
-                label: `${slotStart} - ${slotEnd}`,
-              });
-            }
-          } else {
-            if (slotStartDateTime.getTime() >= earliestTimestamp) {
-              slots.push({
-                value: slotStart,
-                label: `${slotStart} - ${slotEnd}`,
-              });
-            }
-          }
-        });
       });
 
-      const uniqueFinalSlots = slots
-        .filter(
-          (slot, index, arr) =>
-            arr.findIndex((s) => s.value === slot.value) === index
-        )
-        .sort((a, b) => a.value.localeCompare(b.value));
+      // Deduplicate by label just in case
+      const uniqueSlots = slots.filter(
+        (slot, index, self) =>
+          index === self.findIndex((t) => t.label === slot.label)
+      );
 
-      return uniqueFinalSlots;
+      return uniqueSlots;
     },
     [
       getDeliveryWindows,
-      getEarliestDeliveryDateTime,
       isWeekend,
-      isWithinServiceHours,
+      getEarliestDeliveryDateTime,
+      createBrazilDate,
+      getBrazilTimeComponents,
     ]
   );
 
@@ -1731,6 +1842,84 @@ export function useCart(): CartContextType {
 
     return dates;
   }, [getEarliestDeliveryDateTime, generateTimeSlots]);
+
+  const isDateDisabledInCalendar = useCallback(
+    (date: Date): boolean => {
+      // ✅ Usar cache para evitar recalcular para a mesma data
+      const dateKey = date.toISOString().split("T")[0]; // Formato: YYYY-MM-DD
+
+      if (dateDisabledCacheRef.current.has(dateKey)) {
+        return dateDisabledCacheRef.current.get(dateKey) || false;
+      }
+
+      // Calcular e cachear
+      const timeSlots = generateTimeSlots(date);
+      const isDisabled = timeSlots.length === 0;
+      dateDisabledCacheRef.current.set(dateKey, isDisabled);
+
+      return isDisabled;
+    },
+    [generateTimeSlots]
+  );
+
+  /**
+   * ✅ NOVO: Calcula quando a PRODUÇÃO termina dentro do horário de funcionamento
+   *
+   * Retorna objeto com:
+   * - productionEndTime: momento que a produção termina (tempo real)
+   * - earliestPickupTime: primeiro horário de retirada disponível APÓS produção terminar
+   *
+   * EXEMPLO:
+   * - Agora: seg 10:00
+   * - Produção: 18h
+   * - productionEndTime: seg 28:00 = ter 04:00 (fora do horário)
+   * - earliestPickupTime: ter 08:00 (próximo horário de funcionamento)
+   */
+  const getProductionTimeline = useCallback((): {
+    productionHours: number;
+    productionEndsAt: Date;
+    earliestPickupTime: Date;
+    formattedProductionEnds: string;
+    formattedPickup: string;
+  } => {
+    const now = new Date();
+    const prodHours = getMinPreparationHours();
+
+    // Quando a produção termina (tempo real, pode ser fora do expediente)
+    const productionEndsAt = new Date(
+      now.getTime() + prodHours * 60 * 60 * 1000
+    );
+
+    // Encontrar primeira disponibilidade de retirada/entrega APÓS término da produção
+    const earliestPickupTime = getEarliestDeliveryDateTime();
+
+    // Formatar para exibição
+    const formattedProductionEnds = productionEndsAt.toLocaleString("pt-BR", {
+      timeZone: "America/Sao_Paulo",
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+
+    const formattedPickup = earliestPickupTime.toLocaleString("pt-BR", {
+      timeZone: "America/Sao_Paulo",
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+
+    return {
+      productionHours: prodHours,
+      productionEndsAt,
+      earliestPickupTime,
+      formattedProductionEnds,
+      formattedPickup,
+    };
+  }, [getMinPreparationHours, getEarliestDeliveryDateTime]);
 
   /**
    * Retorna o intervalo de datas permitido para agendamento:
@@ -1886,17 +2075,14 @@ export function useCart(): CartContextType {
     isWeekend,
     hasCustomItems,
     getMinPreparationHours,
+    getMaxProductionTime,
     generateTimeSlots,
     getAvailableDates,
+    isDateDisabledInCalendar,
     getDeliveryDateBounds,
+    getProductionTimeline,
     formatDate,
     orderMetadata,
     setOrderMetadata,
-    getMaxProductionTime: useCallback(() => {
-      if (!cart.items || cart.items.length === 0) return 0;
-      return Math.max(
-        ...cart.items.map((item) => item.product.production_time || 0)
-      );
-    }, [cart.items]),
   };
 }

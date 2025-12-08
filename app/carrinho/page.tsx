@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useAuth } from "@/app/hooks/use-auth";
 import { useCartContext } from "@/app/hooks/cart-context";
-// import { useCart } from "@/app/hooks/use-cart";
 import { motion, AnimatePresence, easeIn, easeOut } from "framer-motion";
 import { type Order, useApi } from "@/app/hooks/use-api";
 import { usePaymentManager } from "@/app/hooks/use-payment-manager";
@@ -35,27 +34,28 @@ import {
   RefreshCcw,
 } from "lucide-react";
 import { CustomizationsReview } from "./components/CustomizationsReview";
+import { TimeSlotSelector } from "./components/TimeSlotSelector";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { type PixData, QRCodePIX } from "@/app/components/QRCodePIX";
-import { PaymentStatusOverlay } from "@/app/components/PaymentStatusOverlay";
 import {
-  formatPhoneNumber,
   isValidPhone,
   normalizePhoneForBackend,
+  formatPhoneNumber,
 } from "@/app/lib/phoneMask";
-import {
-  CreditCardForm,
-  type CreditCardData,
-} from "@/app/components/credit-card-form";
-import { usePaymentPolling } from "@/app/hooks/use-payment-polling";
-import { useWebhookNotification } from "@/app/hooks/use-webhook-notification";
-import { PaymentMethodSelector } from "@/app/components/payment-method-selector";
+import { MPStatusScreen } from "@/app/components/mp-status-screen";
 import { getInternalImageUrl } from "@/lib/image-helper";
 import { LoadingPayment } from "@/app/components/LoadingPayment";
 import { OrderConfirmationTicket } from "@/app/components/OrderConfirmationTicket";
+import { usePaymentPolling } from "@/app/hooks/use-payment-polling";
+import { useWebhookNotification } from "@/app/hooks/use-webhook-notification";
+import { QRCodePIX, type PixData } from "@/app/components/QRCodePIX";
+import {
+  MPCardPaymentForm,
+  type MPCardFormData,
+} from "@/app/components/mp-card-payment-form";
+import { PaymentMethodSelector } from "@/app/components/payment-method-selector";
 
 const ACCEPTED_CITIES = [
   "Campina Grande",
@@ -84,16 +84,8 @@ const normalizeString = (value: string) =>
 
 type PaymentStatusType = "" | "pending" | "success" | "failure";
 
-// Tipo para as etapas do checkout
 type CheckoutStep = 1 | 2 | 3;
 
-/**
- * Calcula o preço final de um adicional considerando suas customizações
- * @param additionalId - ID do adicional
- * @param basePrice - Preço base do adicional
- * @param customizations - Array de customizações do item do carrinho
- * @returns Preço final do adicional (base + ajustes de customizações)
- */
 const getAdditionalFinalPrice = (
   additionalId: string,
   basePrice: number,
@@ -193,58 +185,172 @@ const formatCustomizationValue = (custom: CartCustomization) => {
       return "Personalização";
   }
 };
-// Componente de Stepper
+// Componente de Stepper Modernizado - Vertical em Mobile, Horizontal em Desktop
 const CheckoutStepper = ({ currentStep }: { currentStep: CheckoutStep }) => {
   const steps = [
-    { number: 1, label: "Carrinho", icon: ShoppingCart },
-    { number: 2, label: "Entrega", icon: MapPin },
-    { number: 3, label: "Pagamento", icon: CreditCard },
+    {
+      number: 1,
+      label: "Carrinho",
+      shortLabel: "Carrinho",
+      icon: ShoppingCart,
+    },
+    { number: 2, label: "Entrega", shortLabel: "Entrega", icon: MapPin },
+    { number: 3, label: "Pagamento", shortLabel: "Pagar", icon: CreditCard },
   ];
 
   return (
-    <div className="mb-8">
-      <div className="flex items-center justify-between max-w-2xl mx-auto">
-        {steps.map((step, index) => {
-          const Icon = step.icon;
-          const isActive = currentStep === step.number;
-          const isCompleted = currentStep > step.number;
+    <div className="w-full mb-6 sm:mb-8">
+      {/* Container com fundo gradiente sutil */}
+      <div className="bg-gradient-to-r from-white via-rose-50/30 to-white rounded-3xl p-4 sm:p-6 shadow-sm border border-rose-100/50 backdrop-blur-sm">
+        {/* Layout horizontal para desktop */}
+        <div className="hidden sm:flex items-center justify-between max-w-4xl mx-auto">
+          {steps.map((step, index) => {
+            const Icon = step.icon;
+            const isActive = currentStep === step.number;
+            const isCompleted = currentStep > step.number;
 
-          return (
-            <div key={step.number} className="flex items-center flex-1">
-              <div className="flex flex-col items-center flex-1">
-                <div
-                  className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${
-                    isCompleted
-                      ? "bg-green-500 text-white"
-                      : isActive
-                      ? "bg-rose-600 text-white shadow-lg"
-                      : "bg-gray-200 text-gray-500"
-                  }`}
-                >
-                  {isCompleted ? (
-                    <CheckCircle2 className="h-6 w-6" />
-                  ) : (
-                    <Icon className="h-6 w-6" />
-                  )}
+            return (
+              <div key={step.number} className="flex items-center flex-1">
+                {/* Step indicator */}
+                <div className="flex flex-col items-center relative w-full">
+                  {/* Número do step (pequeno, acima) */}
+                  <span
+                    className={`text-xs font-bold mb-2 transition-colors duration-300 ${
+                      isActive
+                        ? "text-rose-600"
+                        : isCompleted
+                        ? "text-green-600"
+                        : "text-gray-400"
+                    }`}
+                  >
+                    PASSO {step.number}
+                  </span>
+
+                  {/* Círculo com ícone */}
+                  <div
+                    className={`w-14 h-14 rounded-full flex items-center justify-center transition-all duration-500 transform ${
+                      isCompleted
+                        ? "bg-gradient-to-br from-green-400 to-green-600 text-white shadow-lg scale-105"
+                        : isActive
+                        ? "bg-gradient-to-br from-rose-500 to-rose-600 text-white shadow-xl ring-4 ring-rose-200 scale-110"
+                        : "bg-gray-100 text-gray-400 border-2 border-gray-200"
+                    }`}
+                  >
+                    {isCompleted ? (
+                      <CheckCircle2 className="h-7 w-7" />
+                    ) : (
+                      <Icon className="h-7 w-7" />
+                    )}
+                  </div>
+
+                  {/* Label */}
+                  <span
+                    className={`mt-3 text-sm font-bold transition-colors duration-300 ${
+                      isActive
+                        ? "text-rose-600"
+                        : isCompleted
+                        ? "text-green-600"
+                        : "text-gray-500"
+                    }`}
+                  >
+                    {step.label}
+                  </span>
                 </div>
-                <span
-                  className={`mt-2 text-xs font-semibold ${
-                    isActive ? "text-rose-600" : "text-gray-600"
-                  }`}
-                >
-                  {step.label}
-                </span>
+
+                {/* Linha de conexão (horizontal) */}
+                {index < steps.length - 1 && (
+                  <div className="flex-1 mx-4 relative h-1 mb-4">
+                    {/* Linha de fundo */}
+                    <div className="absolute top-1/2 transform -translate-y-1/2 h-1 bg-gradient-to-r from-gray-200 to-gray-200 rounded-full w-full" />
+                    {/* Linha de progresso */}
+                    <div
+                      className={`absolute top-1/2 transform -translate-y-1/2 h-1 rounded-full transition-all duration-700 ${
+                        currentStep > step.number
+                          ? "w-full bg-gradient-to-r from-green-400 to-green-600"
+                          : currentStep === step.number
+                          ? "w-1/2 bg-gradient-to-r from-rose-400 to-rose-300"
+                          : "w-0 bg-gray-200"
+                      }`}
+                    />
+                  </div>
+                )}
               </div>
-              {index < steps.length - 1 && (
-                <div
-                  className={`h-1 flex-1 mx-2 rounded transition-all ${
-                    currentStep > step.number ? "bg-green-500" : "bg-gray-200"
-                  }`}
-                />
-              )}
-            </div>
-          );
-        })}
+            );
+          })}
+        </div>
+
+        {/* Layout vertical para mobile */}
+        <div className="flex sm:hidden flex-col gap-4">
+          {steps.map((step, index) => {
+            const Icon = step.icon;
+            const isActive = currentStep === step.number;
+            const isCompleted = currentStep > step.number;
+
+            return (
+              <div key={step.number}>
+                <div className="flex items-center gap-3">
+                  {/* Círculo com ícone */}
+                  <div
+                    className={`w-12 h-12 rounded-full flex items-center justify-center transition-all duration-500 flex-shrink-0 ${
+                      isCompleted
+                        ? "bg-gradient-to-br from-green-400 to-green-600 text-white shadow-lg"
+                        : isActive
+                        ? "bg-gradient-to-br from-rose-500 to-rose-600 text-white shadow-lg ring-4 ring-rose-200 scale-105"
+                        : "bg-gray-100 text-gray-400 border-2 border-gray-200"
+                    }`}
+                  >
+                    {isCompleted ? (
+                      <CheckCircle2 className="h-6 w-6" />
+                    ) : (
+                      <Icon className="h-6 w-6" />
+                    )}
+                  </div>
+
+                  {/* Conteúdo */}
+                  <div className="flex-1">
+                    <span
+                      className={`text-xs font-bold block transition-colors duration-300 ${
+                        isActive
+                          ? "text-rose-600"
+                          : isCompleted
+                          ? "text-green-600"
+                          : "text-gray-400"
+                      }`}
+                    >
+                      PASSO {step.number}
+                    </span>
+                    <span
+                      className={`text-sm font-bold transition-colors duration-300 ${
+                        isActive
+                          ? "text-rose-600"
+                          : isCompleted
+                          ? "text-green-600"
+                          : "text-gray-500"
+                      }`}
+                    >
+                      {step.label}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Linha de conexão vertical */}
+                {index < steps.length - 1 && (
+                  <div className="ml-6 mt-3 pl-3 border-l-2 border-gray-200 h-4">
+                    <div
+                      className={`absolute ml-1 mt-4 h-3 border-l-2 transition-all duration-700 ${
+                        currentStep > step.number
+                          ? "border-l-green-500"
+                          : currentStep === step.number
+                          ? "border-l-rose-400"
+                          : "border-l-gray-200"
+                      }`}
+                    />
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
@@ -408,8 +514,6 @@ export default function CarrinhoPage() {
     getUser,
     updateUser,
     createTransparentPayment,
-    createCardToken,
-    getCardIssuers,
     getOrder,
     updateOrderMetadata,
   } = useApi();
@@ -421,9 +525,10 @@ export default function CarrinhoPage() {
     setOrderMetadata,
     createOrder,
     getMinPreparationHours,
+    getMaxProductionTime,
     generateTimeSlots,
     getDeliveryDateBounds,
-    getMaxProductionTime,
+    isDateDisabledInCalendar,
   } = useCartContext();
 
   const {
@@ -443,77 +548,147 @@ export default function CarrinhoPage() {
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [isGeneratingPix, setIsGeneratingPix] = useState(false);
 
-  const OrderSummary = () => (
-    <Card className="bg-white border-0 shadow-xl rounded-3xl sticky top-6 overflow-hidden">
-      <div className="bg-gray-900 p-6 text-white">
-        <h3 className="text-xl font-bold">Resumo do Pedido</h3>
-        <p className="text-gray-400 text-sm mt-1">
-          {currentStep === 1
-            ? "Revise seus itens antes de prosseguir"
-            : currentStep === 2
-            ? "Informe os dados de entrega"
-            : "Escolha a forma de pagamento"}
-        </p>
-      </div>
+  const OrderSummary = () => {
+    const maxProdTime = getMaxProductionTime();
 
-      <div className="p-6 space-y-6">
-        <div className="space-y-3">
-          <div className="flex justify-between text-sm">
-            <span className="text-gray-500">Subtotal</span>
-            <span className="font-bold text-gray-900">
-              R$ {cartTotal.toFixed(2)}
-            </span>
+    return (
+      <Card className="bg-white border-0 shadow-xl rounded-3xl sticky top-6 overflow-hidden">
+        {/* Header com gradiente */}
+        <div className="bg-gradient-to-r from-rose-600 to-rose-700 p-6 text-white">
+          <h3 className="text-2xl font-bold">Resumo do Pedido</h3>
+          <p className="text-rose-100 text-sm mt-2">
+            {currentStep === 1
+              ? "Revise seus itens antes de prosseguir"
+              : currentStep === 2
+              ? "Informe os dados de entrega"
+              : "Escolha a forma de pagamento"}
+          </p>
+        </div>
+
+        <div className="p-6 space-y-6">
+          {/* Itens do carrinho com melhor layout */}
+          <div className="space-y-3">
+            <div className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-4 flex items-center gap-2">
+              <ShoppingCart className="h-4 w-4" />
+              Itens ({cart.items.length})
+            </div>
+            <div className="max-h-48 overflow-y-auto space-y-2 pr-2">
+              {cart.items.map((item, idx) => (
+                <div
+                  key={idx}
+                  className="text-sm text-gray-700 flex justify-between items-center p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition"
+                >
+                  <span className="truncate pr-2 flex items-center gap-2">
+                    <span className="font-semibold text-rose-600 min-w-fit">
+                      {item.quantity}x
+                    </span>
+                    <span className="text-gray-700">{item.product.name}</span>
+                  </span>
+                  <span className="font-semibold text-gray-900 whitespace-nowrap ml-2">
+                    R${" "}
+                    {(
+                      (item.effectivePrice ?? item.price) * item.quantity
+                    ).toFixed(2)}
+                  </span>
+                </div>
+              ))}
+            </div>
           </div>
-          <div className="flex justify-between text-sm">
-            <span className="text-gray-500">Entrega</span>
-            <span className="font-bold text-gray-900">
-              {shippingCost === null
-                ? "--"
-                : shippingCost === 0
-                ? "GRÁTIS"
-                : `R$ ${shippingCost.toFixed(2)}`}
-            </span>
-          </div>
-          {discountAmount > 0 && (
+
+          {/* Divisor */}
+          <div className="border-t border-gray-200" />
+
+          {/* Cálculos com melhor visualização */}
+          <div className="space-y-3">
             <div className="flex justify-between text-sm">
-              <span className="text-green-600">Desconto</span>
-              <span className="text-green-600 font-bold">
-                - R$ {discountAmount.toFixed(2)}
+              <span className="text-gray-600 font-medium">Subtotal</span>
+              <span className="font-bold text-gray-900">
+                R$ {cartTotal.toFixed(2)}
               </span>
             </div>
+
+            {discountAmount > 0 && (
+              <div className="flex justify-between text-sm p-3 bg-green-50 rounded-lg border border-green-200">
+                <span className="text-green-700 font-medium">💚 Desconto</span>
+                <span className="text-green-700 font-bold">
+                  - R$ {discountAmount.toFixed(2)}
+                </span>
+              </div>
+            )}
+
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-600 font-medium">Entrega</span>
+              <span className="font-bold text-gray-900">
+                {shippingCost === null
+                  ? "--"
+                  : shippingCost === 0
+                  ? "GRÁTIS 🎁"
+                  : `R$ ${shippingCost.toFixed(2)}`}
+              </span>
+            </div>
+
+            {maxProdTime > 0 && (
+              <div className="flex justify-between text-sm bg-amber-50 p-3 rounded-lg border border-amber-200">
+                <span className="text-amber-900 font-medium flex items-center gap-2">
+                  ⏱️ Produção
+                </span>
+                <span className="font-bold text-amber-700">
+                  ~{maxProdTime}h
+                </span>
+              </div>
+            )}
+
+            {selectedDate && selectedTime && (
+              <div className="flex justify-between text-sm bg-blue-50 p-3 rounded-lg border border-blue-200">
+                <span className="text-blue-900 font-medium flex items-center gap-2">
+                  📅 Entrega
+                </span>
+                <span className="font-bold text-blue-900">
+                  {selectedDate.toLocaleDateString("pt-BR")}
+                </span>
+              </div>
+            )}
+          </div>
+
+          {/* Total com destaque */}
+          <div className="border-t-2 border-dashed border-gray-300 pt-4 bg-gradient-to-br from-rose-50 to-orange-50 p-4 rounded-xl">
+            <div className="flex justify-between items-center">
+              <span className="text-gray-600 font-semibold text-lg">Total</span>
+              <span className="text-3xl font-bold text-rose-600">
+                R$ {grandTotal.toFixed(2)}
+              </span>
+            </div>
+          </div>
+
+          {currentStep < 3 && (
+            <Button
+              onClick={handleNextStep}
+              disabled={
+                isProcessing ||
+                (currentStep === 1 && !canProceedToStep2) ||
+                (currentStep === 2 && !canProceedToStep3) ||
+                (currentStep === 3 && !paymentMethod)
+              }
+              className="w-full bg-gradient-to-r from-rose-600 to-rose-700 hover:from-rose-700 hover:to-rose-800 text-white py-6 rounded-2xl font-bold text-lg shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+            >
+              {isProcessing ? (
+                <>
+                  <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                  Processando...
+                </>
+              ) : currentStep === 1 ? (
+                "Checkout →"
+              ) : currentStep === 2 ? (
+                "Ir para Pagamento →"
+              ) : (
+                "Finalizar Pedido →"
+              )}
+            </Button>
           )}
         </div>
-
-        <div className="border-t border-dashed border-gray-200 pt-4">
-          <div className="flex justify-between items-end">
-            <span className="text-gray-500 font-medium">Total</span>
-            <span className="text-3xl font-bold text-gray-900">
-              R$ {grandTotal.toFixed(2)}
-            </span>
-          </div>
-        </div>
-
-        {currentStep < 3 && (
-          <Button
-            onClick={handleNextStep}
-            disabled={
-              isProcessing ||
-              (currentStep === 1 && !canProceedToStep2) ||
-              (currentStep === 2 && !canProceedToStep3) ||
-              (currentStep === 3 && !paymentMethod)
-            }
-            className="w-full bg-rose-600 hover:bg-rose-700 text-white py-6 rounded-xl font-bold text-lg shadow-lg hover:shadow-xl transition-all"
-          >
-            {currentStep === 1
-              ? "Checkout"
-              : currentStep === 2
-              ? "Ir para Pagamento"
-              : "Finalizar Pedido"}
-          </Button>
-        )}
-      </div>
-    </Card>
-  );
+      </Card>
+    );
+  };
 
   const isDateDisabled = useCallback(
     (date: Date): boolean => {
@@ -522,20 +697,17 @@ export default function CarrinhoPage() {
       const normalizedDate = new Date(date);
       normalizedDate.setHours(0, 0, 0, 0);
 
+      // ✅ Verificar se está fora do intervalo permitido
       if (normalizedDate < minDate || normalizedDate > maxDate) {
         return true;
       }
 
-      const slots = generateTimeSlots(normalizedDate);
-      return !slots || slots.length === 0;
+      // ✅ Usar função memoizada do hook (mais otimizada)
+      return isDateDisabledInCalendar(date);
     },
-    [getDeliveryDateBounds, generateTimeSlots]
+    [getDeliveryDateBounds, isDateDisabledInCalendar]
   );
-  const [selectedDate, setSelectedDate] = useState<Date | undefined>(() => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    return today;
-  });
+  const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
   const [selectedTime, setSelectedTime] = useState("");
 
   const [zipCode, setZipCode] = useState("");
@@ -861,6 +1033,11 @@ export default function CarrinhoPage() {
 
       if (user.phone && !customerPhone) {
         setCustomerPhone(formatPhoneNumber(user.phone));
+      }
+
+      // Preencher documento se o usuário já tiver um cadastrado
+      if (user.document && !userDocument) {
+        setUserDocument(user.document.replace(/\D/g, ""));
       }
 
       if (user.address && !address) {
@@ -1289,130 +1466,67 @@ export default function CarrinhoPage() {
     );
   }
 
-  // Moved handleCreditCardPayment here to be accessible by the CreditCardForm component
-  const handleCreditCardPayment = async (cardData: CreditCardData) => {
+  // Handler para pagamento com cartão via MP SDK (já vem tokenizado)
+  const handleMPCardPayment = async (cardData: MPCardFormData) => {
     setIsProcessing(true);
     setPaymentError(null);
-
-    setUserDocument(cardData.identificationNumber);
 
     try {
       let orderId = currentOrderId;
 
       if (!orderId) {
         const storedOrderId = localStorage.getItem("pendingOrderId");
-
         if (storedOrderId) {
           orderId = storedOrderId;
-          setCurrentOrderId(orderId); // Fix: setCurrentOrderId is declared
+          setCurrentOrderId(orderId);
         }
       }
 
       if (!orderId) {
-        console.error("❌ OrderId não encontrado. Estado atual:", {
-          currentOrderId,
-          paymentMethod,
-          cartItems: cartItems.length,
-          localStorage: localStorage.getItem("pendingOrderId"),
-        });
-        throw new Error(
-          "Pedido não encontrado. Por favor, clique em 'Finalizar Compra' novamente antes de preencher os dados do cartão."
-        );
+        throw new Error("Pedido não encontrado. Por favor, tente novamente.");
       }
 
-      let cardTokenId: string | undefined = undefined;
-
-      try {
-        const tokenData = await createCardToken({
-          cardNumber: cardData.cardNumber.replace(/\s/g, ""),
-          securityCode: cardData.securityCode.trim(),
-          expirationMonth: String(cardData.expirationMonth).padStart(2, "0"),
-          expirationYear: String(cardData.expirationYear),
-          cardholderName: cardData.cardholderName.trim(),
-          identificationType: cardData.identificationType,
-          identificationNumber: cardData.identificationNumber.replace(
-            /\D/g,
-            ""
-          ),
-        });
-
-        cardTokenId = tokenData.id;
-        const bin = tokenData.first_six_digits;
-
-        if (!cardTokenId || !bin) {
-          throw new Error(
-            "Falha ao gerar token do cartão. Verifique os dados e tente novamente."
-          );
-        }
-
-        let detectedPaymentMethod = "master";
-        const firstDigit = bin.charAt(0);
-
-        if (firstDigit === "4") {
-          detectedPaymentMethod = "visa";
-        } else if (firstDigit === "5") {
-          detectedPaymentMethod = "master";
-        } else if (firstDigit === "3") {
-          detectedPaymentMethod = "amex";
-        } else if (firstDigit === "6") {
-          detectedPaymentMethod = "elo";
-        }
-
-        const issuerData = await getCardIssuers({
-          bin: bin,
-          paymentMethodId: detectedPaymentMethod,
-        });
-
-        const issuerId = issuerData.issuer_id;
-        const paymentMethodId = issuerData.payment_method_id;
-
-        if (!issuerId) {
-          console.warn("⚠️ Emissor não encontrado, continuando sem issuer_id");
-        }
-        (
-          cardData as unknown as { issuerId?: string; paymentMethodId?: string }
-        ).issuerId = issuerId;
-        (
-          cardData as unknown as { issuerId?: string; paymentMethodId?: string }
-        ).paymentMethodId = paymentMethodId;
-      } catch (tokenError: unknown) {
-        console.error("Erro ao tokenizar cartão:", tokenError);
-        const getMessage = (err: unknown): string => {
-          if (!err || typeof err !== "object")
-            return "Erro ao tokenizar o cartão. Verifique os dados.";
-          const maybe = err as { message?: unknown };
-          if (maybe.message && typeof maybe.message === "string")
-            return maybe.message;
-          return "Erro ao tokenizar o cartão. Verifique os dados.";
-        };
-
-        throw new Error(getMessage(tokenError));
+      // Salvar documento do pagador
+      if (cardData.payer?.identification?.number) {
+        setUserDocument(cardData.payer.identification.number);
       }
 
       const paymentResponse = await createTransparentPayment({
         orderId: orderId,
         paymentMethodId: "credit_card",
-        installments: cardData.installments,
-        payerEmail: cardData.email,
-        payerName: cardData.cardholderName,
-        payerDocument: cardData.identificationNumber,
+        installments: cardData.installments || 1,
+        payerEmail: cardData.payer.email,
+        payerName: user?.name || "Cliente",
+        payerDocument: cardData.payer.identification.number,
         payerDocumentType:
-          cardData.identificationType === "CPF" ? "CPF" : "CNPJ",
-        cardToken: cardTokenId,
-        cardholderName: cardData.cardholderName,
-        issuer_id: (cardData as unknown as { issuerId?: string }).issuerId,
-        payment_method_id: (cardData as unknown as { paymentMethodId?: string })
-          .paymentMethodId,
+          cardData.payer.identification.type === "CPF" ? "CPF" : "CNPJ",
+        cardToken: cardData.token,
+        cardholderName: user?.name || "Cliente",
+        issuer_id: cardData.issuer_id,
+        payment_method_id: cardData.payment_method_id,
       });
 
+      // Verificar se a requisição foi bem-sucedida
       if (!paymentResponse?.success) {
         throw new Error(
           paymentResponse?.message || "Erro ao processar pagamento"
         );
       }
 
-      const rawStatus = paymentResponse.status || "pending";
+      // Verificar o status real do pagamento retornado pelo MP
+      const rawStatus =
+        paymentResponse.data?.status || paymentResponse.status || "pending";
+      const statusDetail =
+        paymentResponse.data?.status_detail ||
+        paymentResponse.status_detail ||
+        "";
       const normalizedStatus = mapPaymentStatus(rawStatus) || "pending";
+
+      console.log("📊 Status do pagamento:", {
+        rawStatus,
+        statusDetail,
+        normalizedStatus,
+      });
 
       setPaymentStatus(normalizedStatus);
 
@@ -1428,24 +1542,63 @@ export default function CarrinhoPage() {
         toast.info("Pagamento em análise. Aguardando confirmação...", {
           duration: 5000,
         });
+      } else if (normalizedStatus === "failure") {
+        // Pagamento foi rejeitado - permitir nova tentativa
+        const friendlyMessage = getFriendlyPaymentError(statusDetail);
+        setPaymentError(friendlyMessage);
+        toast.error(friendlyMessage);
+        // Não lançar erro - apenas mostrar mensagem e permitir nova tentativa
       } else {
         throw new Error("Pagamento recusado. Verifique os dados do cartão.");
       }
     } catch (error) {
-      console.error("❌ Erro ao processar pagamento com cartão:", error);
+      console.error("❌ Erro ao processar pagamento MP Card:", error);
       const errorMessage =
         error instanceof Error ? error.message : "Erro desconhecido";
       setPaymentError(errorMessage);
-
-      if (errorMessage.includes("Pedido não encontrado")) {
-        localStorage.removeItem("pendingOrderId");
-        setCurrentOrderId(null);
-      }
-
       toast.error(`Erro no pagamento: ${errorMessage}`);
     } finally {
       setIsProcessing(false);
     }
+  };
+
+  // Função para traduzir erros do Mercado Pago para mensagens amigáveis
+  const getFriendlyPaymentError = (statusDetail: string): string => {
+    const errorMap: Record<string, string> = {
+      cc_rejected_bad_filled_card_number:
+        "Número do cartão inválido. Verifique e tente novamente.",
+      cc_rejected_bad_filled_date:
+        "Data de validade inválida. Verifique e tente novamente.",
+      cc_rejected_bad_filled_other:
+        "Dados do cartão incorretos. Verifique e tente novamente.",
+      cc_rejected_bad_filled_security_code:
+        "Código de segurança (CVV) incorreto. Verifique e tente novamente.",
+      cc_rejected_blacklist: "Cartão não autorizado. Tente outro cartão.",
+      cc_rejected_call_for_authorize:
+        "Operadora solicita autorização. Entre em contato com seu banco.",
+      cc_rejected_card_disabled:
+        "Cartão desabilitado. Entre em contato com seu banco.",
+      cc_rejected_card_error: "Erro no cartão. Tente novamente ou use outro.",
+      cc_rejected_duplicated_payment:
+        "Pagamento duplicado. Aguarde alguns minutos.",
+      cc_rejected_high_risk:
+        "Pagamento recusado por segurança. Tente outro cartão.",
+      cc_rejected_insufficient_amount:
+        "Saldo insuficiente. Verifique seu limite.",
+      cc_rejected_invalid_installments:
+        "Número de parcelas inválido. Escolha outra opção.",
+      cc_rejected_max_attempts:
+        "Limite de tentativas excedido. Aguarde alguns minutos.",
+      cc_rejected_other_reason:
+        "Pagamento recusado pelo banco. Tente outro cartão.",
+      pending_contingency: "Pagamento em processamento. Aguarde confirmação.",
+      pending_review_manual: "Pagamento em análise. Aguarde confirmação.",
+    };
+
+    return (
+      errorMap[statusDetail] ||
+      "Pagamento recusado. Verifique os dados e tente novamente."
+    );
   };
 
   const originalTotal = cartItems.reduce((sum, item) => {
@@ -1472,18 +1625,32 @@ export default function CarrinhoPage() {
     isValidPhone(customerPhone) &&
     recipientPhone.trim() !== "" &&
     isValidPhone(recipientPhone) &&
+    userDocument.trim().length >= 11 &&
     selectedDate !== undefined &&
     selectedTime !== "" &&
     isAddressServed;
 
   const handleNextStep = async () => {
-    // Compute finalDeliveryDate at the beginning so it's available both for
-    // creating a new order and updating an existing one
     let finalDeliveryDate: Date | null = null;
     if (selectedDate && selectedTime) {
-      const [hours, minutes] = selectedTime.split(":").map(Number);
-      finalDeliveryDate = new Date(selectedDate);
-      finalDeliveryDate.setHours(hours, minutes, 0, 0);
+      try {
+        const parsedDate = new Date(selectedTime);
+        if (!isNaN(parsedDate.getTime())) {
+          finalDeliveryDate = parsedDate;
+        } else {
+          const [hours, minutes] = selectedTime.split(":").map(Number);
+          if (!isNaN(hours) && !isNaN(minutes)) {
+            finalDeliveryDate = new Date(selectedDate);
+            finalDeliveryDate.setHours(hours, minutes, 0, 0);
+          }
+        }
+      } catch {
+        const [hours, minutes] = selectedTime.split(":").map(Number);
+        if (!isNaN(hours) && !isNaN(minutes)) {
+          finalDeliveryDate = new Date(selectedDate);
+          finalDeliveryDate.setHours(hours, minutes, 0, 0);
+        }
+      }
     }
     if (currentStep === 1 && canProceedToStep2) {
       setCurrentStep(2);
@@ -1499,6 +1666,7 @@ export default function CarrinhoPage() {
             city,
             state,
             phone: customerPhone.replace(/\D/g, ""),
+            document: userDocument.replace(/\D/g, "") || undefined,
           });
 
           toast.success("Dados salvos com sucesso!");
@@ -1715,10 +1883,13 @@ export default function CarrinhoPage() {
                       exit="exit"
                       className="space-y-6"
                     >
-                      <Card className="bg-white p-6 lg:p-8 rounded-2xl shadow-sm border-gray-100">
-                        <h2 className="text-2xl font-bold mb-6 text-gray-900">
-                          Seus Produtos
-                        </h2>
+                      <Card className="bg-white p-6 lg:p-8 rounded-3xl shadow-lg border border-gray-100 hover:shadow-xl transition-shadow">
+                        <div className="flex items-center gap-3 mb-8">
+                          <ShoppingCart className="h-7 w-7 text-rose-600" />
+                          <h2 className="text-3xl font-bold text-gray-900">
+                            Seus Produtos ({cartItems.length})
+                          </h2>
+                        </div>
                         <div className="space-y-4">
                           {cartItems.map((item, index) => (
                             <ProductCard
@@ -1732,12 +1903,9 @@ export default function CarrinhoPage() {
                           ))}
                         </div>
                       </Card>
-
-                      {/* Resumo Financeiro removido daqui pois agora está no OrderSummary lateral */}
                     </motion.div>
                   )}
 
-                  {/* Etapa 2: Entrega */}
                   {currentStep === 2 && (
                     <motion.div
                       key="step-2"
@@ -1747,13 +1915,15 @@ export default function CarrinhoPage() {
                       exit="exit"
                       className="space-y-6"
                     >
-                      <Card className="bg-white p-6 lg:p-8 rounded-2xl shadow-sm border-gray-100">
-                        <h2 className="text-2xl font-bold mb-6 text-gray-900 flex items-center gap-2">
-                          <MapPin className="h-6 w-6 text-rose-600" />
-                          Dados de Entrega
-                        </h2>
+                      <Card className="bg-white p-6 lg:p-8 rounded-3xl shadow-lg border border-gray-100 hover:shadow-xl transition-shadow">
+                        <div className="flex items-center gap-3 mb-8">
+                          <MapPin className="h-7 w-7 text-rose-600" />
+                          <h2 className="text-3xl font-bold text-gray-900">
+                            Dados de Entrega
+                          </h2>
+                        </div>
 
-                        <div className="space-y-5">
+                        <div className="space-y-6">
                           {/* Telefone */}
                           <div>
                             <label className="block text-sm font-bold text-gray-900 mb-2">
@@ -1778,6 +1948,27 @@ export default function CarrinhoPage() {
                                 </p>
                               )}
                           </div>
+
+                          <Label className="block text-sm font-bold text-gray-900 mb-2">
+                            🆔 Documento (CPF ou CNPJ) *
+                          </Label>
+                          <input
+                            type="text"
+                            placeholder="000.000.000-00 ou 00000000000"
+                            value={userDocument}
+                            onChange={(e) => {
+                              const value = e.target.value.replace(/\D/g, "");
+                              setUserDocument(value);
+                            }}
+                            maxLength={14}
+                            className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent transition-all"
+                          />
+                          {userDocument.length > 0 &&
+                            userDocument.length < 11 && (
+                              <p className="text-xs text-red-600 font-medium">
+                                ⚠️ Documento inválido (mínimo 11 dígitos)
+                              </p>
+                            )}
 
                           {/* Telefone do Destinatário */}
                           <div>
@@ -2040,32 +2231,15 @@ export default function CarrinhoPage() {
 
                               {selectedDate && (
                                 <div>
-                                  <Label className="block text-sm font-bold text-gray-900 mb-2">
+                                  <Label className="block text-sm font-bold text-gray-900 mb-3">
                                     Horário *
                                   </Label>
-                                  <select
-                                    value={selectedTime}
-                                    onChange={(e) =>
-                                      setSelectedTime(e.target.value)
-                                    }
-                                    title="Selecione o horário de entrega"
-                                    aria-label="Horário de entrega"
-                                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent transition-all"
-                                  >
-                                    <option value="">
-                                      Selecione um horário
-                                    </option>
-                                    {generateTimeSlots(selectedDate).map(
-                                      (slot) => (
-                                        <option
-                                          key={slot.value}
-                                          value={slot.value}
-                                        >
-                                          {slot.label}
-                                        </option>
-                                      )
-                                    )}
-                                  </select>
+                                  <TimeSlotSelector
+                                    slots={generateTimeSlots(selectedDate)}
+                                    selectedValue={selectedTime}
+                                    onSelect={(value) => setSelectedTime(value)}
+                                    disabled={isProcessing}
+                                  />
                                 </div>
                               )}
                             </div>
@@ -2099,243 +2273,205 @@ export default function CarrinhoPage() {
                       exit="exit"
                       className="space-y-6"
                     >
-                      {isProcessing && !pixData && (
-                        <LoadingPayment paymentMethod={paymentMethod} />
-                      )}
-
-                      {!isProcessing && (
-                        <Card className="bg-white p-6 lg:p-8 rounded-2xl shadow-sm border-gray-100">
-                          <h2 className="text-2xl font-bold mb-6 text-gray-900 flex items-center gap-2">
-                            <CreditCard className="h-6 w-6 text-rose-600" />
-                            Forma de Pagamento
-                          </h2>
-
-                          <PaymentMethodSelector
-                            selectedMethod={paymentMethod as "pix" | "card"}
-                            onMethodChange={(method) => {
-                              if (pixData && method !== "pix") {
-                                const confirmed = window.confirm(
-                                  "Você já gerou um código PIX. Deseja cancelar e trocar para cartão de crédito?"
-                                );
-                                if (!confirmed) return;
-                                setPixData(null);
-                                pixGeneratedForOrderRef.current = null;
-                              }
-                              setPaymentMethod(method);
-                              setPaymentError(null);
+                      {/* Status de sucesso */}
+                      {paymentStatus === "success" ? (
+                        <Card className="p-8 text-center bg-green-50 border-green-200">
+                          <CheckCircle2 className="h-16 w-16 text-green-500 mx-auto mb-4" />
+                          <h3 className="text-2xl font-bold text-green-800 mb-2">
+                            Pagamento Confirmado!
+                          </h3>
+                          <p className="text-green-700 mb-6">
+                            Seu pedido foi realizado com sucesso.
+                          </p>
+                          <Button
+                            onClick={() => {
+                              clearCart();
+                              clearPendingOrder();
+                              localStorage.removeItem("pendingOrderId");
+                              router.push("/pedidos");
                             }}
-                          />
+                            className="bg-green-600 hover:bg-green-700"
+                          >
+                            Ver Meus Pedidos
+                          </Button>
                         </Card>
-                      )}
+                      ) : (
+                        <>
+                          {/* Seletor de Método de Pagamento */}
+                          {!paymentMethod && !isProcessing && (
+                            <Card className="p-6 bg-white border-0 shadow-lg rounded-2xl">
+                              <h3 className="text-xl font-bold text-gray-900 mb-6 flex items-center gap-2">
+                                <CreditCard className="h-6 w-6 text-rose-600" />
+                                Escolha a forma de pagamento
+                              </h3>
 
-                      {paymentError && (
-                        <Alert className="border-red-200 bg-red-50 mt-6">
-                          <AlertCircle className="h-4 w-4 text-red-600" />
-                          <AlertDescription className="text-red-700">
-                            {paymentError}
-                          </AlertDescription>
-                        </Alert>
-                      )}
-
-                      {paymentMethod === "pix" && pixData && (
-                        <Card className="bg-white p-6 rounded-2xl shadow-sm border-gray-100 relative">
-                          {/* {paymentStatus === "pending" &&
-                            pollingStatus === "polling" && (
-                              <Alert className="border-blue-200 bg-blue-50 mb-6">
-                                <Loader2 className="h-4 w-4 text-blue-600 animate-spin" />
-                                <AlertDescription className="text-blue-800 text-sm">
-                                  <div className="flex flex-col gap-2">
-                                    <span className="font-medium">
-                                      Aguardando confirmação do pagamento...
+                              {/* Info sobre frete */}
+                              <div className="mb-6 p-4 bg-blue-50 rounded-xl border border-blue-200">
+                                <p className="text-sm text-blue-800">
+                                  💡 <strong>Dica:</strong> O frete é calculado
+                                  de acordo com a forma de pagamento escolhida.
+                                  {shippingRule && (
+                                    <span className="block mt-1">
+                                      PIX:{" "}
+                                      <strong>
+                                        R$ {shippingRule.pix.toFixed(2)}
+                                      </strong>{" "}
+                                      | Cartão:{" "}
+                                      <strong>
+                                        R$ {shippingRule.card.toFixed(2)}
+                                      </strong>
                                     </span>
-                                    <span className="text-xs">
-                                      Verificação {pollingAttempts} de 60 • Isso
-                                      pode levar alguns minutos
-                                    </span>
-                                    <Button
-                                      variant="outline"
-                                      size="sm"
-                                      onClick={async () => {
-                                        if (!currentOrderId) {
-                                          toast.error(
-                                            "ID do pedido não encontrado"
-                                          );
-                                          return;
-                                        }
+                                  )}
+                                </p>
+                              </div>
 
-                                        toast.info("Verificando pagamento...");
+                              <PaymentMethodSelector
+                                selectedMethod={paymentMethod}
+                                onMethodChange={(method) => {
+                                  setPaymentMethod(method);
+                                  setPaymentError(null);
+                                  setPixData(null);
+                                  // Tentar recuperar orderId do localStorage se não existir
+                                  if (!currentOrderId) {
+                                    const storedOrderId =
+                                      localStorage.getItem("pendingOrderId");
+                                    if (storedOrderId) {
+                                      setCurrentOrderId(storedOrderId);
+                                      console.log(
+                                        "📦 Pedido recuperado do localStorage:",
+                                        storedOrderId
+                                      );
+                                    }
+                                  }
+                                }}
+                              />
+                            </Card>
+                          )}
 
-                                        try {
-                                          const order = await getOrder(
-                                            currentOrderId
-                                          );
+                          {/* Processando */}
+                          {isProcessing && (
+                            <LoadingPayment paymentMethod={paymentMethod} />
+                          )}
 
-                                          if (
-                                            order?.payment?.status ===
-                                              "APPROVED" ||
-                                            order?.payment?.status ===
-                                              "AUTHORIZED" ||
-                                            order?.status === "PAID"
-                                          ) {
-                                            setPaymentStatus("success");
-                                            toast.success(
-                                              "🎉 Pagamento confirmado!",
-                                              {
-                                                duration: 3000,
-                                              }
-                                            );
-                                            clearCart();
-                                            clearPendingOrder();
-                                            localStorage.removeItem(
+                          {/* Formulário PIX */}
+                          {paymentMethod === "pix" && !isProcessing && (
+                            <>
+                              {pixData ? (
+                                <QRCodePIX
+                                  pixData={pixData}
+                                  onCopyCode={() =>
+                                    toast.success("Código PIX copiado!")
+                                  }
+                                />
+                              ) : isGeneratingPix ? (
+                                <Card className="p-8 text-center">
+                                  <Loader2 className="h-12 w-12 animate-spin text-rose-500 mx-auto mb-4" />
+                                  <p className="text-gray-600">
+                                    Gerando QR Code PIX...
+                                  </p>
+                                </Card>
+                              ) : (
+                                <Card className="p-6 bg-white border-0 shadow-lg rounded-2xl">
+                                  <h3 className="text-lg font-bold text-gray-900 mb-4">
+                                    Pagamento via PIX
+                                  </h3>
+                                  <p className="text-gray-600 mb-4">
+                                    Clique no botão abaixo para gerar o QR Code
+                                    PIX.
+                                  </p>
+                                  <Button
+                                    onClick={generatePixPayment}
+                                    disabled={!currentOrderId}
+                                    className="w-full bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600 py-6 text-lg font-bold"
+                                  >
+                                    Gerar QR Code PIX
+                                  </Button>
+                                </Card>
+                              )}
+                            </>
+                          )}
+
+                          {/* Formulário de Cartão - MercadoPago */}
+                          {paymentMethod === "card" && !isProcessing && (
+                            <>
+                              {currentOrderId ? (
+                                <MPCardPaymentForm
+                                  amount={grandTotal}
+                                  orderId={currentOrderId}
+                                  payerEmail={user?.email || ""}
+                                  payerName={user?.name || ""}
+                                  onSubmit={handleMPCardPayment}
+                                  isProcessing={isProcessing}
+                                />
+                              ) : (
+                                <Card className="p-6 bg-amber-50 border-amber-200">
+                                  <div className="flex items-start gap-3">
+                                    <AlertCircle className="h-5 w-5 text-amber-600 mt-0.5" />
+                                    <div>
+                                      <p className="text-amber-800 font-medium">
+                                        Pedido não encontrado
+                                      </p>
+                                      <p className="text-sm text-amber-700 mt-1">
+                                        Não foi possível carregar o formulário
+                                        de pagamento. Tente voltar ao passo
+                                        anterior e avançar novamente.
+                                      </p>
+                                      <Button
+                                        onClick={() => {
+                                          // Tentar recuperar do localStorage
+                                          const storedOrderId =
+                                            localStorage.getItem(
                                               "pendingOrderId"
                                             );
-                                          } else if (
-                                            order?.payment?.status ===
-                                              "REJECTED" ||
-                                            order?.payment?.status ===
-                                              "CANCELLED"
-                                          ) {
-                                            setPaymentStatus("failure");
-                                            toast.error(
-                                              "Pagamento foi rejeitado"
-                                            );
+                                          if (storedOrderId) {
+                                            setCurrentOrderId(storedOrderId);
+                                            toast.success("Pedido recuperado!");
                                           } else {
-                                            toast.warning(
-                                              "Pagamento ainda pendente. Continue aguardando.",
-                                              {
-                                                duration: 4000,
-                                              }
+                                            setCurrentStep(2);
+                                            toast.info(
+                                              "Volte a avançar para criar o pedido."
                                             );
                                           }
-                                        } catch (error) {
-                                          console.error(
-                                            "❌ [MANUAL CHECK] Erro ao verificar:",
-                                            error
-                                          );
-                                          toast.error(
-                                            "Erro ao verificar pagamento"
-                                          );
-                                        }
-                                      }}
-                                      className="mt-2 text-xs"
-                                    >
-                                      <RefreshCcw className="h-3 w-3 mr-1" />
-                                      Verificar agora
-                                    </Button>
+                                        }}
+                                        className="mt-3 bg-amber-600 hover:bg-amber-700"
+                                      >
+                                        Tentar novamente
+                                      </Button>
+                                    </div>
                                   </div>
-                                </AlertDescription>
-                              </Alert>
-                            )} */}
+                                </Card>
+                              )}
+                            </>
+                          )}
 
-                          {/* Alert de timeout */}
-                          {pollingStatus === "timeout" && paymentError && (
-                            <Alert className="border-orange-200 bg-orange-50 mb-6">
-                              <AlertCircle className="h-4 w-4 text-orange-600" />
-                              <AlertTitle className="text-orange-900 font-semibold">
-                                Tempo de Espera Expirado
-                              </AlertTitle>
-                              <AlertDescription className="text-orange-800 text-sm">
-                                <div className="flex flex-col gap-3 mt-2">
-                                  <p>{paymentError}</p>
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => router.push("/pedidos")}
-                                    className="border-orange-300 hover:bg-orange-100"
-                                    disabled={isProcessing}
-                                  >
-                                    Verificar Meus Pedidos
-                                  </Button>
-                                </div>
+                          {/* Erro */}
+                          {paymentError && (
+                            <Alert className="border-red-200 bg-red-50">
+                              <AlertCircle className="h-4 w-4 text-red-600" />
+                              <AlertDescription className="text-red-700">
+                                {paymentError}
                               </AlertDescription>
                             </Alert>
                           )}
 
-                          <div className="flex flex-col items-center justify-center w-full">
-                            <QRCodePIX
-                              pixData={{
-                                ...pixData,
-                                payer_info: {
-                                  id: pixData.payer_info.id || "",
-                                  email: pixData.payer_info.email || "",
-                                  first_name: pixData.payer_info.first_name,
-                                  last_name: pixData.payer_info.last_name,
-                                },
+                          {/* Botão para trocar método */}
+                          {paymentMethod && !isProcessing && !pixData && (
+                            <Button
+                              onClick={() => {
+                                setPaymentMethod(undefined);
+                                setPaymentError(null);
                               }}
-                            />
-
-                            {confirmationState === "none" &&
-                              (pollingStatus === "success" ||
-                                pollingStatus === "failure" ||
-                                pollingStatus === "timeout" ||
-                                (pollingStatus === "pending" &&
-                                  paymentStatus === "pending")) && (
-                                <PaymentStatusOverlay
-                                  status={
-                                    pollingStatus === "success"
-                                      ? "success"
-                                      : pollingStatus === "failure"
-                                      ? "failure"
-                                      : pollingStatus === "timeout"
-                                      ? "timeout"
-                                      : "pending"
-                                  }
-                                  paymentMethod="pix"
-                                  showOverQRCode={true}
-                                  onAnimationComplete={() => {
-                                    // if (pollingStatus === "success") {
-                                    // }
-                                  }}
-                                />
-                              )}
-                          </div>
-                        </Card>
+                              variant="outline"
+                              className="w-full py-4"
+                            >
+                              <RefreshCcw className="mr-2 h-4 w-4" />
+                              Trocar forma de pagamento
+                            </Button>
+                          )}
+                        </>
                       )}
 
-                      {paymentMethod === "card" && !pixData && (
-                        <Card className="bg-white w-full p-6 lg:p-8 rounded-2xl shadow-sm border-gray-100">
-                          {/* {paymentStatus === "pending" &&
-                            pollingStatus === "polling" && (
-                              <Alert className="border-blue-200 bg-blue-50 mb-6">
-                                <Loader2 className="h-4 w-4 text-blue-600 animate-spin" />
-                                <AlertDescription className="text-blue-800 text-sm">
-                                  <div className="flex flex-col gap-1">
-                                    <span className="font-medium">
-                                      Aguardando confirmação do pagamento...
-                                    </span>
-                                    <span className="text-xs">
-                                      Verificação {pollingAttempts} de 60 • Não
-                                      feche esta página
-                                    </span>
-                                  </div>
-                                </AlertDescription>
-                              </Alert>
-                            )} */}
-
-                          <div className="w-full">
-                            <div className="mb-4 text-sm text-gray-700">
-                              <div>
-                                Valor:{" "}
-                                <strong>R$ {grandTotal.toFixed(2)}</strong>
-                              </div>
-                              {currentOrderId && (
-                                <div className="text-xs text-gray-500 mt-1">
-                                  Pedido: {currentOrderId}
-                                </div>
-                              )}
-                            </div>
-                            <CreditCardForm
-                              onSubmit={handleCreditCardPayment}
-                              isProcessing={isProcessing}
-                              defaultEmail={user?.email}
-                              defaultName={user?.name}
-                              amount={grandTotal}
-                            />
-                          </div>
-                        </Card>
-                      )}
-
-                      {/* Botões Finais */}
+                      {/* Botões de Navegação */}
                       <div className="flex flex-col sm:flex-row justify-between gap-4">
                         <div className="flex gap-4">
                           <Button
@@ -2401,14 +2537,14 @@ export default function CarrinhoPage() {
                           )}
                         </div>
 
-                        {currentOrderId &&
-                          paymentMethod &&
-                          !pixData &&
-                          paymentMethod === "pix" && (
+                        {/* Status de espera PIX */}
+                        {paymentMethod === "pix" &&
+                          pixData &&
+                          paymentStatus === "pending" && (
                             <Alert className="border-blue-200 bg-blue-50">
                               <Loader2 className="h-4 w-4 text-blue-600 animate-spin" />
                               <AlertDescription className="text-blue-800 text-sm">
-                                Gerando QR Code PIX...
+                                Aguardando confirmação do pagamento...
                               </AlertDescription>
                             </Alert>
                           )}

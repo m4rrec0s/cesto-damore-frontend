@@ -20,6 +20,7 @@ interface User {
   phone?: string | null;
   address?: string | null;
   role?: string; // Mudando para string genérica
+  document?: string | null;
   city?: string | null;
   state?: string | null;
   zip_code?: string | null;

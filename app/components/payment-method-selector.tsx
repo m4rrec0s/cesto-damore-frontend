@@ -5,14 +5,12 @@ import { motion } from "framer-motion";
 import Image from "next/image";
 
 interface PaymentMethodSelectorProps {
-  selectedMethod: "pix" | "card";
+  selectedMethod: "pix" | "card" | undefined;
   onMethodChange: (method: "pix" | "card") => void;
 }
 
 // SVG Icons
-const PixIcon = () => (
-  <Image src="/pix.svg" alt="PIX" width={24} height={24} />
-);
+const PixIcon = () => <Image src="/pix.svg" alt="PIX" width={24} height={24} />;
 
 const CardIcon = () => (
   <svg
@@ -63,10 +61,11 @@ export function PaymentMethodSelector({
             className="relative text-left"
           >
             <Card
-              className={`p-5 h-full cursor-pointer transition-all duration-300 border-2 ${isSelected
+              className={`p-5 h-full cursor-pointer transition-all duration-300 border-2 ${
+                isSelected
                   ? `border-current bg-gradient-to-br ${method.color} bg-opacity-10`
                   : "border-gray-200 hover:border-gray-300"
-                }`}
+              }`}
             >
               {/* Selected Indicator */}
               {isSelected && (
@@ -84,10 +83,11 @@ export function PaymentMethodSelector({
 
               <div className="flex items-start gap-4">
                 <div
-                  className={`p-3 rounded-lg ${isSelected
+                  className={`p-3 rounded-lg ${
+                    isSelected
                       ? `bg-gradient-to-br ${method.color} text-white`
                       : "bg-gray-100 text-gray-600"
-                    }`}
+                  }`}
                 >
                   <Icon />
                 </div>

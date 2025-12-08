@@ -113,6 +113,10 @@ export function useLayoutApi() {
         formData.append("width", layoutData.width.toString());
         formData.append("height", layoutData.height.toString());
         formData.append("slots", JSON.stringify(layoutData.slots));
+        formData.append(
+          "additional_time",
+          (layoutData.additional_time || 0).toString()
+        );
         formData.append("image", imageFile);
 
         const response = await fetch(`${API_URL}/admin/layouts`, {
@@ -172,6 +176,11 @@ export function useLayoutApi() {
           formData.append("height", layoutData.height.toString());
         if (layoutData.slots)
           formData.append("slots", JSON.stringify(layoutData.slots));
+        if (layoutData.additional_time !== undefined)
+          formData.append(
+            "additional_time",
+            layoutData.additional_time.toString()
+          );
         if (imageFile) formData.append("image", imageFile);
 
         const response = await fetch(`${API_URL}/admin/layouts/${id}`, {

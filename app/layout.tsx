@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import Script from "next/script";
 import "./globals.css";
 import "./animations.css";
 import { AuthProvider } from "./hooks/use-auth";
@@ -34,14 +33,6 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-gray-50 text-gray-900`}
       >
-        <Script
-          src="https://sdk.mercadopago.com/js/v2"
-          strategy="beforeInteractive"
-        />
-        <Script
-          src="https://secure.mlstatic.com/sdk/javascript/v1/mercadopago.js"
-          strategy="beforeInteractive"
-        />
         <AuthProvider>
           <AppWrapper>
             <ClientLayout>{children}</ClientLayout>

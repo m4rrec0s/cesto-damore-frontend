@@ -474,9 +474,8 @@ export function CreditCardForm({
                   }
                   placeholder="0000 0000 0000 0000"
                   maxLength={19}
-                  className={`pr-40 text-lg tracking-widest font-semibold ${
-                    errors.cardNumber ? "border-red-500" : ""
-                  }`}
+                  className={`pr-40 text-lg tracking-widest font-semibold ${errors.cardNumber ? "border-red-500" : ""
+                    }`}
                 />
                 {cardBrand !== "unknown" && (
                   <motion.div
@@ -727,18 +726,54 @@ export function CreditCardForm({
                           key={option.installments}
                           value={option.installments.toString()}
                         >
-                          {/* ✅ USAR recommended_message que já vem formatado com juros */}
-                          {option.recommended_message ||
-                            `${option.installments}x de R$ ${(
-                              option.installment_amount ||
-                              amount / option.installments
-                            ).toFixed(2)}`}
+                          <span className="flex items-center gap-2">
+                            {option.recommended_message ? (
+                              <span className="font-medium">{option.recommended_message}</span>
+                            ) : (
+                              <>
+                                <span className="font-medium">
+                                  {option.installments}x de{" "}
+                                  {(
+                                    option.installment_amount ||
+                                    amount / option.installments
+                                  ).toLocaleString("pt-BR", {
+                                    style: "currency",
+                                    currency: "BRL",
+                                  })}
+                                </span>
+                                {option.installment_rate === 0 ||
+                                  (option.installment_amount &&
+                                    Math.abs(option.installment_amount - amount) < 0.05) ? (
+                                  <span className="text-green-600 text-xs font-semibold">
+                                    (Sem juros)
+                                  </span>
+                                ) : (
+                                  <span className="text-gray-500 text-xs">
+                                    (Total:{" "}
+                                    {(option.installment_amount || amount).toLocaleString(
+                                      "pt-BR",
+                                      {
+                                        style: "currency",
+                                        currency: "BRL",
+                                      }
+                                    )}
+                                    )
+                                  </span>
+                                )}
+                              </>
+                            )}
+                          </span>
                         </SelectItem>
                       )
                     )
                   ) : (
                     <SelectItem value="1">
-                      1x de R$ {amount.toFixed(2)}
+                      1x de{" "}
+                      {amount.toLocaleString("pt-BR", {
+                        style: "currency",
+                        currency: "BRL",
+                      })}{" "}
+                      (Sem juros)
                     </SelectItem>
                   )}
                 </SelectContent>
