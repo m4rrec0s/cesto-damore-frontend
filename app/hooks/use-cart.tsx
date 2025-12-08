@@ -1678,8 +1678,6 @@ export function useCart(): CartContextType {
     [getBrazilTimeComponents, isWeekend, getDeliveryWindows, createBrazilDate]
   );
 
-
-
   const getEarliestDeliveryDateTime = useCallback(() => {
     const now = new Date();
     let remainingProductionMinutes = getMinPreparationHours() * 60;

@@ -60,8 +60,6 @@ export interface MPPaymentFormData {
   payment_type?: string;
 }
 
-
-
 interface PaymentBrickError {
   type?: string;
   message?: string;
