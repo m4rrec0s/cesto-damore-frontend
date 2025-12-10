@@ -10,20 +10,20 @@ export interface CustomizationType {
   max_files?: number;
   max_items?: number;
   available_options?:
-    | Array<{
-        label: string;
-        value: string;
-        price_adjustment?: number;
-      }>
-    | {
-        items: Array<{
-          original_item: string;
-          available_substitutes: Array<{
-            item: string;
-            price_adjustment: number;
-          }>;
-        }>;
-      };
+  | Array<{
+    label: string;
+    value: string;
+    price_adjustment?: number;
+  }>
+  | {
+    items: Array<{
+      original_item: string;
+      available_substitutes: Array<{
+        item: string;
+        price_adjustment: number;
+      }>;
+    }>;
+  };
   display_order: number;
 }
 
@@ -57,8 +57,8 @@ interface UploadedFile {
   expires_at: string;
 }
 
-const SESSION_ID_KEY = "customization_session_id";
-const CUSTOMIZATIONS_KEY = "customizations_data";
+// const SESSION_ID_KEY = "customization_session_id";
+// const CUSTOMIZATIONS_KEY = "customizations_data";
 
 /**
  * Hook para gerenciar customizações de produtos/adicionais
@@ -91,45 +91,27 @@ export function useCustomization(
    * Inicializar ou recuperar sessionId
    */
   useEffect(() => {
-    let storedSessionId = localStorage.getItem(SESSION_ID_KEY);
-
-    if (!storedSessionId) {
-      storedSessionId = `session_${Date.now()}_${Math.random()
-        .toString(36)
-        .substring(2, 15)}`;
-      localStorage.setItem(SESSION_ID_KEY, storedSessionId);
-    }
-
-    setSessionId(storedSessionId);
+    // Generate fresh session ID on mount
+    const newSessionId = `session_${Date.now()}_${Math.random()
+      .toString(36)
+      .substring(2, 15)}`;
+    setSessionId(newSessionId);
   }, []);
 
   /**
    * Carregar customizações salvas do localStorage
    */
-  useEffect(() => {
-    const stored = localStorage.getItem(
-      `${CUSTOMIZATIONS_KEY}_${itemType}_${itemId}`
-    );
-    if (stored) {
-      try {
-        setCustomizations(JSON.parse(stored));
-      } catch (error) {
-        console.error("Erro ao carregar customizações do localStorage:", error);
-      }
-    }
-  }, [itemId, itemType]);
+
 
   /**
    * Salvar customizações no localStorage
    */
   const saveToLocalStorage = useCallback(
-    (data: CustomizationValue[]) => {
-      localStorage.setItem(
-        `${CUSTOMIZATIONS_KEY}_${itemType}_${itemId}`,
-        JSON.stringify(data)
-      );
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    (_data: CustomizationValue[]) => {
+      // No-op: localStorage disabled
     },
-    [itemId, itemType]
+    []
   );
 
   /**
@@ -361,8 +343,8 @@ export function useCustomization(
    */
   const clearCustomizations = useCallback(() => {
     setCustomizations([]);
-    localStorage.removeItem(`${CUSTOMIZATIONS_KEY}_${itemType}_${itemId}`);
-  }, [itemId, itemType]);
+    // localStorage.removeItem(`${CUSTOMIZATIONS_KEY}_${itemType}_${itemId}`);
+  }, []);
 
   /**
    * Buscar arquivos da sessão

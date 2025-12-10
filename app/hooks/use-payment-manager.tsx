@@ -51,10 +51,6 @@ export function usePaymentManager() {
       setIsCanceling(true);
       await cancelOrder(pendingOrder.id);
 
-      // Limpar localStorage
-      localStorage.removeItem("pendingOrderId");
-
-      // Limpar estado
       setPendingOrder(null);
 
       toast.success("Pedido cancelado com sucesso");
@@ -75,7 +71,6 @@ export function usePaymentManager() {
    */
   const clearPendingOrder = useCallback(() => {
     setPendingOrder(null);
-    localStorage.removeItem("pendingOrderId");
   }, []);
 
   // Verificar pedido pendente ao montar o componente

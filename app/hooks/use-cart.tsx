@@ -94,9 +94,9 @@ const serializeCustomizations = (customizations?: CartCustomization[]) => {
     selected_option: customization.selected_option || null,
     selected_item: customization.selected_item
       ? {
-          original_item: customization.selected_item.original_item,
-          selected_item: customization.selected_item.selected_item,
-        }
+        original_item: customization.selected_item.original_item,
+        selected_item: customization.selected_item.selected_item,
+      }
       : null,
     // ✅ Include label fields for BASE_LAYOUT duplicate detection
     label_selected: customization.label_selected || null,
@@ -256,64 +256,13 @@ export function useCart(): CartContextType {
   const api = useApi();
   const { user } = useAuth();
 
-  const [cart, setCart] = useState<CartState>(() => {
-    if (typeof window !== "undefined") {
-      try {
-        const savedCart = localStorage.getItem("cart");
-        if (savedCart) {
-          const parsed = JSON.parse(savedCart);
-          if (
-            parsed &&
-            typeof parsed === "object" &&
-            Array.isArray(parsed.items)
-          ) {
-            const itemsWithEffectivePrice = parsed.items.map(
-              (item: Partial<CartItem>) => {
-                const customizationTotal = (item.customizations || []).reduce(
-                  (sum: number, customization: Partial<CartCustomization>) =>
-                    sum + (customization?.price_adjustment || 0),
-                  0
-                );
-
-                const baseEffective =
-                  (item.price || 0) * (1 - (item.discount || 0) / 100);
-
-                return {
-                  ...item,
-                  customizations: Array.isArray(item.customizations)
-                    ? item.customizations
-                    : [],
-                  customization_total: customizationTotal,
-                  effectivePrice:
-                    item.effectivePrice !== undefined
-                      ? item.effectivePrice
-                      : Number((baseEffective + customizationTotal).toFixed(2)),
-                } as CartItem;
-              }
-            );
-            return {
-              items: itemsWithEffectivePrice || [],
-              total: parsed.total || 0,
-              itemCount: parsed.itemCount || 0,
-            };
-          }
-        }
-      } catch (error) {
-        console.error("Erro ao carregar carrinho do localStorage:", error);
-        localStorage.removeItem("cart");
-      }
-    }
-    return {
-      items: [],
-      total: 0,
-      itemCount: 0,
-    };
+  const [cart, setCart] = useState<CartState>({
+    items: [],
+    total: 0,
+    itemCount: 0,
   });
 
-  const [pendingOrderId, setPendingOrderId] = useState<string | null>(() => {
-    if (typeof window === "undefined") return null;
-    return localStorage.getItem("pendingOrderId");
-  });
+  const [pendingOrderId, setPendingOrderId] = useState<string | null>(null);
 
   const isInitializedRef = useRef<boolean>(false);
 
@@ -342,14 +291,7 @@ export function useCart(): CartContextType {
     };
   }, []);
 
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    if (!pendingOrderId) {
-      localStorage.removeItem("pendingOrderId");
-      return;
-    }
-    localStorage.setItem("pendingOrderId", pendingOrderId);
-  }, [pendingOrderId]);
+
 
   const [orderMetadata, _setOrderMetadata] = useState<{
     send_anonymously?: boolean;
@@ -394,11 +336,11 @@ export function useCart(): CartContextType {
             const additionals =
               orderItem.additionals && orderItem.additionals.length > 0
                 ? await Promise.all(
-                    orderItem.additionals.map(
-                      (add: { additional_id: string }) =>
-                        api.getAdditional(add.additional_id)
-                    )
+                  orderItem.additionals.map(
+                    (add: { additional_id: string }) =>
+                      api.getAdditional(add.additional_id)
                   )
+                )
                 : [];
 
             const customizations: CartCustomization[] = [];
@@ -650,7 +592,7 @@ export function useCart(): CartContextType {
           if (status === 403 || status === 404) {
             setPendingOrderId(null);
             if (typeof window !== "undefined") {
-              localStorage.removeItem("pendingOrderId");
+              // localStorage.removeItem("pendingOrderId");
             }
             setOrderMetadata({
               send_anonymously: false,
@@ -706,61 +648,7 @@ export function useCart(): CartContextType {
     dateDisabledCacheRef.current.clear();
   }, [cart]);
 
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      try {
-        const cartToSave = {
-          ...cart,
-          items: cart.items.map((item) => ({
-            ...item,
-            customizations: item.customizations?.map((custom) => ({
-              ...custom,
-              // Limpar dados pesados das customizações
-              photos: custom.photos?.map((photo) => ({
-                ...photo,
-                preview_url: undefined, // Remover preview base64
-              })),
-              text:
-                custom.customization_type === "BASE_LAYOUT"
-                  ? undefined // Remover preview URL do layout
-                  : custom.text,
-              // ✅ PRESERVAR additional_time do BASE_LAYOUT
-              additional_time:
-                custom.customization_type === "BASE_LAYOUT"
-                  ? custom.additional_time
-                  : undefined,
-            })),
-          })),
-        };
 
-        localStorage.setItem("cart", JSON.stringify(cartToSave));
-      } catch (error) {
-        console.error("Erro ao salvar carrinho no localStorage:", error);
-
-        // Se ainda assim falhar, tentar limpar completamente as customizações
-        try {
-          const minimalCart = {
-            ...cart,
-            items: cart.items.map((item) => ({
-              ...item,
-              customizations: undefined, // Remover customizações completamente
-            })),
-          };
-          localStorage.setItem("cart", JSON.stringify(minimalCart));
-          console.warn(
-            "⚠️ Carrinho salvo sem customizações para evitar quota exceeded"
-          );
-        } catch (fallbackError) {
-          console.error(
-            "❌ Não foi possível salvar carrinho mesmo sem customizações:",
-            fallbackError
-          );
-          // Como último recurso, limpar o carrinho
-          localStorage.removeItem("cart");
-        }
-      }
-    }
-  }, [cart]);
 
   // Quando o usuário autentica, sincronizar/recuperar rascunho do backend
   useEffect(() => {
@@ -806,23 +694,23 @@ export function useCart(): CartContextType {
 
                   const customizations = item.customizations
                     ? item.customizations.map((c) => {
-                        const parsed = (() => {
-                          try {
-                            return JSON.parse(c.value || "{}") as Record<
-                              string,
-                              unknown
-                            >;
-                          } catch {
-                            return {};
-                          }
-                        })();
+                      const parsed = (() => {
+                        try {
+                          return JSON.parse(c.value || "{}") as Record<
+                            string,
+                            unknown
+                          >;
+                        } catch {
+                          return {};
+                        }
+                      })();
 
-                        return {
-                          ...parsed,
-                          customization_id: c.customization_id,
-                          title: (parsed.title as string) || undefined,
-                        };
-                      })
+                      return {
+                        ...parsed,
+                        customization_id: c.customization_id,
+                        title: (parsed.title as string) || undefined,
+                      };
+                    })
                     : undefined;
 
                   return {
@@ -834,10 +722,10 @@ export function useCart(): CartContextType {
                       item.effectivePrice !== undefined
                         ? item.effectivePrice
                         : Number(
-                            (
-                              item.price + (item.customization_total || 0)
-                            ).toFixed(2)
-                          ),
+                          (
+                            item.price + (item.customization_total || 0)
+                          ).toFixed(2)
+                        ),
                     additionals,
                     customizations,
                     product: item.product,
@@ -928,11 +816,11 @@ export function useCart(): CartContextType {
             (item) =>
               item.product_id === productId &&
               serializeAdditionals(item.additional_ids) ===
-                targetAdditionalsKey &&
+              targetAdditionalsKey &&
               serializeAdditionalColors(item.additional_colors) ===
-                targetColorsKey &&
+              targetColorsKey &&
               serializeCustomizations(item.customizations) ===
-                targetCustomizationsKey
+              targetCustomizationsKey
           );
 
           let newItems: CartItem[] = [...currentItems];
@@ -993,9 +881,9 @@ export function useCart(): CartContextType {
               item.product_id === productId &&
               serializeAdditionals(item.additional_ids) === targetAdditionals &&
               serializeAdditionalColors(item.additional_colors) ===
-                targetColors &&
+              targetColors &&
               serializeCustomizations(item.customizations) ===
-                targetCustomizations
+              targetCustomizations
           ) || null;
 
         const newItems = currentItems.filter(
@@ -1004,9 +892,9 @@ export function useCart(): CartContextType {
               item.product_id === productId &&
               serializeAdditionals(item.additional_ids) === targetAdditionals &&
               serializeAdditionalColors(item.additional_colors) ===
-                targetColors &&
+              targetColors &&
               serializeCustomizations(item.customizations) ===
-                targetCustomizations
+              targetCustomizations
             )
         );
         const updatedCart = calculateTotals(newItems);
@@ -1105,7 +993,7 @@ export function useCart(): CartContextType {
             item.product_id === productId &&
             serializeAdditionals(item.additional_ids) === targetAdditionals &&
             serializeCustomizations(item.customizations) ===
-              targetCustomizations &&
+            targetCustomizations &&
             serializeAdditionalColors(item.additional_colors) === targetColors
           ) {
             return { ...item, quantity };
@@ -1147,7 +1035,7 @@ export function useCart(): CartContextType {
             item.product_id === productId &&
             serializeAdditionals(item.additional_ids) === targetAdditionals &&
             serializeCustomizations(item.customizations) ===
-              targetOldCustomizations &&
+            targetOldCustomizations &&
             serializeAdditionalColors(item.additional_colors) === targetColors
         );
 
@@ -1443,7 +1331,7 @@ export function useCart(): CartContextType {
     return {
       weekdays: [
         { start: "07:30", end: "12:00" },
-        { start: "14:00", end: "17:00" },
+        { start: "14:00", end: "16:30" },
       ],
       weekends: [{ start: "08:00", end: "11:00" }],
     };

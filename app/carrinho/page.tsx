@@ -76,10 +76,10 @@ const SHIPPING_RULES: Record<string, { pix: number; card: number }> = {
 const normalizeString = (value: string) =>
   value
     ? value
-        .normalize("NFD")
-        .replace(/[\u0300-\u036f]/g, "")
-        .trim()
-        .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .trim()
+      .toLowerCase()
     : "";
 
 type PaymentStatusType = "" | "pending" | "success" | "failure";
@@ -173,10 +173,9 @@ const formatCustomizationValue = (custom: CartCustomization) => {
         if (typeof custom.selected_item === "string") {
           return "Personalização de Layout Aplicada";
         }
-        return `${
-          (custom.selected_item as { selected_item?: string }).selected_item ||
+        return `${(custom.selected_item as { selected_item?: string }).selected_item ||
           "Layout Personalizado"
-        }`;
+          }`;
       }
       return "Layout Personalizado";
     case "IMAGES":
@@ -215,26 +214,24 @@ const CheckoutStepper = ({ currentStep }: { currentStep: CheckoutStep }) => {
                 <div className="flex flex-col items-center relative w-full">
                   {/* Número do step (pequeno, acima) */}
                   <span
-                    className={`text-xs font-bold mb-2 transition-colors duration-300 ${
-                      isActive
-                        ? "text-rose-600"
-                        : isCompleted
+                    className={`text-xs font-bold mb-2 transition-colors duration-300 ${isActive
+                      ? "text-rose-600"
+                      : isCompleted
                         ? "text-green-600"
                         : "text-gray-400"
-                    }`}
+                      }`}
                   >
                     PASSO {step.number}
                   </span>
 
                   {/* Círculo com ícone */}
                   <div
-                    className={`w-14 h-14 rounded-full flex items-center justify-center transition-all duration-500 transform ${
-                      isCompleted
-                        ? "bg-gradient-to-br from-green-400 to-green-600 text-white shadow-lg scale-105"
-                        : isActive
+                    className={`w-14 h-14 rounded-full flex items-center justify-center transition-all duration-500 transform ${isCompleted
+                      ? "bg-gradient-to-br from-green-400 to-green-600 text-white shadow-lg scale-105"
+                      : isActive
                         ? "bg-gradient-to-br from-rose-500 to-rose-600 text-white shadow-xl ring-4 ring-rose-200 scale-110"
                         : "bg-gray-100 text-gray-400 border-2 border-gray-200"
-                    }`}
+                      }`}
                   >
                     {isCompleted ? (
                       <CheckCircle2 className="h-7 w-7" />
@@ -245,13 +242,12 @@ const CheckoutStepper = ({ currentStep }: { currentStep: CheckoutStep }) => {
 
                   {/* Label */}
                   <span
-                    className={`mt-3 text-sm font-bold transition-colors duration-300 ${
-                      isActive
-                        ? "text-rose-600"
-                        : isCompleted
+                    className={`mt-3 text-sm font-bold transition-colors duration-300 ${isActive
+                      ? "text-rose-600"
+                      : isCompleted
                         ? "text-green-600"
                         : "text-gray-500"
-                    }`}
+                      }`}
                   >
                     {step.label}
                   </span>
@@ -264,13 +260,12 @@ const CheckoutStepper = ({ currentStep }: { currentStep: CheckoutStep }) => {
                     <div className="absolute top-1/2 transform -translate-y-1/2 h-1 bg-gradient-to-r from-gray-200 to-gray-200 rounded-full w-full" />
                     {/* Linha de progresso */}
                     <div
-                      className={`absolute top-1/2 transform -translate-y-1/2 h-1 rounded-full transition-all duration-700 ${
-                        currentStep > step.number
-                          ? "w-full bg-gradient-to-r from-green-400 to-green-600"
-                          : currentStep === step.number
+                      className={`absolute top-1/2 transform -translate-y-1/2 h-1 rounded-full transition-all duration-700 ${currentStep > step.number
+                        ? "w-full bg-gradient-to-r from-green-400 to-green-600"
+                        : currentStep === step.number
                           ? "w-1/2 bg-gradient-to-r from-rose-400 to-rose-300"
                           : "w-0 bg-gray-200"
-                      }`}
+                        }`}
                     />
                   </div>
                 )}
@@ -291,13 +286,12 @@ const CheckoutStepper = ({ currentStep }: { currentStep: CheckoutStep }) => {
                 <div className="flex items-center gap-3">
                   {/* Círculo com ícone */}
                   <div
-                    className={`w-12 h-12 rounded-full flex items-center justify-center transition-all duration-500 flex-shrink-0 ${
-                      isCompleted
-                        ? "bg-gradient-to-br from-green-400 to-green-600 text-white shadow-lg"
-                        : isActive
+                    className={`w-12 h-12 rounded-full flex items-center justify-center transition-all duration-500 flex-shrink-0 ${isCompleted
+                      ? "bg-gradient-to-br from-green-400 to-green-600 text-white shadow-lg"
+                      : isActive
                         ? "bg-gradient-to-br from-rose-500 to-rose-600 text-white shadow-lg ring-4 ring-rose-200 scale-105"
                         : "bg-gray-100 text-gray-400 border-2 border-gray-200"
-                    }`}
+                      }`}
                   >
                     {isCompleted ? (
                       <CheckCircle2 className="h-6 w-6" />
@@ -309,24 +303,22 @@ const CheckoutStepper = ({ currentStep }: { currentStep: CheckoutStep }) => {
                   {/* Conteúdo */}
                   <div className="flex-1">
                     <span
-                      className={`text-xs font-bold block transition-colors duration-300 ${
-                        isActive
-                          ? "text-rose-600"
-                          : isCompleted
+                      className={`text-xs font-bold block transition-colors duration-300 ${isActive
+                        ? "text-rose-600"
+                        : isCompleted
                           ? "text-green-600"
                           : "text-gray-400"
-                      }`}
+                        }`}
                     >
                       PASSO {step.number}
                     </span>
                     <span
-                      className={`text-sm font-bold transition-colors duration-300 ${
-                        isActive
-                          ? "text-rose-600"
-                          : isCompleted
+                      className={`text-sm font-bold transition-colors duration-300 ${isActive
+                        ? "text-rose-600"
+                        : isCompleted
                           ? "text-green-600"
                           : "text-gray-500"
-                      }`}
+                        }`}
                     >
                       {step.label}
                     </span>
@@ -337,13 +329,12 @@ const CheckoutStepper = ({ currentStep }: { currentStep: CheckoutStep }) => {
                 {index < steps.length - 1 && (
                   <div className="ml-6 mt-3 pl-3 border-l-2 border-gray-200 h-4">
                     <div
-                      className={`absolute ml-1 mt-4 h-3 border-l-2 transition-all duration-700 ${
-                        currentStep > step.number
-                          ? "border-l-green-500"
-                          : currentStep === step.number
+                      className={`absolute ml-1 mt-4 h-3 border-l-2 transition-all duration-700 ${currentStep > step.number
+                        ? "border-l-green-500"
+                        : currentStep === step.number
                           ? "border-l-rose-400"
                           : "border-l-gray-200"
-                      }`}
+                        }`}
                     />
                   </div>
                 )}
@@ -493,7 +484,7 @@ const ProductCard = ({
                       add.price,
                       item.customizations
                     ) *
-                      item.quantity,
+                    item.quantity,
                   0
                 ) || 0)
               ).toFixed(2)}
@@ -560,8 +551,8 @@ export default function CarrinhoPage() {
             {currentStep === 1
               ? "Revise seus itens antes de prosseguir"
               : currentStep === 2
-              ? "Informe os dados de entrega"
-              : "Escolha a forma de pagamento"}
+                ? "Informe os dados de entrega"
+                : "Escolha a forma de pagamento"}
           </p>
         </div>
 
@@ -622,8 +613,8 @@ export default function CarrinhoPage() {
                 {shippingCost === null
                   ? "--"
                   : shippingCost === 0
-                  ? "GRÁTIS 🎁"
-                  : `R$ ${shippingCost.toFixed(2)}`}
+                    ? "GRÁTIS 🎁"
+                    : `R$ ${shippingCost.toFixed(2)}`}
               </span>
             </div>
 
@@ -788,7 +779,6 @@ export default function CarrinhoPage() {
       paymentApprovedRef.current = true;
 
       setPaymentStatus("success");
-      localStorage.removeItem("pendingOrderId");
       clearPendingOrder();
       clearCart();
 
@@ -834,7 +824,7 @@ export default function CarrinhoPage() {
         }
       }, 2000);
     },
-    onPending: () => {},
+    onPending: () => { },
   });
 
   const handleTrackOrder = () => {
@@ -954,17 +944,17 @@ export default function CarrinhoPage() {
     });
   }, []);
 
-  const sseOnPaymentPending = useCallback((data: unknown) => {}, []);
+  const sseOnPaymentPending = useCallback((data: unknown) => { }, []);
 
-  const sseOnPaymentUpdate = useCallback((data: unknown) => {}, []);
+  const sseOnPaymentUpdate = useCallback((data: unknown) => { }, []);
 
   const { disconnect: disconnectSSE } = useWebhookNotification({
     orderId: currentOrderId,
     // Habilitar SSE enquanto houver um pedido pendente (evitar loops causados por toggles de enabled)
     enabled: Boolean(
       currentOrderId &&
-        paymentStatus !== "success" &&
-        paymentStatus !== "failure"
+      paymentStatus !== "success" &&
+      paymentStatus !== "failure"
     ),
     onPaymentUpdate: sseOnPaymentUpdate,
     onPaymentApproved: sseOnPaymentApproved,
@@ -1108,8 +1098,8 @@ export default function CarrinhoPage() {
             orderPaymentMethod === "pix"
               ? "pix"
               : orderPaymentMethod === "card"
-              ? "card"
-              : undefined
+                ? "card"
+                : undefined
           );
           // Preencher campos do pedido (se houver)
           if (pendingOrder.delivery_address) {
@@ -1313,8 +1303,8 @@ export default function CarrinhoPage() {
           amount:
             Number(
               responseData.amount ??
-                responseData.transaction_amount ??
-                cartTotal + (shippingCost ?? 0)
+              responseData.transaction_amount ??
+              cartTotal + (shippingCost ?? 0)
             ) || cartTotal + (shippingCost ?? 0),
           expires_at:
             responseData.expires_at ||
@@ -1489,6 +1479,14 @@ export default function CarrinhoPage() {
       // Salvar documento do pagador
       if (cardData.payer?.identification?.number) {
         setUserDocument(cardData.payer.identification.number);
+      }
+
+      // ✅ Atualizar frete no backend antes de processar pagamento
+      // Isso garante que o grand_total no backend bata com o valor enviado
+      if (typeof shippingCost === "number") {
+        await updateOrderMetadata(orderId, {
+          shipping_price: shippingCost,
+        });
       }
 
       const paymentResponse = await createTransparentPayment({
@@ -2203,8 +2201,8 @@ export default function CarrinhoPage() {
                                       <CalendarIcon className="mr-2 h-4 w-4" />
                                       {selectedDate
                                         ? selectedDate.toLocaleDateString(
-                                            "pt-BR"
-                                          )
+                                          "pt-BR"
+                                        )
                                         : "Selecione uma data"}
                                     </Button>
                                   </PopoverTrigger>
@@ -2396,6 +2394,7 @@ export default function CarrinhoPage() {
                             <>
                               {currentOrderId ? (
                                 <MPCardPaymentForm
+                                  key={grandTotal}
                                   amount={grandTotal}
                                   orderId={currentOrderId}
                                   payerEmail={user?.email || ""}
@@ -2510,7 +2509,7 @@ export default function CarrinhoPage() {
                                     });
                                     try {
                                       disconnectSSE?.();
-                                    } catch {}
+                                    } catch { }
                                   }
                                 }
                               }}

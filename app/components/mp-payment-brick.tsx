@@ -133,7 +133,7 @@ export function MPPaymentBrick({
           controller.unmount();
           console.log("🧹 Payment Brick desmontado");
         }
-      } catch (_err) {
+      } catch {
         // Ignorar erros de cleanup
       }
     };

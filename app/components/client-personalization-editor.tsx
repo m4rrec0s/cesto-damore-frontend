@@ -16,12 +16,14 @@ interface ClientPersonalizationEditorProps {
   layoutBase: LayoutBase;
   onComplete: (images: ImageData[], previewUrl: string) => void;
   onBack: () => void;
+  initialImages?: ImageData[];
 }
 
 export default function ClientPersonalizationEditor({
   layoutBase,
   onComplete,
   onBack,
+  initialImages,
 }: ClientPersonalizationEditorProps) {
   const { fileToImageData } = usePersonalization();
 
@@ -91,6 +93,55 @@ export default function ClientPersonalizationEditor({
     loadBaseImage();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [layoutBase.image_url]);
+
+  // Restore state from initialImages
+  useEffect(() => {
+    const restoreState = async () => {
+      if (
+        initialImages &&
+        initialImages.length > 0 &&
+        uploadedImages.size === 0
+      ) {
+        const newMap = new Map<string, ImageData & { previewUrl?: string }>();
+
+        for (const imgData of initialImages) {
+          if (!imgData.slotId) continue;
+
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          let previewUrl = (imgData as any).previewUrl;
+
+          // Recreate blob URL if missing but buffer exists
+          if (!previewUrl && imgData.imageBuffer) {
+            const buffer = imgData.imageBuffer;
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const blob = new Blob([buffer as any], { type: imgData.mimeType });
+            previewUrl = URL.createObjectURL(blob);
+          }
+
+          if (previewUrl) {
+            const img = new Image();
+            img.crossOrigin = "anonymous";
+            img.src = previewUrl;
+            await new Promise((resolve) => {
+              img.onload = resolve;
+              img.onerror = resolve; // Continue even if one fails
+            });
+
+            slotImagesRef.current.set(imgData.slotId, img);
+            newMap.set(imgData.slotId, { ...imgData, previewUrl });
+          }
+        }
+
+        if (newMap.size > 0) {
+          setUploadedImages(newMap);
+          setTimeout(() => updateCanvasPreview(), 200);
+        }
+      }
+    };
+
+    restoreState();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const updateCanvasPreview = useCallback(() => {
     if (!canvasRef.current || !baseImageRef.current) return;

@@ -57,7 +57,7 @@ interface Customization {
 
 // Type-safe interfaces for customization data
 interface BaseLayoutData {
-  layouts: Array<{ id: string; name: string }>;
+  layouts: Array<{ id: string; name: string; image_url?: string }>;
 }
 
 interface TextCustomizationData {
@@ -563,6 +563,7 @@ export default function CustomizationManager() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead>Preview</TableHead>
                   <TableHead>Nome</TableHead>
                   <TableHead>Tipo</TableHead>
                   <TableHead>Preço</TableHead>
@@ -580,6 +581,31 @@ export default function CustomizationManager() {
                 ) : (
                   customizations.map((customization) => (
                     <TableRow key={customization.id}>
+                      <TableCell>
+                        {customization.type === "BASE_LAYOUT" &&
+                          (customization.customization_data as unknown as BaseLayoutData).layouts?.[0]
+                            ?.image_url ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={(customization.customization_data as unknown as BaseLayoutData).layouts[0].image_url}
+                            alt="Preview"
+                            className="w-10 h-10 object-cover rounded-md"
+                          />
+                        ) : customization.type === "MULTIPLE_CHOICE" &&
+                          (customization.customization_data as unknown as MultipleChoiceData).options?.[0]
+                            ?.image_url ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={(customization.customization_data as unknown as MultipleChoiceData).options[0].image_url}
+                            alt="Preview"
+                            className="w-10 h-10 object-cover rounded-md"
+                          />
+                        ) : (
+                          <div className="w-10 h-10 bg-gray-100 rounded-md flex items-center justify-center text-gray-400">
+                            -
+                          </div>
+                        )}
+                      </TableCell>
                       <TableCell className="font-medium">
                         {customization.name}
                       </TableCell>

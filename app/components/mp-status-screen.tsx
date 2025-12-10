@@ -83,7 +83,7 @@ export function MPStatusScreen({
   onError,
 }: MPStatusScreenProps) {
   const [isReady, setIsReady] = useState(false);
-  const [status, setStatus] = useState<StatusType>("unknown");
+  const [status] = useState<StatusType>("unknown");
   const mountedRef = useRef(true);
 
   useEffect(() => {
@@ -99,7 +99,7 @@ export function MPStatusScreen({
         if (controller?.unmount) {
           controller.unmount();
         }
-      } catch (_err) {
+      } catch {
         // Ignorar erros de cleanup
       }
     };
