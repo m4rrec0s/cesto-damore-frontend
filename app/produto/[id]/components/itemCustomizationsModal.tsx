@@ -91,6 +91,11 @@ interface Props {
   customizations: Customization[];
   onComplete: (hasCustomizations: boolean, data: CustomizationInput[]) => void;
   onPreviewChange?: (previewUrl: string | null) => void;
+  onImagesUpdate?: (
+    itemId: string,
+    imageCount: number,
+    maxImages: number
+  ) => void;
 }
 
 type ModalStep = "selection" | "editing";
@@ -100,10 +105,12 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL;
 export function ItemCustomizationModal({
   isOpen,
   onClose,
+  itemId,
   itemName,
   customizations,
   onComplete,
   onPreviewChange,
+  onImagesUpdate,
 }: Props) {
   const [step, setStep] = useState<ModalStep>("selection");
   const [customizationData, setCustomizationData] = useState<
@@ -113,7 +120,7 @@ export function ItemCustomizationModal({
     {}
   );
   const [selectedLayoutId, setSelectedLayoutId] = useState<string | null>(null);
-  const [loading, _setLoading] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [fullLayoutBase, setFullLayoutBase] = useState<LayoutBase | null>(null);
   const [loadingLayout, setLoadingLayout] = useState(false);
   const [imageLoadStates, setImageLoadStates] = useState<
@@ -129,10 +136,10 @@ export function ItemCustomizationModal({
         image_url: string;
         slots?: SlotDef[];
         additional_time?: number;
+        item_type?: string;
       }
     >
   >({});
-  // Local cache for fetched full layouts to avoid repeated network calls
   const layoutCacheRef = useRef<Record<string, LayoutBase | undefined>>({});
   const [loadingLayouts, setLoadingLayouts] = useState(false);
 
@@ -142,14 +149,16 @@ export function ItemCustomizationModal({
   const [currentCustomizationId, setCurrentCustomizationId] = useState<
     string | null
   >(null);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [imagesCustomizationId, setImagesCustomizationId] = useState<
+    string | null
+  >(null);
 
-  // Ref to keep track of uploadingFiles without stale closures during async operations
   const uploadingFilesRef = useRef(uploadingFiles);
   useEffect(() => {
     uploadingFilesRef.current = uploadingFiles;
   }, [uploadingFiles]);
 
-  // 🔄 Queue for sequential image cropping
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [isCropping, setIsCropping] = useState(false);
 
@@ -170,7 +179,13 @@ export function ItemCustomizationModal({
       setLoadingLayouts(true);
       const fetchedLayouts: Record<
         string,
-        { id: string; name: string; image_url: string; slots?: SlotDef[] }
+        {
+          id: string;
+          name: string;
+          image_url: string;
+          slots?: SlotDef[];
+          item_type?: string;
+        }
       > = {};
 
       // Use Promise.all to fetch in parallel, but skip if cached
@@ -184,6 +199,7 @@ export function ItemCustomizationModal({
             name: fullLayout.name,
             image_url: fullLayout.image_url,
             slots: fullLayout.slots,
+            item_type: fullLayout.item_type,
           };
         } catch (error) {
           console.error(`❌ Erro ao carregar layout ${l.id}:`, error);
@@ -205,6 +221,7 @@ export function ItemCustomizationModal({
             name: fullLayout.name,
             image_url: fullLayout.image_url,
             slots: fullLayout.slots,
+            item_type: fullLayout.item_type,
           };
         }
       }
@@ -231,6 +248,7 @@ export function ItemCustomizationModal({
       );
       if (!layout) return;
 
+      setLoading(true);
       setCustomizationData((prev) => ({
         ...prev,
         [baseLayoutCustom.id]: {
@@ -239,8 +257,9 @@ export function ItemCustomizationModal({
         },
       }));
 
+      setLoading(false);
+
       try {
-        // Check in-memory cache first
         let layoutData: LayoutBase | undefined = layoutCacheRef.current[
           layoutId
         ] as LayoutBase | undefined;
@@ -249,7 +268,7 @@ export function ItemCustomizationModal({
           const token =
             typeof window !== "undefined"
               ? localStorage.getItem("appToken") ||
-              localStorage.getItem("token")
+                localStorage.getItem("token")
               : null;
 
           const response = await fetch(`${API_URL}/layouts/${layoutId}`, {
@@ -268,8 +287,8 @@ export function ItemCustomizationModal({
           layoutData.item_type?.toLowerCase() === "caneca"
             ? "/3DModels/caneca.glb"
             : layoutData.item_type?.toLowerCase() === "quadro"
-              ? "/3DModels/quadro.glb"
-              : undefined;
+            ? "/3DModels/quadro.glb"
+            : undefined;
 
         setCustomizationData((prev) => ({
           ...prev,
@@ -291,8 +310,6 @@ export function ItemCustomizationModal({
     },
     [customizations]
   );
-
-
 
   const handleLayoutComplete = useCallback(
     async (images: ImageData[], previewUrl: string) => {
@@ -368,7 +385,6 @@ export function ItemCustomizationModal({
 
       onComplete(result.length > 0, result);
       toast.success("Design aplicado! (Será salvo ao adicionar ao carrinho)");
-      onClose();
 
       setStep("selection");
       setFullLayoutBase(null);
@@ -379,7 +395,6 @@ export function ItemCustomizationModal({
       customizationData,
       onPreviewChange,
       onComplete,
-      onClose,
       fullLayoutBase?.additional_time,
     ]
   );
@@ -412,7 +427,7 @@ export function ItemCustomizationModal({
       // Safety check: we need a customization ID target
       if (!customId) return;
 
-      const customization = customizations.find(c => c.id === customId);
+      const customization = customizations.find((c) => c.id === customId);
       if (!customization) return;
 
       let aspect: number | undefined;
@@ -428,7 +443,13 @@ export function ItemCustomizationModal({
       setIsCropping(true);
       setCropDialogOpen(true);
     }
-  }, [pendingFiles, isCropping, cropDialogOpen, currentCustomizationId, customizations]);
+  }, [
+    pendingFiles,
+    isCropping,
+    cropDialogOpen,
+    currentCustomizationId,
+    customizations,
+  ]);
 
   const handleFileUpload = useCallback(
     (customizationId: string, files: FileList | null) => {
@@ -442,7 +463,8 @@ export function ItemCustomizationModal({
       const fileArray = Array.from(files);
 
       setCurrentCustomizationId(customizationId);
-      setPendingFiles(prev => [...prev, ...fileArray]);
+      setImagesCustomizationId(customizationId);
+      setPendingFiles((prev) => [...prev, ...fileArray]);
     },
     [customizations]
   );
@@ -471,8 +493,14 @@ export function ItemCustomizationModal({
             customization.customization_data.base_layout?.max_images || 10;
 
           // Use Ref to get latest files, avoiding stale closures
-          const currentFiles = uploadingFilesRef.current[currentCustomizationId] || [];
-          console.log("💾 [Crop] Saving. Current:", currentFiles.length, "Max:", maxImages);
+          const currentFiles =
+            uploadingFilesRef.current[currentCustomizationId] || [];
+          console.log(
+            "💾 [Crop] Saving. Current:",
+            currentFiles.length,
+            "Max:",
+            maxImages
+          );
 
           const totalFiles = [...currentFiles, file].slice(0, maxImages);
 
@@ -480,6 +508,16 @@ export function ItemCustomizationModal({
             ...prev,
             [currentCustomizationId]: totalFiles,
           }));
+
+          // Notificar pai sobre o número de imagens adicionadas
+          if (onImagesUpdate && itemId) {
+            console.log("📸 [onImagesUpdate] Chamando callback:", {
+              itemId: itemId,
+              current: totalFiles.length,
+              max: maxImages,
+            });
+            onImagesUpdate(itemId, totalFiles.length, maxImages);
+          }
 
           const filesDataPromises = totalFiles.map(async (f, index) => {
             const reader = new FileReader();
@@ -510,7 +548,7 @@ export function ItemCustomizationModal({
           console.error("Erro ao processar imagem cortada:", error);
         });
     },
-    [currentCustomizationId, customizations, uploadingFiles, fileToCrop]
+    [currentCustomizationId, customizations, fileToCrop, onImagesUpdate, itemId]
   );
 
   const handleDetailsConfirm = (croppedImageUrl: string) => {
@@ -520,16 +558,19 @@ export function ItemCustomizationModal({
     setPendingFiles((prev) => prev.slice(1));
     setCropDialogOpen(false);
     setFileToCrop(null);
-    setIsCropping(false);
+
+    setTimeout(() => {
+      setIsCropping(false);
+    }, 500);
   };
 
-  const handleCropCancel = () => {
-    // If canceled, we also remove it from queue to avoid getting stuck
-    setPendingFiles((prev) => prev.slice(1));
-    setCropDialogOpen(false);
-    setFileToCrop(null);
-    setIsCropping(false);
-  };
+  // const handleCropCancel = () => {
+  //   // If canceled, we also remove it from queue to avoid getting stuck
+  //   setPendingFiles((prev) => prev.slice(1));
+  //   setCropDialogOpen(false);
+  //   setFileToCrop(null);
+  //   setIsCropping(false);
+  // };
 
   const handleRemoveFile = useCallback(
     async (customizationId: string, index: number) => {
@@ -537,6 +578,21 @@ export function ItemCustomizationModal({
       const newFiles = currentFiles.filter((_, i) => i !== index);
 
       setUploadingFiles((prev) => ({ ...prev, [customizationId]: newFiles }));
+
+      // Notificar pai sobre o novo número de imagens
+      const customization = customizations.find(
+        (c) => c.id === customizationId
+      );
+      if (customization && customization.type === "IMAGES" && onImagesUpdate) {
+        const maxImages =
+          customization.customization_data.base_layout?.max_images || 10;
+        console.log("📸 [handleRemoveFile] Atualizando contador:", {
+          itemId: itemId,
+          newCount: newFiles.length,
+          max: maxImages,
+        });
+        onImagesUpdate(itemId, newFiles.length, maxImages);
+      }
 
       const filesDataPromises = newFiles.map(async (file, idx) => {
         const reader = new FileReader();
@@ -563,7 +619,7 @@ export function ItemCustomizationModal({
         [customizationId]: filesData,
       }));
     },
-    [uploadingFiles]
+    [uploadingFiles, customizations, itemId, onImagesUpdate]
   );
 
   const handleOptionSelect = useCallback(
@@ -645,14 +701,29 @@ export function ItemCustomizationModal({
 
               const imageUrl = getProxiedImageUrl(fullLayout.image_url || "");
               const hasSlots = fullLayout.slots && fullLayout.slots.length > 0;
+              const isQuadro = fullLayout.item_type?.toLowerCase() === "quadro";
 
               return (
                 <div
                   key={fullLayout.id}
-                  className="group cursor-pointer transition-all duration-300 overflow-hidden hover:shadow-2xl hover:scale-105 border-2 border-gray-200 hover:border-purple-300"
+                  className={`group cursor-pointer transition-all duration-300 overflow-hidden hover:shadow-2xl hover:scale-105 border-2 border-gray-200 hover:border-purple-300 ${
+                    isQuadro ? "rounded-lg shadow-lg" : ""
+                  }`}
                   onClick={() => handleLayoutSelect(fullLayout.id)}
                 >
-                  <div className="relative aspect-video max-h-[200px] bg-gradient-to-br from-gray-50 to-gray-100">
+                  {/* Para quadros: aspect-square para parecer um quadro real. Para outros: aspect-video */}
+                  <div
+                    className={`relative bg-gradient-to-br from-gray-50 to-gray-100 ${
+                      isQuadro
+                        ? "aspect-square p-3"
+                        : "aspect-video max-h-[200px]"
+                    }`}
+                  >
+                    {/* Moldura visual para quadros */}
+                    {isQuadro && (
+                      <div className="absolute inset-2 border-4 border-amber-800/30 rounded-sm pointer-events-none z-10 shadow-inner" />
+                    )}
+
                     {imageLoaded && !imageUrl && (
                       <div className="absolute inset-0 flex items-center justify-center bg-white/80 backdrop-blur-sm">
                         <Loader2 className="h-10 w-10 animate-spin text-purple-600" />
@@ -660,13 +731,20 @@ export function ItemCustomizationModal({
                     )}
 
                     {imageUrl ? (
-                      <div className="relative w-full h-full">
+                      <div
+                        className={`relative w-full h-full ${
+                          isQuadro ? "p-1" : ""
+                        }`}
+                      >
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
                           src={imageUrl}
                           alt={fullLayout.name}
-                          className={`w-full h-full object-cover transition-all duration-300 ${imageLoaded ? "opacity-100" : "opacity-0"
-                            }`}
+                          className={`w-full h-full transition-all duration-300 ${
+                            imageLoaded ? "opacity-100" : "opacity-0"
+                          } ${
+                            isQuadro ? "object-contain rounded" : "object-cover"
+                          }`}
                           onLoad={() => {
                             setImageLoadStates((prev) => ({
                               ...prev,
@@ -889,7 +967,6 @@ export function ItemCustomizationModal({
 
                 onComplete(result.length > 0, result);
                 toast.success("Texto confirmado!");
-                onClose();
               }}
               className="flex-1 gap-2 bg-amber-600 hover:bg-amber-700 text-white"
               disabled={
@@ -920,7 +997,7 @@ export function ItemCustomizationModal({
     const currentFiles = uploadingFiles[customization.id] || [];
     const maxImages =
       customization.customization_data.base_layout?.max_images || 10;
-    const canAddMore = currentFiles.length < maxImages;
+    // const canAddMore = currentFiles.length < maxImages;
     const hasImages = currentFiles.length > 0;
 
     return (
@@ -983,48 +1060,48 @@ export function ItemCustomizationModal({
         )}
 
         <div className="space-y-3">
-          {Array.from({ length: Math.max(0, maxImages - currentFiles.length) }).map(
-            (_, relativeIndex) => {
-              const globalIndex = currentFiles.length + relativeIndex;
-              return (
-                <div key={`empty-slot-${globalIndex}`}>
-                  <label
-                    htmlFor={`file-${customization.id}-${globalIndex}`}
-                    className="flex flex-row items-center justify-between border-2 border-dashed border-green-300 rounded-xl p-4 cursor-pointer hover:border-green-600 hover:bg-green-50/80 transition-all bg-green-50/30 group"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="bg-green-100 p-2 rounded-full group-hover:bg-green-200 transition-colors">
-                        <Upload className="h-5 w-5 text-green-700" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-semibold text-green-900 group-hover:text-green-700">
-                          Adicionar Foto {globalIndex + 1}
-                        </p>
-                        <p className="text-xs text-green-600">
-                          Clique para selecionar
-                        </p>
-                      </div>
+          {Array.from({
+            length: Math.max(0, maxImages - currentFiles.length),
+          }).map((_, relativeIndex) => {
+            const globalIndex = currentFiles.length + relativeIndex;
+            return (
+              <div key={`empty-slot-${globalIndex}`}>
+                <label
+                  htmlFor={`file-${customization.id}-${globalIndex}`}
+                  className="flex flex-row items-center justify-between border-2 border-dashed border-green-300 rounded-xl p-4 cursor-pointer hover:border-green-600 hover:bg-green-50/80 transition-all bg-green-50/30 group"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="bg-green-100 p-2 rounded-full group-hover:bg-green-200 transition-colors">
+                      <Upload className="h-5 w-5 text-green-700" />
                     </div>
-
-                    <input
-                      id={`file-${customization.id}-${globalIndex}`}
-                      type="file"
-                      className="hidden"
-                      accept="image/*"
-                      onChange={(e) => {
-                        handleFileUpload(customization.id, e.target.files);
-                        e.target.value = ""; // Reset input to allow selecting the same file again or triggering change
-                      }}
-                    />
-
-                    <div className="bg-white border border-green-200 px-3 py-1 rounded text-xs font-medium text-green-700">
-                      Selecionar
+                    <div>
+                      <p className="text-sm font-semibold text-green-900 group-hover:text-green-700">
+                        Adicionar Foto {globalIndex + 1}
+                      </p>
+                      <p className="text-xs text-green-600">
+                        Clique para selecionar
+                      </p>
                     </div>
-                  </label>
-                </div>
-              );
-            }
-          )}
+                  </div>
+
+                  <input
+                    id={`file-${customization.id}-${globalIndex}`}
+                    type="file"
+                    className="hidden"
+                    accept="image/*"
+                    onChange={(e) => {
+                      handleFileUpload(customization.id, e.target.files);
+                      e.target.value = ""; // Reset input to allow selecting the same file again or triggering change
+                    }}
+                  />
+
+                  <div className="bg-white border border-green-200 px-3 py-1 rounded text-xs font-medium text-green-700">
+                    Selecionar
+                  </div>
+                </label>
+              </div>
+            );
+          })}
         </div>
 
         {hasImages && currentFiles.length === maxImages && (
@@ -1056,13 +1133,13 @@ export function ItemCustomizationModal({
                   const result: CustomizationInput[] = [];
                   const filesData = customizationData[customization.id] as
                     | Array<{
-                      file: File;
-                      preview: string;
-                      position: number;
-                      base64?: string;
-                      mime_type?: string;
-                      size?: number;
-                    }>
+                        file: File;
+                        preview: string;
+                        position: number;
+                        base64?: string;
+                        mime_type?: string;
+                        size?: number;
+                      }>
                     | undefined;
 
                   if (filesData && filesData.length > 0) {
@@ -1084,7 +1161,6 @@ export function ItemCustomizationModal({
 
                   onComplete(result.length > 0, result);
                   toast.success("Imagens confirmadas!");
-                  onClose();
                 }}
                 className="flex-1 gap-2 bg-green-600 hover:bg-green-700"
               >
@@ -1144,10 +1220,11 @@ export function ItemCustomizationModal({
                 whileTap={{ scale: 0.98 }}
               >
                 <Card
-                  className={`p-4 cursor-pointer transition-all ${isSelected
-                    ? "border-2 border-rose-500 bg-gradient-to-r from-rose-50 to-pink-50 shadow-md"
-                    : "border-2 border-rose-200 hover:border-rose-400 hover:bg-rose-50/30"
-                    }`}
+                  className={`p-4 cursor-pointer transition-all ${
+                    isSelected
+                      ? "border-2 border-rose-500 bg-gradient-to-r from-rose-50 to-pink-50 shadow-md"
+                      : "border-2 border-rose-200 hover:border-rose-400 hover:bg-rose-50/30"
+                  }`}
                   onClick={() =>
                     handleOptionSelect(
                       customization.id,
@@ -1182,8 +1259,9 @@ export function ItemCustomizationModal({
                     />
                     <div className="flex-1">
                       <p
-                        className={`font-semibold ${isSelected ? "text-rose-900" : "text-rose-800"
-                          }`}
+                        className={`font-semibold ${
+                          isSelected ? "text-rose-900" : "text-rose-800"
+                        }`}
                       >
                         {option.label}
                       </p>
@@ -1253,7 +1331,6 @@ export function ItemCustomizationModal({
                   });
                   onComplete(result.length > 0, result);
                   toast.success("Opção selecionada!");
-                  onClose();
                 }}
                 className="flex-1 gap-2 bg-rose-600 hover:bg-rose-700"
               >
@@ -1268,8 +1345,53 @@ export function ItemCustomizationModal({
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-6xl max-h-[95vh] overflow-y-auto">
+    <Dialog
+      open={isOpen}
+      onOpenChange={(newOpen) => {
+        // Evitar fechar o dialog se está em andamento operação de crop de imagem ou processando arquivos
+        if (
+          !newOpen &&
+          (cropDialogOpen || pendingFiles.length > 0 || isCropping)
+        ) {
+          console.log(
+            "⛔ [Dialog] Tentativa bloqueada - cropDialogOpen:",
+            cropDialogOpen,
+            "pendingFiles:",
+            pendingFiles.length,
+            "isCropping:",
+            isCropping
+          );
+          return;
+        }
+        if (!newOpen) {
+          onClose();
+        }
+      }}
+    >
+      <DialogContent
+        className="max-w-6xl max-h-[95vh] overflow-y-auto"
+        onPointerDownOutside={(e) => {
+          // Prevenir fechamento quando clica fora durante crop ou processamento
+          if (cropDialogOpen || pendingFiles.length > 0 || isCropping) {
+            console.log("🛡️ [DialogContent] onPointerDownOutside bloqueado");
+            e.preventDefault();
+          }
+        }}
+        onInteractOutside={(e) => {
+          // Prevenir interação externa durante crop ou processamento
+          if (cropDialogOpen || pendingFiles.length > 0 || isCropping) {
+            console.log("🛡️ [DialogContent] onInteractOutside bloqueado");
+            e.preventDefault();
+          }
+        }}
+        onEscapeKeyDown={(e) => {
+          // Prevenir fechamento por ESC durante crop ou processamento
+          if (cropDialogOpen || pendingFiles.length > 0 || isCropping) {
+            console.log("🛡️ [DialogContent] onEscapeKeyDown bloqueado");
+            e.preventDefault();
+          }
+        }}
+      >
         {loading && (
           <div className="fixed inset-0 bg-white/95 backdrop-blur-sm rounded-lg flex items-center justify-center z-[60]">
             <AnimatedFramesLoader />
@@ -1327,7 +1449,11 @@ export function ItemCustomizationModal({
                   onComplete={handleLayoutComplete}
                   onBack={handleBackToSelection}
                   initialImages={
-                    (customizationData[fullLayoutBase.id] as { images?: unknown } | undefined)?.images as ImageData[]
+                    (
+                      customizationData[fullLayoutBase.id] as
+                        | { images?: unknown }
+                        | undefined
+                    )?.images as ImageData[]
                   }
                 />
               )}

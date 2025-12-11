@@ -21,6 +21,7 @@ const FeedSection = dynamic(() => import("./components/feed/FeedSection"), {
 import { getInternalImageUrl } from "@/lib/image-helper";
 import Image from "next/image";
 import InfiniteScroll from "react-infinite-scroll-component";
+import WhatsappToggle from "./components/whatsappToggle";
 
 interface GridProduct {
   id: string;
@@ -73,7 +74,7 @@ export default function Home() {
   useEffect(() => {
     const computeThreshold = () => {
       const isMobile = window.innerWidth < 768;
-      
+
       if (isMobile) {
         const val = Math.floor(window.innerHeight * 1.2);
         setScrollThreshold(`${val}px`);
@@ -319,6 +320,10 @@ export default function Home() {
           </div>
         </section>
       )}
+
+      <div className="fixed bottom-6 right-6">
+        <WhatsappToggle />
+      </div>
     </div>
   );
 }
