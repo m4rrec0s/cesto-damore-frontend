@@ -6,7 +6,7 @@ import { Label } from "@/app/components/ui/label";
 import { Card } from "@/app/components/ui/card";
 import { Checkbox } from "@/app/components/ui/checkbox";
 import { Badge } from "@/app/components/ui/badge";
-import { AlertCircle, Check } from "lucide-react";
+import { AlertCircle, Check, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { LoadingSpinner } from "@/app/components/LoadingSpinner";
 import { getDirectImageUrl } from "@/app/helpers/drive-normalize";
@@ -69,6 +69,9 @@ export default function BaseLayoutCustomizationForm({
   const [availableLayouts, setAvailableLayouts] = useState<Layout[]>([]);
   const [loading, setLoading] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
+  const [imageLoadingStates, setImageLoadingStates] = useState<
+    Record<string, boolean>
+  >({});
 
   // Ref para armazenar último conteúdo recebido (evitar loops)
   const lastDataContentRef = useRef<string>("");
@@ -236,35 +239,56 @@ export default function BaseLayoutCustomizationForm({
               return (
                 <Card
                   key={layout.id}
-                  className={`p-4 cursor-pointer transition-all hover:shadow-md ${isSelected
-                    ? "border-purple-500 border-2 bg-purple-50"
-                    : "border-gray-200 hover:border-gray-300"
-                    }`}
+                  className={`p-4 cursor-pointer transition-all hover:shadow-md ${
+                    isSelected
+                      ? "border-purple-500 border-2 bg-purple-50"
+                      : "border-gray-200 hover:border-gray-300"
+                  }`}
                   onClick={() => toggleLayout(layout.id)}
                 >
                   {/* Preview Image */}
                   <div className="relative w-full h-40 mb-3 rounded-md overflow-hidden bg-gray-100">
                     {layout.image_url ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={(() => {
-                          const url = layout.image_url;
-                          if (!url) return "";
-                          if (url.startsWith("data:")) return url;
-                          if (
-                            url.includes("drive.google.com") ||
-                            url.includes("drive.usercontent.google.com")
-                          ) {
-                            const normalizedUrl = getDirectImageUrl(url);
-                            return `/api/proxy-image?url=${encodeURIComponent(
-                              normalizedUrl
-                            )}`;
+                      <>
+                        {/* Loading spinner */}
+                        {imageLoadingStates[layout.id] && (
+                          <div className="absolute inset-0 flex items-center justify-center bg-gray-200/50 z-10">
+                            <Loader2 className="h-5 w-5 text-gray-600 animate-spin" />
+                          </div>
+                        )}
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={(() => {
+                            const url = layout.image_url;
+                            if (!url) return "";
+                            if (url.startsWith("data:")) return url;
+                            if (
+                              url.includes("drive.google.com") ||
+                              url.includes("drive.usercontent.google.com")
+                            ) {
+                              const normalizedUrl = getDirectImageUrl(url);
+                              return `/api/proxy-image?url=${encodeURIComponent(
+                                normalizedUrl
+                              )}`;
+                            }
+                            return url;
+                          })()}
+                          alt={layout.name}
+                          className="absolute inset-0 w-full h-full object-cover"
+                          onLoad={() =>
+                            setImageLoadingStates((prev) => ({
+                              ...prev,
+                              [layout.id]: false,
+                            }))
                           }
-                          return url;
-                        })()}
-                        alt={layout.name}
-                        className="absolute inset-0 w-full h-full object-cover"
-                      />
+                          onError={() =>
+                            setImageLoadingStates((prev) => ({
+                              ...prev,
+                              [layout.id]: false,
+                            }))
+                          }
+                        />
+                      </>
                     ) : (
                       <div className="flex items-center justify-center h-full text-gray-400">
                         <span className="text-4xl">🎨</span>

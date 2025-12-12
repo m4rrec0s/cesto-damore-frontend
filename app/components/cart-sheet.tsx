@@ -43,11 +43,19 @@ export function CartSheet({ isOpen, onClose, onCheckout }: CartSheetProps) {
           "Opção não selecionada"
         );
       case "BASE_LAYOUT":
-        if (custom.selected_item) {
-          return `${custom.selected_item.original_item} → ${custom.selected_item.selected_item}`;
+        // BASE_LAYOUT sempre deve retornar o label_selected
+        if (custom.label_selected) return custom.label_selected;
+        // Fallback se não houver label_selected
+        if (custom.selected_item_label) return custom.selected_item_label;
+        if (typeof custom.selected_item === "string") {
+          return custom.selected_item;
         }
-        if (custom.text) {
-          return custom.text;
+        if (
+          custom.selected_item &&
+          typeof custom.selected_item === "object" &&
+          "selected_item" in custom.selected_item
+        ) {
+          return (custom.selected_item as { selected_item?: string }).selected_item || "Layout selecionado";
         }
         return "Layout selecionado";
       case "IMAGES":

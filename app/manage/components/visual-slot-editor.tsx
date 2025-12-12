@@ -103,13 +103,21 @@ export default function VisualSlotEditor({
     const img = new Image();
     const directImageUrl = getDirectImageUrl(imageUrl);
     const finalUrl = directImageUrl.includes("drive.google.com")
-      ? `/api/proxy-image?url=${encodeURIComponent(directImageUrl)}`
+      ? `/api/proxy-image?url=${encodeURIComponent(directImageUrl)}&size=w1200`
       : directImageUrl;
+
+    console.log("🖼️ Carregando imagem:", finalUrl);
 
     img.src = finalUrl;
     img.crossOrigin = "anonymous";
 
     img.onload = () => {
+      console.log(
+        "✅ Imagem carregada com sucesso:",
+        img.width,
+        "x",
+        img.height
+      );
       baseImageRef.current = img;
       setZoom(calculateInitialZoom());
       drawCanvas();
@@ -117,7 +125,13 @@ export default function VisualSlotEditor({
 
     img.onerror = (error) => {
       console.error("❌ Erro ao carregar imagem do layout:", error);
+      console.error("URL tentada:", finalUrl);
     };
+
+    img.onabort = () => {
+      console.error("⚠️ Carregamento da imagem foi abortado");
+    };
+
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [imageUrl, imageHeight]);
 
@@ -127,7 +141,7 @@ export default function VisualSlotEditor({
   }, [slots, selectedSlot, zoom]);
 
   const drawCanvas = () => {
-    if (!canvasRef.current || !baseImageRef.current) return;
+    if (!canvasRef.current) return;
 
     const canvas = canvasRef.current;
     const ctx = canvas.getContext("2d");
@@ -136,8 +150,19 @@ export default function VisualSlotEditor({
     canvas.width = imageWidth * zoom;
     canvas.height = imageHeight * zoom;
 
-    // Limpar canvas
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    // Limpar canvas com cor cinza padrão
+    ctx.fillStyle = "#f3f4f6";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Se a imagem não foi carregada, desenha um placeholder
+    if (!baseImageRef.current) {
+      ctx.fillStyle = "#9ca3af";
+      ctx.font = `${16 * zoom}px sans-serif`;
+      ctx.textAlign = "center";
+      ctx.fillText("Carregando imagem...", canvas.width / 2, canvas.height / 2);
+      console.warn("⚠️ Imagem não carregada ainda, desenhando placeholder");
+      return;
+    }
 
     // 1. Desenhar Slots (ordenados por zIndex)
     const sortedSlots = [...slots].sort(
@@ -296,7 +321,10 @@ export default function VisualSlotEditor({
 
     // Resize Handles
     // TL
-    if (Math.abs(localM.x - x) <= hitRadius && Math.abs(localM.y - y) <= hitRadius)
+    if (
+      Math.abs(localM.x - x) <= hitRadius &&
+      Math.abs(localM.y - y) <= hitRadius
+    )
       return "tl";
     // TR
     if (
@@ -399,7 +427,8 @@ export default function VisualSlotEditor({
       }
     }
 
-    if (interactionMode === "none" || !selectedSlot || !initialSlotState) return;
+    if (interactionMode === "none" || !selectedSlot || !initialSlotState)
+      return;
 
     const slot = slots.find((s) => s.id === selectedSlot);
     if (!slot) return;
@@ -449,7 +478,13 @@ export default function VisualSlotEditor({
 
       // 2. Rotacionar o ponto atual do mouse para o sistema local do slot inicial
       const localM = rotatePoint(coords.x, coords.y, cx, cy, -initRot);
-      const localStart = rotatePoint(dragStart.x, dragStart.y, cx, cy, -initRot);
+      const localStart = rotatePoint(
+        dragStart.x,
+        dragStart.y,
+        cx,
+        cy,
+        -initRot
+      );
 
       const dx = localM.x - localStart.x;
       const dy = localM.y - localStart.y;
@@ -516,12 +551,12 @@ export default function VisualSlotEditor({
         slots.map((s) =>
           s.id === selectedSlot
             ? {
-              ...s,
-              x: (finalX / canvas.width) * 100,
-              y: (finalY / canvas.height) * 100,
-              width: (newW / canvas.width) * 100,
-              height: (newH / canvas.height) * 100,
-            }
+                ...s,
+                x: (finalX / canvas.width) * 100,
+                y: (finalY / canvas.height) * 100,
+                width: (newW / canvas.width) * 100,
+                height: (newH / canvas.height) * 100,
+              }
             : s
         )
       );
@@ -620,7 +655,8 @@ export default function VisualSlotEditor({
                 />
               </div>
               <p className="text-sm text-muted-foreground mt-2">
-                Clique e arraste para mover. Use os cantos para redimensionar e o círculo superior para rotacionar.
+                Clique e arraste para mover. Use os cantos para redimensionar e
+                o círculo superior para rotacionar.
               </p>
             </div>
 
@@ -795,10 +831,11 @@ export default function VisualSlotEditor({
                     slots.map((slot) => (
                       <div
                         key={slot.id}
-                        className={`p-2 rounded border cursor-pointer hover:bg-muted ${selectedSlot === slot.id
-                          ? "border-primary bg-muted"
-                          : ""
-                          }`}
+                        className={`p-2 rounded border cursor-pointer hover:bg-muted ${
+                          selectedSlot === slot.id
+                            ? "border-primary bg-muted"
+                            : ""
+                        }`}
                         onClick={() => setSelectedSlot(slot.id)}
                       >
                         <div className="flex items-center justify-between">

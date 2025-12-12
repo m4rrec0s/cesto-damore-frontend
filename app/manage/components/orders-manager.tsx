@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+import InfiniteScroll from "react-infinite-scroll-component";
 import {
   AlertCircle,
   BadgeCheck,
@@ -14,24 +15,27 @@ import {
   User,
   Workflow,
   XCircle,
+  ChevronDown,
+  FolderOpen,
 } from "lucide-react";
-import type {
-  Order,
-  OrderItemDetailed,
-  OrderStatus,
-} from "../../hooks/use-api";
-import { useApi } from "../../hooks/use-api";
-import { Badge } from "../../components/ui/badge";
-import { Button } from "../../components/ui/button";
+import Link from "next/link";
+import { Badge } from "@/app/components/ui/badge";
+import { Button } from "@/app/components/ui/button";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "../../components/ui/select";
-import { cn } from "../../lib/utils";
-import Link from "next/link";
+} from "@/app/components/ui/select";
+import { cn } from "@/app/lib/utils";
+import {
+  useApi,
+  Order,
+  OrderItemDetailed,
+  OrderStatus,
+} from "../../hooks/use-api";
+import { CustomizationDisplay } from "./customization-display";
 
 const STATUS_LABELS: Record<OrderStatus, string> = {
   PENDING: "Aguardando pagamento",
@@ -42,7 +46,7 @@ const STATUS_LABELS: Record<OrderStatus, string> = {
 };
 
 const STATUS_COLORS: Record<OrderStatus, string> = {
-  PENDING: "bg-rose-100 text-rose-700 border-rose-200",
+  PENDING: "bg-yellow-100 text-yellow-700 border-yellow-200",
   PAID: "bg-sky-100 text-sky-700 border-sky-200",
   SHIPPED: "bg-blue-100 text-blue-700 border-blue-200",
   DELIVERED: "bg-emerald-100 text-emerald-700 border-emerald-200",
@@ -85,7 +89,7 @@ interface StatusSelectionState {
 export function OrdersManager() {
   const api = useApi();
   const [orders, setOrders] = useState<Order[]>([]);
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("open");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [notifyCustomer, setNotifyCustomer] = useState(true);
@@ -97,28 +101,90 @@ export function OrdersManager() {
   const [counts, setCounts] = useState<Partial<Record<StatusFilter, number>>>(
     {}
   );
+  const [expandedOrders, setExpandedOrders] = useState<Set<string>>(new Set());
+  const [currentPage, setCurrentPage] = useState(1);
+  const [paginationData, setPaginationData] = useState<{
+    total: number;
+    totalPages: number;
+    hasMore: boolean;
+  }>({ total: 0, totalPages: 0, hasMore: false });
+  const ITEMS_PER_PAGE = 8;
 
   const loadOrders = useCallback(
-    async (currentFilter: StatusFilter, silent = false) => {
-      if (!silent) setLoading(true);
+    async (currentFilter: StatusFilter, page: number = 1, silent = false) => {
+      if (!silent && page === 1) setLoading(true);
       try {
         const params =
           currentFilter === "all"
-            ? undefined
-            : { status: currentFilter === "open" ? "open" : currentFilter };
+            ? { page, limit: ITEMS_PER_PAGE }
+            : {
+                status: currentFilter === "open" ? "open" : currentFilter,
+                page,
+                limit: ITEMS_PER_PAGE,
+              };
         const data = await api.getOrders(params);
-        const list = Array.isArray(data) ? (data as Order[]) : [];
 
-        setOrders(list);
-        setSelectedStatuses(
-          list.reduce<StatusSelectionState>((acc, order) => {
-            acc[order.id] = getInitialNextStatus(order.status);
-            return acc;
-          }, {})
-        );
+        // Handle both old format (array) and new format (paginated response)
+        if (Array.isArray(data)) {
+          const list = data as Order[];
+          if (page === 1) {
+            setOrders(list);
+          } else {
+            setOrders((prev) => [...prev, ...list]);
+          }
+          setSelectedStatuses(
+            list.reduce<StatusSelectionState>((acc, order) => {
+              acc[order.id] = getInitialNextStatus(order.status);
+              return acc;
+            }, {})
+          );
+          setPaginationData({
+            total: list.length,
+            totalPages: 1,
+            hasMore: false,
+          });
+        } else {
+          // New paginated format
+          const paginatedData = data as {
+            data: Order[];
+            pagination: {
+              page: number;
+              limit: number;
+              total: number;
+              totalPages: number;
+              hasMore: boolean;
+            };
+          };
+          const list = paginatedData.data || [];
+
+          if (page === 1) {
+            setOrders(list);
+            setCurrentPage(1);
+          } else {
+            setOrders((prev) => [...prev, ...list]);
+          }
+
+          const newStatuses = list.reduce<StatusSelectionState>(
+            (acc, order) => {
+              if (!selectedStatuses[order.id]) {
+                acc[order.id] = getInitialNextStatus(order.status);
+              }
+              return acc;
+            },
+            {}
+          );
+
+          if (Object.keys(newStatuses).length > 0) {
+            setSelectedStatuses((prev) => ({ ...prev, ...newStatuses }));
+          }
+
+          setPaginationData(paginatedData.pagination);
+          setCurrentPage(paginatedData.pagination.page);
+        }
+
         setCounts((prev) => ({
           ...prev,
-          [currentFilter]: list.length,
+          [currentFilter]: paginationData.total || 0,
         }));
       } catch (error: unknown) {
         console.error("Erro ao carregar pedidos:", error);
@@ -126,36 +192,49 @@ export function OrdersManager() {
           extractErrorMessage(error, "Não foi possível carregar pedidos")
         );
       } finally {
-        setLoading(false);
+        if (page === 1) setLoading(false);
       }
     },
-    [api]
+    [api, ITEMS_PER_PAGE, selectedStatuses, paginationData.total]
   );
 
   useEffect(() => {
-    loadOrders(statusFilter);
-  }, [loadOrders, statusFilter]);
+    setOrders([]);
+    setCurrentPage(1);
+    setPaginationData({ total: 0, totalPages: 0, hasMore: false });
+    loadOrders(statusFilter, 1);
+  }, [statusFilter, loadOrders]);
 
   const refreshCounts = useCallback(
     async (silent = false) => {
       if (!silent) setRefreshing(true);
       try {
         const results = await Promise.all(
-          SUMMARY_FILTERS.map((filter) =>
-            api.getOrders(
+          SUMMARY_FILTERS.map((filter) => {
+            const params =
               filter === "all"
-                ? undefined
-                : { status: filter === "open" ? "open" : filter }
-            )
-          )
+                ? { page: 1, limit: 1 }
+                : {
+                    status: filter === "open" ? "open" : filter,
+                    page: 1,
+                    limit: 1,
+                  };
+            return api.getOrders(params);
+          })
         );
 
         const map = SUMMARY_FILTERS.reduce<
           Partial<Record<StatusFilter, number>>
         >((acc, filter, index) => {
-          acc[filter] = Array.isArray(results[index])
-            ? (results[index] as Order[]).length
-            : 0;
+          const result = results[index];
+          if (Array.isArray(result)) {
+            acc[filter] = (result as Order[]).length;
+          } else {
+            const paginatedResult = result as {
+              pagination?: { total: number };
+            };
+            acc[filter] = paginatedResult?.pagination?.total || 0;
+          }
           return acc;
         }, {});
 
@@ -202,7 +281,7 @@ export function OrdersManager() {
         });
         toast.success("Status do pedido atualizado");
         await Promise.all([
-          loadOrders(statusFilter, true),
+          loadOrders(statusFilter, 1, true),
           refreshCounts(true),
         ]);
       } catch (error: unknown) {
@@ -224,7 +303,10 @@ export function OrdersManager() {
     try {
       await api.deleteAllCanceledOrders();
       toast.success("Pedido cancelado excluído");
-      await Promise.all([loadOrders(statusFilter, true), refreshCounts(true)]);
+      await Promise.all([
+        loadOrders(statusFilter, 1, true),
+        refreshCounts(true),
+      ]);
     } catch (error: unknown) {
       console.error("Erro ao excluir pedido cancelado", error);
       toast.error(
@@ -237,6 +319,12 @@ export function OrdersManager() {
       setUpdatingOrders((prev) => ({ ...prev, ["deleteAll"]: false }));
     }
   }, [api, loadOrders, refreshCounts, statusFilter]);
+
+  const loadMoreOrders = useCallback(() => {
+    if (paginationData.hasMore) {
+      loadOrders(statusFilter, currentPage + 1, true);
+    }
+  }, [statusFilter, currentPage, paginationData.hasMore, loadOrders]);
 
   const groupedOrders = useMemo(() => orders ?? [], [orders]);
 
@@ -354,434 +442,434 @@ export function OrdersManager() {
           </div>
         </div>
       ) : (
-        <div className="space-y-6">
-          {groupedOrders.map((order) => {
-            const currentStatus = order.status;
-            const selectedStatus = selectedStatuses[order.id] ?? currentStatus;
-            const isUpdating = Boolean(updatingOrders[order.id]);
-            const paymentStatus = order.payment?.status;
-            const totalItems = order.items.reduce(
-              (acc, item) => acc + (item.quantity ?? 0),
-              0
-            );
-            const canCancel =
-              currentStatus !== "DELIVERED" && currentStatus !== "CANCELED";
-            const disableUpdate =
-              isUpdating || !selectedStatus || selectedStatus === currentStatus;
+        <InfiniteScroll
+          dataLength={groupedOrders.length}
+          next={loadMoreOrders}
+          hasMore={paginationData.hasMore}
+          loader={
+            <div className="flex justify-center py-8">
+              <Loader2 className="h-6 w-6 animate-spin text-rose-500" />
+            </div>
+          }
+          endMessage={
+            <div className="flex justify-center py-8">
+              <p className="text-gray-500 text-sm">
+                Você viu todos os pedidos ({groupedOrders.length} no total)
+              </p>
+            </div>
+          }
+        >
+          <div className="space-y-6">
+            {groupedOrders.map((order) => {
+              const currentStatus = order.status;
+              const selectedStatus =
+                selectedStatuses[order.id] ?? currentStatus;
+              const isUpdating = Boolean(updatingOrders[order.id]);
+              const paymentStatus = order.payment?.status;
+              const totalItems = order.items.reduce(
+                (acc, item) => acc + (item.quantity ?? 0),
+                0
+              );
+              const canCancel =
+                currentStatus !== "DELIVERED" && currentStatus !== "CANCELED";
+              const disableUpdate =
+                isUpdating ||
+                !selectedStatus ||
+                selectedStatus === currentStatus;
 
-            return (
-              <article
-                key={order.id}
-                className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm"
-              >
-                <header className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-                  <div>
-                    <div className="flex items-center gap-2 text-xs uppercase tracking-wider text-gray-400">
-                      <span>Pedido</span>
-                      <span>#{shortId(order.id)}</span>
-                      <span>•</span>
-                      <span>{formatDate(order.created_at)}</span>
+              const isExpanded = expandedOrders.has(order.id);
+              const toggleExpand = () => {
+                const newExpanded = new Set(expandedOrders);
+                if (isExpanded) {
+                  newExpanded.delete(order.id);
+                } else {
+                  newExpanded.add(order.id);
+                }
+                setExpandedOrders(newExpanded);
+              };
+
+              return (
+                <article
+                  key={order.id}
+                  className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden"
+                >
+                  {/* Header Clicável - Sempre Visível */}
+                  <button
+                    onClick={toggleExpand}
+                    className="w-full text-left p-6 hover:bg-gray-50/50 transition-colors flex flex-col gap-4 md:flex-row md:items-start md:justify-between group"
+                  >
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 text-xs uppercase tracking-wider text-gray-400">
+                        <span>Pedido</span>
+                        <span>#{shortId(order.id)}</span>
+                        <span>•</span>
+                        <span>{formatDate(order.created_at)}</span>
+                      </div>
+                      <h3 className="mt-1 text-lg font-semibold text-gray-900 group-hover:text-rose-600 transition-colors">
+                        {order.user?.name || "Cliente não identificado"}
+                      </h3>
+                      <p className="mt-1 text-sm text-gray-500">
+                        {order.user?.email || "Sem e-mail"}
+                      </p>
                     </div>
-                    <h3 className="mt-1 text-lg font-semibold text-gray-900">
-                      {order.user?.name || "Cliente não identificado"}
-                    </h3>
-                    <p className="mt-1 text-sm text-gray-500">
-                      {order.user?.email || "Sem e-mail"}
-                    </p>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Badge
-                      className={cn(
-                        "border px-3 py-1 text-xs font-semibold uppercase tracking-wide",
-                        STATUS_COLORS[currentStatus]
-                      )}
-                    >
-                      {STATUS_LABELS[currentStatus]}
-                    </Badge>
-                    {paymentStatus && (
+                    <div className="flex flex-wrap items-center gap-2 md:flex-nowrap">
                       <Badge
-                        variant="outline"
-                        className="border-blue-200 bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700"
+                        className={cn(
+                          "border px-3 py-1 text-xs font-semibold uppercase tracking-wide",
+                          STATUS_COLORS[currentStatus]
+                        )}
                       >
-                        Pagamento: {paymentStatus}
+                        {STATUS_LABELS[currentStatus]}
                       </Badge>
-                    )}
-                    <Badge
-                      variant="secondary"
-                      className="bg-gray-100 text-gray-600"
-                    >
-                      Itens: {totalItems}
-                    </Badge>
-                    <Badge
-                      variant="secondary"
-                      className="bg-gray-100 text-gray-600"
-                    >
-                      Total: {formatCurrency(order.grand_total || order.total)}
-                    </Badge>
-                  </div>
-                </header>
-
-                <section className="mt-6 grid gap-4 rounded-xl border border-gray-100 bg-gray-50/70 p-4 md:grid-cols-3">
-                  <div className="space-y-2">
-                    <h4 className="flex items-center gap-2 text-sm font-semibold text-gray-700">
-                      <User className="h-4 w-4 text-gray-500" /> Cliente
-                    </h4>
-                    <div className="text-sm text-gray-600">
-                      {order.user?.phone && (
-                        <p className="flex items-center gap-2">
-                          <Phone className="h-4 w-4 text-gray-400" />
-                          <Link
-                            href={`https://wa.me/55${order.user.phone}`}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="hover:text-rose-600"
-                          >
-                            {order.user.phone}
-                          </Link>
-                        </p>
-                      )}
-                      <p className="mt-1 flex items-center gap-2">
-                        <AlertCircle className="h-4 w-4 text-gray-400" />
-                        {order.payment_method
-                          ? `Pagamento via ${order.payment_method}`
-                          : "Forma de pagamento não informada"}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <h4 className="flex items-center gap-2 text-sm font-semibold text-gray-700">
-                      <MapPin className="h-4 w-4 text-gray-500" /> Entrega
-                    </h4>
-                    <div className="text-sm text-gray-600">
-                      <p>
-                        {order.delivery_address || "Endereço não informado"}
-                      </p>
-                      <p className="text-gray-500">
-                        {(order.delivery_city || "Cidade").trim()} -{" "}
-                        {(order.delivery_state || "UF").trim()}
-                      </p>
-                      <p className="mt-1 flex items-center gap-2">
-                        <CalendarClock className="h-4 w-4 text-gray-400" />
-                        {order.delivery_date
-                          ? formatDate(order.delivery_date)
-                          : "Data de entrega não definida"}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <h4 className="flex items-center gap-2 text-sm font-semibold text-gray-700">
-                      <Workflow className="h-4 w-4 text-gray-500" />
-                      Progresso
-                    </h4>
-                    <div className="flex flex-wrap gap-2">
-                      {STATUS_FLOW.map((status) => {
-                        const isCompleted =
-                          STATUS_FLOW.indexOf(order.status) >
-                          STATUS_FLOW.indexOf(status);
-                        const isCurrent = order.status === status;
-                        return (
-                          <Badge
-                            key={status}
-                            className={cn(
-                              "border px-2 py-1 text-xs",
-                              isCurrent
-                                ? STATUS_COLORS[status]
-                                : isCompleted
-                                ? "border-emerald-200 bg-emerald-50 text-emerald-600"
-                                : "border-gray-200 bg-white text-gray-500"
-                            )}
-                          >
-                            {STATUS_LABELS[status]}
-                          </Badge>
-                        );
-                      })}
-                      {order.status === "CANCELED" && (
+                      {paymentStatus && (
                         <Badge
-                          className={cn(
-                            "px-2 py-1 text-xs",
-                            STATUS_COLORS.CANCELED
-                          )}
+                          variant="outline"
+                          className="border-blue-200 bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700"
                         >
-                          Pedido cancelado
+                          Pagamento: {paymentStatus}
                         </Badge>
                       )}
-                    </div>
-                  </div>
-                </section>
-
-                <section className="mt-6 space-y-3">
-                  <h4 className="text-sm font-semibold text-gray-700">
-                    Itens da cesta
-                  </h4>
-                  <div className="space-y-3">
-                    {order.items.map((item) => (
-                      <div
-                        key={item.id}
-                        className="rounded-lg border border-gray-100 bg-white p-3 shadow-sm"
+                      <Badge
+                        variant="secondary"
+                        className="bg-gray-100 text-gray-600"
                       >
-                        <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-gray-700">
-                          <div className="font-medium text-gray-900">
-                            {item.product?.name || "Produto"}
-                          </div>
-                          <div className="text-sm text-gray-500">
-                            Quantidade: {item.quantity} • Total:{" "}
-                            {formatCurrency(calculateItemTotal(item))}
+                        Itens: {totalItems}
+                      </Badge>
+                      <Badge
+                        variant="secondary"
+                        className="bg-gray-100 text-gray-600"
+                      >
+                        Total:{" "}
+                        {formatCurrency(order.grand_total || order.total)}
+                      </Badge>
+                      <ChevronDown
+                        className={cn(
+                          "h-5 w-5 text-gray-400 transition-transform duration-300 ml-2",
+                          isExpanded && "rotate-180"
+                        )}
+                      />
+                    </div>
+                  </button>
+
+                  {/* Conteúdo Expandível */}
+                  {isExpanded && (
+                    <div className="border-t border-gray-100 px-6 py-6 space-y-6">
+                      <section className="grid gap-4 rounded-xl border border-gray-100 bg-gray-50/70 p-4 md:grid-cols-3">
+                        <div className="space-y-2">
+                          <h4 className="flex items-center gap-2 text-sm font-semibold text-gray-700">
+                            <User className="h-4 w-4 text-gray-500" /> Cliente
+                          </h4>
+                          <div className="text-sm text-gray-600">
+                            {order.user?.phone && (
+                              <p className="flex items-center gap-2">
+                                <Phone className="h-4 w-4 text-gray-400" />
+                                <Link
+                                  href={`https://wa.me/55${order.user.phone}`}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="hover:text-rose-600"
+                                >
+                                  {order.user.phone}
+                                </Link>
+                              </p>
+                            )}
+                            <p className="mt-1 flex items-center gap-2">
+                              <AlertCircle className="h-4 w-4 text-gray-400" />
+                              {order.payment_method
+                                ? `Pagamento via ${order.payment_method}`
+                                : "Forma de pagamento não informada"}
+                            </p>
                           </div>
                         </div>
-                        {item.additionals.length > 0 && (
-                          <div className="mt-2 space-y-1 text-xs text-gray-500">
-                            <p className="font-medium text-gray-700">
-                              Adicionais
+                        <div className="space-y-2">
+                          <h4 className="flex items-center gap-2 text-sm font-semibold text-gray-700">
+                            <MapPin className="h-4 w-4 text-gray-500" /> Entrega
+                          </h4>
+                          <div className="text-sm text-gray-600">
+                            <p>
+                              {order.delivery_address ||
+                                "Endereço não informado"}
                             </p>
-                            <ul className="space-y-1">
-                              {item.additionals.map((additional) => (
-                                <li
-                                  key={additional.id}
-                                  className="flex items-center justify-between gap-3"
+                            <p className="text-gray-500">
+                              {(order.delivery_city || "Cidade").trim()} -{" "}
+                              {(order.delivery_state || "UF").trim()}
+                            </p>
+                            <p className="mt-1 flex items-center gap-2">
+                              <CalendarClock className="h-4 w-4 text-gray-400" />
+                              {order.delivery_date
+                                ? formatDate(order.delivery_date)
+                                : "Data de entrega não definida"}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          <h4 className="flex items-center gap-2 text-sm font-semibold text-gray-700">
+                            <Workflow className="h-4 w-4 text-gray-500" />
+                            Progresso
+                          </h4>
+                          <div className="flex flex-wrap gap-2">
+                            {STATUS_FLOW.map((status) => {
+                              const isCompleted =
+                                STATUS_FLOW.indexOf(order.status) >
+                                STATUS_FLOW.indexOf(status);
+                              const isCurrent = order.status === status;
+                              return (
+                                <Badge
+                                  key={status}
+                                  className={cn(
+                                    "border px-2 py-1 text-xs",
+                                    isCurrent
+                                      ? STATUS_COLORS[status]
+                                      : isCompleted
+                                      ? "border-emerald-200 bg-emerald-50 text-emerald-600"
+                                      : "border-gray-200 bg-white text-gray-500"
+                                  )}
                                 >
-                                  <span>
-                                    {additional.additional?.name || "Adicional"}
-                                  </span>
-                                  <span className="font-medium text-gray-600">
-                                    x{additional.quantity} •{" "}
-                                    {formatCurrency(
-                                      additional.price * additional.quantity
-                                    )}
-                                  </span>
-                                </li>
-                              ))}
-                            </ul>
+                                  {STATUS_LABELS[status]}
+                                </Badge>
+                              );
+                            })}
+                            {order.status === "CANCELED" && (
+                              <Badge
+                                className={cn(
+                                  "px-2 py-1 text-xs",
+                                  STATUS_COLORS.CANCELED
+                                )}
+                              >
+                                Pedido cancelado
+                              </Badge>
+                            )}
                           </div>
-                        )}
-                        {item.customizations.length > 0 && (
-                          <div className="mt-3 space-y-2 text-xs">
-                            <p className="font-medium text-gray-700">
-                              Customizações ({item.customizations.length})
-                            </p>
-                            <ul className="space-y-2">
-                              {item.customizations.map((customization) => {
-                                const customData = parseCustomizationData(
-                                  customization.value
-                                );
+                        </div>
+                      </section>
 
-                                const displayType =
-                                  customization.customization_type ||
-                                  customData.customization_type ||
-                                  "UNKNOWN";
-                                const displayTitle =
-                                  customization.title ||
-                                  customData.title ||
-                                  "Personalização";
-
-                                return (
-                                  <li
-                                    key={customization.id}
-                                    className="rounded-md border border-gray-200 bg-gray-50 p-2"
-                                  >
-                                    <div className="flex flex-wrap items-start gap-2">
-                                      <Badge
-                                        variant="outline"
-                                        className="border-purple-200 bg-purple-50 px-2 py-0 text-[10px] uppercase tracking-wide text-purple-700"
+                      <section className="space-y-3">
+                        <h4 className="text-sm font-semibold text-gray-700">
+                          Itens da cesta
+                        </h4>
+                        <div className="space-y-3">
+                          {order.items.map((item) => (
+                            <div
+                              key={item.id}
+                              className="rounded-lg border border-gray-100 bg-white p-3 shadow-sm"
+                            >
+                              <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-gray-700">
+                                <div className="font-medium text-gray-900">
+                                  {item.product?.name || "Produto"}
+                                </div>
+                                <div className="text-sm text-gray-500">
+                                  Quantidade: {item.quantity} • Total:{" "}
+                                  {formatCurrency(calculateItemTotal(item))}
+                                </div>
+                              </div>
+                              {item.additionals.length > 0 && (
+                                <div className="mt-2 space-y-1 text-xs text-gray-500">
+                                  <p className="font-medium text-gray-700">
+                                    Adicionais
+                                  </p>
+                                  <ul className="space-y-1">
+                                    {item.additionals.map((additional) => (
+                                      <li
+                                        key={additional.id}
+                                        className="flex items-center justify-between gap-3"
                                       >
-                                        {formatCustomizationType(displayType)}
-                                      </Badge>
-                                      <span className="flex-1 font-medium text-gray-800">
-                                        {displayTitle}
-                                      </span>
-                                    </div>
-
-                                    {/* Detalhes específicos por tipo */}
-                                    <div className="mt-2 space-y-1 text-gray-600">
-                                      {/* Fotos */}
-                                      {displayType === "IMAGES" &&
-                                        customData.photos && (
-                                          <p className="flex items-center gap-1">
-                                            <span className="text-blue-600">
-                                              📸
-                                            </span>
-                                            {Array.isArray(customData.photos)
-                                              ? customData.photos.length
-                                              : 0}{" "}
-                                            foto(s) anexada(s)
-                                          </p>
-                                        )}
-
-                                      {customData.selected_option && (
-                                        <p className="flex items-center gap-1">
-                                          <span className="text-green-600">
-                                            ✓
-                                          </span>
-                                          Opção:{" "}
-                                          {String(customData.selected_option)}
-                                        </p>
-                                      )}
-
-                                      {/* Texto personalizado */}
-                                      {customData.text && (
-                                        <p className="flex items-center gap-1">
-                                          <span className="text-gray-600">
-                                            ✏️
-                                          </span>
-                                          {String(customData.text)}
-                                        </p>
-                                      )}
-
-                                      {/* Layout Base */}
-                                      {customData.selected_item && (
-                                        <p className="flex items-center gap-1">
-                                          <span className="text-purple-600">
-                                            🎨
-                                          </span>
-                                          {String(
-                                            (
-                                              customData.selected_item as {
-                                                selected_item?: string;
-                                              }
-                                            )?.selected_item ||
-                                              "Layout personalizado"
+                                        <span>
+                                          {additional.additional?.name ||
+                                            "Adicional"}
+                                        </span>
+                                        <span className="font-medium text-gray-600">
+                                          x{additional.quantity} •{" "}
+                                          {formatCurrency(
+                                            additional.price *
+                                              additional.quantity
                                           )}
-                                        </p>
-                                      )}
-
-                                      {/* Link do Drive */}
-                                      {customization.google_drive_url && (
-                                        <a
-                                          href={customization.google_drive_url}
-                                          target="_blank"
-                                          rel="noreferrer"
-                                          className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700 hover:underline"
-                                        >
-                                          <span>📁</span>
-                                          Ver arquivos no Drive
-                                        </a>
-                                      )}
-                                    </div>
-                                  </li>
-                                );
-                              })}
-                            </ul>
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </section>
-
-                {/* Botões de Ação Rápida */}
-                <section className="mt-6 flex flex-wrap gap-3 border-t border-gray-100 pt-4">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="gap-2 border-green-200 bg-green-50 text-green-700 hover:bg-green-100 hover:text-green-800"
-                    onClick={() => {
-                      const phone = order.recipient_phone || order.user?.phone;
-                      if (phone) {
-                        const whatsappUrl = `https://wa.me/${onlyDigits(
-                          phone
-                        )}?text=${encodeURIComponent(
-                          `Olá! Sobre o pedido #${shortId(order.id)}`
-                        )}`;
-                        window.open(whatsappUrl, "_blank");
-                      } else {
-                        toast.error("Número de telefone não disponível");
-                      }
-                    }}
-                  >
-                    <Phone className="h-4 w-4" />
-                    Falar no WhatsApp
-                  </Button>
-
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="gap-2"
-                    onClick={() => {
-                      toast.info(
-                        "Função de mensagem direta em desenvolvimento"
-                      );
-                    }}
-                  >
-                    <User className="h-4 w-4" />
-                    Mensagem Direta
-                  </Button>
-
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="gap-2"
-                    onClick={() => {
-                      window.open(
-                        `/manage/service?order=${order.id}`,
-                        "_blank"
-                      );
-                    }}
-                  >
-                    <PackageCheck className="h-4 w-4" />
-                    Verificar Situação
-                  </Button>
-                </section>
-
-                <footer className="mt-6 flex flex-col gap-4 border-t border-gray-100 pt-4 md:flex-row md:items-center md:justify-between">
-                  <div className="flex flex-col gap-2">
-                    <span className="text-xs font-medium uppercase text-gray-500">
-                      Próximo status
-                    </span>
-                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
-                      <Select
-                        value={selectedStatus}
-                        onValueChange={(value) =>
-                          setSelectedStatuses((prev) => ({
-                            ...prev,
-                            [order.id]: value as OrderStatus,
-                          }))
-                        }
-                      >
-                        <SelectTrigger className="w-[220px]">
-                          <SelectValue placeholder="Selecione o status" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {STATUS_OPTIONS.map((status) => (
-                            <SelectItem key={status} value={status}>
-                              {STATUS_LABELS[status]}
-                            </SelectItem>
+                                        </span>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              )}
+                              {item.customizations.length > 0 && (
+                                <div className="mt-3 space-y-2 text-xs">
+                                  <div className="flex items-center justify-between gap-2">
+                                    <p className="font-medium text-gray-700">
+                                      Customizações (
+                                      {item.customizations.length})
+                                    </p>
+                                    {item.customizations.some((c) =>
+                                      getGoogleDriveFolderUrl(
+                                        c as unknown as Record<string, unknown>
+                                      )
+                                    ) && (
+                                      <Link
+                                        href={
+                                          getGoogleDriveFolderUrl(
+                                            (item.customizations.find((c) =>
+                                              getGoogleDriveFolderUrl(
+                                                c as unknown as Record<
+                                                  string,
+                                                  unknown
+                                                >
+                                              )
+                                            ) || {}) as Record<string, unknown>
+                                          ) || "#"
+                                        }
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="flex items-center gap-1 px-2 py-1 rounded bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors text-xs font-medium"
+                                      >
+                                        <FolderOpen className="h-3 w-3" />
+                                        Abrir no Drive
+                                      </Link>
+                                    )}
+                                  </div>
+                                  <ul className="space-y-2">
+                                    {item.customizations.map(
+                                      (customization) => (
+                                        <CustomizationDisplay
+                                          key={customization.id}
+                                          customization={{
+                                            id: customization.id,
+                                            customization_type:
+                                              customization.customization_type,
+                                            title: customization.title,
+                                            value:
+                                              customization.value ?? undefined,
+                                          }}
+                                        />
+                                      )
+                                    )}
+                                  </ul>
+                                </div>
+                              )}
+                            </div>
                           ))}
-                        </SelectContent>
-                      </Select>
-                      <p className="text-xs text-gray-500">
-                        {notifyCustomer
-                          ? "Clientes serão notificados automaticamente."
-                          : "Notificações automáticas desativadas."}
-                      </p>
+                        </div>
+                      </section>
+
+                      {/* Botões de Ação Rápida */}
+                      <section className="flex flex-wrap gap-3 border-t border-gray-100 pt-6">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="gap-2 border-green-200 bg-green-50 text-green-700 hover:bg-green-100 hover:text-green-800"
+                          onClick={() => {
+                            const phone =
+                              order.recipient_phone || order.user?.phone;
+                            if (phone) {
+                              const whatsappUrl = `https://wa.me/${onlyDigits(
+                                phone
+                              )}?text=${encodeURIComponent(
+                                `Olá! Sobre o pedido #${shortId(order.id)}`
+                              )}`;
+                              window.open(whatsappUrl, "_blank");
+                            } else {
+                              toast.error("Número de telefone não disponível");
+                            }
+                          }}
+                        >
+                          <Phone className="h-4 w-4" />
+                          Falar no WhatsApp
+                        </Button>
+
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="gap-2"
+                          onClick={() => {
+                            toast.info(
+                              "Função de mensagem direta em desenvolvimento"
+                            );
+                          }}
+                        >
+                          <User className="h-4 w-4" />
+                          Mensagem Direta
+                        </Button>
+
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="gap-2"
+                          onClick={() => {
+                            window.open(
+                              `/manage/service?order=${order.id}`,
+                              "_blank"
+                            );
+                          }}
+                        >
+                          <PackageCheck className="h-4 w-4" />
+                          Verificar Situação
+                        </Button>
+                      </section>
+
+                      <footer className="flex flex-col gap-4 border-t border-gray-100 pt-6 md:flex-row md:items-center md:justify-between">
+                        <div className="flex flex-col gap-2">
+                          <span className="text-xs font-medium uppercase text-gray-500">
+                            Próximo status
+                          </span>
+                          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+                            <Select
+                              value={selectedStatus}
+                              onValueChange={(value) =>
+                                setSelectedStatuses((prev) => ({
+                                  ...prev,
+                                  [order.id]: value as OrderStatus,
+                                }))
+                              }
+                            >
+                              <SelectTrigger className="w-[220px]">
+                                <SelectValue placeholder="Selecione o status" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {STATUS_OPTIONS.map((status) => (
+                                  <SelectItem key={status} value={status}>
+                                    {STATUS_LABELS[status]}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <p className="text-xs text-gray-500">
+                              {notifyCustomer
+                                ? "Clientes serão notificados automaticamente."
+                                : "Notificações automáticas desativadas."}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-3">
+                          <Button
+                            onClick={() =>
+                              handleStatusChange(order, selectedStatus)
+                            }
+                            disabled={disableUpdate}
+                            className="gap-2"
+                          >
+                            {isUpdating ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <BadgeCheck className="h-4 w-4" />
+                            )}
+                            Atualizar status
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() =>
+                              handleStatusChange(order, "CANCELED")
+                            }
+                            disabled={isUpdating || !canCancel}
+                            className="gap-2 text-rose-600 hover:bg-rose-50 hover:text-rose-700"
+                          >
+                            <XCircle className="h-4 w-4" /> Cancelar pedido
+                          </Button>
+                        </div>
+                      </footer>
                     </div>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-3">
-                    <Button
-                      onClick={() => handleStatusChange(order, selectedStatus)}
-                      disabled={disableUpdate}
-                      className="gap-2"
-                    >
-                      {isUpdating ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <BadgeCheck className="h-4 w-4" />
-                      )}
-                      Atualizar status
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleStatusChange(order, "CANCELED")}
-                      disabled={isUpdating || !canCancel}
-                      className="gap-2 text-rose-600 hover:bg-rose-50 hover:text-rose-700"
-                    >
-                      <XCircle className="h-4 w-4" /> Cancelar pedido
-                    </Button>
-                  </div>
-                </footer>
-              </article>
-            );
-          })}
-        </div>
+                  )}
+                </article>
+              );
+            })}
+          </div>
+        </InfiniteScroll>
       )}
     </section>
   );
@@ -826,42 +914,6 @@ function onlyDigits(value?: string | null) {
   return value ? value.replace(/\D/g, "") : "";
 }
 
-interface CustomizationData {
-  customization_type?: string;
-  title?: string;
-  photos?: unknown[];
-  selected_option?: string;
-  selected_option_label?: string;
-  text?: string;
-  selected_item?: { selected_item?: string } | string;
-  selected_item_label?: string;
-}
-
-function parseCustomizationData(value?: string | null): CustomizationData {
-  if (!value) return {};
-  try {
-    return JSON.parse(value) as CustomizationData;
-  } catch {
-    return {};
-  }
-}
-
-function formatCustomizationType(type: string) {
-  switch (type) {
-    case "IMAGES":
-      return "Fotos";
-    case "TEXT":
-    case "TEXT_INPUT":
-      return "Texto";
-    case "MULTIPLE_CHOICE":
-      return "Escolha";
-    case "BASE_LAYOUT":
-      return "Layout";
-    default:
-      return "Customização";
-  }
-}
-
 function extractErrorMessage(error: unknown, fallback: string) {
   if (typeof error === "object" && error !== null && "response" in error) {
     const response = (
@@ -888,4 +940,46 @@ function calculateItemTotal(item: OrderItemDetailed) {
     return acc + (additional.price || 0) * quantity;
   }, 0);
   return (item.price || 0) * (item.quantity || 0) + additionalsTotal;
+}
+
+function getGoogleDriveFolderUrl(
+  customization: Record<string, unknown>
+): string | null {
+  try {
+    // Tenta extrair folder_id do google_drive_url se disponível
+    if (
+      customization.google_drive_url &&
+      typeof customization.google_drive_url === "string"
+    ) {
+      // Se for uma pasta do Drive, retorna a URL
+      if (customization.google_drive_url.includes("folder")) {
+        return customization.google_drive_url;
+      }
+      // Se for um arquivo, tenta extrair a pasta
+      const folderId =
+        customization.google_drive_url.match(/[?&]id=([^&]+)/)?.[1];
+      if (folderId) {
+        return `https://drive.google.com/drive/folders/${folderId}`;
+      }
+    }
+
+    // Tenta pelo value se for JSON
+    if (customization.value) {
+      const data =
+        typeof customization.value === "string"
+          ? JSON.parse(customization.value as string)
+          : customization.value;
+
+      if (data?.folder_id) {
+        return `https://drive.google.com/drive/folders/${data.folder_id}`;
+      }
+      if (data?.google_drive_url) {
+        return data.google_drive_url;
+      }
+    }
+  } catch {
+    // Se falhar no parse, ignora
+  }
+
+  return null;
 }

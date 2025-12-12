@@ -4,7 +4,7 @@ const WhatsappToggle = () => {
   return (
     <Link
       href={
-        "https://wa.me/83982163104?text=Estou%20vindo%20do%20site%20e%20gostaria%20de%20saber%20mais%20informa%C3%A7%C3%B5es."
+        "https://tintim.link/whatsapp/0e438d1e-b6d6-41f8-ba1e-1a2554fb2089/e1e7a67b-23ad-4d79-b41f-faad52c88ddf"
       }
       target="_blank"
       className="rounded-full bg-green-500 p-3 w-12 h-12 flex items-center justify-center cursor-pointer hover:bg-green-600"

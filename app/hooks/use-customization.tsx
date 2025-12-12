@@ -10,20 +10,20 @@ export interface CustomizationType {
   max_files?: number;
   max_items?: number;
   available_options?:
-  | Array<{
-    label: string;
-    value: string;
-    price_adjustment?: number;
-  }>
-  | {
-    items: Array<{
-      original_item: string;
-      available_substitutes: Array<{
-        item: string;
-        price_adjustment: number;
-      }>;
-    }>;
-  };
+    | Array<{
+        label: string;
+        value: string;
+        price_adjustment?: number;
+      }>
+    | {
+        items: Array<{
+          original_item: string;
+          available_substitutes: Array<{
+            item: string;
+            price_adjustment: number;
+          }>;
+        }>;
+      };
   display_order: number;
 }
 
@@ -32,9 +32,10 @@ export interface PhotoUploadData {
   original_name: string;
   position: number;
   preview_url?: string;
-  base64?: string; // ✅ Dados base64 da imagem para upload ao Drive
+  base64?: string;
   mime_type?: string;
   size?: number;
+  google_drive_url?: string;
 }
 
 export interface CustomizationValue {
@@ -47,6 +48,7 @@ export interface CustomizationValue {
     selected_item: string;
     price_adjustment: number;
   };
+  google_drive_url?: string;
 }
 
 interface UploadedFile {
@@ -101,7 +103,6 @@ export function useCustomization(
   /**
    * Carregar customizações salvas do localStorage
    */
-
 
   /**
    * Salvar customizações no localStorage

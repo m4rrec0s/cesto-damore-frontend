@@ -97,20 +97,22 @@ export async function GET(request: NextRequest) {
     let finalUrl = imageUrl;
 
     if (fileId) {
-      // Usar URL de thumbnail do Drive - MUITO mais rápido que download direto
-      // O formato sz=w{width} pega thumbnail em largura específica
-      finalUrl = `https://drive.google.com/thumbnail?id=${fileId}&sz=${size}`;
+      // Tentar usar download direto com a query string que força download
+      // Isso é mais confiável que thumbnail para layouts
+      finalUrl = `https://drive.google.com/uc?id=${fileId}&export=download`;
     }
 
     // Fazer requisição para o Google Drive
     const response = await fetch(finalUrl, {
       headers: {
         "User-Agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         Accept: "image/*",
+        "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8",
       },
-      // Timeout de 10 segundos
-      signal: AbortSignal.timeout(10000),
+      redirect: "follow",
+      // Timeout de 15 segundos
+      signal: AbortSignal.timeout(15000),
     });
 
     if (!response.ok) {
