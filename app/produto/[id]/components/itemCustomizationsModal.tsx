@@ -96,6 +96,7 @@ interface Props {
     imageCount: number,
     maxImages: number
   ) => void;
+  initialValues?: Record<string, unknown>;
 }
 
 type ModalStep = "selection" | "editing";
@@ -111,11 +112,26 @@ export function ItemCustomizationModal({
   onComplete,
   onPreviewChange,
   onImagesUpdate,
+  initialValues,
 }: Props) {
   const [step, setStep] = useState<ModalStep>("selection");
   const [customizationData, setCustomizationData] = useState<
     Record<string, unknown>
   >({});
+
+  // Initialize with initialValues when opening
+  useEffect(() => {
+    if (isOpen && initialValues) {
+      console.log(
+        "🔄 [ItemCustomizationModal] Initializing with:",
+        initialValues
+      );
+      setCustomizationData(initialValues);
+    } else if (isOpen && !initialValues) {
+      setCustomizationData({});
+    }
+  }, [isOpen, initialValues]);
+
   const [uploadingFiles, setUploadingFiles] = useState<Record<string, File[]>>(
     {}
   );
@@ -645,9 +661,9 @@ export function ItemCustomizationModal({
             <Label className="text-xl font-bold text-gray-900">
               {customization.name}
               {customization.isRequired && (
-                <Badge variant="destructive" className="ml-2 text-xs">
-                  Obrigatório
-                </Badge>
+                <span className="ml-2 text-sm text-red-500 font-medium">
+                  * Obrigatório
+                </span>
               )}
             </Label>
             {customization.description && (

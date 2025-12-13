@@ -1,557 +1,628 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/app/components/ui/card";
+import React, { useEffect, useState, useCallback } from "react";
 import { Badge } from "@/app/components/ui/badge";
-import {
-  AlertCircle,
-  CheckCircle2,
-  Palette,
-  AlertTriangle,
-  Image as ImageIcon,
-  Loader2,
-  Download,
-} from "lucide-react";
+import { AlertCircle, CheckCircle2, Edit2, Loader2 } from "lucide-react";
+import { Button } from "@/app/components/ui/button";
 import type { CartCustomization } from "@/app/hooks/use-cart";
-import Image from "next/image";
+import { useApi } from "@/app/hooks/use-api";
+import { ItemCustomizationModal } from "@/app/produto/[id]/components/itemCustomizationsModal";
+import type {
+  CustomizationInput,
+  CustomizationType,
+  SaveOrderItemCustomizationPayload,
+} from "@/app/types/customization";
+import { toast } from "sonner";
+
+interface CartItemForReview {
+  product_id: string;
+  product: {
+    name: string;
+    image_url?: string | null;
+  };
+  customizations?: CartCustomization[];
+}
 
 interface CustomizationsReviewProps {
-  cartItems: Array<{
-    product_id: string;
-    product: {
-      name: string;
-      image_url?: string | null;
-    };
-    customizations?: CartCustomization[];
-  }>;
+  cartItems: CartItemForReview[];
+  orderId?: string | null;
+  onCustomizationUpdate?: (
+    productId: string,
+    customizations: CustomizationInput[]
+  ) => void;
+  onCustomizationSaved?: () => void;
 }
 
-interface ImageStatus {
-  url: string;
-  isValid: boolean;
-  isChecking: boolean;
-  error?: string;
+interface AvailableCustomization {
+  id: string;
+  name: string;
+  type: string;
+  isRequired: boolean;
+  itemId: string;
+  itemName: string;
 }
 
-export function CustomizationsReview({ cartItems }: CustomizationsReviewProps) {
-  const [imageStates, setImageStates] = useState<Map<string, ImageStatus>>(
-    new Map()
-  );
-  const [isValidating, setIsValidating] = useState(false);
+interface ProductValidation {
+  productId: string;
+  productName: string;
+  availableCustomizations: AvailableCustomization[];
+  filledCustomizations: CartCustomization[];
+  missingRequired: AvailableCustomization[];
+  isComplete: boolean;
+}
 
-  // Verificar se há itens com customizações
-  const itemsWithCustomizations = cartItems.filter(
-    (item) => item.customizations && item.customizations.length > 0
-  );
+// Tipo para customizações do modal (compatível com ItemCustomizationModal)
+interface ModalCustomization {
+  id: string;
+  name: string;
+  description?: string;
+  type: "BASE_LAYOUT" | "TEXT" | "IMAGES" | "MULTIPLE_CHOICE";
+  isRequired: boolean;
+  price: number;
+  customization_data: Record<string, unknown>;
+}
 
-  // Validar disponibilidade de imagens na VPS
-  const validateImageUrl = async (url: string): Promise<boolean> => {
-    if (!url) return false;
+// Alias para compatibilidade com o modal
+type Customization = ModalCustomization;
 
-    try {
-      const response = await fetch(url, { method: "HEAD" });
-      return response.ok;
-    } catch {
-      return false;
-    }
+const isCustomizationFilled = (
+  custom: CartCustomization | undefined
+): boolean => {
+  if (!custom) return false;
+
+  switch (custom.customization_type) {
+    case "TEXT":
+      return Boolean(custom.text && custom.text.trim().length > 0);
+    case "MULTIPLE_CHOICE":
+      return Boolean(custom.selected_option);
+    case "BASE_LAYOUT":
+      return Boolean(custom.label_selected || custom.selected_item);
+    case "IMAGES":
+      return Boolean(custom.photos && custom.photos.length > 0);
+    default:
+      return true;
+  }
+};
+
+const mapCustomizationType = (backendType: string): string => {
+  const typeMap: Record<string, string> = {
+    IMAGES: "IMAGES",
+    TEXT: "TEXT",
+    MULTIPLE_CHOICE: "MULTIPLE_CHOICE",
+    BASE_LAYOUT: "BASE_LAYOUT",
   };
+  return typeMap[backendType] || backendType;
+};
 
-  // Iniciar validação de imagens quando o componente montar
-  useEffect(() => {
-    const validateAllImages = async () => {
-      setIsValidating(true);
-      const newStates = new Map<string, ImageStatus>();
+// =============================================
+// COMPONENTE PRINCIPAL
+// =============================================
 
-      // Coletar todas as imagens
-      for (const item of itemsWithCustomizations) {
-        for (const custom of item.customizations || []) {
-          if (custom.customization_type === "IMAGES" && custom.photos) {
-            for (const photo of custom.photos) {
-              const url = photo.preview_url || photo.base64;
-              if (url && !newStates.has(url)) {
-                newStates.set(url, {
-                  url,
-                  isValid: false,
-                  isChecking: true,
-                });
-              }
+export function CustomizationsReview({
+  cartItems,
+  orderId,
+  onCustomizationUpdate,
+  onCustomizationSaved,
+}: CustomizationsReviewProps) {
+  const {
+    getProduct,
+    getItemCustomizations,
+    saveOrderItemCustomization,
+    getOrder,
+  } = useApi();
+
+  const [validations, setValidations] = useState<ProductValidation[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Estado do modal
+  const [modalOpen, setModalOpen] = useState(false);
+  const [activeItemId, setActiveItemId] = useState<string | null>(null);
+  const [activeItemName, setActiveItemName] = useState<string>("");
+  const [activeCustomizations, setActiveCustomizations] = useState<
+    Customization[]
+  >([]);
+  const [activeProductId, setActiveProductId] = useState<string | null>(null);
+  const [activeInitialValues, setActiveInitialValues] = useState<
+    Record<string, unknown>
+  >({});
+
+  const fetchAvailableCustomizations = useCallback(async () => {
+    setIsLoading(true);
+    const productIds = [...new Set(cartItems.map((item) => item.product_id))];
+    const results: ProductValidation[] = [];
+
+    for (const productId of productIds) {
+      const cartItem = cartItems.find((i) => i.product_id === productId);
+      if (!cartItem) continue;
+
+      try {
+        const product = await getProduct(productId);
+        const allAvailable: AvailableCustomization[] = [];
+
+        if (product.components && product.components.length > 0) {
+          for (const component of product.components) {
+            try {
+              const configResponse = await getItemCustomizations(
+                component.item_id
+              );
+              const itemCustomizations = configResponse?.customizations || [];
+
+              const mapped = itemCustomizations.map((c) => ({
+                id: c.id,
+                name: c.name,
+                type: mapCustomizationType(c.type),
+                isRequired: c.isRequired,
+                itemId: component.item_id,
+                itemName:
+                  configResponse?.item?.name || component.item?.name || "Item",
+              }));
+
+              allAvailable.push(...mapped);
+            } catch (itemError) {
+              console.warn(
+                `Erro ao buscar customizações do item ${component.item_id}:`,
+                itemError
+              );
             }
           }
         }
-      }
 
-      // Validar cada imagem
-      for (const [url] of newStates) {
-        const isValid = await validateImageUrl(url);
-        newStates.set(url, {
-          url,
-          isValid,
-          isChecking: false,
-          error: isValid ? undefined : "Imagem expirada ou indisponível",
+        const filled = cartItem.customizations || [];
+        const missingRequired = allAvailable.filter((avail) => {
+          if (!avail.isRequired) return false;
+          const filledCustom = filled.find(
+            (f) =>
+              f.customization_id === avail.id ||
+              f.customization_id?.includes(avail.id)
+          );
+          return !isCustomizationFilled(filledCustom);
+        });
+
+        results.push({
+          productId,
+          productName: cartItem.product.name,
+          availableCustomizations: allAvailable,
+          filledCustomizations: filled,
+          missingRequired,
+          isComplete: missingRequired.length === 0,
+        });
+      } catch (error) {
+        console.error(
+          `Erro ao buscar customizações do produto ${productId}:`,
+          error
+        );
+
+        const filled = cartItem.customizations || [];
+        const missingFromFilled = filled.filter(
+          (f) => f.is_required && !isCustomizationFilled(f)
+        );
+
+        results.push({
+          productId,
+          productName: cartItem.product.name,
+          availableCustomizations: [],
+          filledCustomizations: filled,
+          missingRequired: missingFromFilled.map((f) => ({
+            id: f.customization_id || "",
+            name: f.title,
+            type: f.customization_type,
+            isRequired: true,
+            itemId: "",
+            itemName: "",
+          })),
+          isComplete: missingFromFilled.length === 0,
         });
       }
-
-      setImageStates(newStates);
-      setIsValidating(false);
-    };
-
-    if (itemsWithCustomizations.length > 0) {
-      validateAllImages();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cartItems]);
 
-  // Verificar customizações obrigatórias faltantes
-  const missingRequired = itemsWithCustomizations.flatMap((item) =>
-    (item.customizations || [])
-      .filter((c) => c.is_required)
-      .filter((c) => {
-        // Validar se está preenchido
-        if (c.customization_type === "TEXT") {
-          return !c.text || c.text.trim().length === 0;
-        }
-        if (c.customization_type === "MULTIPLE_CHOICE") {
-          return !c.selected_option;
-        }
-        if (c.customization_type === "BASE_LAYOUT") {
-          return !c.label_selected && !c.selected_item;
-        }
-        if (c.customization_type === "IMAGES") {
-          return !c.photos || c.photos.length === 0;
-        }
-        return false;
-      })
-      .map((c) => ({ product: item.product.name, customization: c.title }))
-  );
+    setValidations(results);
+    setIsLoading(false);
+  }, [cartItems, getProduct, getItemCustomizations]);
 
-  // Verificar imagens expiradas
-  const expiredImages = itemsWithCustomizations.flatMap((item) =>
-    (item.customizations || [])
-      .filter((c) => c.customization_type === "IMAGES")
-      .filter((c) => {
-        if (!c.photos) return false;
-        return c.photos.some((photo) => {
-          const url = photo.preview_url || photo.base64 || "";
-          if (!url) return false;
-          const status = imageStates.get(url);
-          return status && !status.isValid && !status.isChecking;
+  useEffect(() => {
+    if (cartItems.length > 0) {
+      fetchAvailableCustomizations();
+    } else {
+      setValidations([]);
+      setIsLoading(false);
+    }
+  }, [cartItems, fetchAvailableCustomizations]);
+
+  // Abrir modal para editar customizações de um item específico
+  const handleEditItem = useCallback(
+    async (productId: string, itemId: string, itemName: string) => {
+      try {
+        const configResponse = await getItemCustomizations(itemId);
+        const customizations = configResponse?.customizations || [];
+
+        // Mapear para o formato esperado pelo modal
+        const modalCustoms: Customization[] = customizations.map((c) => ({
+          id: c.id,
+          name: c.name,
+          description: c.description,
+          type: c.type as "BASE_LAYOUT" | "TEXT" | "IMAGES" | "MULTIPLE_CHOICE",
+          isRequired: c.isRequired,
+          price: c.price,
+          customization_data: c.customization_data,
+        }));
+
+        // Preparar initialValues
+        const cartItem = cartItems.find((i) => i.product_id === productId);
+        const filled = cartItem?.customizations || [];
+        const initialData: Record<string, unknown> = {};
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        filled.forEach((fc: any) => {
+          const ruleId = fc.customization_id;
+          if (!ruleId) return;
+
+          // Fallback mapping - CartCustomization pode ter propriedades dinamicamente adicionadas do servidor
+          if (fc.customization_type === "TEXT") {
+            initialData[ruleId] = fc.text;
+          } else if (fc.customization_type === "MULTIPLE_CHOICE") {
+            initialData[ruleId] = fc.selected_option;
+          } else if (fc.customization_type === "IMAGES") {
+            initialData[ruleId] = fc.photos;
+          } else if (fc.customization_type === "BASE_LAYOUT") {
+            if (fc.data) {
+              initialData[ruleId] = fc.data;
+            }
+          }
         });
-      })
-      .map((c) => ({ product: item.product.name, customization: c.title }))
+
+        setActiveInitialValues(initialData);
+        setActiveItemId(itemId);
+        setActiveItemName(itemName);
+        setActiveCustomizations(modalCustoms);
+        setActiveProductId(productId);
+        setModalOpen(true);
+      } catch (error) {
+        console.error("Erro ao carregar customizações:", error);
+      }
+    },
+    [getItemCustomizations, cartItems, setModalOpen]
   );
 
-  if (itemsWithCustomizations.length === 0) {
-    return null; // Não mostrar nada se não houver customizações
+  // Estado de salvamento
+  const [isSaving, setIsSaving] = useState(false);
+
+  // Callback quando customização é completada no modal
+  const handleCustomizationComplete = useCallback(
+    async (hasCustomizations: boolean, data: CustomizationInput[]) => {
+      if (!hasCustomizations || !activeItemId) {
+        setModalOpen(false);
+        return;
+      }
+
+      // Se temos orderId, salvar diretamente no backend
+      if (orderId && activeProductId) {
+        setIsSaving(true);
+        try {
+          // Buscar o pedido para encontrar o OrderItem.id correto
+          const order = await getOrder(orderId);
+
+          // Encontrar o OrderItem que corresponde ao produto atual
+          // OrderItem tem product_id que aponta para o produto
+          const orderItem = order?.items?.find(
+            (item: { product_id: string }) =>
+              item.product_id === activeProductId
+          );
+
+          if (!orderItem) {
+            console.error(
+              "❌ OrderItem não encontrado para o produto:",
+              activeProductId
+            );
+            toast.error("Item do pedido não encontrado.");
+            setIsSaving(false);
+            setModalOpen(false);
+            return;
+          }
+
+          const orderItemId = orderItem.id;
+          console.log("📍 [CustomizationsReview] OrderItem encontrado:", {
+            orderItemId,
+            productId: activeProductId,
+            catalogItemId: activeItemId,
+          });
+
+          // Salvar cada customização no backend
+          for (const customization of data) {
+            const customData = customization.data as Record<string, unknown>;
+            const previewUrl = customData?.previewUrl as string | undefined;
+
+            // Sanitizar data para remover imageBuffer que causa erro 400 (payload muito grande/inválido)
+            const sanitizedData = { ...customData };
+            if (sanitizedData.images && Array.isArray(sanitizedData.images)) {
+              sanitizedData.images = sanitizedData.images.map(
+                (img: Record<string, unknown>) => {
+                  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+                  const { imageBuffer, ...rest } = img;
+                  return rest;
+                }
+              );
+            }
+
+            // Preparar payload para o backend
+            const payload: SaveOrderItemCustomizationPayload = {
+              customizationRuleId:
+                customization.ruleId ||
+                customization.customizationRuleId ||
+                null,
+              customizationType:
+                customization.customizationType as CustomizationType,
+              title:
+                (customData?._customizationName as string) ||
+                customization.customizationType,
+              selectedLayoutId: customization.selectedLayoutId || null,
+              data: sanitizedData || {},
+            };
+
+            // Para BASE_LAYOUT com preview, adicionar como finalArtwork
+            if (
+              customization.customizationType === "BASE_LAYOUT" &&
+              previewUrl
+            ) {
+              // Se é base64, enviar como finalArtwork
+              if (previewUrl.startsWith("data:")) {
+                payload.finalArtwork = {
+                  base64: previewUrl,
+                  mimeType: "image/png",
+                  fileName: "artwork.png",
+                };
+              }
+            }
+
+            console.log("📤 [CustomizationsReview] Salvando customização:", {
+              orderId,
+              orderItemId,
+              type: customization.customizationType,
+              hasPreview: !!previewUrl,
+              isBase64: previewUrl?.startsWith("data:"),
+            });
+
+            // Usar orderItemId (ID do item do pedido) em vez de activeItemId (ID do item do catálogo)
+            await saveOrderItemCustomization(orderId, orderItemId, payload);
+          }
+
+          // Notificar sucesso
+          console.log(
+            "✅ [CustomizationsReview] Customização salva com sucesso!"
+          );
+          toast.success("Personalização salva no pedido!");
+          onCustomizationSaved?.();
+        } catch (error) {
+          console.error(
+            "❌ [CustomizationsReview] Erro ao salvar customização:",
+            error
+          );
+          toast.error("Erro ao salvar personalização. Tente novamente.");
+        } finally {
+          setIsSaving(false);
+        }
+      } else if (activeProductId && onCustomizationUpdate) {
+        // Fallback: atualizar via callback (para uso sem order)
+        onCustomizationUpdate(activeProductId, data);
+      }
+
+      setModalOpen(false);
+      // Recarregar validações após edição
+      fetchAvailableCustomizations();
+    },
+    [
+      activeItemId,
+      activeProductId,
+      orderId,
+      onCustomizationUpdate,
+      onCustomizationSaved,
+      saveOrderItemCustomization,
+      fetchAvailableCustomizations,
+      getOrder,
+      setModalOpen,
+    ]
+  );
+
+  // Se não há validações relevantes, não mostrar
+  const hasRelevantValidations = validations.some(
+    (v) =>
+      v.availableCustomizations.length > 0 || v.filledCustomizations.length > 0
+  );
+
+  if (!hasRelevantValidations && !isLoading) {
+    return null;
   }
 
-  const hasErrors = missingRequired.length > 0 || expiredImages.length > 0;
-  const isStillValidating = isValidating;
+  const totalMissing = validations.reduce(
+    (acc, v) => acc + v.missingRequired.length,
+    0
+  );
+  const allComplete = validations.every((v) => v.isComplete);
+
+  // Loading state simples
+  if (isLoading || isSaving) {
+    return (
+      <div className="flex items-center gap-2 text-sm text-gray-500 py-2">
+        <Loader2 className="h-4 w-4 animate-spin" />
+        {isSaving
+          ? "Salvando personalizações..."
+          : "Verificando personalizações..."}
+      </div>
+    );
+  }
 
   return (
-    <Card
-      className={
-        hasErrors ? "border-red-200 bg-red-50" : "border-green-200 bg-green-50"
-      }
-    >
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-lg">
-          <Palette className="h-5 w-5 text-rose-600" />
-          Revisão de Personalizações
-          {isStillValidating ? (
-            <Badge className="ml-auto bg-blue-600">
-              <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-              Validando...
-            </Badge>
-          ) : hasErrors ? (
-            <Badge variant="destructive" className="ml-auto">
-              <AlertCircle className="h-3 w-3 mr-1" />
-              {missingRequired.length + expiredImages.length} problema(s)
+    <>
+      <div className="space-y-2">
+        {/* Header simples */}
+        <div className="flex items-center justify-between">
+          <span className="text-sm font-medium text-gray-700">
+            Personalizações
+          </span>
+          {allComplete ? (
+            <Badge
+              variant="outline"
+              className="bg-green-50 text-green-700 border-green-200"
+            >
+              <CheckCircle2 className="h-3 w-3 mr-1" />
+              OK
             </Badge>
           ) : (
-            <Badge className="ml-auto bg-green-600">
-              <CheckCircle2 className="h-3 w-3 mr-1" />
-              Completo
+            <Badge variant="destructive">
+              <AlertCircle className="h-3 w-3 mr-1" />
+              {totalMissing} pendente{totalMissing > 1 ? "s" : ""}
             </Badge>
           )}
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {/* Erros de customizações obrigatórias */}
-        {missingRequired.length > 0 && (
-          <div className="bg-white border-l-4 border-red-500 p-4 rounded-r-lg">
-            <h4 className="font-semibold text-red-800 mb-2 flex items-center gap-2">
-              <AlertTriangle className="h-4 w-4" />
-              Personalizações Obrigatórias Pendentes
-            </h4>
-            <ul className="text-sm text-red-700 space-y-1 list-disc list-inside">
-              {missingRequired.map((item, idx) => (
-                <li key={idx}>
-                  <strong>{item.product}:</strong> {item.customization}
-                </li>
-              ))}
-            </ul>
-            <p className="text-xs text-red-600 mt-3">
-              Volte à página do produto e preencha as personalizações
-              obrigatórias antes de continuar.
-            </p>
-          </div>
-        )}
+        </div>
 
-        {/* Erros de imagens expiradas */}
-        {expiredImages.length > 0 && (
-          <div className="bg-white border-l-4 border-orange-500 p-4 rounded-r-lg">
-            <h4 className="font-semibold text-orange-800 mb-2 flex items-center gap-2">
-              <AlertTriangle className="h-4 w-4" />
-              Imagens Expiradas
-            </h4>
-            <p className="text-sm text-orange-700 mb-2">
-              Algumas imagens temporárias expiraram. É necessário enviar
-              novamente:
-            </p>
-            <ul className="text-sm text-orange-700 space-y-1 list-disc list-inside">
-              {expiredImages.map((item, idx) => (
-                <li key={idx}>
-                  <strong>{item.product}:</strong> {item.customization}
-                </li>
-              ))}
-            </ul>
-            <p className="text-xs text-orange-600 mt-3">
-              Volte à página do produto e envie as imagens novamente.
-            </p>
-          </div>
-        )}
+        {/* Lista de items com customizações */}
+        {validations.map((validation) => {
+          // Agrupar por item
+          const itemsMap = new Map<
+            string,
+            {
+              itemName: string;
+              missing: AvailableCustomization[];
+              filled: CartCustomization[];
+            }
+          >();
 
-        {/* Detalhes das customizações */}
-        <div className="space-y-3">
-          {itemsWithCustomizations.map((item, idx) => (
-            <div
-              key={idx}
-              className="bg-white p-4 rounded-lg border border-gray-200"
-            >
-              <h5 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                {item.product.name}
-                <Badge variant="outline" className="text-xs">
-                  {item.customizations?.length || 0} personalização(ões)
-                </Badge>
-              </h5>
-              <div className="space-y-3">
-                {item.customizations?.map((custom, cidx) => {
-                  const isFilled = (() => {
-                    if (custom.customization_type === "TEXT") {
-                      return custom.text && custom.text.trim().length > 0;
-                    }
-                    if (custom.customization_type === "MULTIPLE_CHOICE") {
-                      return Boolean(custom.selected_option);
-                    }
-                    if (custom.customization_type === "BASE_LAYOUT") {
-                      return Boolean(
-                        custom.label_selected || custom.selected_item
-                      );
-                    }
-                    if (custom.customization_type === "IMAGES") {
-                      return custom.photos && custom.photos.length > 0;
-                    }
-                    return true;
-                  })();
+          // Adicionar itens faltantes
+          validation.missingRequired.forEach((missing) => {
+            if (!missing.itemId) return;
+            if (!itemsMap.has(missing.itemId)) {
+              itemsMap.set(missing.itemId, {
+                itemName: missing.itemName,
+                missing: [],
+                filled: [],
+              });
+            }
+            itemsMap.get(missing.itemId)!.missing.push(missing);
+          });
 
-                  const hasExpiredImages = (() => {
-                    if (
-                      custom.customization_type === "IMAGES" &&
-                      custom.photos
-                    ) {
-                      return custom.photos.some((photo) => {
-                        const url = photo.preview_url || photo.base64 || "";
-                        if (!url) return false;
-                        const status = imageStates.get(url);
-                        return status && !status.isValid && !status.isChecking;
-                      });
-                    }
-                    return false;
-                  })();
+          // Adicionar itens preenchidos (iterando sobre availableCustomizations para agrupar corretamente)
+          validation.availableCustomizations.forEach((avail) => {
+            const filledCustom = validation.filledCustomizations.find(
+              (f) =>
+                f.customization_id === avail.id ||
+                f.customization_id?.includes(avail.id)
+            );
+
+            if (filledCustom && isCustomizationFilled(filledCustom)) {
+              if (!itemsMap.has(avail.itemId)) {
+                itemsMap.set(avail.itemId, {
+                  itemName: avail.itemName,
+                  missing: [],
+                  filled: [],
+                });
+              }
+              const entry = itemsMap.get(avail.itemId)!;
+              // Evitar duplicatas
+              if (
+                !entry.filled.some(
+                  (f) => f.customization_id === filledCustom.customization_id
+                )
+              ) {
+                entry.filled.push(filledCustom);
+              }
+            }
+          });
+
+          if (itemsMap.size === 0 && validation.isComplete) {
+            return null;
+          }
+
+          return (
+            <div key={validation.productId} className="space-y-1">
+              {Array.from(itemsMap.entries()).map(
+                ([itemId, { itemName, missing }]) => {
+                  const isIncomplete = missing.length > 0;
+                  const statusColor = isIncomplete ? "red" : "blue";
+                  const StatusIcon = isIncomplete ? AlertCircle : CheckCircle2;
 
                   return (
                     <div
-                      key={cidx}
-                      className={`p-4 rounded border space-y-3 ${
-                        custom.is_required && !isFilled
-                          ? "border-red-300 bg-red-50"
-                          : hasExpiredImages
-                          ? "border-orange-300 bg-orange-50"
-                          : "border-gray-200"
-                      }`}
+                      key={itemId}
+                      className={`flex items-center justify-between py-1.5 px-2 bg-${statusColor}-50 rounded text-sm`}
                     >
-                      {/* Cabeçalho da customização */}
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="text-sm font-medium text-gray-900">
-                              {custom.title}
-                            </span>
-                            {custom.is_required && (
-                              <Badge variant="destructive" className="text-xs">
-                                Obrigatório
-                              </Badge>
-                            )}
-                          </div>
-                        </div>
-                        {isFilled && !hasExpiredImages ? (
-                          <CheckCircle2 className="h-5 w-5 text-green-600 flex-shrink-0" />
-                        ) : custom.is_required && !isFilled ? (
-                          <AlertCircle className="h-5 w-5 text-red-600 flex-shrink-0" />
-                        ) : hasExpiredImages ? (
-                          <AlertTriangle className="h-5 w-5 text-orange-600 flex-shrink-0" />
-                        ) : (
-                          <div className="h-5 w-5 rounded-full border-2 border-gray-300 flex-shrink-0" />
-                        )}
+                      <div
+                        className={`flex items-center gap-2 text-${statusColor}-700`}
+                      >
+                        <StatusIcon className="h-3.5 w-3.5 flex-shrink-0" />
+                        <span className="truncate">
+                          {validation.productName}
+                          {itemName && ` - ${itemName}`}
+                        </span>
+                        <span className={`text-${statusColor}-500 text-xs`}>
+                          {isIncomplete
+                            ? `(${missing.length} pendente${
+                                missing.length > 1 ? "s" : ""
+                              })`
+                            : "(Personalizado)"}
+                        </span>
                       </div>
-
-                      {/* Conteúdo da customização com preview */}
-                      <div className="text-sm space-y-2">
-                        {/* TEXT */}
-                        {custom.customization_type === "TEXT" && (
-                          <div className="bg-gradient-to-r from-blue-50 to-cyan-50 p-3 rounded border border-blue-200">
-                            <p className="text-xs text-blue-600 font-medium mb-1">
-                              📝 Mensagem:
-                            </p>
-                            {custom.text ? (
-                              <p className="text-gray-900 italic font-medium">
-                                &quot;{custom.text}&quot;
-                              </p>
-                            ) : (
-                              <p className="text-red-600 font-semibold">
-                                ⚠️ Não preenchido
-                              </p>
-                            )}
-                          </div>
-                        )}
-
-                        {/* MULTIPLE_CHOICE */}
-                        {custom.customization_type === "MULTIPLE_CHOICE" && (
-                          <div className="bg-gradient-to-r from-purple-50 to-pink-50 p-3 rounded border border-purple-200">
-                            <p className="text-xs text-purple-600 font-medium mb-1">
-                              🎯 Opção Selecionada:
-                            </p>
-                            {custom.selected_option ? (
-                              <p className="text-gray-900 font-medium">
-                                {custom.label_selected ||
-                                  custom.selected_option_label ||
-                                  custom.selected_option}
-                              </p>
-                            ) : (
-                              <p className="text-red-600 font-semibold">
-                                ⚠️ Não selecionado
-                              </p>
-                            )}
-                          </div>
-                        )}
-
-                        {/* BASE_LAYOUT */}
-                        {custom.customization_type === "BASE_LAYOUT" && (
-                          <div className="bg-gradient-to-r from-yellow-50 to-amber-50 p-3 rounded border border-yellow-200">
-                            <p className="text-xs text-yellow-700 font-medium mb-1">
-                              🎨 Layout Selecionado:
-                            </p>
-                            {custom.label_selected || custom.selected_item ? (
-                              <p className="text-gray-900 font-medium">
-                                {custom.label_selected ||
-                                  (typeof custom.selected_item === "string"
-                                    ? custom.selected_item
-                                    : custom.selected_item?.selected_item ||
-                                      "Layout")}
-                              </p>
-                            ) : (
-                              <p className="text-red-600 font-semibold">
-                                ⚠️ Não selecionado
-                              </p>
-                            )}
-                          </div>
-                        )}
-
-                        {/* IMAGES */}
-                        {custom.customization_type === "IMAGES" && (
-                          <div className="space-y-2">
-                            <div className="text-xs text-gray-600 font-medium flex items-center gap-1">
-                              <ImageIcon className="h-4 w-4" />
-                              Fotos enviadas ({custom.photos?.length || 0})
-                            </div>
-                            {custom.photos && custom.photos.length > 0 ? (
-                              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                                {custom.photos.map((photo, pidx) => {
-                                  const photoUrl =
-                                    photo.preview_url || photo.base64;
-                                  const imageStatus = imageStates.get(
-                                    photoUrl || ""
-                                  );
-                                  const isExpired =
-                                    imageStatus &&
-                                    !imageStatus.isValid &&
-                                    !imageStatus.isChecking;
-
-                                  return (
-                                    <div
-                                      key={pidx}
-                                      className={`relative w-full aspect-square rounded border-2 overflow-hidden group ${
-                                        isExpired
-                                          ? "border-orange-300 bg-orange-50"
-                                          : "border-green-300 bg-green-50"
-                                      }`}
-                                    >
-                                      {imageStatus?.isChecking && (
-                                        <div className="absolute inset-0 flex items-center justify-center bg-gray-100/50">
-                                          <Loader2 className="h-4 w-4 animate-spin text-gray-600" />
-                                        </div>
-                                      )}
-                                      {photoUrl && (
-                                        <>
-                                          {photoUrl.startsWith("data:") ? (
-                                            <Image
-                                              src={photoUrl}
-                                              alt={`Foto ${pidx + 1}`}
-                                              fill
-                                              className={`object-cover transition-opacity ${
-                                                imageStatus?.isChecking
-                                                  ? "opacity-50"
-                                                  : ""
-                                              }`}
-                                            />
-                                          ) : (
-                                            <Image
-                                              src={photoUrl}
-                                              alt={`Foto ${pidx + 1}`}
-                                              fill
-                                              className={`object-cover transition-opacity ${
-                                                imageStatus?.isChecking
-                                                  ? "opacity-50"
-                                                  : isExpired
-                                                  ? "opacity-40"
-                                                  : ""
-                                              }`}
-                                              onError={() => {
-                                                setImageStates((prev) => {
-                                                  const newStates = new Map(
-                                                    prev
-                                                  );
-                                                  if (photoUrl) {
-                                                    newStates.set(photoUrl, {
-                                                      url: photoUrl,
-                                                      isValid: false,
-                                                      isChecking: false,
-                                                      error:
-                                                        "Falha ao carregar imagem",
-                                                    });
-                                                  }
-                                                  return newStates;
-                                                });
-                                              }}
-                                            />
-                                          )}
-                                        </>
-                                      )}
-                                      {isExpired && (
-                                        <div className="absolute inset-0 bg-orange-600/20 flex items-center justify-center">
-                                          <AlertTriangle className="h-5 w-5 text-orange-700" />
-                                        </div>
-                                      )}
-                                      {/* Google Drive Link */}
-                                      {photo.google_drive_url && (
-                                        <a
-                                          href={photo.google_drive_url}
-                                          target="_blank"
-                                          rel="noreferrer"
-                                          className="absolute inset-x-0 bottom-0 flex items-center justify-center gap-1 bg-blue-600/90 py-1.5 text-white opacity-0 group-hover:opacity-100 transition-opacity duration-200"
-                                          title="Abrir no Google Drive"
-                                        >
-                                          <Download className="h-3 w-3" />
-                                          <span className="text-xs font-medium">
-                                            Drive
-                                          </span>
-                                        </a>
-                                      )}
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            ) : (
-                              <p className="text-red-600 font-semibold">
-                                ⚠️ Nenhuma foto enviada
-                              </p>
-                            )}
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Aviso de imagem expirada */}
-                      {hasExpiredImages && (
-                        <div className="mt-2 p-2 bg-orange-100 border border-orange-300 rounded text-xs text-orange-800 font-medium flex items-center gap-2">
-                          <AlertTriangle className="h-4 w-4" />
-                          Imagens temporárias expiraram. Envie novamente na
-                          página do produto.
-                        </div>
-                      )}
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className={`h-7 px-2 text-${statusColor}-700 hover:text-${statusColor}-800 hover:bg-${statusColor}-100`}
+                        onClick={() =>
+                          handleEditItem(
+                            validation.productId,
+                            itemId,
+                            itemName || "Item"
+                          )
+                        }
+                      >
+                        <Edit2 className="h-3.5 w-3.5" />
+                      </Button>
                     </div>
                   );
-                })}
-              </div>
+                }
+              )}
             </div>
-          ))}
-        </div>
+          );
+        })}
 
-        {/* Sucesso */}
-        {!hasErrors && !isStillValidating && (
-          <div className="bg-white border-l-4 border-green-500 p-4 rounded-r-lg">
-            <p className="text-sm text-green-800 flex items-center gap-2">
-              <CheckCircle2 className="h-5 w-5" />
-              <span>
-                <strong>Tudo certo!</strong> Todas as personalizações foram
-                validadas e estão prontas.
-              </span>
-            </p>
-          </div>
+        {/* Mensagem se completo */}
+        {allComplete && (
+          <p className="text-xs text-green-600 flex items-center gap-1">
+            <CheckCircle2 className="h-3 w-3" />
+            Todas as personalizações preenchidas
+          </p>
         )}
+      </div>
 
-        {/* Bloqueio de checkout se houver erros */}
-        {hasErrors && !isStillValidating && (
-          <div className="pt-4 border-t border-red-200">
-            <p className="text-xs text-red-700 font-semibold mb-3">
-              ⚠️ Você não pode prosseguir com erros nas personalizações. Corrija
-              os problemas acima antes de continuar.
-            </p>
-          </div>
-        )}
-      </CardContent>
-    </Card>
+      {/* Modal de customização */}
+      {activeItemId && (
+        <ItemCustomizationModal
+          isOpen={modalOpen}
+          onClose={() => setModalOpen(false)}
+          itemId={activeItemId}
+          itemName={activeItemName}
+          customizations={activeCustomizations}
+          onComplete={handleCustomizationComplete}
+          initialValues={activeInitialValues}
+        />
+      )}
+    </>
   );
 }
+
+// =============================================
+// FUNÇÕES UTILITÁRIAS EXPORTADAS
+// =============================================
 
 export function validateCustomizations(
   cartItems: Array<{
     customizations?: CartCustomization[];
   }>
 ): boolean {
-  const itemsWithCustomizations = cartItems.filter(
-    (item) => item.customizations && item.customizations.length > 0
-  );
-
-  for (const item of itemsWithCustomizations) {
+  for (const item of cartItems) {
     for (const custom of item.customizations || []) {
       if (!custom.is_required) continue;
-
-      if (custom.customization_type === "TEXT") {
-        if (!custom.text || custom.text.trim().length === 0) return false;
-      } else if (custom.customization_type === "MULTIPLE_CHOICE") {
-        if (!custom.selected_option) return false;
-      } else if (custom.customization_type === "BASE_LAYOUT") {
-        if (!custom.label_selected && !custom.selected_item) return false;
-      } else if (custom.customization_type === "IMAGES") {
-        if (!custom.photos || custom.photos.length === 0) return false;
+      if (!isCustomizationFilled(custom)) {
+        return false;
       }
     }
   }
-
   return true;
 }

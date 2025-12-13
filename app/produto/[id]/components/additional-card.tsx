@@ -85,6 +85,18 @@ const AdditionalCard = ({
     }
   };
 
+  const handleDirectAddToCartClick = () => {
+    if (!hasCompletedProductCustomizations) {
+      toast.warning("Complete as personalizações obrigatórias do produto antes de adicionar este item.");
+      return;
+    }
+    if (onAddToCart) {
+      onAddToCart(additional.id);
+    } else {
+      toast.error("Função de adicionar ao carrinho não disponível");
+    }
+  };
+
   return (
     <div className="group flex flex-col min-w-[150px] max-w-[300px] justify-between relative bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-xs transition-all duration-300 overflow-hidden">
       <div className="absolute top-2 right-2 z-10 flex flex-col gap-1 items-end">
@@ -127,11 +139,11 @@ const AdditionalCard = ({
               className="w-full border-purple-500 text-purple-600 hover:bg-purple-50"
               title={
                 hasProductRequiredCustomizations &&
-                !hasCompletedProductCustomizations
+                  !hasCompletedProductCustomizations
                   ? "Complete as personalizações do produto primeiro"
                   : hasCustomizations
-                  ? "Editar e adicionar ao carrinho"
-                  : "Personalizar e adicionar ao carrinho"
+                    ? "Editar e adicionar ao carrinho"
+                    : "Personalizar e adicionar ao carrinho"
               }
             >
               <Palette className="h-4 w-4 mr-2" />
@@ -140,23 +152,18 @@ const AdditionalCard = ({
           ) : (
             // Se não tem customizações obrigatórias, botão normal de adicionar
             <Button
-              onClick={handleAddToCart}
-              disabled={
-                isAddingToCart ||
-                (hasProductRequiredCustomizations &&
-                  !hasCompletedProductCustomizations)
-              }
+              onClick={handleDirectAddToCartClick}
+              disabled={isInCart || isAddingToCart}
               title={
                 hasProductRequiredCustomizations &&
-                !hasCompletedProductCustomizations
+                  !hasCompletedProductCustomizations
                   ? "Complete as personalizações do produto primeiro"
                   : "Adicionar ao Carrinho"
               }
-              className={`w-full ${
-                isInCart
+              className={`w-full ${isInCart
                   ? "bg-green-500 hover:bg-green-600"
                   : "bg-rose-500 hover:bg-rose-600"
-              }`}
+                }`}
             >
               {isAddingToCart ? (
                 <>

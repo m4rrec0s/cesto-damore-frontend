@@ -3,7 +3,14 @@
 import Image from "next/image";
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { toast } from "sonner";
-import { ShoppingCart, Minus, Plus, ChevronLeft, Clock } from "lucide-react";
+import {
+  ShoppingCart,
+  Minus,
+  Plus,
+  ChevronLeft,
+  Clock,
+  CheckCircle2,
+} from "lucide-react";
 
 import { Button } from "@/app/components/ui/button";
 import { Badge } from "@/app/components/ui/badge";
@@ -89,6 +96,60 @@ const ClientProductPage = ({ id }: { id: string }) => {
     },
     []
   );
+
+  // Persistence logic
+  useEffect(() => {
+    if (!id) return;
+    const key = `product_customization_v1_${id}`;
+    const saved = sessionStorage.getItem(key);
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed.itemCustomizations)
+          setItemCustomizations(parsed.itemCustomizations);
+        if (parsed.additionalCustomizations)
+          setAdditionalCustomizations(parsed.additionalCustomizations);
+        if (parsed.customizationPreviews)
+          setCustomizationPreviews(parsed.customizationPreviews);
+
+        // Removed toast to avoid spam on every page load, or use a subtle indicator
+        // toast.info("Personalizações restauradas.");
+      } catch (e) {
+        console.error("Erro ao restaurar personalizações:", e);
+      }
+    }
+  }, [id]);
+
+  useEffect(() => {
+    if (!id) return;
+    const key = `product_customization_v1_${id}`;
+
+    // Check if we have any data to save
+    const hasData =
+      Object.keys(itemCustomizations).length > 0 ||
+      Object.keys(additionalCustomizations).length > 0;
+
+    if (hasData) {
+      const dataToSave = {
+        itemCustomizations,
+        additionalCustomizations,
+        customizationPreviews,
+      };
+      try {
+        sessionStorage.setItem(key, JSON.stringify(dataToSave));
+      } catch (e) {
+        console.warn(
+          "Falha ao salvar personalizações (provavelmente limite de quota):",
+          e
+        );
+      }
+    } else {
+      // Optional: clear if empty? Or keep previous?
+      // Keeping previous might be safer if state was just cleared by mistake, but usually we want to sync.
+      // However, cleaning up when empty is good.
+      // sessionStorage.removeItem(key);
+    }
+  }, [id, itemCustomizations, additionalCustomizations, customizationPreviews]);
 
   const handleCustomizationComplete = useCallback(
     (
@@ -1683,9 +1744,48 @@ const ClientProductPage = ({ id }: { id: string }) => {
               </Button>
             </div>
             <div>
-              <h2 className="text-xl font-bold text-gray-900 mb-4">
-                Adicionais
-              </h2>
+              <div className="mb-4">
+                <h2 className="text-xl font-bold text-gray-900">Adicionais</h2>
+                <span className="text-sm opacity-50">
+                  {(() => {
+                    const hasProductRequiredCustomizations = components.some(
+                      (component) =>
+                        component.customizations?.some((c) => c.isRequired)
+                    );
+
+                    let hasCompletedProductCustomizations = true;
+                    if (hasProductRequiredCustomizations) {
+                      hasCompletedProductCustomizations = components.every(
+                        (component) => {
+                          const requiredCustomizations =
+                            component.customizations?.filter(
+                              (c) => c.isRequired
+                            ) || [];
+                          if (requiredCustomizations.length === 0) return true;
+
+                          const componentData =
+                            itemCustomizations[component.id] || [];
+                          return requiredCustomizations.every((reqCustom) =>
+                            componentData.some((c) => c.ruleId === reqCustom.id)
+                          );
+                        }
+                      );
+                    }
+
+                    return hasCompletedProductCustomizations ? (
+                      <strong className="text-green-600 flex items-center gap-2">
+                        <CheckCircle2 className="inline-block ml-1 w-4 h-4" />
+                        Selecione os adicionais desejados
+                      </strong>
+                    ) : (
+                      <strong className="text-red-500">
+                        Termine de customizar o produto para acrescentar
+                        adicionais
+                      </strong>
+                    );
+                  })()}
+                </span>
+              </div>
               {additionals.length > 0 ? (
                 <div className="flex items-center w-full">
                   <div className="flex gap-4 items-center w-full overflow-x-scroll scrollbar-hide py-2">

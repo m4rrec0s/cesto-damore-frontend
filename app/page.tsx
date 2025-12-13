@@ -114,7 +114,7 @@ export default function Home() {
             setProducts(featuredProducts);
             setInitialLoad(false);
           }
-        } catch {}
+        } catch { }
       }
 
       const loaderTimer = window.setTimeout(
@@ -320,10 +320,6 @@ export default function Home() {
           </div>
         </section>
       )}
-
-      <div className="fixed bottom-6 right-6">
-        <WhatsappToggle />
-      </div>
     </div>
   );
 }

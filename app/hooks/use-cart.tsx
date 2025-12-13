@@ -1643,6 +1643,12 @@ export function useCart(): CartContextType {
 
       // Construir objeto Date representando o meio-dia no Brasil para verificar se é FDS
       const checkDate = createBrazilDate(year, month, day, 12, 0);
+
+      // Bloquear Domingos (0)
+      if (checkDate.getDay() === 0) {
+        return [];
+      }
+
       const isWknd = isWeekend(checkDate);
 
       const windows = getDeliveryWindows();
@@ -1687,6 +1693,15 @@ export function useCart(): CartContextType {
           // Incremento: 30 minutos
           iter.setTime(iter.getTime() + 30 * 60 * 1000);
         }
+      });
+
+      // Adicionar opção "A combinar"
+      // Usamos 23:59:59 como marcador para "A combinar"
+      const agreeLaterDate = createBrazilDate(year, month, day, 23, 59);
+      // Garantir que não duplica se já existir (improvável)
+      slots.push({
+        value: agreeLaterDate.toISOString(),
+        label: "A combinar (entraremos em contato)",
       });
 
       // Deduplicate by label just in case

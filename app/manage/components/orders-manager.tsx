@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, useRef } from "react";
 import { toast } from "sonner";
 import InfiniteScroll from "react-infinite-scroll-component";
 import {
@@ -110,6 +110,15 @@ export function OrdersManager() {
   }>({ total: 0, totalPages: 0, hasMore: false });
   const ITEMS_PER_PAGE = 8;
 
+  const loadOrdersRef =
+    useRef<
+      (
+        currentFilter: StatusFilter,
+        page?: number,
+        silent?: boolean
+      ) => Promise<void>
+    >(null);
+
   const loadOrders = useCallback(
     async (currentFilter: StatusFilter, page: number = 1, silent = false) => {
       if (!silent && page === 1) setLoading(true);
@@ -164,28 +173,24 @@ export function OrdersManager() {
             setOrders((prev) => [...prev, ...list]);
           }
 
-          const newStatuses = list.reduce<StatusSelectionState>(
-            (acc, order) => {
-              if (!selectedStatuses[order.id]) {
-                acc[order.id] = getInitialNextStatus(order.status);
-              }
-              return acc;
-            },
-            {}
-          );
-
-          if (Object.keys(newStatuses).length > 0) {
-            setSelectedStatuses((prev) => ({ ...prev, ...newStatuses }));
-          }
+          setSelectedStatuses((prev) => {
+            const newStatuses = list.reduce<StatusSelectionState>(
+              (acc, order) => {
+                if (!prev[order.id]) {
+                  acc[order.id] = getInitialNextStatus(order.status);
+                }
+                return acc;
+              },
+              {}
+            );
+            return Object.keys(newStatuses).length > 0
+              ? { ...prev, ...newStatuses }
+              : prev;
+          });
 
           setPaginationData(paginatedData.pagination);
           setCurrentPage(paginatedData.pagination.page);
         }
-
-        setCounts((prev) => ({
-          ...prev,
-          [currentFilter]: paginationData.total || 0,
-        }));
       } catch (error: unknown) {
         console.error("Erro ao carregar pedidos:", error);
         toast.error(
@@ -195,15 +200,20 @@ export function OrdersManager() {
         if (page === 1) setLoading(false);
       }
     },
-    [api, ITEMS_PER_PAGE, selectedStatuses, paginationData.total]
+    [api, ITEMS_PER_PAGE]
   );
+
+  // Armazenar referência de loadOrders em useRef
+  useEffect(() => {
+    loadOrdersRef.current = loadOrders;
+  }, [loadOrders]);
 
   useEffect(() => {
     setOrders([]);
     setCurrentPage(1);
     setPaginationData({ total: 0, totalPages: 0, hasMore: false });
-    loadOrders(statusFilter, 1);
-  }, [statusFilter, loadOrders]);
+    loadOrdersRef.current?.(statusFilter, 1);
+  }, [statusFilter]);
 
   const refreshCounts = useCallback(
     async (silent = false) => {
@@ -281,7 +291,7 @@ export function OrdersManager() {
         });
         toast.success("Status do pedido atualizado");
         await Promise.all([
-          loadOrders(statusFilter, 1, true),
+          loadOrdersRef.current?.(statusFilter, 1, true),
           refreshCounts(true),
         ]);
       } catch (error: unknown) {
@@ -293,7 +303,7 @@ export function OrdersManager() {
         setUpdatingOrders((prev) => ({ ...prev, [order.id]: false }));
       }
     },
-    [api, loadOrders, notifyCustomer, refreshCounts, statusFilter]
+    [api, notifyCustomer, refreshCounts, statusFilter]
   );
 
   const handleDeleteCanceledOrders = useCallback(async () => {
@@ -304,7 +314,7 @@ export function OrdersManager() {
       await api.deleteAllCanceledOrders();
       toast.success("Pedido cancelado excluído");
       await Promise.all([
-        loadOrders(statusFilter, 1, true),
+        loadOrdersRef.current?.(statusFilter, 1, true),
         refreshCounts(true),
       ]);
     } catch (error: unknown) {
@@ -318,13 +328,13 @@ export function OrdersManager() {
     } finally {
       setUpdatingOrders((prev) => ({ ...prev, ["deleteAll"]: false }));
     }
-  }, [api, loadOrders, refreshCounts, statusFilter]);
+  }, [api, refreshCounts, statusFilter]);
 
   const loadMoreOrders = useCallback(() => {
     if (paginationData.hasMore) {
-      loadOrders(statusFilter, currentPage + 1, true);
+      loadOrdersRef.current?.(statusFilter, currentPage + 1, true);
     }
-  }, [statusFilter, currentPage, paginationData.hasMore, loadOrders]);
+  }, [statusFilter, currentPage, paginationData.hasMore]);
 
   const groupedOrders = useMemo(() => orders ?? [], [orders]);
 

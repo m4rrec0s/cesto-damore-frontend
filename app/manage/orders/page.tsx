@@ -7,23 +7,22 @@ import { useRouter } from "next/navigation";
 
 export default function OrdersPage() {
   const { user, isLoading: authLoading } = useAuth();
-  const [loading, setLoading] = useState(true);
   const router = useRouter();
 
   useEffect(() => {
-    if (!user && !authLoading) {
+    if (authLoading) {
+      return;
+    }
+
+    if (!user) {
       router.push(
         `/login?redirect=${encodeURIComponent(window.location.pathname)}`
       );
       return;
     }
-
-    if (!authLoading) {
-      setLoading(false);
-    }
   }, [authLoading, user, router]);
 
-  if (authLoading || loading) {
+  if (authLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">

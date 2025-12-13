@@ -1642,11 +1642,9 @@ class ApiService {
     created_at: string;
     updated_at: string;
   }> => {
-    // ✅ CORRIGIDO: Usar stripBase64FromOrderPayload para manter base64 em IMAGES/BASE_LAYOUT
-    // Em vez de stripBase64FromCustomizationPayload que Remove TODOS os base64
-    const payloadSanitized = this.stripBase64FromOrderPayload(
-      payload as unknown as Record<string, unknown>
-    ) as import("../types/customization").SaveOrderItemCustomizationPayload;
+    // ✅ CORRIGIDO: Não sanitizar payload aqui, pois o backend precisa do base64 em finalArtwork e data.photos
+    // A sanitização de imageBuffer já é feita no componente CustomizationsReview.tsx
+    const payloadSanitized = payload;
 
     // 🔍 DEBUG: Log do payload sendo enviado
     console.log(
