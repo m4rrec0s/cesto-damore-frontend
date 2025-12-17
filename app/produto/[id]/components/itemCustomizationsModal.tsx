@@ -119,18 +119,7 @@ export function ItemCustomizationModal({
     Record<string, unknown>
   >({});
 
-  // Initialize with initialValues when opening
-  useEffect(() => {
-    if (isOpen && initialValues) {
-      console.log(
-        "🔄 [ItemCustomizationModal] Initializing with:",
-        initialValues
-      );
-      setCustomizationData(initialValues);
-    } else if (isOpen && !initialValues) {
-      setCustomizationData({});
-    }
-  }, [isOpen, initialValues]);
+
 
   const [uploadingFiles, setUploadingFiles] = useState<Record<string, File[]>>(
     {}
@@ -284,7 +273,7 @@ export function ItemCustomizationModal({
           const token =
             typeof window !== "undefined"
               ? localStorage.getItem("appToken") ||
-                localStorage.getItem("token")
+              localStorage.getItem("token")
               : null;
 
           const response = await fetch(`${API_URL}/layouts/${layoutId}`, {
@@ -303,8 +292,8 @@ export function ItemCustomizationModal({
           layoutData.item_type?.toLowerCase() === "caneca"
             ? "/3DModels/caneca.glb"
             : layoutData.item_type?.toLowerCase() === "quadro"
-            ? "/3DModels/quadro.glb"
-            : undefined;
+              ? "/3DModels/quadro.glb"
+              : undefined;
 
         setCustomizationData((prev) => ({
           ...prev,
@@ -326,6 +315,39 @@ export function ItemCustomizationModal({
     },
     [customizations]
   );
+
+  // Initialize with initialValues when opening
+  useEffect(() => {
+    if (isOpen && initialValues) {
+      console.log(
+        "🔄 [ItemCustomizationModal] Initializing with:",
+        initialValues
+      );
+      setCustomizationData(initialValues);
+
+      // ✅ Restore BASE_LAYOUT state if present
+      const baseLayoutCustom = customizations.find(
+        (c) => c.type === "BASE_LAYOUT"
+      );
+      if (baseLayoutCustom) {
+        const layoutData = initialValues[baseLayoutCustom.id] as Record<
+          string,
+          unknown
+        >;
+        const layoutId = layoutData?.layout_id as string;
+
+        if (layoutId) {
+          console.log("🎨 Restoring layout selection:", layoutId);
+          handleLayoutSelect(layoutId);
+        }
+      }
+    } else if (isOpen && !initialValues) {
+      setCustomizationData({});
+      setStep("selection");
+      setSelectedLayoutId(null);
+      setFullLayoutBase(null);
+    }
+  }, [isOpen, initialValues, customizations, handleLayoutSelect]);
 
   const handleLayoutComplete = useCallback(
     async (images: ImageData[], previewUrl: string) => {
@@ -722,18 +744,16 @@ export function ItemCustomizationModal({
               return (
                 <div
                   key={fullLayout.id}
-                  className={`group cursor-pointer transition-all duration-300 overflow-hidden hover:shadow-2xl hover:scale-105 border-2 border-gray-200 hover:border-purple-300 ${
-                    isQuadro ? "rounded-lg shadow-lg" : ""
-                  }`}
+                  className={`group cursor-pointer transition-all duration-300 overflow-hidden hover:shadow-2xl hover:scale-105 border-2 border-gray-200 hover:border-purple-300 ${isQuadro ? "rounded-lg shadow-lg" : ""
+                    }`}
                   onClick={() => handleLayoutSelect(fullLayout.id)}
                 >
                   {/* Para quadros: aspect-square para parecer um quadro real. Para outros: aspect-video */}
                   <div
-                    className={`relative bg-gradient-to-br from-gray-50 to-gray-100 ${
-                      isQuadro
-                        ? "aspect-square p-3"
-                        : "aspect-video max-h-[200px]"
-                    }`}
+                    className={`relative bg-gradient-to-br from-gray-50 to-gray-100 ${isQuadro
+                      ? "aspect-square p-3"
+                      : "aspect-video max-h-[200px]"
+                      }`}
                   >
                     {/* Moldura visual para quadros */}
                     {isQuadro && (
@@ -748,19 +768,16 @@ export function ItemCustomizationModal({
 
                     {imageUrl ? (
                       <div
-                        className={`relative w-full h-full ${
-                          isQuadro ? "p-1" : ""
-                        }`}
+                        className={`relative w-full h-full ${isQuadro ? "p-1" : ""
+                          }`}
                       >
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
                           src={imageUrl}
                           alt={fullLayout.name}
-                          className={`w-full h-full transition-all duration-300 ${
-                            imageLoaded ? "opacity-100" : "opacity-0"
-                          } ${
-                            isQuadro ? "object-contain rounded" : "object-cover"
-                          }`}
+                          className={`w-full h-full transition-all duration-300 ${imageLoaded ? "opacity-100" : "opacity-0"
+                            } ${isQuadro ? "object-contain rounded" : "object-cover"
+                            }`}
                           onLoad={() => {
                             setImageLoadStates((prev) => ({
                               ...prev,
@@ -1149,13 +1166,13 @@ export function ItemCustomizationModal({
                   const result: CustomizationInput[] = [];
                   const filesData = customizationData[customization.id] as
                     | Array<{
-                        file: File;
-                        preview: string;
-                        position: number;
-                        base64?: string;
-                        mime_type?: string;
-                        size?: number;
-                      }>
+                      file: File;
+                      preview: string;
+                      position: number;
+                      base64?: string;
+                      mime_type?: string;
+                      size?: number;
+                    }>
                     | undefined;
 
                   if (filesData && filesData.length > 0) {
@@ -1236,11 +1253,10 @@ export function ItemCustomizationModal({
                 whileTap={{ scale: 0.98 }}
               >
                 <Card
-                  className={`p-4 cursor-pointer transition-all ${
-                    isSelected
-                      ? "border-2 border-rose-500 bg-gradient-to-r from-rose-50 to-pink-50 shadow-md"
-                      : "border-2 border-rose-200 hover:border-rose-400 hover:bg-rose-50/30"
-                  }`}
+                  className={`p-4 cursor-pointer transition-all ${isSelected
+                    ? "border-2 border-rose-500 bg-gradient-to-r from-rose-50 to-pink-50 shadow-md"
+                    : "border-2 border-rose-200 hover:border-rose-400 hover:bg-rose-50/30"
+                    }`}
                   onClick={() =>
                     handleOptionSelect(
                       customization.id,
@@ -1275,9 +1291,8 @@ export function ItemCustomizationModal({
                     />
                     <div className="flex-1">
                       <p
-                        className={`font-semibold ${
-                          isSelected ? "text-rose-900" : "text-rose-800"
-                        }`}
+                        className={`font-semibold ${isSelected ? "text-rose-900" : "text-rose-800"
+                          }`}
                       >
                         {option.label}
                       </p>
@@ -1467,8 +1482,8 @@ export function ItemCustomizationModal({
                   initialImages={
                     (
                       customizationData[fullLayoutBase.id] as
-                        | { images?: unknown }
-                        | undefined
+                      | { images?: unknown }
+                      | undefined
                     )?.images as ImageData[]
                   }
                 />

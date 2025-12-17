@@ -1,5 +1,5 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
 "use client";
+
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useAuth } from "@/app/hooks/use-auth";
 import { useCartContext } from "@/app/hooks/cart-context";
@@ -11,7 +11,7 @@ import { Card } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
 import { Label } from "@/app/components/ui/label";
 import { Calendar } from "@/app/components/ui/calendar";
-import { Alert, AlertDescription, AlertTitle } from "@/app/components/ui/alert";
+import { Alert, AlertDescription } from "@/app/components/ui/alert";
 import {
   Popover,
   PopoverContent,
@@ -32,11 +32,11 @@ import {
   ArrowLeft,
   XCircle,
   RefreshCcw,
+  Car,
+  Store,
+  Info,
 } from "lucide-react";
-import {
-  CustomizationsReview,
-  validateCustomizations,
-} from "./components/CustomizationsReview";
+import { CustomizationsReview } from "./components/CustomizationsReview";
 import { TimeSlotSelector } from "./components/TimeSlotSelector";
 import Link from "next/link";
 import Image from "next/image";
@@ -47,7 +47,6 @@ import {
   normalizePhoneForBackend,
   formatPhoneNumber,
 } from "@/app/lib/phoneMask";
-import { MPStatusScreen } from "@/app/components/mp-status-screen";
 import { getInternalImageUrl } from "@/lib/image-helper";
 import { LoadingPayment } from "@/app/components/LoadingPayment";
 import { OrderConfirmationTicket } from "@/app/components/OrderConfirmationTicket";
@@ -59,6 +58,7 @@ import {
   type MPCardFormData,
 } from "@/app/components/mp-card-payment-form";
 import { PaymentMethodSelector } from "@/app/components/payment-method-selector";
+import { Input } from "../components/ui/input";
 
 const ACCEPTED_CITIES = [
   "Campina Grande",
@@ -79,10 +79,10 @@ const SHIPPING_RULES: Record<string, { pix: number; card: number }> = {
 const normalizeString = (value: string) =>
   value
     ? value
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .trim()
-      .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .trim()
+        .toLowerCase()
     : "";
 
 type PaymentStatusType = "" | "pending" | "success" | "failure";
@@ -124,6 +124,12 @@ interface CartItem {
     name: string;
     description?: string;
     image_url?: string | null;
+    customization_rules?: Array<{
+      id: string;
+      name: string;
+      description?: string;
+      image_url?: string | null;
+    }>;
   };
   quantity: number;
   price: number;
@@ -224,24 +230,26 @@ const CheckoutStepper = ({ currentStep }: { currentStep: CheckoutStep }) => {
                 <div className="flex flex-col items-center relative w-full">
                   {/* Número do step (pequeno, acima) */}
                   <span
-                    className={`text-xs font-bold mb-2 transition-colors duration-300 ${isActive
+                    className={`text-xs font-bold mb-2 transition-colors duration-300 ${
+                      isActive
                         ? "text-rose-600"
                         : isCompleted
-                          ? "text-green-600"
-                          : "text-gray-400"
-                      }`}
+                        ? "text-green-600"
+                        : "text-gray-400"
+                    }`}
                   >
                     PASSO {step.number}
                   </span>
 
                   {/* Círculo com ícone */}
                   <div
-                    className={`w-14 h-14 rounded-full flex items-center justify-center transition-all duration-500 transform ${isCompleted
+                    className={`w-14 h-14 rounded-full flex items-center justify-center transition-all duration-500 transform ${
+                      isCompleted
                         ? "bg-gradient-to-br from-green-400 to-green-600 text-white shadow-lg scale-105"
                         : isActive
-                          ? "bg-gradient-to-br from-rose-500 to-rose-600 text-white shadow-xl ring-4 ring-rose-200 scale-110"
-                          : "bg-gray-100 text-gray-400 border-2 border-gray-200"
-                      }`}
+                        ? "bg-gradient-to-br from-rose-500 to-rose-600 text-white shadow-xl ring-4 ring-rose-200 scale-110"
+                        : "bg-gray-100 text-gray-400 border-2 border-gray-200"
+                    }`}
                   >
                     {isCompleted ? (
                       <CheckCircle2 className="h-7 w-7" />
@@ -252,12 +260,13 @@ const CheckoutStepper = ({ currentStep }: { currentStep: CheckoutStep }) => {
 
                   {/* Label */}
                   <span
-                    className={`mt-3 text-sm font-bold transition-colors duration-300 ${isActive
+                    className={`mt-3 text-sm font-bold transition-colors duration-300 ${
+                      isActive
                         ? "text-rose-600"
                         : isCompleted
-                          ? "text-green-600"
-                          : "text-gray-500"
-                      }`}
+                        ? "text-green-600"
+                        : "text-gray-500"
+                    }`}
                   >
                     {step.label}
                   </span>
@@ -270,12 +279,13 @@ const CheckoutStepper = ({ currentStep }: { currentStep: CheckoutStep }) => {
                     <div className="absolute top-1/2 transform -translate-y-1/2 h-1 bg-gradient-to-r from-gray-200 to-gray-200 rounded-full w-full" />
                     {/* Linha de progresso */}
                     <div
-                      className={`absolute top-1/2 transform -translate-y-1/2 h-1 rounded-full transition-all duration-700 ${currentStep > step.number
+                      className={`absolute top-1/2 transform -translate-y-1/2 h-1 rounded-full transition-all duration-700 ${
+                        currentStep > step.number
                           ? "w-full bg-gradient-to-r from-green-400 to-green-600"
                           : currentStep === step.number
-                            ? "w-1/2 bg-gradient-to-r from-rose-400 to-rose-300"
-                            : "w-0 bg-gray-200"
-                        }`}
+                          ? "w-1/2 bg-gradient-to-r from-rose-400 to-rose-300"
+                          : "w-0 bg-gray-200"
+                      }`}
                     />
                   </div>
                 )}
@@ -296,12 +306,13 @@ const CheckoutStepper = ({ currentStep }: { currentStep: CheckoutStep }) => {
                 <div className="flex items-center gap-3">
                   {/* Círculo com ícone */}
                   <div
-                    className={`w-12 h-12 rounded-full flex items-center justify-center transition-all duration-500 flex-shrink-0 ${isCompleted
+                    className={`w-12 h-12 rounded-full flex items-center justify-center transition-all duration-500 flex-shrink-0 ${
+                      isCompleted
                         ? "bg-gradient-to-br from-green-400 to-green-600 text-white shadow-lg"
                         : isActive
-                          ? "bg-gradient-to-br from-rose-500 to-rose-600 text-white shadow-lg ring-4 ring-rose-200 scale-105"
-                          : "bg-gray-100 text-gray-400 border-2 border-gray-200"
-                      }`}
+                        ? "bg-gradient-to-br from-rose-500 to-rose-600 text-white shadow-lg ring-4 ring-rose-200 scale-105"
+                        : "bg-gray-100 text-gray-400 border-2 border-gray-200"
+                    }`}
                   >
                     {isCompleted ? (
                       <CheckCircle2 className="h-6 w-6" />
@@ -313,22 +324,24 @@ const CheckoutStepper = ({ currentStep }: { currentStep: CheckoutStep }) => {
                   {/* Conteúdo */}
                   <div className="flex-1">
                     <span
-                      className={`text-xs font-bold block transition-colors duration-300 ${isActive
+                      className={`text-xs font-bold block transition-colors duration-300 ${
+                        isActive
                           ? "text-rose-600"
                           : isCompleted
-                            ? "text-green-600"
-                            : "text-gray-400"
-                        }`}
+                          ? "text-green-600"
+                          : "text-gray-400"
+                      }`}
                     >
                       PASSO {step.number}
                     </span>
                     <span
-                      className={`text-sm font-bold transition-colors duration-300 ${isActive
+                      className={`text-sm font-bold transition-colors duration-300 ${
+                        isActive
                           ? "text-rose-600"
                           : isCompleted
-                            ? "text-green-600"
-                            : "text-gray-500"
-                        }`}
+                          ? "text-green-600"
+                          : "text-gray-500"
+                      }`}
                     >
                       {step.label}
                     </span>
@@ -339,12 +352,13 @@ const CheckoutStepper = ({ currentStep }: { currentStep: CheckoutStep }) => {
                 {index < steps.length - 1 && (
                   <div className="ml-6 mt-3 pl-3 border-l-2 border-gray-200 h-4">
                     <div
-                      className={`absolute ml-1 mt-4 h-3 border-l-2 transition-all duration-700 ${currentStep > step.number
+                      className={`absolute ml-1 mt-4 h-3 border-l-2 transition-all duration-700 ${
+                        currentStep > step.number
                           ? "border-l-green-500"
                           : currentStep === step.number
-                            ? "border-l-rose-400"
-                            : "border-l-gray-200"
-                        }`}
+                          ? "border-l-rose-400"
+                          : "border-l-gray-200"
+                      }`}
                     />
                   </div>
                 )}
@@ -362,12 +376,8 @@ const ProductCard = ({
   item,
   updateQuantity,
   removeFromCart,
-  onEditCustomizations,
   isProcessing,
 }: ProductCardProps) => {
-  const hasCustomizations =
-    item.customizations && item.customizations.length > 0;
-
   return (
     <div className="flex gap-6 py-6 border-b border-gray-100 last:border-0">
       <div className="relative w-24 h-24 flex-shrink-0 rounded-xl overflow-hidden bg-gray-50">
@@ -410,11 +420,6 @@ const ProductCard = ({
           {item.additionals && item.additionals.length > 0 && (
             <div className="flex flex-wrap gap-2">
               {item.additionals.map((add) => {
-                const finalPrice = getAdditionalFinalPrice(
-                  add.id,
-                  add.price,
-                  item.customizations
-                );
                 return (
                   <span
                     key={add.id}
@@ -429,9 +434,9 @@ const ProductCard = ({
 
           {item.customizations && item.customizations.length > 0 && (
             <div className="space-y-1">
-              {item.customizations.map((customization) => (
+              {item.customizations.map((customization, index) => (
                 <div
-                  key={customization.customization_id}
+                  key={`${customization.customization_id}-${index}`}
                   className="text-xs text-gray-600 flex items-center gap-1"
                 >
                   <span className="font-medium">{customization.title}:</span>
@@ -494,7 +499,7 @@ const ProductCard = ({
                       add.price,
                       item.customizations
                     ) *
-                    item.quantity,
+                      item.quantity,
                   0
                 ) || 0)
               ).toFixed(2)}
@@ -549,6 +554,7 @@ export default function CarrinhoPage() {
   const [paymentError, setPaymentError] = useState<string | null>(null);
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [isGeneratingPix, setIsGeneratingPix] = useState(false);
+  const [optionSelected, setOptionSelected] = useState<string>("delivery");
 
   // Callback para atualizar customizações no carrinho (quando não há orderId)
   const handleCustomizationUpdate = useCallback(
@@ -583,30 +589,26 @@ export default function CarrinhoPage() {
               c.customizationType === "IMAGES"
                 ? (data?.photos as CartCustomization["photos"])
                 : undefined,
-            selected_option:
-              c.customizationType === "MULTIPLE_CHOICE"
-                ? (data?.id as string)
-                : undefined,
+            // ✅ Map missed fields
+            selected_option: (data?.selected_option as string) || undefined,
             selected_option_label:
-              c.customizationType === "MULTIPLE_CHOICE"
-                ? (data?.label as string)
-                : undefined,
-            selected_item:
-              c.customizationType === "BASE_LAYOUT"
-                ? {
-                  original_item: "Layout Base",
-                  selected_item: (data?.name as string) || "Personalizado",
-                  price_adjustment: (data?._priceAdjustment as number) || 0,
-                }
-                : undefined,
+              (data?.selected_option_label as string) || undefined,
             label_selected:
-              c.customizationType === "BASE_LAYOUT"
-                ? (data?.name as string)
-                : undefined,
-            additional_time:
-              c.customizationType === "BASE_LAYOUT"
-                ? (data?.additional_time as number)
-                : undefined,
+              (data?.label_selected as string) ||
+              (data?.selected_option_label as string) ||
+              undefined,
+            selected_item:
+              (data?.selected_item as
+                | {
+                    original_item: string;
+                    selected_item: string;
+                    price_adjustment: number;
+                  }
+                | undefined) || undefined,
+            selected_item_label:
+              (data?.selected_item_label as string) || undefined,
+            additional_time: (data?.additional_time as number) || 0,
+            data: data, // ✅ Store full data object
           };
         }
       );
@@ -625,146 +627,27 @@ export default function CarrinhoPage() {
     [cart.items, updateCustomizations]
   );
 
-  const OrderSummary = () => {
-    const maxProdTime = getMaxProductionTime();
+  // Helper para formatar CPF/CNPJ visualmente
+  const formatDocument = (value: string) => {
+    const numbers = value.replace(/\D/g, "");
+    if (numbers.length <= 11) {
+      // CPF: 000.000.000-00
+      return numbers
+        .replace(/(\d{3})(\d)/, "$1.$2")
+        .replace(/(\d{3})(\d)/, "$1.$2")
+        .replace(/(\d{3})(\d{1,2})$/, "$1-$2");
+    } else {
+      // CNPJ: 00.000.000/0000-00
+      return numbers
+        .replace(/^(\d{2})(\d)/, "$1.$2")
+        .replace(/^(\d{2})\.(\d{3})(\d)/, "$1.$2.$3")
+        .replace(/\.(\d{3})(\d)/, ".$1/$2")
+        .replace(/(\d{4})(\d)/, "$1-$2");
+    }
+  };
 
-    return (
-      <Card className="bg-white border-0 shadow-xl rounded-3xl sticky top-6 overflow-hidden">
-        {/* Header com gradiente */}
-        <div className="bg-gradient-to-r from-rose-600 to-rose-700 p-6 text-white">
-          <h3 className="text-2xl font-bold">Resumo do Pedido</h3>
-          <p className="text-rose-100 text-sm mt-2">
-            {currentStep === 1
-              ? "Revise seus itens antes de prosseguir"
-              : currentStep === 2
-                ? "Informe os dados de entrega"
-                : "Escolha a forma de pagamento"}
-          </p>
-        </div>
-
-        <div className="p-6 space-y-6">
-          {/* Itens do carrinho com melhor layout */}
-          <div className="space-y-3">
-            <div className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-4 flex items-center gap-2">
-              <ShoppingCart className="h-4 w-4" />
-              Itens ({cart.items.length})
-            </div>
-            <div className="max-h-48 overflow-y-auto space-y-2 pr-2">
-              {cart.items.map((item, idx) => (
-                <div
-                  key={idx}
-                  className="text-sm text-gray-700 flex justify-between items-center p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition"
-                >
-                  <span className="truncate pr-2 flex items-center gap-2">
-                    <span className="font-semibold text-rose-600 min-w-fit">
-                      {item.quantity}x
-                    </span>
-                    <span className="text-gray-700">{item.product.name}</span>
-                  </span>
-                  <span className="font-semibold text-gray-900 whitespace-nowrap ml-2">
-                    R${" "}
-                    {(
-                      (item.effectivePrice ?? item.price) * item.quantity
-                    ).toFixed(2)}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Divisor */}
-          <div className="border-t border-gray-200" />
-
-          {/* Cálculos com melhor visualização */}
-          <div className="space-y-3">
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-600 font-medium">Subtotal</span>
-              <span className="font-bold text-gray-900">
-                R$ {cartTotal.toFixed(2)}
-              </span>
-            </div>
-
-            {discountAmount > 0 && (
-              <div className="flex justify-between text-sm p-3 bg-green-50 rounded-lg border border-green-200">
-                <span className="text-green-700 font-medium">💚 Desconto</span>
-                <span className="text-green-700 font-bold">
-                  - R$ {discountAmount.toFixed(2)}
-                </span>
-              </div>
-            )}
-
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-600 font-medium">Entrega</span>
-              <span className="font-bold text-gray-900">
-                {shippingCost === null
-                  ? "--"
-                  : shippingCost === 0
-                    ? "GRÁTIS 🎁"
-                    : `R$ ${shippingCost.toFixed(2)}`}
-              </span>
-            </div>
-
-            {maxProdTime > 0 && (
-              <div className="flex justify-between text-sm bg-amber-50 p-3 rounded-lg border border-amber-200">
-                <span className="text-amber-900 font-medium flex items-center gap-2">
-                  ⏱️ Produção
-                </span>
-                <span className="font-bold text-amber-700">
-                  ~{maxProdTime}h
-                </span>
-              </div>
-            )}
-
-            {selectedDate && selectedTime && (
-              <div className="flex justify-between text-sm bg-blue-50 p-3 rounded-lg border border-blue-200">
-                <span className="text-blue-900 font-medium flex items-center gap-2">
-                  📅 Entrega
-                </span>
-                <span className="font-bold text-blue-900">
-                  {selectedDate.toLocaleDateString("pt-BR")}
-                </span>
-              </div>
-            )}
-          </div>
-
-          {/* Total com destaque */}
-          <div className="border-t-2 border-dashed border-gray-300 pt-4 bg-gradient-to-br from-rose-50 to-orange-50 p-4 rounded-xl">
-            <div className="flex justify-between items-center">
-              <span className="text-gray-600 font-semibold text-lg">Total</span>
-              <span className="text-3xl font-bold text-rose-600">
-                R$ {grandTotal.toFixed(2)}
-              </span>
-            </div>
-          </div>
-
-          {currentStep < 3 && (
-            <Button
-              onClick={handleNextStep}
-              disabled={
-                isProcessing ||
-                (currentStep === 1 && !canProceedToStep2) ||
-                (currentStep === 2 && !canProceedToStep3) ||
-                (currentStep === 3 && !paymentMethod)
-              }
-              className="w-full bg-gradient-to-r from-rose-600 to-rose-700 hover:from-rose-700 hover:to-rose-800 text-white py-6 rounded-2xl font-bold text-lg shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
-            >
-              {isProcessing ? (
-                <>
-                  <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                  Processando...
-                </>
-              ) : currentStep === 1 ? (
-                "Checkout →"
-              ) : currentStep === 2 ? (
-                "Ir para Pagamento →"
-              ) : (
-                "Finalizar Pedido →"
-              )}
-            </Button>
-          )}
-        </div>
-      </Card>
-    );
+  const validateCustomizations = (items: CartItem[]): boolean => {
+    return items.length > 0;
   };
 
   const isDateDisabled = useCallback(
@@ -819,7 +702,6 @@ export default function CarrinhoPage() {
   }, [confirmationState]);
 
   const paymentApprovedRef = useRef(false);
-  const pendingPaymentToastShownRef = useRef(false);
   const disconnectSSERef = useRef<(() => void) | null>(null);
   const pollingStartedRef = useRef(false);
   const sseDisconnectCountRef = useRef(0);
@@ -876,11 +758,7 @@ export default function CarrinhoPage() {
     [clearPendingOrder, clearCart]
   );
 
-  const {
-    status: pollingStatus,
-    attempts: pollingAttempts,
-    startPolling,
-  } = usePaymentPolling({
+  const { startPolling } = usePaymentPolling({
     orderId: currentOrderId,
     enabled: Boolean(currentOrderId && paymentStatus === "pending"),
     maxAttempts: 60,
@@ -910,7 +788,7 @@ export default function CarrinhoPage() {
         }
       }, 2000);
     },
-    onPending: () => { },
+    onPending: () => {},
   });
 
   const handleTrackOrder = () => {
@@ -1030,17 +908,17 @@ export default function CarrinhoPage() {
     });
   }, []);
 
-  const sseOnPaymentPending = useCallback((data: unknown) => { }, []);
+  const sseOnPaymentPending = useCallback(() => {}, []);
 
-  const sseOnPaymentUpdate = useCallback((data: unknown) => { }, []);
+  const sseOnPaymentUpdate = useCallback(() => {}, []);
 
   const { disconnect: disconnectSSE } = useWebhookNotification({
     orderId: currentOrderId,
     // Habilitar SSE enquanto houver um pedido pendente (evitar loops causados por toggles de enabled)
     enabled: Boolean(
       currentOrderId &&
-      paymentStatus !== "success" &&
-      paymentStatus !== "failure"
+        paymentStatus !== "success" &&
+        paymentStatus !== "failure"
     ),
     onPaymentUpdate: sseOnPaymentUpdate,
     onPaymentApproved: sseOnPaymentApproved,
@@ -1184,17 +1062,39 @@ export default function CarrinhoPage() {
             orderPaymentMethod === "pix"
               ? "pix"
               : orderPaymentMethod === "card"
-                ? "card"
-                : undefined
+              ? "card"
+              : undefined
           );
           // Preencher campos do pedido (se houver)
           if (pendingOrder.delivery_address) {
-            setAddress(pendingOrder.delivery_address);
-            // Tentar extrair número da casa do endereço
-            const numMatch = pendingOrder.delivery_address.match(
-              /\b(\d{1,4}[A-Za-z\-]*)\b/
-            );
-            if (numMatch) setHouseNumber(numMatch[1]);
+            const addressStr = pendingOrder.delivery_address;
+            const isPickupAddress = addressStr.includes("Retirada na Loja");
+
+            if (!isPickupAddress) {
+              // Tentar extrair rua e número corretamente
+              const streetMatch = addressStr.match(/^([^,]+),\s*(\d+)/);
+              if (streetMatch) {
+                setAddress(streetMatch[1].trim());
+                setHouseNumber(streetMatch[2].trim());
+              } else {
+                // Fallback: tentar pegar apenas a primeira parte antes da vírgula
+                const parts = addressStr.split(",");
+                if (parts.length > 0) {
+                  setAddress(parts[0].trim());
+                } else {
+                  setAddress(addressStr);
+                }
+              }
+              // Tentar extrair número se não foi pego pelo regex acima
+              if (!streetMatch) {
+                const numMatch = addressStr.match(/\b(\d{1,4}[A-Za-z\-]*)\b/);
+                if (numMatch) setHouseNumber(numMatch[1]);
+              }
+            } else {
+              // Se for retirada, não preencher endereço
+              setAddress("");
+              setHouseNumber("");
+            }
           }
           if (typeof pendingOrder.complement === "string") {
             setComplemento(pendingOrder.complement || "");
@@ -1301,15 +1201,31 @@ export default function CarrinhoPage() {
     [shippingRule, normalizedState]
   );
   const shippingCost = useMemo(() => {
-    if (!paymentMethod || !isAddressServed || !shippingRule) {
+    if (!paymentMethod) return null;
+
+    // Pickup: Frete Grátis
+    if (optionSelected === "pickup") {
+      return 0;
+    }
+
+    // Delivery: Validar endereço e aplicar regras
+    if (!isAddressServed || !shippingRule) {
       return null;
     }
     return shippingRule[paymentMethod];
-  }, [paymentMethod, isAddressServed, shippingRule]);
+  }, [paymentMethod, isAddressServed, shippingRule, optionSelected]);
+
+  // Desconto de Retirada (apenas PIX)
+  const pickupDiscount = useMemo(() => {
+    if (optionSelected === "pickup" && paymentMethod === "pix") {
+      return 10.0;
+    }
+    return 0;
+  }, [optionSelected, paymentMethod]);
 
   const grandTotal = useMemo(
-    () => cartTotal + (shippingCost ?? 0),
-    [cartTotal, shippingCost]
+    () => Math.max(0, cartTotal + (shippingCost ?? 0) - pickupDiscount),
+    [cartTotal, shippingCost, pickupDiscount]
   );
 
   const discountAmount = useMemo(() => {
@@ -1340,8 +1256,6 @@ export default function CarrinhoPage() {
       setIsProcessing(true);
       setIsGeneratingPix(true);
 
-      setIsProcessing(true);
-      setIsGeneratingPix(true);
       setPaymentError(null);
 
       try {
@@ -1389,8 +1303,8 @@ export default function CarrinhoPage() {
           amount:
             Number(
               responseData.amount ??
-              responseData.transaction_amount ??
-              cartTotal + (shippingCost ?? 0)
+                responseData.transaction_amount ??
+                cartTotal + (shippingCost ?? 0)
             ) || cartTotal + (shippingCost ?? 0),
           expires_at:
             responseData.expires_at ||
@@ -1686,35 +1600,36 @@ export default function CarrinhoPage() {
     );
   };
 
-  const originalTotal = cartItems.reduce((sum, item) => {
-    const baseTotal = (item.effectivePrice ?? item.price) * item.quantity;
-    const additionalsTotal =
-      item.additionals?.reduce(
-        (a, add) =>
-          getAdditionalFinalPrice(add.id, add.price, item.customizations) *
-          item.quantity,
-        0
-      ) || 0;
-    return sum + baseTotal + additionalsTotal;
-  }, 0);
-
   const canProceedToStep2 = cartItems.length > 0;
 
-  const canProceedToStep3 =
-    zipCode.trim().length === 8 &&
-    address.trim() !== "" &&
-    houseNumber.trim() !== "" &&
-    city.trim() !== "" &&
-    state.trim() !== "" &&
-    customerPhone.trim() !== "" &&
-    isValidPhone(customerPhone) &&
-    recipientPhone.trim() !== "" &&
-    isValidPhone(recipientPhone) &&
-    userDocument.trim().length >= 11 &&
-    selectedDate !== undefined &&
-    selectedTime !== "" &&
-    isAddressServed &&
-    validateCustomizations(cartItems);
+  const canProceedToStep3 = (() => {
+    // Validações comuns
+    const commonValid =
+      customerPhone.trim() !== "" &&
+      isValidPhone(customerPhone) &&
+      userDocument.trim().length >= 11 &&
+      selectedDate !== undefined &&
+      selectedTime !== "" &&
+      validateCustomizations(cartItems);
+
+    if (optionSelected === "pickup") {
+      // Para pickup não precisamos validar endereço detalhado, só os contatos
+      return commonValid;
+    } else {
+      // Para delivery precisamos de endereço completo e served
+      return (
+        commonValid &&
+        recipientPhone.trim() !== "" &&
+        isValidPhone(recipientPhone) &&
+        zipCode.trim().length === 8 &&
+        address.trim() !== "" &&
+        houseNumber.trim() !== "" &&
+        city.trim() !== "" &&
+        state.trim() !== "" &&
+        isAddressServed
+      );
+    }
+  })();
 
   const handleNextStep = async () => {
     let finalDeliveryDate: Date | null = null;
@@ -1765,11 +1680,11 @@ export default function CarrinhoPage() {
       }
 
       if (!currentOrderId && !hasPendingOrder) {
-        if (!recipientPhone.trim()) {
+        if (optionSelected === "delivery" && !recipientPhone.trim()) {
           toast.error("Por favor, informe o número do destinatário");
           return;
         }
-        if (!isValidPhone(recipientPhone)) {
+        if (optionSelected === "delivery" && !isValidPhone(recipientPhone)) {
           toast.error(
             "Por favor, informe um número de telefone válido para o destinatário"
           );
@@ -1778,21 +1693,32 @@ export default function CarrinhoPage() {
 
         setIsProcessing(true);
         try {
-          const fullAddress = `${address}, ${houseNumber} - ${neighborhood}, ${city}/${state} - CEP: ${zipCode}`;
+          // Se "A combinar" for selecionado (23:59), enviar null para backend
+          let finalDateForBackend = finalDeliveryDate;
+          if (selectedTime === "23:59") {
+            finalDateForBackend = null;
+          }
 
-          // finalDeliveryDate already computed above
+          const isPickup = optionSelected === "pickup";
+          const deliveryAddress = isPickup
+            ? "Retirada na Loja - R. Dr. Raif Ramalho, 350 - Jardim Tavares, Campina Grande - PB, 58402-025"
+            : `${address}, ${houseNumber} - ${neighborhood}, ${city}/${state} - CEP: ${zipCode}`;
 
           const createdOrder = await createOrder(
             user.id,
-            fullAddress,
-            finalDeliveryDate || undefined,
+            deliveryAddress,
+            finalDateForBackend || undefined,
             {
-              shippingCost: 0,
+              shippingCost: shippingCost || 0,
               paymentMethod: "pix",
-              grandTotal: cartTotal,
-              deliveryCity: city,
-              deliveryState: state,
+              grandTotal: grandTotal, // Usar grandTotal calculado com desconto
+              deliveryCity: isPickup ? "Campina Grande" : city,
+              deliveryState: isPickup ? "PB" : state,
               recipientPhone: normalizePhoneForBackend(recipientPhone),
+              sendAnonymously,
+              complement: complemento,
+              deliveryMethod: optionSelected as "delivery" | "pickup",
+              discount: pickupDiscount,
             }
           );
 
@@ -1833,19 +1759,28 @@ export default function CarrinhoPage() {
         }
       }
 
-      // If there's an existing pending order, update its delivery info before proceeding
       if (currentOrderId) {
         try {
-          const fullAddress = `${address}, ${houseNumber} - ${neighborhood}, ${city}/${state} - CEP: ${zipCode}`;
+          const isPickup = optionSelected === "pickup";
+          const deliveryAddress = isPickup
+            ? "Retirada na Loja - R. Dr. Raif Ramalho, 350 - Jardim Tavares, Campina Grande - PB, 58402-025"
+            : `${address}, ${houseNumber} - ${neighborhood}, ${city}/${state} - CEP: ${zipCode}`;
+
+          // Se "A combinar" (23:59), tratar como null
+          let finalDateForBackend = finalDeliveryDate;
+          if (selectedTime === "23:59") {
+            finalDateForBackend = null;
+          }
 
           await updateOrderMetadata(currentOrderId, {
-            delivery_address: fullAddress,
-            delivery_city: city,
-            delivery_state: state,
+            delivery_address: deliveryAddress,
+            delivery_city: isPickup ? "Campina Grande" : city,
+            delivery_state: isPickup ? "PB" : state,
             recipient_phone: normalizePhoneForBackend(recipientPhone),
-            delivery_date: finalDeliveryDate?.toISOString() || undefined,
+            delivery_date: finalDateForBackend?.toISOString() || null, // Allow null explicitamente
             send_anonymously: sendAnonymously,
             complement: complemento,
+            delivery_method: optionSelected as "delivery" | "pickup",
           });
         } catch (err) {
           console.error("Erro ao atualizar metadata do pedido pendente:", err);
@@ -1870,6 +1805,158 @@ export default function CarrinhoPage() {
       setCurrentStep((prev) => (prev - 1) as CheckoutStep);
       window.scrollTo({ top: 0, behavior: "smooth" });
     }
+  };
+
+  const OrderSummary = () => {
+    const maxProdTime = getMaxProductionTime();
+
+    return (
+      <Card className="bg-white border-0 shadow-xl rounded-3xl sticky top-6 overflow-hidden">
+        {/* Header com gradiente */}
+        <div className="bg-gradient-to-r from-rose-600 to-rose-700 p-6 text-white">
+          <h3 className="text-2xl font-bold">Resumo do Pedido</h3>
+          <p className="text-rose-100 text-sm mt-2">
+            {currentStep === 1
+              ? "Revise seus itens antes de prosseguir"
+              : currentStep === 2
+              ? "Informe os dados de entrega"
+              : "Escolha a forma de pagamento"}
+          </p>
+        </div>
+
+        <div className="p-6 space-y-6">
+          {/* Itens do carrinho com melhor layout */}
+          <div className="space-y-3">
+            <div className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-4 flex items-center gap-2">
+              <ShoppingCart className="h-4 w-4" />
+              Itens ({cart.items.length})
+            </div>
+            <div className="max-h-48 overflow-y-auto space-y-2 pr-2">
+              {cart.items.map((item, idx) => (
+                <div
+                  key={idx}
+                  className="text-sm text-gray-700 flex justify-between items-center p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition"
+                >
+                  <span className="truncate pr-2 flex items-center gap-2">
+                    <span className="font-semibold text-rose-600 min-w-fit">
+                      {item.quantity}x
+                    </span>
+                    <span className="text-gray-700">{item.product.name}</span>
+                  </span>
+                  <span className="font-semibold text-gray-900 whitespace-nowrap ml-2">
+                    R${" "}
+                    {(
+                      (item.effectivePrice ?? item.price) * item.quantity
+                    ).toFixed(2)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Divisor */}
+          <div className="border-t border-gray-200" />
+
+          {/* Cálculos com melhor visualização */}
+          <div className="space-y-3">
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-600 font-medium">Subtotal</span>
+              <span className="font-bold text-gray-900">
+                R$ {cartTotal.toFixed(2)}
+              </span>
+            </div>
+
+            {discountAmount > 0 && (
+              <div className="flex justify-between text-sm p-3 bg-green-50 rounded-lg border border-green-200">
+                <span className="text-green-700 font-medium">💚 Desconto</span>
+                <span className="text-green-700 font-bold">
+                  - R$ {discountAmount.toFixed(2)}
+                </span>
+              </div>
+            )}
+            {pickupDiscount > 0 && (
+              <div className="flex justify-between text-sm p-3 bg-purple-50 rounded-lg border border-purple-200">
+                <span className="text-purple-700 font-medium">
+                  🏷️ Desconto Retirada
+                </span>
+                <span className="text-purple-700 font-bold">
+                  - R$ {pickupDiscount.toFixed(2)}
+                </span>
+              </div>
+            )}
+
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-600 font-medium">Entrega</span>
+              <span className="font-bold text-gray-900">
+                {shippingCost === null
+                  ? "--"
+                  : shippingCost === 0
+                  ? "GRÁTIS 🎁"
+                  : `R$ ${shippingCost.toFixed(2)}`}
+              </span>
+            </div>
+
+            {maxProdTime > 0 && (
+              <div className="flex justify-between text-sm bg-amber-50 p-3 rounded-lg border border-amber-200">
+                <span className="text-amber-900 font-medium flex items-center gap-2">
+                  ⏱️ Produção
+                </span>
+                <span className="font-bold text-amber-700">
+                  ~{maxProdTime}h
+                </span>
+              </div>
+            )}
+
+            {selectedDate && selectedTime && (
+              <div className="flex justify-between text-sm bg-blue-50 p-3 rounded-lg border border-blue-200">
+                <span className="text-blue-900 font-medium flex items-center gap-2">
+                  📅 Entrega
+                </span>
+                <span className="font-bold text-blue-900">
+                  {selectedDate.toLocaleDateString("pt-BR")}
+                </span>
+              </div>
+            )}
+          </div>
+
+          {/* Total com destaque */}
+          <div className="border-t-2 border-dashed border-gray-300 pt-4 bg-gradient-to-br from-rose-50 to-orange-50 p-4 rounded-xl">
+            <div className="flex justify-between items-center">
+              <span className="text-gray-600 font-semibold text-lg">Total</span>
+              <span className="text-3xl font-bold text-rose-600">
+                R$ {grandTotal.toFixed(2)}
+              </span>
+            </div>
+          </div>
+
+          {currentStep < 3 && (
+            <Button
+              onClick={handleNextStep}
+              disabled={
+                isProcessing ||
+                (currentStep === 1 && !canProceedToStep2) ||
+                (currentStep === 2 && !canProceedToStep3) ||
+                (currentStep === 3 && !paymentMethod)
+              }
+              className="w-full bg-gradient-to-r from-rose-600 to-rose-700 hover:from-rose-700 hover:to-rose-800 text-white py-6 rounded-2xl font-bold text-lg shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+            >
+              {isProcessing ? (
+                <>
+                  <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                  Processando...
+                </>
+              ) : currentStep === 1 ? (
+                "Checkout →"
+              ) : currentStep === 2 ? (
+                "Ir para Pagamento →"
+              ) : (
+                "Finalizar Pedido →"
+              )}
+            </Button>
+          )}
+        </div>
+      </Card>
+    );
   };
 
   const stepVariants = {
@@ -2011,11 +2098,246 @@ export default function CarrinhoPage() {
 
                         <div className="space-y-6">
                           {/* Telefone */}
+                          {/* Opção de Entrega (Delivery / Pickup) */}
+                          <div className="mb-8">
+                            <label className="block text-sm font-bold text-gray-900 mb-4">
+                              Como você quer receber seu pedido?
+                            </label>
+                            <div className="grid grid-cols-2 gap-4">
+                              <button
+                                onClick={() => setOptionSelected("delivery")}
+                                className={`
+                                  relative p-4 rounded-xl border-2 transition-all duration-300 flex flex-col items-center gap-3
+                                  ${
+                                    optionSelected === "delivery"
+                                      ? "border-rose-500 bg-rose-50 text-rose-700 shadow-md transform scale-105"
+                                      : "border-gray-100 bg-white text-gray-500 hover:border-gray-200 hover:bg-gray-50"
+                                  }
+                                `}
+                              >
+                                {optionSelected === "delivery" && (
+                                  <div className="absolute top-2 right-2 text-rose-500">
+                                    <CheckCircle2 className="w-5 h-5" />
+                                  </div>
+                                )}
+                                <Car
+                                  className={`w-8 h-8 ${
+                                    optionSelected === "delivery"
+                                      ? "text-rose-600"
+                                      : "text-gray-400"
+                                  }`}
+                                />
+                                <span className="font-bold">Entrega</span>
+                              </button>
+
+                              <button
+                                onClick={() => setOptionSelected("pickup")}
+                                className={`
+                                  relative p-4 rounded-xl border-2 transition-all duration-300 flex flex-col items-center gap-3
+                                  ${
+                                    optionSelected === "pickup"
+                                      ? "border-purple-500 bg-purple-50 text-purple-700 shadow-md transform scale-105"
+                                      : "border-gray-100 bg-white text-gray-500 hover:border-gray-200 hover:bg-gray-50"
+                                  }
+                                `}
+                              >
+                                {optionSelected === "pickup" && (
+                                  <div className="absolute top-2 right-2 text-purple-500">
+                                    <CheckCircle2 className="w-5 h-5" />
+                                  </div>
+                                )}
+                                <Store
+                                  className={`w-8 h-8 ${
+                                    optionSelected === "pickup"
+                                      ? "text-purple-600"
+                                      : "text-gray-400"
+                                  }`}
+                                />
+                                <span className="font-bold">Retirada</span>
+                                {paymentMethod === "pix" && (
+                                  <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-bold animate-pulse">
+                                    - R$ 10,00 OFF
+                                  </span>
+                                )}
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Se for Delivery: Mostra campos de endereço */}
+                          {optionSelected === "delivery" ? (
+                            <div className="space-y-6 animate-in fade-in slide-in-from-top-4 duration-500">
+                              {/* Campos de endereço existentes */}
+                              <div>
+                                <label className="block text-sm font-bold text-gray-900 mb-2">
+                                  CEP *
+                                </label>
+                                <div className="flex gap-2">
+                                  <Input
+                                    type="text"
+                                    value={zipCode}
+                                    onChange={(e) => {
+                                      const value = e.target.value.replace(
+                                        /\D/g,
+                                        ""
+                                      );
+                                      setZipCode(value);
+                                      if (value.length === 8)
+                                        handleCepSearch(value);
+                                    }}
+                                    maxLength={8}
+                                    placeholder="00000000"
+                                    className="flex-1 px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent transition-all"
+                                  />
+                                  <button
+                                    onClick={() => handleCepSearch(zipCode)}
+                                    disabled={
+                                      isLoadingCep || zipCode.length !== 8
+                                    }
+                                    className="px-4 py-2 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 disabled:opacity-50 transition-colors font-medium text-sm"
+                                  >
+                                    {isLoadingCep ? (
+                                      <Loader2 className="w-5 h-5 animate-spin" />
+                                    ) : (
+                                      "Buscar"
+                                    )}
+                                  </button>
+                                </div>
+                              </div>
+
+                              <div className="grid grid-cols-3 gap-4">
+                                <div className="col-span-2">
+                                  <label className="block text-sm font-bold text-gray-900 mb-2">
+                                    Rua *
+                                  </label>
+                                  <Input
+                                    placeholder="Rua. ABC"
+                                    type="text"
+                                    value={address}
+                                    onChange={(e) => setAddress(e.target.value)}
+                                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent transition-all"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-sm font-bold text-gray-900 mb-2">
+                                    Número *
+                                  </label>
+                                  <Input
+                                    placeholder="001"
+                                    type="text"
+                                    value={houseNumber}
+                                    onChange={(e) =>
+                                      setHouseNumber(e.target.value)
+                                    }
+                                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent transition-all"
+                                  />
+                                </div>
+                              </div>
+
+                              <div>
+                                <label className="block text-sm font-bold text-gray-900 mb-2">
+                                  Complemento
+                                </label>
+                                <Input
+                                  type="text"
+                                  value={complemento}
+                                  onChange={(e) =>
+                                    setComplemento(e.target.value)
+                                  }
+                                  placeholder="Apto, Bloco, Ponto de referência..."
+                                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent transition-all"
+                                />
+                              </div>
+
+                              <div>
+                                <label className="block text-sm font-bold text-gray-900 mb-2">
+                                  Bairro *
+                                </label>
+                                <Input
+                                  placeholder="Jardim Tavares"
+                                  type="text"
+                                  value={neighborhood}
+                                  onChange={(e) =>
+                                    setNeighborhood(e.target.value)
+                                  }
+                                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent transition-all"
+                                />
+                              </div>
+
+                              <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                  <label className="block text-sm font-bold text-gray-900 mb-2">
+                                    Cidade *
+                                  </label>
+                                  <Input
+                                    placeholder="Campina Grande"
+                                    type="text"
+                                    value={city}
+                                    onChange={(e) => setCity(e.target.value)}
+                                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent transition-all"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-sm font-bold text-gray-900 mb-2">
+                                    Estado *
+                                  </label>
+                                  <Input
+                                    type="text"
+                                    value={state}
+                                    onChange={(e) =>
+                                      setState(e.target.value.toUpperCase())
+                                    }
+                                    maxLength={2}
+                                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent transition-all"
+                                  />
+                                </div>
+                              </div>
+
+                              {addressWarning && (
+                                <Alert
+                                  variant="destructive"
+                                  className="bg-red-50 border-red-200 text-red-800"
+                                >
+                                  <AlertCircle className="h-4 w-4" />
+                                  <AlertDescription className="text-sm font-medium">
+                                    {addressWarning}
+                                  </AlertDescription>
+                                </Alert>
+                              )}
+                            </div>
+                          ) : (
+                            // Se for Retirada: Mostra local de retirada
+                            <div className="bg-purple-50 p-6 rounded-2xl border border-purple-100 animate-in fade-in slide-in-from-top-4 duration-500 mb-6">
+                              <div className="flex items-start gap-4">
+                                <div className="bg-purple-100 p-3 rounded-full">
+                                  <MapPin className="w-6 h-6 text-purple-600" />
+                                </div>
+                                <div>
+                                  <h3 className="font-bold text-purple-900 text-lg mb-1">
+                                    Local de Retirada
+                                  </h3>
+                                  <p className="text-purple-700 font-medium">
+                                    R. Dr. Raif Ramalho, 350 - Jardim Tavares,
+                                    Campina Grande - PB, 58402-025
+                                  </p>
+                                  <p className="text-purple-600 text-sm mt-1">
+                                    O endereço completo será enviado após a
+                                    confirmação do pedido.
+                                  </p>
+                                  <div className="mt-4 flex items-center gap-2 text-sm text-purple-800 bg-white/50 p-2 rounded-lg">
+                                    <CheckCircle2 className="w-4 h-4 text-green-600" />
+                                    <span>Economize o valor do frete</span>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Telefone para contato (Comum a ambos) */}
                           <div>
                             <label className="block text-sm font-bold text-gray-900 mb-2">
-                              📱 Seu Telefone (WhatsApp) *
+                              Seu Telefone (WhatsApp) *
                             </label>
-                            <input
+                            <Input
                               type="tel"
                               value={customerPhone}
                               onChange={(e) => {
@@ -2030,305 +2352,185 @@ export default function CarrinhoPage() {
                             {customerPhone.length > 0 &&
                               !isValidPhone(customerPhone) && (
                                 <p className="text-xs text-red-600 mt-2 font-medium">
-                                  ⚠️ Telefone incompleto
+                                  Telefone incompleto
                                 </p>
                               )}
                           </div>
 
-                          <Label className="block text-sm font-bold text-gray-900 mb-2">
-                            🆔 Documento (CPF ou CNPJ) *
+                          <Label className="block text-sm font-bold text-gray-900 mb-2 mt-4">
+                            Documento (CPF ou CNPJ) *
                           </Label>
-                          <input
+                          <Input
                             type="text"
-                            placeholder="000.000.000-00 ou 00000000000"
-                            value={userDocument}
+                            placeholder="000.000.000-00 ou 00.000.000/0000-00"
+                            value={formatDocument(userDocument)}
                             onChange={(e) => {
                               const value = e.target.value.replace(/\D/g, "");
                               setUserDocument(value);
                             }}
-                            maxLength={14}
-                            className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent transition-all"
+                            maxLength={18}
+                            className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent transition-all mb-6"
                           />
                           {userDocument.length > 0 &&
                             userDocument.length < 11 && (
-                              <p className="text-xs text-red-600 font-medium">
-                                ⚠️ Documento inválido (mínimo 11 dígitos)
+                              <p className="text-xs text-red-600 font-medium mb-4">
+                                Documento inválido (mínimo 11 dígitos)
                               </p>
                             )}
 
-                          {/* Telefone do Destinatário */}
-                          <div>
-                            <label className="block text-sm font-bold text-gray-900 mb-2">
-                              🎁 Telefone do Destinatário *
-                            </label>
-                            <div className="mb-3">
-                              <label className="flex items-center gap-2 cursor-pointer">
-                                <input
-                                  type="checkbox"
-                                  checked={isSelfRecipient}
-                                  onChange={(e) => {
-                                    setIsSelfRecipient(e.target.checked);
-                                    if (e.target.checked) {
-                                      setRecipientPhone(customerPhone);
-                                    }
-                                  }}
-                                  className="w-4 h-4 text-rose-600 border-gray-300 rounded focus:ring-rose-500"
-                                />
-                                <span className="text-sm text-gray-700">
-                                  Eu vou receber
-                                </span>
+                          {optionSelected === "delivery" && (
+                            <div className="animate-in fade-in slide-in-from-top-2 duration-300">
+                              <label className="block text-sm font-bold text-gray-900 mb-2">
+                                Telefone do Destinatário *
                               </label>
-                            </div>
-                            {!isSelfRecipient && (
-                              <>
-                                <input
-                                  type="tel"
-                                  value={recipientPhone}
-                                  onChange={(e) => {
-                                    const formatted = formatPhoneNumber(
-                                      e.target.value
-                                    );
-                                    setRecipientPhone(formatted);
-                                  }}
-                                  placeholder="+55 (XX) XXXXX-XXXX"
-                                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent transition-all"
-                                />
-                                {recipientPhone.length > 0 &&
-                                  !isValidPhone(recipientPhone) && (
-                                    <p className="text-xs text-red-600 mt-2 font-medium">
-                                      ⚠️ Telefone incompleto
+                              <div className="mb-3">
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                  <Input
+                                    type="checkbox"
+                                    checked={isSelfRecipient}
+                                    onChange={(e) => {
+                                      setIsSelfRecipient(e.target.checked);
+                                      if (e.target.checked) {
+                                        setRecipientPhone(customerPhone);
+                                      }
+                                    }}
+                                    className="w-4 h-4 text-rose-600 border-gray-300 rounded focus:ring-rose-500"
+                                  />
+                                  <span className="text-sm text-gray-700">
+                                    Eu vou receber
+                                  </span>
+                                </label>
+                              </div>
+                              {!isSelfRecipient && (
+                                <>
+                                  <Input
+                                    type="tel"
+                                    value={recipientPhone}
+                                    onChange={(e) => {
+                                      const formatted = formatPhoneNumber(
+                                        e.target.value
+                                      );
+                                      setRecipientPhone(formatted);
+                                    }}
+                                    placeholder="+55 (XX) XXXXX-XXXX"
+                                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent transition-all"
+                                  />
+                                  {recipientPhone.length > 0 &&
+                                    !isValidPhone(recipientPhone) && (
+                                      <p className="text-xs text-red-600 mt-2 font-medium">
+                                        Telefone incompleto
+                                      </p>
+                                    )}
+                                  <div className="mt-3 flex items-center gap-3">
+                                    <Info className="w-5 h-5 text-purple-600" />
+                                    <p className="text-sm text-gray-600">
+                                      Usaremos este número apenas se tivermos
+                                      problemas na entrega.
                                     </p>
-                                  )}
-                                <div className="mt-3 flex items-center gap-3">
-                                  <label className="inline-flex items-center">
-                                    <input
-                                      type="checkbox"
-                                      checked={sendAnonymously}
-                                      onChange={(e) => {
-                                        setSendAnonymously(e.target.checked);
-                                        setOrderMetadata({
-                                          send_anonymously: e.target.checked,
-                                        });
-                                      }}
-                                      className="w-4 h-4 text-rose-600 border-gray-300 rounded focus:ring-rose-500"
-                                    />
-                                    <span className="ml-2 text-sm text-gray-700">
-                                      Enviar anonimamente
-                                    </span>
-                                  </label>
-                                </div>
-                              </>
-                            )}
-                          </div>
-
-                          {/* CEP */}
-                          <div>
-                            <label className="block text-sm font-bold text-gray-900 mb-2">
-                              📮 CEP *
-                            </label>
-                            <div className="relative">
-                              <input
-                                type="text"
-                                value={zipCode}
-                                onChange={(e) => {
-                                  const value = e.target.value.replace(
-                                    /\D/g,
-                                    ""
-                                  );
-                                  if (value.length <= 8) {
-                                    setZipCode(value);
-                                    if (value.length === 8) {
-                                      handleCepSearch(value);
-                                    } else {
-                                      setAddress("");
-                                      setNeighborhood("");
-                                      setCity("");
-                                      setState("");
-                                    }
-                                  }
-                                }}
-                                placeholder="00000000"
-                                className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent pr-10 transition-all"
-                                maxLength={8}
-                              />
-                              {isLoadingCep && (
-                                <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                                  <Loader2 className="h-5 w-5 animate-spin text-rose-500" />
-                                </div>
+                                  </div>
+                                </>
                               )}
                             </div>
-                          </div>
-
-                          {/* Endereço e Número */}
-                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            <div className="md:col-span-2">
-                              <label className="block text-sm font-bold text-gray-900 mb-2">
-                                🏠 Endereço *
-                              </label>
-                              <input
-                                type="text"
-                                value={address}
-                                onChange={(e) => setAddress(e.target.value)}
-                                placeholder="Rua, Avenida..."
-                                className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent transition-all"
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-sm font-bold text-gray-900 mb-2">
-                                Número *
-                              </label>
-                              <input
-                                type="text"
-                                value={houseNumber}
-                                onChange={(e) => setHouseNumber(e.target.value)}
-                                placeholder="123"
-                                className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent transition-all"
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-sm font-bold text-gray-900 mb-2">
-                                Complemento
-                              </label>
-                              <input
-                                type="text"
-                                value={complemento}
-                                onChange={(e) => {
-                                  setComplemento(e.target.value);
-                                  setOrderMetadata({
-                                    complement: e.target.value,
-                                  });
-                                }}
-                                placeholder="Apt, bloco, ponto de referência"
-                                className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent transition-all"
-                              />
-                            </div>
-                          </div>
-
-                          <div>
-                            <label className="block text-sm font-bold text-gray-900 mb-2">
-                              🏘️ Bairro
-                            </label>
-                            <input
-                              type="text"
-                              value={neighborhood}
-                              onChange={(e) => setNeighborhood(e.target.value)}
-                              placeholder="Nome do bairro"
-                              className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent transition-all"
-                            />
-                          </div>
-
-                          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                            <div className="md:col-span-3">
-                              <label className="block text-sm font-bold text-gray-900 mb-2">
-                                🏙️ Cidade *
-                              </label>
-                              <input
-                                type="text"
-                                value={city}
-                                onChange={(e) => setCity(e.target.value)}
-                                placeholder="Cidade"
-                                className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent transition-all"
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-sm font-bold text-gray-900 mb-2">
-                                Estado *
-                              </label>
-                              <input
-                                type="text"
-                                value={state}
-                                onChange={(e) =>
-                                  setState(e.target.value.toUpperCase())
-                                }
-                                placeholder="UF"
-                                maxLength={2}
-                                className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent uppercase transition-all"
-                              />
-                            </div>
-                          </div>
-
-                          {/* Aviso de endereço */}
-                          {addressWarning && (
-                            <Alert className="border-red-200 bg-red-50">
-                              <AlertCircle className="h-4 w-4 text-red-600" />
-                              <AlertDescription className="text-red-700 text-sm">
-                                {addressWarning}
-                              </AlertDescription>
-                            </Alert>
                           )}
 
-                          {/* Agendamento */}
-                          <div className="pt-4 border-t border-gray-200">
-                            <h3 className="text-lg font-bold mb-4 text-gray-900 flex items-center gap-2">
-                              <CalendarIcon className="h-5 w-5 text-rose-600" />
-                              Agendar Entrega
-                            </h3>
+                          {optionSelected === "delivery" && (
+                            <label className="inline-flex items-center">
+                              <Input
+                                type="checkbox"
+                                checked={sendAnonymously}
+                                onChange={(e) => {
+                                  setSendAnonymously(e.target.checked);
+                                  setOrderMetadata({
+                                    send_anonymously: e.target.checked,
+                                  });
+                                }}
+                                className="w-4 h-4 text-rose-600 border-gray-300 rounded focus:ring-rose-500"
+                              />
+                              <span className="ml-2 text-sm text-gray-700">
+                                Enviar anonimamente
+                              </span>
+                            </label>
+                          )}
+                        </div>
 
-                            <div className="bg-blue-50 rounded-xl border border-blue-200 p-4 mb-4">
-                              <p className="text-xs text-blue-800">
-                                ⏱️ <strong>Tempo de preparo:</strong>{" "}
-                                {getMinPreparationHours()}h
-                              </p>
-                            </div>
+                        {addressWarning && (
+                          <Alert className="border-red-200 bg-red-50">
+                            <AlertCircle className="h-4 w-4 text-red-600" />
+                            <AlertDescription className="text-red-700 text-sm">
+                              {addressWarning}
+                            </AlertDescription>
+                          </Alert>
+                        )}
 
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                              <div>
-                                <Label className="block text-sm font-bold text-gray-900 mb-2">
-                                  Data *
-                                </Label>
-                                <Popover
-                                  open={calendarOpen}
-                                  onOpenChange={setCalendarOpen}
-                                >
-                                  <PopoverTrigger asChild>
-                                    <Button
-                                      variant="outline"
-                                      className="w-full justify-start text-left border-2 border-gray-200 hover:border-rose-300 rounded-xl py-6 bg-transparent"
-                                      disabled={isProcessing}
-                                    >
-                                      <CalendarIcon className="mr-2 h-4 w-4" />
-                                      {selectedDate
-                                        ? selectedDate.toLocaleDateString(
-                                          "pt-BR"
-                                        )
-                                        : "Selecione uma data"}
-                                    </Button>
-                                  </PopoverTrigger>
-                                  <PopoverContent
-                                    className="w-full max-w-[400px] min-w-[300px] p-0"
-                                    align="start"
-                                  >
-                                    <Calendar
-                                      mode="single"
-                                      selected={selectedDate}
-                                      onSelect={(date: Date | undefined) => {
-                                        if (date) {
-                                          setSelectedDate(date);
-                                          setSelectedTime("");
-                                        }
-                                        setCalendarOpen(false);
-                                      }}
-                                      disabled={isDateDisabled}
-                                      className="rounded-md w-full border"
-                                    />
-                                  </PopoverContent>
-                                </Popover>
-                              </div>
+                        {/* Agendamento */}
+                        <div className="pt-4 border-t border-gray-200">
+                          <h3 className="text-lg font-bold mb-4 text-gray-900 flex items-center gap-2">
+                            <CalendarIcon className="h-5 w-5 text-rose-600" />
+                            Agendar Entrega
+                          </h3>
 
-                              {selectedDate && (
-                                <div>
-                                  <Label className="block text-sm font-bold text-gray-900 mb-3">
-                                    Horário *
-                                  </Label>
-                                  <TimeSlotSelector
-                                    slots={generateTimeSlots(selectedDate)}
-                                    selectedValue={selectedTime}
-                                    onSelect={(value) => setSelectedTime(value)}
+                          <div className="bg-blue-50 rounded-xl border border-blue-200 p-4 mb-4">
+                            <p className="text-xs text-blue-800">
+                              <strong>Tempo de preparo:</strong>{" "}
+                              {getMinPreparationHours()}h
+                            </p>
+                          </div>
+
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                              <Label className="block text-sm font-bold text-gray-900 mb-2">
+                                Data *
+                              </Label>
+                              <Popover
+                                open={calendarOpen}
+                                onOpenChange={setCalendarOpen}
+                              >
+                                <PopoverTrigger asChild>
+                                  <Button
+                                    variant="outline"
+                                    className="w-full justify-start text-left border-2 border-gray-200 hover:border-rose-300 rounded-xl py-6 bg-transparent"
                                     disabled={isProcessing}
+                                  >
+                                    <CalendarIcon className="mr-2 h-4 w-4" />
+                                    {selectedDate
+                                      ? selectedDate.toLocaleDateString("pt-BR")
+                                      : "Selecione uma data"}
+                                  </Button>
+                                </PopoverTrigger>
+                                <PopoverContent
+                                  className="w-full max-w-[400px] min-w-[300px] p-0"
+                                  align="start"
+                                >
+                                  <Calendar
+                                    mode="single"
+                                    selected={selectedDate}
+                                    onSelect={(date: Date | undefined) => {
+                                      if (date) {
+                                        setSelectedDate(date);
+                                        setSelectedTime("");
+                                      }
+                                      setCalendarOpen(false);
+                                    }}
+                                    disabled={isDateDisabled}
+                                    className="rounded-md w-full border"
                                   />
-                                </div>
-                              )}
+                                </PopoverContent>
+                              </Popover>
                             </div>
+
+                            {selectedDate && (
+                              <div>
+                                <Label className="block text-sm font-bold text-gray-900 mb-3">
+                                  Horário *
+                                </Label>
+                                <TimeSlotSelector
+                                  slots={generateTimeSlots(selectedDate)}
+                                  selectedValue={selectedTime}
+                                  onSelect={(value) => setSelectedTime(value)}
+                                  disabled={isProcessing}
+                                />
+                              </div>
+                            )}
                           </div>
                         </div>
                       </Card>
@@ -2605,7 +2807,7 @@ export default function CarrinhoPage() {
                                     });
                                     try {
                                       disconnectSSE?.();
-                                    } catch { }
+                                    } catch {}
                                   }
                                 }
                               }}

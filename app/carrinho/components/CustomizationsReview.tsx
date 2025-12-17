@@ -400,8 +400,11 @@ export function CustomizationsReview({
         } finally {
           setIsSaving(false);
         }
-      } else if (activeProductId && onCustomizationUpdate) {
-        // Fallback: atualizar via callback (para uso sem order)
+      }
+
+      // ✅ ALWAYS update local state (fallback/sync)
+      // This ensures use-cart logic has the latest data and doesn't overwrite backend with stale state on next sync
+      if (activeProductId && onCustomizationUpdate) {
         onCustomizationUpdate(activeProductId, data);
       }
 
@@ -554,9 +557,8 @@ export function CustomizationsReview({
                         </span>
                         <span className={`text-${statusColor}-500 text-xs`}>
                           {isIncomplete
-                            ? `(${missing.length} pendente${
-                                missing.length > 1 ? "s" : ""
-                              })`
+                            ? `(${missing.length} pendente${missing.length > 1 ? "s" : ""
+                            })`
                             : "(Personalizado)"}
                         </span>
                       </div>

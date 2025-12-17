@@ -13,6 +13,7 @@ export interface CartCustomization extends CustomizationValue {
   selected_item_label?: string;
   label_selected?: string;
   additional_time?: number;
+  data?: Record<string, unknown>; // ✅ Store raw data for complex customizations (BASE_LAYOUT)
 }
 
 interface OrderAdditionalItem {
@@ -102,6 +103,7 @@ const serializeCustomizations = (customizations?: CartCustomization[]) => {
     label_selected: customization.label_selected || null,
     selected_item_label: customization.selected_item_label || null,
     selected_option_label: customization.selected_option_label || null,
+    data: customization.data || null, // ✅ Serialize raw data
     photos:
       customization.photos?.map(
         (photo) =>
@@ -396,6 +398,7 @@ export function useCart(): CartContextType {
                         data.selected_item_label ||
                         data.selected_option_label,
                       additional_time: data.additional_time || 0,
+                      data: data.data || data, // ✅ Restore raw data if nested or use root
                     });
                   }
                 } catch (error) {
@@ -490,6 +493,7 @@ export function useCart(): CartContextType {
           label_selected: custom.label_selected,
           price_adjustment: custom.price_adjustment,
           additional_time: custom.additional_time || 0,
+          ...custom.data, // ✅ Merge raw data into customization_data
         },
       })),
     }));
@@ -1108,6 +1112,8 @@ export function useCart(): CartContextType {
         recipientPhone?: string;
         sendAnonymously?: boolean;
         complement?: string;
+        deliveryMethod?: "delivery" | "pickup";
+        discount?: number;
       }
     ) => {
       if (cart.items.length === 0) {
@@ -1197,9 +1203,10 @@ export function useCart(): CartContextType {
         delivery_state: deliveryState,
         delivery_date: deliveryDate,
         recipient_phone: options.recipientPhone,
-        discount: 0, // Pode ser ajustado se houver desconto
+        discount: options.discount || 0, // ✅ Pode ser ajustado se houver desconto
         send_anonymously: options?.sendAnonymously,
         complement: options?.complement,
+        delivery_method: options?.deliveryMethod || "delivery",
       };
 
       // Log sucinto do payload para evitar impressão de base64/imagens
