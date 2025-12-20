@@ -168,14 +168,19 @@ export function CustomizationsReview({
         }
 
         const filled = cartItem.customizations || [];
+        // ✅ MUDANÇA: Mostrar TODAS as customizações, não só as obrigatórias
         const missingRequired = allAvailable.filter((avail) => {
-          if (!avail.isRequired) return false;
           const filledCustom = filled.find(
             (f) =>
               f.customization_id === avail.id ||
               f.customization_id?.includes(avail.id)
           );
-          return !isCustomizationFilled(filledCustom);
+          // Se é obrigatória E não está preenchida, adicionar na lista
+          if (avail.isRequired && !isCustomizationFilled(filledCustom)) {
+            return true;
+          }
+          // Se é opcional, nunca aparecer em missingRequired
+          return false;
         });
 
         results.push({
@@ -184,6 +189,7 @@ export function CustomizationsReview({
           availableCustomizations: allAvailable,
           filledCustomizations: filled,
           missingRequired,
+          // ✅ MUDANÇA: isComplete agora é true apenas se TODAS as OBRIGATÓRIAS estão preenchidas
           isComplete: missingRequired.length === 0,
         });
       } catch (error) {
@@ -228,6 +234,19 @@ export function CustomizationsReview({
     }
   }, [cartItems, fetchAvailableCustomizations]);
 
+  // ✅ Desserializar valor salvo de customizações (vem como string JSON do backend)
+  const deserializeCustomizationValue = (
+    value: string | undefined
+  ): Record<string, unknown> => {
+    if (!value) return {};
+    try {
+      return JSON.parse(value);
+    } catch (e) {
+      console.warn("Erro ao desserializar valor de customização:", e);
+      return {};
+    }
+  };
+
   // Abrir modal para editar customizações de um item específico
   const handleEditItem = useCallback(
     async (productId: string, itemId: string, itemName: string) => {
@@ -251,24 +270,76 @@ export function CustomizationsReview({
         const filled = cartItem?.customizations || [];
         const initialData: Record<string, unknown> = {};
 
+        console.log("📋 [handleEditItem] Customizações do item no carrinho:", {
+          itemId,
+          totalCustomizations: filled.length,
+          customizations: filled.map((f) => ({
+            id: f.customization_id,
+            type: f.customization_type,
+            hasValue: !!f.value,
+            valueType: typeof f.value,
+            valuePreview:
+              typeof f.value === "string"
+                ? f.value.substring(0, 100)
+                : "not-string",
+          })),
+        });
+
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         filled.forEach((fc: any) => {
           const ruleId = fc.customization_id;
           if (!ruleId) return;
 
+          console.log(
+            `🔍 [handleEditItem] Processando customização ${ruleId}:`,
+            {
+              type: fc.customization_type,
+              hasValue: !!fc.value,
+              valueType: typeof fc.value,
+              hasText: !!fc.text,
+              hasSelectedOption: !!fc.selected_option,
+              hasPhotos: !!fc.photos,
+              hasData: !!fc.data,
+            }
+          );
+
+          // ✅ NOVO: Se temos 'value' como string (vem do backend), desserializar
+          if (typeof fc.value === "string") {
+            const deserialized = deserializeCustomizationValue(fc.value);
+            initialData[ruleId] = deserialized;
+            console.log(
+              `✅ [handleEditItem] Desserializou customização ${ruleId}:`,
+              deserialized
+            );
+            return;
+          }
+
           // Fallback mapping - CartCustomization pode ter propriedades dinamicamente adicionadas do servidor
           if (fc.customization_type === "TEXT") {
-            initialData[ruleId] = fc.text;
+            initialData[ruleId] = fc.text || "";
+            console.log(`✅ [handleEditItem] Mapeou TEXT ${ruleId}:`, fc.text);
           } else if (fc.customization_type === "MULTIPLE_CHOICE") {
             initialData[ruleId] = fc.selected_option;
+            console.log(
+              `✅ [handleEditItem] Mapeou MULTIPLE_CHOICE ${ruleId}:`,
+              fc.selected_option
+            );
           } else if (fc.customization_type === "IMAGES") {
-            initialData[ruleId] = fc.photos;
+            initialData[ruleId] = fc.photos || [];
+            console.log(
+              `✅ [handleEditItem] Mapeou IMAGES ${ruleId}:`,
+              fc.photos?.length
+            );
           } else if (fc.customization_type === "BASE_LAYOUT") {
-            if (fc.data) {
-              initialData[ruleId] = fc.data;
-            }
+            initialData[ruleId] = fc.data || fc;
+            console.log(
+              `✅ [handleEditItem] Mapeou BASE_LAYOUT ${ruleId}:`,
+              Object.keys(fc.data || fc)
+            );
           }
         });
+
+        console.log("📊 [handleEditItem] initialData final:", initialData);
 
         setActiveInitialValues(initialData);
         setActiveItemId(itemId);
@@ -479,22 +550,39 @@ export function CustomizationsReview({
 
         {/* Lista de items com customizações */}
         {validations.map((validation) => {
+          // ✅ MUDANÇA: Mostrar TODAS as customizações disponíveis, não só as faltantes
           // Agrupar por item
           const itemsMap = new Map<
             string,
             {
               itemName: string;
+              allCustomizations: AvailableCustomization[];
               missing: AvailableCustomization[];
               filled: CartCustomization[];
             }
           >();
 
-          // Adicionar itens faltantes
+          // Adicionar TODAS as customizações disponíveis
+          validation.availableCustomizations.forEach((avail) => {
+            if (!avail.itemId) return;
+            if (!itemsMap.has(avail.itemId)) {
+              itemsMap.set(avail.itemId, {
+                itemName: avail.itemName,
+                allCustomizations: [],
+                missing: [],
+                filled: [],
+              });
+            }
+            itemsMap.get(avail.itemId)!.allCustomizations.push(avail);
+          });
+
+          // Adicionar itens faltantes (obrigatórios não preenchidos)
           validation.missingRequired.forEach((missing) => {
             if (!missing.itemId) return;
             if (!itemsMap.has(missing.itemId)) {
               itemsMap.set(missing.itemId, {
                 itemName: missing.itemName,
+                allCustomizations: [],
                 missing: [],
                 filled: [],
               });
@@ -502,7 +590,7 @@ export function CustomizationsReview({
             itemsMap.get(missing.itemId)!.missing.push(missing);
           });
 
-          // Adicionar itens preenchidos (iterando sobre availableCustomizations para agrupar corretamente)
+          // Adicionar itens preenchidos
           validation.availableCustomizations.forEach((avail) => {
             const filledCustom = validation.filledCustomizations.find(
               (f) =>
@@ -514,6 +602,7 @@ export function CustomizationsReview({
               if (!itemsMap.has(avail.itemId)) {
                 itemsMap.set(avail.itemId, {
                   itemName: avail.itemName,
+                  allCustomizations: [],
                   missing: [],
                   filled: [],
                 });
@@ -530,15 +619,16 @@ export function CustomizationsReview({
             }
           });
 
-          if (itemsMap.size === 0 && validation.isComplete) {
+          if (itemsMap.size === 0) {
             return null;
           }
 
           return (
             <div key={validation.productId} className="space-y-1">
               {Array.from(itemsMap.entries()).map(
-                ([itemId, { itemName, missing }]) => {
+                ([itemId, { itemName, allCustomizations, missing }]) => {
                   const isIncomplete = missing.length > 0;
+                  const totalCustomizations = allCustomizations.length;
                   const statusColor = isIncomplete ? "red" : "blue";
                   const StatusIcon = isIncomplete ? AlertCircle : CheckCircle2;
 
@@ -557,9 +647,14 @@ export function CustomizationsReview({
                         </span>
                         <span className={`text-${statusColor}-500 text-xs`}>
                           {isIncomplete
-                            ? `(${missing.length} pendente${missing.length > 1 ? "s" : ""
-                            })`
-                            : "(Personalizado)"}
+                            ? `(${
+                                missing.length
+                              }/${totalCustomizations} pendente${
+                                missing.length > 1 ? "s" : ""
+                              })`
+                            : `(${totalCustomizations} personalizado${
+                                totalCustomizations > 1 ? "s" : ""
+                              })`}
                         </span>
                       </div>
                       <Button

@@ -119,8 +119,6 @@ export function ItemCustomizationModal({
     Record<string, unknown>
   >({});
 
-
-
   const [uploadingFiles, setUploadingFiles] = useState<Record<string, File[]>>(
     {}
   );
@@ -273,7 +271,7 @@ export function ItemCustomizationModal({
           const token =
             typeof window !== "undefined"
               ? localStorage.getItem("appToken") ||
-              localStorage.getItem("token")
+                localStorage.getItem("token")
               : null;
 
           const response = await fetch(`${API_URL}/layouts/${layoutId}`, {
@@ -292,8 +290,8 @@ export function ItemCustomizationModal({
           layoutData.item_type?.toLowerCase() === "caneca"
             ? "/3DModels/caneca.glb"
             : layoutData.item_type?.toLowerCase() === "quadro"
-              ? "/3DModels/quadro.glb"
-              : undefined;
+            ? "/3DModels/quadro.glb"
+            : undefined;
 
         setCustomizationData((prev) => ({
           ...prev,
@@ -316,32 +314,81 @@ export function ItemCustomizationModal({
     [customizations]
   );
 
-  // Initialize with initialValues when opening
+  // ✅ Initialize customizationData from initialValues (fallback for reopening modal)
   useEffect(() => {
-    if (isOpen && initialValues) {
+    if (!isOpen) return;
+
+    if (initialValues && Object.keys(initialValues).length > 0) {
       console.log(
         "🔄 [ItemCustomizationModal] Initializing with:",
         initialValues
       );
-      setCustomizationData(initialValues);
+
+      // ✅ Processar initialValues para garantir estrutura correta
+      const processedData: Record<string, unknown> = {};
+
+      for (const [customId, value] of Object.entries(initialValues)) {
+        console.log(`🔍 [ItemCustomizationModal] Processing ${customId}:`, {
+          valueType: typeof value,
+          value: value instanceof Object ? Object.keys(value as object) : value,
+        });
+
+        // Se value é um objeto (vem desserializado do backend)
+        if (value && typeof value === "object") {
+          const obj = value as Record<string, unknown>;
+
+          // Se tem "customization_type" e "title", é um objeto completo desserializado
+          if (obj.customization_type) {
+            // Processar baseado no tipo
+            if (obj.customization_type === "TEXT") {
+              // Se tem "fields", estruturar corretamente
+              if (obj.fields && typeof obj.fields === "object") {
+                processedData[customId] = obj.fields;
+              } else {
+                // Senão, guardar o objeto todo
+                processedData[customId] = obj;
+              }
+            } else if (obj.customization_type === "MULTIPLE_CHOICE") {
+              // Para MULTIPLE_CHOICE, tentar extrair selected_option
+              processedData[customId] = obj.selected_option || obj;
+            } else if (obj.customization_type === "IMAGES") {
+              // Para IMAGES, tentar extrair photos
+              processedData[customId] = obj.photos || obj;
+            } else if (obj.customization_type === "BASE_LAYOUT") {
+              // Para BASE_LAYOUT, manter todo o objeto
+              processedData[customId] = obj;
+            } else {
+              processedData[customId] = obj;
+            }
+          } else {
+            // Se não tem customization_type, é um mapeamento direto
+            processedData[customId] = value;
+          }
+        } else {
+          // Se é um valor simples (string, number, array), manter como está
+          processedData[customId] = value;
+        }
+      }
+
+      console.log("🔄 [ItemCustomizationModal] Processed data:", processedData);
+      setCustomizationData(processedData);
 
       // ✅ Restore BASE_LAYOUT state if present
       const baseLayoutCustom = customizations.find(
         (c) => c.type === "BASE_LAYOUT"
       );
       if (baseLayoutCustom) {
-        const layoutData = initialValues[baseLayoutCustom.id] as Record<
-          string,
-          unknown
-        >;
-        const layoutId = layoutData?.layout_id as string;
+        const layoutData = processedData[baseLayoutCustom.id] as
+          | Record<string, unknown>
+          | undefined;
+        const layoutId = layoutData?.layout_id as string | undefined;
 
         if (layoutId) {
           console.log("🎨 Restoring layout selection:", layoutId);
           handleLayoutSelect(layoutId);
         }
       }
-    } else if (isOpen && !initialValues) {
+    } else {
       setCustomizationData({});
       setStep("selection");
       setSelectedLayoutId(null);
@@ -744,16 +791,18 @@ export function ItemCustomizationModal({
               return (
                 <div
                   key={fullLayout.id}
-                  className={`group cursor-pointer transition-all duration-300 overflow-hidden hover:shadow-2xl hover:scale-105 border-2 border-gray-200 hover:border-purple-300 ${isQuadro ? "rounded-lg shadow-lg" : ""
-                    }`}
+                  className={`group cursor-pointer transition-all duration-300 overflow-hidden hover:shadow-2xl hover:scale-105 border-2 border-gray-200 hover:border-purple-300 ${
+                    isQuadro ? "rounded-lg shadow-lg" : ""
+                  }`}
                   onClick={() => handleLayoutSelect(fullLayout.id)}
                 >
                   {/* Para quadros: aspect-square para parecer um quadro real. Para outros: aspect-video */}
                   <div
-                    className={`relative bg-gradient-to-br from-gray-50 to-gray-100 ${isQuadro
-                      ? "aspect-square p-3"
-                      : "aspect-video max-h-[200px]"
-                      }`}
+                    className={`relative bg-gradient-to-br from-gray-50 to-gray-100 ${
+                      isQuadro
+                        ? "aspect-square p-3"
+                        : "aspect-video max-h-[200px]"
+                    }`}
                   >
                     {/* Moldura visual para quadros */}
                     {isQuadro && (
@@ -768,16 +817,19 @@ export function ItemCustomizationModal({
 
                     {imageUrl ? (
                       <div
-                        className={`relative w-full h-full ${isQuadro ? "p-1" : ""
-                          }`}
+                        className={`relative w-full h-full ${
+                          isQuadro ? "p-1" : ""
+                        }`}
                       >
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
                           src={imageUrl}
                           alt={fullLayout.name}
-                          className={`w-full h-full transition-all duration-300 ${imageLoaded ? "opacity-100" : "opacity-0"
-                            } ${isQuadro ? "object-contain rounded" : "object-cover"
-                            }`}
+                          className={`w-full h-full transition-all duration-300 ${
+                            imageLoaded ? "opacity-100" : "opacity-0"
+                          } ${
+                            isQuadro ? "object-contain rounded" : "object-cover"
+                          }`}
                           onLoad={() => {
                             setImageLoadStates((prev) => ({
                               ...prev,
@@ -910,9 +962,19 @@ export function ItemCustomizationModal({
         </div>
 
         {fields.map((field) => {
-          const data = customizationData[customization.id] as
+          // ✅ Tentar restaurar de customizationData OU initialValues
+          let data = customizationData[customization.id] as
             | Record<string, string>
             | undefined;
+
+          // Se não temos dados em customizationData, tentar de initialValues
+          if (!data && initialValues && initialValues[customization.id]) {
+            const initialValue = initialValues[customization.id] as unknown;
+            if (typeof initialValue === "object" && initialValue !== null) {
+              data = initialValue as Record<string, string>;
+            }
+          }
+
           const value = data?.[field.id] || "";
 
           return (
@@ -1027,9 +1089,27 @@ export function ItemCustomizationModal({
   };
 
   const renderImageCustomization = (customization: Customization) => {
-    const currentFiles = uploadingFiles[customization.id] || [];
+    let currentFiles = uploadingFiles[customization.id] || [];
     const maxImages =
       customization.customization_data.base_layout?.max_images || 10;
+
+    // ✅ FIX: Se não temos files em uploadingFiles, tentar restaurar de customizationData ou initialValues
+    if (currentFiles.length === 0) {
+      const dataFromState = customizationData[customization.id];
+      if (Array.isArray(dataFromState) && dataFromState.length > 0) {
+        currentFiles = dataFromState as unknown as File[];
+      } else if (
+        initialValues &&
+        Array.isArray(initialValues[customization.id])
+      ) {
+        const initialPhotos = initialValues[customization.id] as unknown[];
+        // Se são strings ou objetos com preview_url, manter para referência
+        console.log(
+          `✅ [renderImageCustomization] Restaurou ${initialPhotos.length} imagens de initialValues`
+        );
+      }
+    }
+
     // const canAddMore = currentFiles.length < maxImages;
     const hasImages = currentFiles.length > 0;
 
@@ -1166,13 +1246,13 @@ export function ItemCustomizationModal({
                   const result: CustomizationInput[] = [];
                   const filesData = customizationData[customization.id] as
                     | Array<{
-                      file: File;
-                      preview: string;
-                      position: number;
-                      base64?: string;
-                      mime_type?: string;
-                      size?: number;
-                    }>
+                        file: File;
+                        preview: string;
+                        position: number;
+                        base64?: string;
+                        mime_type?: string;
+                        size?: number;
+                      }>
                     | undefined;
 
                   if (filesData && filesData.length > 0) {
@@ -1209,9 +1289,50 @@ export function ItemCustomizationModal({
 
   const renderMultipleChoiceCustomization = (customization: Customization) => {
     const options = customization.customization_data.options || [];
-    const data = customizationData[customization.id] as
+
+    // ✅ FIX: Usar initialValues como fallback se customizationData está vazio
+    let data = customizationData[customization.id] as
       | { id?: string; label?: string }
       | undefined;
+
+    // Se não temos dados selecionados, procurar nos initialValues
+    if (
+      !data &&
+      initialValues &&
+      Object.prototype.hasOwnProperty.call(initialValues, customization.id)
+    ) {
+      const initialValue: unknown = initialValues[customization.id];
+      let matchedOption: (typeof options)[0] | undefined;
+
+      if (typeof initialValue === "string") {
+        // String: procurar pela opção correspondente
+        matchedOption = options.find(
+          (opt: (typeof options)[0]) =>
+            opt.id === initialValue || opt.value === initialValue
+        );
+      } else if (initialValue !== null && typeof initialValue === "object") {
+        // Object: verificar se tem id property
+        const objValue = initialValue as Record<string, unknown>;
+        if (typeof objValue.id === "string") {
+          matchedOption = options.find(
+            (opt: (typeof options)[0]) => opt.id === objValue.id
+          );
+        }
+      }
+
+      if (matchedOption && matchedOption.id && matchedOption.label) {
+        data = {
+          id: matchedOption.id,
+          label: matchedOption.label,
+        };
+        // Atualizar state com o fallback
+        setCustomizationData((prev) => ({
+          ...prev,
+          [customization.id]: data,
+        }));
+      }
+    }
+
     const selectedId = data?.id;
     const selectedLabel = data?.label;
 
@@ -1253,10 +1374,11 @@ export function ItemCustomizationModal({
                 whileTap={{ scale: 0.98 }}
               >
                 <Card
-                  className={`p-4 cursor-pointer transition-all ${isSelected
-                    ? "border-2 border-rose-500 bg-gradient-to-r from-rose-50 to-pink-50 shadow-md"
-                    : "border-2 border-rose-200 hover:border-rose-400 hover:bg-rose-50/30"
-                    }`}
+                  className={`p-4 cursor-pointer transition-all ${
+                    isSelected
+                      ? "border-2 border-rose-500 bg-gradient-to-r from-rose-50 to-pink-50 shadow-md"
+                      : "border-2 border-rose-200 hover:border-rose-400 hover:bg-rose-50/30"
+                  }`}
                   onClick={() =>
                     handleOptionSelect(
                       customization.id,
@@ -1291,8 +1413,9 @@ export function ItemCustomizationModal({
                     />
                     <div className="flex-1">
                       <p
-                        className={`font-semibold ${isSelected ? "text-rose-900" : "text-rose-800"
-                          }`}
+                        className={`font-semibold ${
+                          isSelected ? "text-rose-900" : "text-rose-800"
+                        }`}
                       >
                         {option.label}
                       </p>
@@ -1482,8 +1605,8 @@ export function ItemCustomizationModal({
                   initialImages={
                     (
                       customizationData[fullLayoutBase.id] as
-                      | { images?: unknown }
-                      | undefined
+                        | { images?: unknown }
+                        | undefined
                     )?.images as ImageData[]
                   }
                 />

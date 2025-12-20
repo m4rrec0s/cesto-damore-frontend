@@ -11,6 +11,24 @@ import { auth } from "@/app/config/firebase";
 import { GoogleAuthProvider, signInWithPopup } from "firebase/auth";
 import { useApi } from "@/app/hooks/use-api";
 
+// ✅ SEGURANÇA: Funções para validação de token
+function decodeToken(token: string): Record<string, unknown> | null {
+  try {
+    const parts = token.split(".");
+    if (parts.length !== 3) return null;
+    const payload = JSON.parse(atob(parts[1]));
+    return payload;
+  } catch {
+    return null;
+  }
+}
+
+function isTokenExpired(tokenData: Record<string, unknown>): boolean {
+  if (!tokenData.exp || typeof tokenData.exp !== "number") return true;
+  const currentTime = Math.floor(Date.now() / 1000);
+  return tokenData.exp < currentTime;
+}
+
 interface User {
   id: string;
   name: string;
@@ -19,7 +37,7 @@ interface User {
   image_url?: string | null;
   phone?: string | null;
   address?: string | null;
-  role?: string; // Mudando para string genérica
+  role?: string; // ✅ VALIDADO NO SERVIDOR - nunca confiar no cliente
   document?: string | null;
   city?: string | null;
   state?: string | null;
@@ -52,16 +70,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (storedUser && storedAppToken && storedAppToken !== "undefined") {
         try {
           const userData = JSON.parse(storedUser);
+          const tokenData = decodeToken(storedAppToken);
+
+          // ✅ SEGURANÇA: Verificar se token expirou
+          if (tokenData && isTokenExpired(tokenData)) {
+            console.warn("⏰ Token expirado ao carregar do localStorage");
+            localStorage.removeItem("user");
+            localStorage.removeItem("appToken");
+            localStorage.removeItem("tokenTimestamp");
+            // Limpar cookies também
+            document.cookie =
+              "appToken=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT";
+            document.cookie =
+              "user=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT";
+            return;
+          }
+
           setUser(userData);
           setAppToken(storedAppToken);
 
-          // Sincronizar com cookies para o middleware
+          // ✅ SEGURANÇA: Max 12 horas de expiração
           document.cookie = `appToken=${storedAppToken}; path=/; max-age=${
-            7 * 24 * 60 * 60
-          }`; // 7 dias
+            12 * 60 * 60
+          }; Secure; SameSite=Strict`;
           document.cookie = `user=${encodeURIComponent(
             storedUser
-          )}; path=/; max-age=${7 * 24 * 60 * 60}`;
+          )}; path=/; max-age=${12 * 60 * 60}; Secure; SameSite=Strict`;
         } catch (error) {
           console.error("Erro ao carregar dados do usuário:", error);
           localStorage.removeItem("user");
@@ -78,19 +112,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const login = (userData: User, token: string) => {
+    // ✅ SEGURANÇA: Validar token antes de salvar
+    const tokenData = decodeToken(token);
+    if (!tokenData || isTokenExpired(tokenData)) {
+      console.error("❌ Token inválido ou expirado");
+      throw new Error("Token inválido ou expirado");
+    }
+
     setUser(userData);
     setAppToken(token);
     if (typeof window !== "undefined") {
       localStorage.setItem("user", JSON.stringify(userData));
       localStorage.setItem("appToken", token);
+      localStorage.setItem("tokenTimestamp", Date.now().toString());
 
-      // Sincronizar com cookies para o middleware
+      // ✅ SEGURANÇA: Max 12 horas de expiração + flags Secure/SameSite
       document.cookie = `appToken=${token}; path=/; max-age=${
-        7 * 24 * 60 * 60
-      }`; // 7 dias
+        12 * 60 * 60
+      }; Secure; SameSite=Strict`;
       document.cookie = `user=${encodeURIComponent(
         JSON.stringify(userData)
-      )}; path=/; max-age=${7 * 24 * 60 * 60}`;
+      )}; path=/; max-age=${12 * 60 * 60}; Secure; SameSite=Strict`;
     }
   };
 

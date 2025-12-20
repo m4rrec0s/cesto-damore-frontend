@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import { toast } from "sonner";
 import { useApi, Product, Additional, CustomizationTypeValue } from "./use-api";
 import { useAuth } from "./use-auth";
-import type { CustomizationValue } from "./use-customization";
+import type { CustomizationValue, PhotoUploadData } from "./use-customization";
 
 export interface CartCustomization extends CustomizationValue {
   title: string;
@@ -14,6 +14,7 @@ export interface CartCustomization extends CustomizationValue {
   label_selected?: string;
   additional_time?: number;
   data?: Record<string, unknown>; // ✅ Store raw data for complex customizations (BASE_LAYOUT)
+  value?: string; // ✅ Store serialized JSON value from backend
 }
 
 interface OrderAdditionalItem {
@@ -95,9 +96,9 @@ const serializeCustomizations = (customizations?: CartCustomization[]) => {
     selected_option: customization.selected_option || null,
     selected_item: customization.selected_item
       ? {
-        original_item: customization.selected_item.original_item,
-        selected_item: customization.selected_item.selected_item,
-      }
+          original_item: customization.selected_item.original_item,
+          selected_item: customization.selected_item.selected_item,
+        }
       : null,
     // ✅ Include label fields for BASE_LAYOUT duplicate detection
     label_selected: customization.label_selected || null,
@@ -293,8 +294,6 @@ export function useCart(): CartContextType {
     };
   }, []);
 
-
-
   const [orderMetadata, _setOrderMetadata] = useState<{
     send_anonymously?: boolean;
     complement?: string;
@@ -338,11 +337,11 @@ export function useCart(): CartContextType {
             const additionals =
               orderItem.additionals && orderItem.additionals.length > 0
                 ? await Promise.all(
-                  orderItem.additionals.map(
-                    (add: { additional_id: string }) =>
-                      api.getAdditional(add.additional_id)
+                    orderItem.additionals.map(
+                      (add: { additional_id: string }) =>
+                        api.getAdditional(add.additional_id)
+                    )
                   )
-                )
                 : [];
 
             const customizations: CartCustomization[] = [];
@@ -352,53 +351,109 @@ export function useCart(): CartContextType {
             ) {
               for (const customization of orderItem.customizations) {
                 try {
-                  const data = JSON.parse(customization.value);
-                  if (data.customization_type === "TEXT") {
+                  // ✅ Desserializar campo 'value' que vem do backend como string JSON
+                  let data: Record<string, unknown> = {};
+
+                  if (typeof customization.value === "string") {
+                    data = JSON.parse(customization.value);
+                  } else if (
+                    typeof customization.value === "object" &&
+                    customization.value !== null
+                  ) {
+                    data = customization.value as Record<string, unknown>;
+                  }
+
+                  // ✅ Se não temos customization_type em data, tentar usar do objeto principal
+                  const customizationType = (data.customization_type ||
+                    customization.customization_type ||
+                    "TEXT") as string;
+
+                  if (customizationType === "TEXT") {
                     customizations.push({
                       customization_id: customization.customization_id,
-                      title: data.title || "Personalização",
+                      title: (data.title as string) || "Personalização",
                       customization_type: "TEXT",
                       is_required: false,
-                      price_adjustment: data.price_adjustment || 0,
-                      text: data.text || "",
+                      price_adjustment: (data.price_adjustment as number) || 0,
+                      text: (data.text as string) || "",
+                      value:
+                        typeof customization.value === "string"
+                          ? customization.value
+                          : JSON.stringify(customization.value),
                     });
-                  } else if (data.customization_type === "MULTIPLE_CHOICE") {
+                  } else if (customizationType === "MULTIPLE_CHOICE") {
                     customizations.push({
                       customization_id: customization.customization_id,
-                      title: data.title || "Personalização",
+                      title: (data.title as string) || "Personalização",
                       customization_type: "MULTIPLE_CHOICE",
                       is_required: false,
-                      price_adjustment: data.price_adjustment || 0,
-                      selected_option: data.selected_option,
-                      selected_option_label: data.selected_option_label,
+                      price_adjustment: (data.price_adjustment as number) || 0,
+                      selected_option: data.selected_option as
+                        | string
+                        | undefined,
+                      selected_option_label: data.selected_option_label as
+                        | string
+                        | undefined,
                       label_selected:
-                        data.label_selected || data.selected_option_label,
+                        (data.label_selected as string) ||
+                        (data.selected_option_label as string),
+                      value:
+                        typeof customization.value === "string"
+                          ? customization.value
+                          : JSON.stringify(customization.value),
                     });
-                  } else if (data.customization_type === "IMAGES") {
+                  } else if (customizationType === "IMAGES") {
                     customizations.push({
                       customization_id: customization.customization_id,
-                      title: data.title || "Personalização",
+                      title: (data.title as string) || "Personalização",
                       customization_type: "IMAGES",
                       is_required: false,
-                      price_adjustment: data.price_adjustment || 0,
-                      photos: data.photos || [],
+                      price_adjustment: (data.price_adjustment as number) || 0,
+                      photos: (data.photos as PhotoUploadData[]) || [],
+                      value:
+                        typeof customization.value === "string"
+                          ? customization.value
+                          : JSON.stringify(customization.value),
                     });
-                  } else if (data.customization_type === "BASE_LAYOUT") {
+                  } else if (customizationType === "BASE_LAYOUT") {
                     customizations.push({
                       customization_id: customization.customization_id,
-                      title: data.title || "Layout",
+                      title: (data.title as string) || "Layout",
                       customization_type: "BASE_LAYOUT",
                       is_required: false,
-                      price_adjustment: data.price_adjustment || 0,
-                      text: data.text || "",
-                      selected_option: data.selected_option,
-                      selected_option_label: data.selected_option_label,
+                      price_adjustment: (data.price_adjustment as number) || 0,
+                      text: (data.text as string) || "",
+                      selected_option: data.selected_option as
+                        | string
+                        | undefined,
+                      selected_option_label: data.selected_option_label as
+                        | string
+                        | undefined,
                       label_selected:
-                        data.label_selected ||
-                        data.selected_item_label ||
-                        data.selected_option_label,
-                      additional_time: data.additional_time || 0,
-                      data: data.data || data, // ✅ Restore raw data if nested or use root
+                        (data.label_selected as string) ||
+                        (data.selected_item_label as string) ||
+                        (data.selected_option_label as string),
+                      additional_time: (data.additional_time as number) || 0,
+                      data: data, // ✅ Armazenar TODOS os dados
+                      value:
+                        typeof customization.value === "string"
+                          ? customization.value
+                          : JSON.stringify(customization.value),
+                    });
+                  } else {
+                    // Fallback para tipos desconhecidos
+                    customizations.push({
+                      customization_id: customization.customization_id,
+                      title: (data.title as string) || "Personalização",
+                      customization_type:
+                        (customizationType as CustomizationTypeValue) || "TEXT",
+                      is_required: false,
+                      price_adjustment: (data.price_adjustment as number) || 0,
+                      data: data,
+                      value:
+                        typeof customization.value === "string"
+                          ? customization.value
+                          : JSON.stringify(customization.value),
                     });
                   }
                 } catch (error) {
@@ -652,8 +707,6 @@ export function useCart(): CartContextType {
     dateDisabledCacheRef.current.clear();
   }, [cart]);
 
-
-
   // Quando o usuário autentica, sincronizar/recuperar rascunho do backend
   useEffect(() => {
     const init = async () => {
@@ -698,23 +751,23 @@ export function useCart(): CartContextType {
 
                   const customizations = item.customizations
                     ? item.customizations.map((c) => {
-                      const parsed = (() => {
-                        try {
-                          return JSON.parse(c.value || "{}") as Record<
-                            string,
-                            unknown
-                          >;
-                        } catch {
-                          return {};
-                        }
-                      })();
+                        const parsed = (() => {
+                          try {
+                            return JSON.parse(c.value || "{}") as Record<
+                              string,
+                              unknown
+                            >;
+                          } catch {
+                            return {};
+                          }
+                        })();
 
-                      return {
-                        ...parsed,
-                        customization_id: c.customization_id,
-                        title: (parsed.title as string) || undefined,
-                      };
-                    })
+                        return {
+                          ...parsed,
+                          customization_id: c.customization_id,
+                          title: (parsed.title as string) || undefined,
+                        };
+                      })
                     : undefined;
 
                   return {
@@ -726,10 +779,10 @@ export function useCart(): CartContextType {
                       item.effectivePrice !== undefined
                         ? item.effectivePrice
                         : Number(
-                          (
-                            item.price + (item.customization_total || 0)
-                          ).toFixed(2)
-                        ),
+                            (
+                              item.price + (item.customization_total || 0)
+                            ).toFixed(2)
+                          ),
                     additionals,
                     customizations,
                     product: item.product,
@@ -820,11 +873,11 @@ export function useCart(): CartContextType {
             (item) =>
               item.product_id === productId &&
               serializeAdditionals(item.additional_ids) ===
-              targetAdditionalsKey &&
+                targetAdditionalsKey &&
               serializeAdditionalColors(item.additional_colors) ===
-              targetColorsKey &&
+                targetColorsKey &&
               serializeCustomizations(item.customizations) ===
-              targetCustomizationsKey
+                targetCustomizationsKey
           );
 
           let newItems: CartItem[] = [...currentItems];
@@ -885,9 +938,9 @@ export function useCart(): CartContextType {
               item.product_id === productId &&
               serializeAdditionals(item.additional_ids) === targetAdditionals &&
               serializeAdditionalColors(item.additional_colors) ===
-              targetColors &&
+                targetColors &&
               serializeCustomizations(item.customizations) ===
-              targetCustomizations
+                targetCustomizations
           ) || null;
 
         const newItems = currentItems.filter(
@@ -896,9 +949,9 @@ export function useCart(): CartContextType {
               item.product_id === productId &&
               serializeAdditionals(item.additional_ids) === targetAdditionals &&
               serializeAdditionalColors(item.additional_colors) ===
-              targetColors &&
+                targetColors &&
               serializeCustomizations(item.customizations) ===
-              targetCustomizations
+                targetCustomizations
             )
         );
         const updatedCart = calculateTotals(newItems);
@@ -997,7 +1050,7 @@ export function useCart(): CartContextType {
             item.product_id === productId &&
             serializeAdditionals(item.additional_ids) === targetAdditionals &&
             serializeCustomizations(item.customizations) ===
-            targetCustomizations &&
+              targetCustomizations &&
             serializeAdditionalColors(item.additional_colors) === targetColors
           ) {
             return { ...item, quantity };
@@ -1014,6 +1067,7 @@ export function useCart(): CartContextType {
 
   /**
    * Atualizar customizações de um item específico no carrinho
+   * ✅ FIX: Mescla as customizações novas com as existentes para não perder dados
    */
   const updateCustomizations = useCallback(
     (
@@ -1039,7 +1093,7 @@ export function useCart(): CartContextType {
             item.product_id === productId &&
             serializeAdditionals(item.additional_ids) === targetAdditionals &&
             serializeCustomizations(item.customizations) ===
-            targetOldCustomizations &&
+              targetOldCustomizations &&
             serializeAdditionalColors(item.additional_colors) === targetColors
         );
 
@@ -1051,8 +1105,15 @@ export function useCart(): CartContextType {
         const newItems = [...currentItems];
         const item = newItems[itemIndex];
 
+        // ✅ FIX: Mesclar customizações em vez de substituir
+        // Isso preserva as que não foram editadas
+        const mergedCustomizations = mergeCustomizations(
+          item.customizations || [],
+          newCustomizations
+        );
+
         // Calcular novo total de customização
-        const customizationEntries = cloneCustomizations(newCustomizations);
+        const customizationEntries = cloneCustomizations(mergedCustomizations);
         const customizationTotal =
           calculateCustomizationTotal(customizationEntries);
 
@@ -1062,7 +1123,7 @@ export function useCart(): CartContextType {
           (baseEffective + customizationTotal).toFixed(2)
         );
 
-        // Atualizar item com novas customizações
+        // Atualizar item com customizações mescladas
         newItems[itemIndex] = {
           ...item,
           customizations:
@@ -1079,6 +1140,30 @@ export function useCart(): CartContextType {
     },
     [calculateTotals, debouncedSync]
   );
+
+  // ✅ FIX: Função para mesclar customizações (não perder as não editadas)
+  const mergeCustomizations = (
+    existing: CartCustomization[],
+    updated: CartCustomization[]
+  ): CartCustomization[] => {
+    const merged = [...existing];
+
+    for (const newCustom of updated) {
+      const existingIndex = merged.findIndex(
+        (c) => c.customization_id === newCustom.customization_id
+      );
+
+      if (existingIndex >= 0) {
+        // Atualizar customização existente
+        merged[existingIndex] = { ...newCustom };
+      } else {
+        // Adicionar nova customização
+        merged.push({ ...newCustom });
+      }
+    }
+
+    return merged;
+  };
 
   const clearCart = useCallback(() => {
     const emptyCart = {

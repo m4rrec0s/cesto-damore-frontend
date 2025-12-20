@@ -27,12 +27,16 @@ function isTokenExpired(token: string): boolean {
   return payload.exp < currentTime;
 }
 
-// Função para verificar se o usuário é admin
+// ✅ SEGURANÇA: Verificação de role NÃO é confiável no cliente
+// Esta função é APENAS para UX (evitar navegação desnecessária)
+// A validação REAL OBRIGATÓRIA acontece no backend
 function isUserAdmin(userString: string | null): boolean {
   if (!userString) return false;
 
   try {
     const user = JSON.parse(userString);
+    // ⚠️ AVISO: Role pode ser falsificado no cliente
+    // O backend DEVE validar isso independentemente em TODA requisição
     return user.role === "admin";
   } catch {
     return false;
