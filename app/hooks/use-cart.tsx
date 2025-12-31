@@ -1556,9 +1556,34 @@ export function useCart(): CartContextType {
       timeZone: "America/Sao_Paulo",
       hour12: false,
     });
-    const [datePart, timePart] = str.split(", ");
-    const [month, day, year] = datePart.split("/").map(Number);
-    const [hour, minute, second] = timePart.split(":").map(Number);
+    const parts = str.split(", ");
+    if (parts.length < 2) {
+      // Fallback: return current date components if format is unexpected
+      return {
+        year: date.getFullYear(),
+        month: date.getMonth(),
+        day: date.getDate(),
+        hour: date.getHours(),
+        minute: date.getMinutes(),
+        second: 0,
+      };
+    }
+    const [datePart, timePart] = parts;
+    const dateParts = datePart.split("/").map(Number);
+    const timeParts = timePart.split(":").map(Number);
+    if (dateParts.length < 3 || timeParts.length < 2) {
+      // Fallback if parsing fails
+      return {
+        year: date.getFullYear(),
+        month: date.getMonth(),
+        day: date.getDate(),
+        hour: date.getHours(),
+        minute: date.getMinutes(),
+        second: 0,
+      };
+    }
+    const [month, day, year] = dateParts;
+    const [hour, minute, second] = timeParts;
     return { year, month: month - 1, day, hour, minute, second: second || 0 };
   }, []);
 

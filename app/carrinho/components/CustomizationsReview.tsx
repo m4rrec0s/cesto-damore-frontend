@@ -14,6 +14,7 @@ import type {
   SaveOrderItemCustomizationPayload,
 } from "@/app/types/customization";
 import { toast } from "sonner";
+import { Card } from "@/app/components/ui/card";
 
 interface CartItemForReview {
   product_id: string;
@@ -103,12 +104,60 @@ const isCustomizationFilled = (
   }
 };
 
+// Extrai o texto limpo de um valor que pode estar serializado
+const extractCleanText = (text: string | undefined): string => {
+  if (!text) return "";
+
+  // Se começar com "field-", extrair o valor após o ": "
+  if (text.startsWith("field-")) {
+    const colonIndex = text.indexOf(":");
+    if (colonIndex !== -1) {
+      let extracted = text.substring(colonIndex + 1).trim();
+      // Remover ", text: ", ", fields: ", etc. se existirem
+      const commaIndex = extracted.indexOf(",");
+      if (commaIndex !== -1) {
+        extracted = extracted.substring(0, commaIndex).trim();
+      }
+      return extracted;
+    }
+  }
+
+  // Se contiver ", text: ", extrair o valor após isso
+  if (text.includes(", text: ")) {
+    const textMatch = text.match(/,\s*text:\s*([^,]+)/);
+    if (textMatch && textMatch[1]) {
+      return textMatch[1].trim();
+    }
+  }
+
+  // Se for JSON, tentar parsear
+  try {
+    if (text.startsWith("{")) {
+      const obj = JSON.parse(text);
+      if (obj.text) return obj.text;
+      // Procurar por propriedade que começe com "field-"
+      for (const key of Object.keys(obj)) {
+        if (key.startsWith("field-")) {
+          return obj[key];
+        }
+      }
+    }
+  } catch {
+    // Não é JSON válido, continuar
+  }
+
+  // Retornar o texto como está
+  return text;
+};
+
 const getCustomizationSummary = (custom: CartCustomization): string => {
   if (!isCustomizationFilled(custom)) return "";
 
   switch (custom.customization_type) {
-    case "TEXT":
-      return custom.text ? `Texto: "${custom.text}"` : "";
+    case "TEXT": {
+      const cleanText = extractCleanText(custom.text);
+      return cleanText ? `Texto: "${cleanText}"` : "";
+    }
     case "MULTIPLE_CHOICE":
       return custom.label_selected || custom.selected_option_label || "";
     case "IMAGES":
@@ -173,36 +222,16 @@ export function CustomizationsReview({
   >({});
 
   const fetchAvailableCustomizations = useCallback(async () => {
-    console.log(
-      "🔍 [CustomizationsReview] Iniciando fetchAvailableCustomizations. orderId:",
-      orderId
-    );
     setIsLoading(true);
 
     // ✅ NOVO: Se tivermos orderId, buscar dados consolidados do backend
     if (orderId) {
       try {
-        console.log(
-          "🔍 [CustomizationsReview] Buscando dados consolidados para orderId:",
-          orderId
-        );
         const reviewData = await getCustomizationReviewData(orderId);
-        console.log(
-          "📋 [CustomizationsReview] reviewData recebida:",
-          JSON.stringify(reviewData, null, 2)
-        );
-
         const results: ProductValidation[] = reviewData.map((data) => {
-          console.log(
-            `📦 Processando item do pedido: ${data.productName} (${data.orderItemId})`
-          );
-
           const filled: CartCustomization[] = data.filledCustomizations.map(
             (f) => {
               const val = (f.value || {}) as Record<string, unknown>;
-              console.log(
-                `  📝 Customização preenchida no BD: ID=${f.id}, ruleId=${f.customization_id}, componentId=${val.componentId}`
-              );
 
               return {
                 id: f.id,
@@ -242,14 +271,6 @@ export function CustomizationsReview({
               );
 
               const isFilled = isCustomizationFilled(filledCustom);
-              console.log(
-                `  ⚙️ Regra Disponível: ${avail.name} (ID: ${
-                  avail.id
-                }, Component: ${avail.componentId}) -> ${
-                  isFilled ? "PREENCHIDA" : "PENDENTE"
-                }`
-              );
-
               return avail.isRequired && !isFilled;
             }
           );
@@ -395,7 +416,6 @@ export function CustomizationsReview({
     }
   }, [cartItems, fetchAvailableCustomizations]);
 
-  // ✅ Desserializar valor salvo de customizações (vem como string JSON do backend)
   const deserializeCustomizationValue = (
     value: string | undefined
   ): Record<string, unknown> => {
@@ -408,7 +428,6 @@ export function CustomizationsReview({
     }
   };
 
-  // Abrir modal para editar customizações de um item específico
   const handleEditItem = useCallback(
     async (
       productId: string,
@@ -420,7 +439,6 @@ export function CustomizationsReview({
         const configResponse = await getItemCustomizations(itemId);
         const customizations = configResponse?.customizations || [];
 
-        // Mapear para o formato esperado pelo modal
         const modalCustoms: Customization[] = customizations.map((c) => ({
           id: c.id,
           name: c.name,
@@ -431,91 +449,40 @@ export function CustomizationsReview({
           customization_data: c.customization_data,
         }));
 
-        // Preparar initialValues
         const cartItem = cartItems.find((i) => i.product_id === productId);
-        // ✅ Filtrar apenas customizações que pertencem a este componente específico
         const filled =
           cartItem?.customizations?.filter(
             (f) => f.componentId === componentId
           ) || [];
         const initialData: Record<string, unknown> = {};
 
-        console.log("📋 [handleEditItem] Customizações do item no carrinho:", {
-          itemId,
-          totalCustomizations: filled.length,
-          customizations: filled.map((f) => ({
-            id: f.customization_id,
-            type: f.customization_type,
-            hasValue: !!f.value,
-            valueType: typeof f.value,
-            valuePreview:
-              typeof f.value === "string"
-                ? f.value.substring(0, 100)
-                : "not-string",
-          })),
-        });
-
         filled.forEach((fc: CartCustomization) => {
           const ruleId = fc.customization_id;
           if (!ruleId) return;
 
-          console.log(
-            `🔍 [handleEditItem] Processando customização ${ruleId}:`,
-            {
-              type: fc.customization_type,
-              hasValue: !!fc.value,
-              valueType: typeof fc.value,
-              hasText: !!fc.text,
-              hasSelectedOption: !!fc.selected_option,
-              hasPhotos: !!fc.photos,
-              hasData: !!fc.data,
-            }
-          );
-
-          // ✅ NOVO: Se temos 'value' como string (vem do backend), desserializar
           if (typeof fc.value === "string") {
             const deserialized = deserializeCustomizationValue(fc.value);
             initialData[ruleId] = deserialized;
-            console.log(
-              `✅ [handleEditItem] Desserializou customização ${ruleId}:`,
-              deserialized
-            );
             return;
           }
 
-          // Fallback mapping - CartCustomization pode ter propriedades dinamicamente adicionadas do servidor
           if (fc.customization_type === "TEXT") {
             initialData[ruleId] = fc.text || "";
-            console.log(`✅ [handleEditItem] Mapeou TEXT ${ruleId}:`, fc.text);
           } else if (fc.customization_type === "MULTIPLE_CHOICE") {
             initialData[ruleId] = fc.selected_option;
-            console.log(
-              `✅ [handleEditItem] Mapeou MULTIPLE_CHOICE ${ruleId}:`,
-              fc.selected_option
-            );
           } else if (fc.customization_type === "IMAGES") {
             initialData[ruleId] = fc.photos || [];
-            console.log(
-              `✅ [handleEditItem] Mapeou IMAGES ${ruleId}:`,
-              fc.photos?.length
-            );
           } else if (fc.customization_type === "BASE_LAYOUT") {
             initialData[ruleId] = fc.data || fc;
-            console.log(
-              `✅ [handleEditItem] Mapeou BASE_LAYOUT ${ruleId}:`,
-              Object.keys(fc.data || fc)
-            );
           }
         });
-
-        console.log("📊 [handleEditItem] initialData final:", initialData);
 
         setActiveInitialValues(initialData);
         setActiveItemId(itemId);
         setActiveItemName(itemName);
         setActiveCustomizations(modalCustoms);
         setActiveProductId(productId);
-        setActiveComponentId(componentId); // ✅ Set activeComponentId
+        setActiveComponentId(componentId);
         setModalOpen(true);
       } catch (error) {
         console.error("Erro ao carregar customizações:", error);
@@ -524,10 +491,8 @@ export function CustomizationsReview({
     [getItemCustomizations, cartItems, setModalOpen]
   );
 
-  // Estado de salvamento
   const [isSaving, setIsSaving] = useState(false);
 
-  // Callback quando customização é completada no modal
   const handleCustomizationComplete = useCallback(
     async (hasCustomizations: boolean, data: CustomizationInput[]) => {
       if (!hasCustomizations || !activeItemId) {
@@ -535,15 +500,11 @@ export function CustomizationsReview({
         return;
       }
 
-      // Se temos orderId, salvar diretamente no backend
       if (orderId && activeProductId) {
         setIsSaving(true);
         try {
-          // Buscar o pedido para encontrar o OrderItem.id correto
           const order = await getOrder(orderId);
 
-          // Encontrar o OrderItem que corresponde ao produto atual
-          // OrderItem tem product_id que aponta para o produto
           const orderItem = order?.items?.find(
             (item: { product_id: string }) =>
               item.product_id === activeProductId
@@ -561,22 +522,13 @@ export function CustomizationsReview({
           }
 
           const orderItemId = orderItem.id;
-          console.log("📍 [CustomizationsReview] OrderItem encontrado:", {
-            orderItemId,
-            productId: activeProductId,
-            catalogItemId: activeItemId,
-            componentId: activeComponentId,
-          });
 
-          // Salvar cada customização no backend
           for (const customization of data) {
             const customData = customization.data as Record<string, unknown>;
             const previewUrl = customData?.previewUrl as string | undefined;
 
-            // Sanitizar data para remover imageBuffer que causa erro 400 (payload muito grande/inválido)
             const sanitizedData = { ...customData };
 
-            // ✅ IMPORTANTE: Incluir componentId no data para recuperar depois
             if (activeComponentId) {
               sanitizedData.componentId = activeComponentId;
             }
@@ -591,7 +543,6 @@ export function CustomizationsReview({
               );
             }
 
-            // Preparar payload para o backend
             const payload: SaveOrderItemCustomizationPayload = {
               customizationRuleId:
                 customization.ruleId ||
@@ -606,12 +557,10 @@ export function CustomizationsReview({
               data: sanitizedData || {},
             };
 
-            // Para BASE_LAYOUT com preview, adicionar como finalArtwork
             if (
               customization.customizationType === "BASE_LAYOUT" &&
               previewUrl
             ) {
-              // Se é base64, enviar como finalArtwork
               if (previewUrl.startsWith("data:")) {
                 payload.finalArtwork = {
                   base64: previewUrl,
@@ -621,22 +570,9 @@ export function CustomizationsReview({
               }
             }
 
-            console.log("📤 [CustomizationsReview] Salvando customização:", {
-              orderId,
-              orderItemId,
-              type: customization.customizationType,
-              hasPreview: !!previewUrl,
-              isBase64: previewUrl?.startsWith("data:"),
-            });
-
-            // Usar orderItemId (ID do item do pedido) em vez de activeItemId (ID do item do catálogo)
             await saveOrderItemCustomization(orderId, orderItemId, payload);
           }
 
-          // Notificar sucesso
-          console.log(
-            "✅ [CustomizationsReview] Customização salva com sucesso!"
-          );
           toast.success("Personalização salva no pedido!");
           onCustomizationSaved?.();
         } catch (error) {
@@ -650,8 +586,6 @@ export function CustomizationsReview({
         }
       }
 
-      // ✅ ALWAYS update local state (fallback/sync)
-      // This ensures use-cart logic has the latest data and doesn't overwrite backend with stale state on next sync
       if (activeProductId && onCustomizationUpdate) {
         onCustomizationUpdate(
           activeProductId,
@@ -661,7 +595,6 @@ export function CustomizationsReview({
       }
 
       setModalOpen(false);
-      // Recarregar validações após edição
       fetchAvailableCustomizations();
     },
     [
@@ -678,7 +611,6 @@ export function CustomizationsReview({
     ]
   );
 
-  // Se não há validações relevantes, não mostrar
   const hasRelevantValidations = validations.some(
     (v) =>
       v.availableCustomizations.length > 0 || v.filledCustomizations.length > 0
@@ -694,7 +626,6 @@ export function CustomizationsReview({
   );
   const allComplete = validations.every((v) => v.isComplete);
 
-  // Loading state simples
   if (isLoading || isSaving) {
     return (
       <div className="flex items-center gap-2 text-sm text-gray-500 py-2">
@@ -708,84 +639,48 @@ export function CustomizationsReview({
 
   return (
     <>
-      <div className="space-y-2">
-        {/* Header simples */}
-        <div className="flex items-center justify-between">
-          <span className="text-sm font-medium text-gray-700">
-            Personalizações
-          </span>
-          {allComplete ? (
-            <Badge
-              variant="outline"
-              className="bg-green-50 text-green-700 border-green-200"
-            >
-              <CheckCircle2 className="h-3 w-3 mr-1" />
-              OK
-            </Badge>
-          ) : (
-            <Badge variant="destructive">
-              <AlertCircle className="h-3 w-3 mr-1" />
-              {totalMissing} pendente{totalMissing > 1 ? "s" : ""}
-            </Badge>
-          )}
+      <Card className="bg-white p-4 sm:p-6 rounded-lg border border-gray-200 shadow-none">
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h3 className="text-lg font-bold text-gray-900">Personalizações</h3>
+            <p className="text-sm text-gray-600">
+              Revise as personalizações dos seus itens
+            </p>
+          </div>
+          <div className="flex flex-col items-end">
+            {allComplete ? (
+              <div className="flex items-center gap-2 px-3 py-1.5 bg-green-50 rounded-full border border-green-200">
+                <CheckCircle2 className="h-4 w-4 text-green-600" />
+                <span className="text-sm font-medium text-green-700">
+                  Completo
+                </span>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-50 rounded-full border border-amber-200">
+                <AlertCircle className="h-4 w-4 text-amber-600" />
+                <span className="text-sm font-medium text-amber-700">
+                  {totalMissing} pendente{totalMissing > 1 ? "s" : ""}
+                </span>
+              </div>
+            )}
+          </div>
         </div>
 
-        {/* Lista de items com customizações */}
-        {validations.map((validation) => {
-          // ✅ MUDANÇA: Mostrar TODAS as customizações disponíveis, não só as faltantes
-          // Agrupar por COMPONENT instance em vez de apenas itemId
-          const itemsMap = new Map<
-            string,
-            {
-              itemName: string;
-              allCustomizations: AvailableCustomization[];
-              missing: AvailableCustomization[];
-              filled: CartCustomization[];
-              itemId: string;
-            }
-          >();
+        <div className="space-y-4">
+          {validations.map((validation) => {
+            const itemsMap = new Map<
+              string,
+              {
+                itemName: string;
+                allCustomizations: AvailableCustomization[];
+                missing: AvailableCustomization[];
+                filled: CartCustomization[];
+                itemId: string;
+              }
+            >();
 
-          // Adicionar TODAS as customizações disponíveis
-          validation.availableCustomizations.forEach((avail) => {
-            if (!avail.itemId) return;
-            if (!itemsMap.has(avail.componentId)) {
-              itemsMap.set(avail.componentId, {
-                itemName: avail.itemName,
-                allCustomizations: [],
-                missing: [],
-                filled: [],
-                itemId: avail.itemId,
-              });
-            }
-            itemsMap.get(avail.componentId)!.allCustomizations.push(avail);
-          });
-
-          // Adicionar itens faltantes (obrigatórios não preenchidos)
-          validation.missingRequired.forEach((missing) => {
-            if (!missing.componentId) return;
-            if (!itemsMap.has(missing.componentId)) {
-              itemsMap.set(missing.componentId, {
-                itemName: missing.itemName,
-                allCustomizations: [],
-                missing: [],
-                filled: [],
-                itemId: missing.itemId,
-              });
-            }
-            itemsMap.get(missing.componentId)!.missing.push(missing);
-          });
-
-          // Adicionar itens preenchidos
-          validation.availableCustomizations.forEach((avail) => {
-            const filledCustom = validation.filledCustomizations.find(
-              (f) =>
-                (f.customization_id === avail.id ||
-                  f.customization_id?.includes(avail.id)) &&
-                (f.componentId === avail.componentId ||
-                  f.componentId === avail.itemId)
-            );
-
-            if (filledCustom && isCustomizationFilled(filledCustom)) {
+            validation.availableCustomizations.forEach((avail) => {
+              if (!avail.itemId) return;
               if (!itemsMap.has(avail.componentId)) {
                 itemsMap.set(avail.componentId, {
                   itemName: avail.itemName,
@@ -795,110 +690,187 @@ export function CustomizationsReview({
                   itemId: avail.itemId,
                 });
               }
-              const entry = itemsMap.get(avail.componentId)!;
-              // Evitar duplicatas
-              if (
-                !entry.filled.some(
-                  (f) => f.customization_id === filledCustom.customization_id
-                )
-              ) {
-                entry.filled.push(filledCustom);
+              itemsMap.get(avail.componentId)!.allCustomizations.push(avail);
+            });
+
+            validation.missingRequired.forEach((missing) => {
+              if (!missing.componentId) return;
+              if (!itemsMap.has(missing.componentId)) {
+                itemsMap.set(missing.componentId, {
+                  itemName: missing.itemName,
+                  allCustomizations: [],
+                  missing: [],
+                  filled: [],
+                  itemId: missing.itemId,
+                });
               }
-            }
-          });
+              itemsMap.get(missing.componentId)!.missing.push(missing);
+            });
 
-          if (itemsMap.size === 0) {
-            return null;
-          }
+            validation.availableCustomizations.forEach((avail) => {
+              const filledCustom = validation.filledCustomizations.find(
+                (f) =>
+                  (f.customization_id === avail.id ||
+                    f.customization_id?.includes(avail.id)) &&
+                  (f.componentId === avail.componentId ||
+                    f.componentId === avail.itemId)
+              );
 
-          return (
-            <div key={validation.productId} className="space-y-1">
-              {Array.from(itemsMap.entries()).map(
-                ([
-                  componentId,
-                  { itemName, allCustomizations, missing, filled, itemId },
-                ]) => {
-                  const isIncomplete = missing.length > 0;
-                  const totalCustomizations = allCustomizations.length;
-                  const statusColor = isIncomplete ? "red" : "blue";
-                  const StatusIcon = isIncomplete ? AlertCircle : CheckCircle2;
-
-                  return (
-                    <div key={componentId} className="space-y-1">
-                      <div
-                        className={`flex items-center justify-between py-1.5 px-2 bg-${statusColor}-50 rounded text-sm`}
-                      >
-                        <div
-                          className={`flex items-center gap-2 text-${statusColor}-700`}
-                        >
-                          <StatusIcon className="h-3.5 w-3.5 flex-shrink-0" />
-                          <span className="truncate">
-                            {validation.productName}
-                            {itemName && ` - ${itemName}`}
-                          </span>
-                          <span className={`text-${statusColor}-500 text-xs`}>
-                            {isIncomplete
-                              ? `(${
-                                  missing.length
-                                }/${totalCustomizations} pendente${
-                                  missing.length > 1 ? "s" : ""
-                                })`
-                              : `(${totalCustomizations} personalizado${
-                                  totalCustomizations > 1 ? "s" : ""
-                                })`}
-                          </span>
-                        </div>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className={`h-7 px-2 text-${statusColor}-700 hover:text-${statusColor}-800 hover:bg-${statusColor}-100`}
-                          onClick={() =>
-                            handleEditItem(
-                              validation.productId,
-                              itemId, // ✅ Use the actual itemId from the map
-                              itemName || "Item",
-                              componentId // ✅ Pass componentId as 4th argument
-                            )
-                          }
-                        >
-                          <Edit2 className="h-3.5 w-3.5" />
-                        </Button>
-                      </div>
-
-                      {/* ✅ NOVO: Lista de customizações preenchidas */}
-                      {filled.length > 0 && (
-                        <div className="pl-7 pb-1 flex flex-wrap gap-1.5">
-                          {filled.map((f, idx) => {
-                            const summary = getCustomizationSummary(f);
-                            if (!summary) return null;
-                            return (
-                              <Badge
-                                key={`${f.customization_id}-${idx}`}
-                                variant="outline"
-                                className="text-[10px] py-0 px-1.5 font-normal border-gray-200 text-gray-600 bg-white"
-                              >
-                                {f.title}: {summary}
-                              </Badge>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
-                  );
+              if (filledCustom && isCustomizationFilled(filledCustom)) {
+                if (!itemsMap.has(avail.componentId)) {
+                  itemsMap.set(avail.componentId, {
+                    itemName: avail.itemName,
+                    allCustomizations: [],
+                    missing: [],
+                    filled: [],
+                    itemId: avail.itemId,
+                  });
                 }
-              )}
-            </div>
-          );
-        })}
+                const entry = itemsMap.get(avail.componentId)!;
+                if (
+                  !entry.filled.some(
+                    (f) => f.customization_id === filledCustom.customization_id
+                  )
+                ) {
+                  entry.filled.push(filledCustom);
+                }
+              }
+            });
 
-        {/* Mensagem se completo */}
-        {allComplete && (
-          <p className="text-xs text-green-600 flex items-center gap-1">
-            <CheckCircle2 className="h-3 w-3" />
-            Todas as personalizações preenchidas
-          </p>
+            if (itemsMap.size === 0) {
+              return null;
+            }
+
+            return (
+              <div key={validation.productId} className="space-y-3">
+                {Array.from(itemsMap.entries()).map(
+                  ([componentId, { itemName, missing, filled, itemId }]) => {
+                    const isIncomplete = missing.length > 0;
+                    // const totalCustomizations = allCustomizations.length;
+
+                    return (
+                      <div
+                        key={componentId}
+                        className={`border rounded-sm p-4 transition-all ${
+                          isIncomplete ? "border-amber-200" : "border-green-200"
+                        }`}
+                      >
+                        {/* Header do item */}
+                        <div className="flex items-start justify-between mb-3">
+                          <div className="flex items-start gap-3 flex-1">
+                            <div className="flex-1">
+                              <div className="">
+                                <h2 className="font-medium text-sm text-gray-900">
+                                  {validation.productName}
+                                </h2>
+                                {/* <p
+                                  className={`text-xs font-medium mt-1 ${
+                                    isIncomplete
+                                      ? "text-amber-700"
+                                      : "text-green-700"
+                                  }`}
+                                >
+                                  {isIncomplete
+                                    ? `${
+                                        missing.length
+                                      } de ${totalCustomizations} pendente${
+                                        missing.length > 1 ? "s" : ""
+                                      }`
+                                    : `${totalCustomizations} personalizado${
+                                        totalCustomizations > 1 ? "s" : ""
+                                      }`}
+                                </p> */}
+                              </div>
+                              {itemName && (
+                                <p className="text-sm text-gray-600 mt-0.5">
+                                  {itemName}
+                                </p>
+                              )}
+                            </div>
+                            {filled.length > 0 && (
+                              <div className="max-w-[60%]">
+                                <div className="flex flex-wrap gap-2">
+                                  {filled.map((f, idx) => {
+                                    const summary = getCustomizationSummary(f);
+                                    if (!summary) return null;
+                                    return (
+                                      <Badge
+                                        key={`${f.customization_id}-${idx}`}
+                                        variant="outline"
+                                        className="bg-white border-gray-300 text-gray-700 font-medium text-xs py-1 px-2.5"
+                                      >
+                                        <span className="inline-block w-2 h-2 rounded-full bg-green-500 mr-1.5" />
+                                        <p>
+                                          {f.title}: {summary}
+                                        </p>
+                                      </Badge>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() =>
+                              handleEditItem(
+                                validation.productId,
+                                itemId,
+                                itemName || "Item",
+                                componentId
+                              )
+                            }
+                            className={`h-9 px-3 font-medium text-sm ${
+                              isIncomplete
+                                ? "text-amber-700 hover:bg-amber-100"
+                                : "text-green-700 hover:bg-green-100"
+                            }`}
+                          >
+                            <Edit2 className="h-4 w-4 mr-2" />
+                            Editar
+                          </Button>
+                        </div>
+
+                        {/* Itens pendentes */}
+                        {missing.length > 0 && (
+                          <div className="space-y-2 mt-3 pt-3 border-t border-amber-200">
+                            <p className="text-xs font-semibold text-amber-900 uppercase tracking-wide">
+                              Pendentes
+                            </p>
+                            <div className="flex flex-wrap gap-2">
+                              {missing.map((m) => (
+                                <Badge
+                                  key={m.id}
+                                  className="bg-amber-100 text-amber-900 font-medium text-xs py-1 px-2.5 border-0"
+                                >
+                                  <span className="inline-block w-2 h-2 rounded-full bg-amber-500 mr-1.5" />
+                                  {m.name}
+                                </Badge>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  }
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Mensagem de conclusão */}
+        {allComplete && validations.length > 0 && (
+          <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-lg flex items-center gap-2">
+            <CheckCircle2 className="h-5 w-5 text-green-600 flex-shrink-0" />
+            <p className="text-sm text-green-800 font-medium">
+              Todas as personalizações foram preenchidas. Prossiga para o
+              pagamento.
+            </p>
+          </div>
         )}
-      </div>
+      </Card>
 
       {/* Modal de customização */}
       {activeItemId && (
