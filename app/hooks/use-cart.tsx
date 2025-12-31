@@ -606,7 +606,10 @@ export function useCart(): CartContextType {
         const itemsPayload = cartItemsToOrderItems(currentCart.items);
 
         if (itemsPayload.length === 0) {
-          if (pendingOrderId && getOrderAttemptedRef.current.has(pendingOrderId)) {
+          if (
+            pendingOrderId &&
+            getOrderAttemptedRef.current.has(pendingOrderId)
+          ) {
             // Já tentamos carregar essa order, não fazer novamente
             try {
               // Se já carregamos antes, só checar se está PENDING antes de deletar
@@ -618,10 +621,7 @@ export function useCart(): CartContextType {
                 complement: undefined,
               });
             } catch (error) {
-              console.error(
-                "Erro ao deletar pedido pendente:",
-                error
-              );
+              console.error("Erro ao deletar pedido pendente:", error);
             }
           } else if (pendingOrderId) {
             // Primeira vez tentando carregar
@@ -779,10 +779,13 @@ export function useCart(): CartContextType {
       if (!user) return;
 
       try {
-        if (pendingOrderId && !getOrderAttemptedRef.current.has(pendingOrderId)) {
+        if (
+          pendingOrderId &&
+          !getOrderAttemptedRef.current.has(pendingOrderId)
+        ) {
           // Marcar como já tentado para evitar múltiplas requisições
           getOrderAttemptedRef.current.add(pendingOrderId);
-          
+
           // Tentar recuperar pedido pendente e preencher o carrinho local caso esteja vazio
           const serverOrder = await api.getOrder(pendingOrderId);
           if (serverOrder?.items && serverOrder.items.length > 0) {
