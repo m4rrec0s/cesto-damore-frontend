@@ -1,10 +1,18 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { toast } from "sonner";
-import { useApi, Product, Additional, CustomizationTypeValue } from "./use-api";
+import {
+  useApi,
+  Product,
+  Additional,
+  CustomizationTypeValue,
+  Order,
+} from "./use-api";
 import { useAuth } from "./use-auth";
 import type { CustomizationValue, PhotoUploadData } from "./use-customization";
 
 export interface CartCustomization extends CustomizationValue {
+  id?: string; // ✅ Database record ID (OrderItemCustomization.id)
+  componentId?: string; // ✅ ProductComponent.id (to distinguish multiple identical items)
   title: string;
   customization_type: CustomizationTypeValue;
   is_required: boolean;
@@ -268,6 +276,7 @@ export function useCart(): CartContextType {
   const [pendingOrderId, setPendingOrderId] = useState<string | null>(null);
 
   const isInitializedRef = useRef<boolean>(false);
+  const getOrderAttemptedRef = useRef<Set<string>>(new Set()); // Rastrear quais orders já foram carregadas
 
   const calculateTotals = useCallback((items: CartItem[]): CartState => {
     const safeItems = Array.isArray(items) ? items : [];
@@ -317,6 +326,189 @@ export function useCart(): CartContextType {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orderMetadata, pendingOrderId, user]);
 
+  // ✅ NOVO: Helper para converter pedido do backend em itens do carrinho local
+  const transformOrderToCartItems = useCallback(
+    async (serverOrder: Order): Promise<CartItem[]> => {
+      if (!serverOrder || !serverOrder.items) return [];
+
+      const cartItems: CartItem[] = [];
+
+      for (const orderItem of serverOrder.items) {
+        try {
+          const product = await api.getProduct(orderItem.product_id);
+
+          const additionals =
+            orderItem.additionals && orderItem.additionals.length > 0
+              ? await Promise.all(
+                  orderItem.additionals.map((add: { additional_id: string }) =>
+                    api.getAdditional(add.additional_id)
+                  )
+                )
+              : [];
+
+          const customizations: CartCustomization[] = [];
+          if (orderItem.customizations && orderItem.customizations.length > 0) {
+            for (const customization of orderItem.customizations) {
+              try {
+                // Desserializar campo 'value'
+                let data: Record<string, unknown> = {};
+
+                if (typeof customization.value === "string") {
+                  data = JSON.parse(customization.value);
+                } else if (
+                  typeof customization.value === "object" &&
+                  customization.value !== null
+                ) {
+                  data = customization.value as Record<string, unknown>;
+                }
+
+                const customizationType = (data.customization_type ||
+                  customization.customization_type ||
+                  "TEXT") as string;
+
+                const componentId = (data.componentId as string) || undefined; // ✅ Extract componentId
+                const customizationId = (customization.customization_id ||
+                  data.customization_id ||
+                  data.customizationRuleId ||
+                  "") as string;
+
+                if (customizationType === "TEXT") {
+                  customizations.push({
+                    id: customization.id,
+                    componentId, // ✅ Set componentId
+                    customization_id: customizationId,
+                    title: (data.title as string) || "Personalização",
+                    customization_type: "TEXT",
+                    is_required: false,
+                    price_adjustment: (data.price_adjustment as number) || 0,
+                    text: (data.text as string) || "",
+                    value:
+                      typeof customization.value === "string"
+                        ? customization.value
+                        : JSON.stringify(customization.value),
+                  });
+                } else if (customizationType === "MULTIPLE_CHOICE") {
+                  customizations.push({
+                    id: customization.id,
+                    componentId, // ✅ Set componentId
+                    customization_id: customizationId,
+                    title: (data.title as string) || "Personalização",
+                    customization_type: "MULTIPLE_CHOICE",
+                    is_required: false,
+                    price_adjustment: (data.price_adjustment as number) || 0,
+                    selected_option: data.selected_option as string | undefined,
+                    selected_option_label: data.selected_option_label as
+                      | string
+                      | undefined,
+                    label_selected:
+                      (data.label_selected as string) ||
+                      (data.selected_option_label as string),
+                    value:
+                      typeof customization.value === "string"
+                        ? customization.value
+                        : JSON.stringify(customization.value),
+                  });
+                } else if (customizationType === "IMAGES") {
+                  customizations.push({
+                    id: customization.id,
+                    componentId, // ✅ Set componentId
+                    customization_id: customizationId,
+                    title: (data.title as string) || "Personalização",
+                    customization_type: "IMAGES",
+                    is_required: false,
+                    price_adjustment: (data.price_adjustment as number) || 0,
+                    photos: (data.photos as PhotoUploadData[]) || [],
+                    value:
+                      typeof customization.value === "string"
+                        ? customization.value
+                        : JSON.stringify(customization.value),
+                  });
+                } else if (customizationType === "BASE_LAYOUT") {
+                  customizations.push({
+                    id: customization.id,
+                    componentId, // ✅ Set componentId
+                    customization_id: customizationId,
+                    title: (data.title as string) || "Layout",
+                    customization_type: "BASE_LAYOUT",
+                    is_required: false,
+                    price_adjustment: (data.price_adjustment as number) || 0,
+                    text: (data.text as string) || "",
+                    selected_option: data.selected_option as string | undefined,
+                    selected_option_label: data.selected_option_label as
+                      | string
+                      | undefined,
+                    label_selected:
+                      (data.label_selected as string) ||
+                      (data.selected_item_label as string) ||
+                      (data.selected_option_label as string),
+                    additional_time: (data.additional_time as number) || 0,
+                    data: data,
+                    value:
+                      typeof customization.value === "string"
+                        ? customization.value
+                        : JSON.stringify(customization.value),
+                  });
+                } else {
+                  customizations.push({
+                    id: customization.id,
+                    componentId, // ✅ Set componentId
+                    customization_id: customizationId,
+                    title: (data.title as string) || "Personalização",
+                    customization_type:
+                      (customizationType as CustomizationTypeValue) || "TEXT",
+                    is_required: false,
+                    price_adjustment: (data.price_adjustment as number) || 0,
+                    data: data,
+                    value:
+                      typeof customization.value === "string"
+                        ? customization.value
+                        : JSON.stringify(customization.value),
+                  });
+                }
+              } catch (error) {
+                console.error("Erro ao parsear customização:", error);
+              }
+            }
+          }
+
+          const customizationTotal = customizations.reduce(
+            (sum, c) => sum + (c.price_adjustment || 0),
+            0
+          );
+
+          const baseEffective =
+            product.price * (1 - (product.discount || 0) / 100);
+          const effectivePrice = Number(
+            (baseEffective + customizationTotal).toFixed(2)
+          );
+
+          cartItems.push({
+            product_id: orderItem.product_id,
+            quantity: orderItem.quantity,
+            price: product.price,
+            effectivePrice,
+            discount: product.discount || 0,
+            additional_ids:
+              orderItem.additionals?.map(
+                (add: { additional_id: string }) => add.additional_id
+              ) || [],
+            additionals,
+            customizations:
+              customizations.length > 0 ? customizations : undefined,
+            customization_total:
+              customizationTotal > 0 ? customizationTotal : undefined,
+            product,
+          });
+        } catch (err) {
+          console.error(`Erro ao transformar item ${orderItem.id}:`, err);
+        }
+      }
+
+      return cartItems;
+    },
+    [api]
+  );
+
   // Carregar pedido pendente existente quando usuário faz login
   useEffect(() => {
     const loadPendingOrder = async () => {
@@ -329,168 +521,7 @@ export function useCart(): CartContextType {
           pendingOrder.items &&
           pendingOrder.items.length > 0
         ) {
-          const cartItems: CartItem[] = [];
-
-          for (const orderItem of pendingOrder.items) {
-            const product = await api.getProduct(orderItem.product_id);
-
-            const additionals =
-              orderItem.additionals && orderItem.additionals.length > 0
-                ? await Promise.all(
-                    orderItem.additionals.map(
-                      (add: { additional_id: string }) =>
-                        api.getAdditional(add.additional_id)
-                    )
-                  )
-                : [];
-
-            const customizations: CartCustomization[] = [];
-            if (
-              orderItem.customizations &&
-              orderItem.customizations.length > 0
-            ) {
-              for (const customization of orderItem.customizations) {
-                try {
-                  // ✅ Desserializar campo 'value' que vem do backend como string JSON
-                  let data: Record<string, unknown> = {};
-
-                  if (typeof customization.value === "string") {
-                    data = JSON.parse(customization.value);
-                  } else if (
-                    typeof customization.value === "object" &&
-                    customization.value !== null
-                  ) {
-                    data = customization.value as Record<string, unknown>;
-                  }
-
-                  // ✅ Se não temos customization_type em data, tentar usar do objeto principal
-                  const customizationType = (data.customization_type ||
-                    customization.customization_type ||
-                    "TEXT") as string;
-
-                  if (customizationType === "TEXT") {
-                    customizations.push({
-                      customization_id: customization.customization_id,
-                      title: (data.title as string) || "Personalização",
-                      customization_type: "TEXT",
-                      is_required: false,
-                      price_adjustment: (data.price_adjustment as number) || 0,
-                      text: (data.text as string) || "",
-                      value:
-                        typeof customization.value === "string"
-                          ? customization.value
-                          : JSON.stringify(customization.value),
-                    });
-                  } else if (customizationType === "MULTIPLE_CHOICE") {
-                    customizations.push({
-                      customization_id: customization.customization_id,
-                      title: (data.title as string) || "Personalização",
-                      customization_type: "MULTIPLE_CHOICE",
-                      is_required: false,
-                      price_adjustment: (data.price_adjustment as number) || 0,
-                      selected_option: data.selected_option as
-                        | string
-                        | undefined,
-                      selected_option_label: data.selected_option_label as
-                        | string
-                        | undefined,
-                      label_selected:
-                        (data.label_selected as string) ||
-                        (data.selected_option_label as string),
-                      value:
-                        typeof customization.value === "string"
-                          ? customization.value
-                          : JSON.stringify(customization.value),
-                    });
-                  } else if (customizationType === "IMAGES") {
-                    customizations.push({
-                      customization_id: customization.customization_id,
-                      title: (data.title as string) || "Personalização",
-                      customization_type: "IMAGES",
-                      is_required: false,
-                      price_adjustment: (data.price_adjustment as number) || 0,
-                      photos: (data.photos as PhotoUploadData[]) || [],
-                      value:
-                        typeof customization.value === "string"
-                          ? customization.value
-                          : JSON.stringify(customization.value),
-                    });
-                  } else if (customizationType === "BASE_LAYOUT") {
-                    customizations.push({
-                      customization_id: customization.customization_id,
-                      title: (data.title as string) || "Layout",
-                      customization_type: "BASE_LAYOUT",
-                      is_required: false,
-                      price_adjustment: (data.price_adjustment as number) || 0,
-                      text: (data.text as string) || "",
-                      selected_option: data.selected_option as
-                        | string
-                        | undefined,
-                      selected_option_label: data.selected_option_label as
-                        | string
-                        | undefined,
-                      label_selected:
-                        (data.label_selected as string) ||
-                        (data.selected_item_label as string) ||
-                        (data.selected_option_label as string),
-                      additional_time: (data.additional_time as number) || 0,
-                      data: data, // ✅ Armazenar TODOS os dados
-                      value:
-                        typeof customization.value === "string"
-                          ? customization.value
-                          : JSON.stringify(customization.value),
-                    });
-                  } else {
-                    // Fallback para tipos desconhecidos
-                    customizations.push({
-                      customization_id: customization.customization_id,
-                      title: (data.title as string) || "Personalização",
-                      customization_type:
-                        (customizationType as CustomizationTypeValue) || "TEXT",
-                      is_required: false,
-                      price_adjustment: (data.price_adjustment as number) || 0,
-                      data: data,
-                      value:
-                        typeof customization.value === "string"
-                          ? customization.value
-                          : JSON.stringify(customization.value),
-                    });
-                  }
-                } catch (error) {
-                  console.error("Erro ao parsear customização:", error);
-                }
-              }
-            }
-
-            const customizationTotal = customizations.reduce(
-              (sum, c) => sum + (c.price_adjustment || 0),
-              0
-            );
-
-            const baseEffective =
-              product.price * (1 - (product.discount || 0) / 100);
-            const effectivePrice = Number(
-              (baseEffective + customizationTotal).toFixed(2)
-            );
-
-            cartItems.push({
-              product_id: orderItem.product_id,
-              quantity: orderItem.quantity,
-              price: product.price,
-              effectivePrice,
-              discount: product.discount || 0,
-              additional_ids:
-                orderItem.additionals?.map(
-                  (add: { additional_id: string }) => add.additional_id
-                ) || [],
-              additionals,
-              customizations:
-                customizations.length > 0 ? customizations : undefined,
-              customization_total:
-                customizationTotal > 0 ? customizationTotal : undefined,
-              product,
-            });
-          }
+          const cartItems = await transformOrderToCartItems(pendingOrder);
 
           // Carregar metadata do pedido
           if (
@@ -521,7 +552,7 @@ export function useCart(): CartContextType {
     };
 
     loadPendingOrder();
-  }, [user, api, calculateTotals, setOrderMetadata]);
+  }, [user, api, calculateTotals, setOrderMetadata, transformOrderToCartItems]);
 
   const cartItemsToOrderItems = useCallback((items: CartItem[]) => {
     return items.map((item) => ({
@@ -542,7 +573,9 @@ export function useCart(): CartContextType {
           photos: custom.photos,
           selected_option: custom.selected_option,
           selected_item: custom.selected_item,
-          // ✅ CRITICAL: Include all label fields for BASE_LAYOUT and other types
+          // ✅ CRITICAL: Include componentId for instance isolation
+          componentId: custom.componentId,
+          // ✅ Include all label fields for BASE_LAYOUT and other types
           selected_option_label: custom.selected_option_label,
           selected_item_label: custom.selected_item_label,
           label_selected: custom.label_selected,
@@ -573,9 +606,28 @@ export function useCart(): CartContextType {
         const itemsPayload = cartItemsToOrderItems(currentCart.items);
 
         if (itemsPayload.length === 0) {
-          if (pendingOrderId) {
+          if (pendingOrderId && getOrderAttemptedRef.current.has(pendingOrderId)) {
+            // Já tentamos carregar essa order, não fazer novamente
+            try {
+              // Se já carregamos antes, só checar se está PENDING antes de deletar
+              // Sem fazer uma nova requisição
+              await api.deleteOrder(pendingOrderId);
+              setPendingOrderId(null);
+              setOrderMetadata({
+                send_anonymously: false,
+                complement: undefined,
+              });
+            } catch (error) {
+              console.error(
+                "Erro ao deletar pedido pendente:",
+                error
+              );
+            }
+          } else if (pendingOrderId) {
+            // Primeira vez tentando carregar
             try {
               const serverOrder = await api.getOrder(pendingOrderId);
+              getOrderAttemptedRef.current.add(pendingOrderId);
               const status = serverOrder?.status;
               if (status && (status === "PENDING" || status === "pending")) {
                 await api.deleteOrder(pendingOrderId);
@@ -634,13 +686,24 @@ export function useCart(): CartContextType {
               send_anonymously: !!order.send_anonymously,
               complement: order.complement || undefined,
             });
+            // ✅ Sincronizar estado local com IDs do backend
+            const updatedItems = await transformOrderToCartItems(order);
+            setCart(calculateTotals(updatedItems));
           }
         } else {
-          await api.updateOrderItems(pendingOrderId, itemsPayload);
+          const order = await api.updateOrderItems(
+            pendingOrderId,
+            itemsPayload
+          );
           await api.updateOrderMetadata(pendingOrderId, {
             send_anonymously: orderMetadata.send_anonymously,
             complement: orderMetadata.complement,
           });
+          // ✅ Sincronizar estado local com novos IDs (o backend deleta e recria)
+          if (order) {
+            const updatedItems = await transformOrderToCartItems(order);
+            setCart(calculateTotals(updatedItems));
+          }
         }
       } catch (error: unknown) {
         console.error("Erro ao sincronizar carrinho com backend:", error);
@@ -679,6 +742,9 @@ export function useCart(): CartContextType {
       user,
       orderMetadata,
       setOrderMetadata,
+      transformOrderToCartItems,
+      calculateTotals,
+      setCart,
     ]
   );
 
@@ -713,7 +779,10 @@ export function useCart(): CartContextType {
       if (!user) return;
 
       try {
-        if (pendingOrderId) {
+        if (pendingOrderId && !getOrderAttemptedRef.current.has(pendingOrderId)) {
+          // Marcar como já tentado para evitar múltiplas requisições
+          getOrderAttemptedRef.current.add(pendingOrderId);
+          
           // Tentar recuperar pedido pendente e preencher o carrinho local caso esteja vazio
           const serverOrder = await api.getOrder(pendingOrderId);
           if (serverOrder?.items && serverOrder.items.length > 0) {
@@ -814,8 +883,14 @@ export function useCart(): CartContextType {
     };
 
     init();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user]);
+  }, [
+    user,
+    pendingOrderId,
+    api,
+    calculateTotals,
+    syncCartToBackend,
+    cart.items.length,
+  ]);
 
   const addToCart = useCallback(
     async (
@@ -1149,9 +1224,14 @@ export function useCart(): CartContextType {
     const merged = [...existing];
 
     for (const newCustom of updated) {
-      const existingIndex = merged.findIndex(
-        (c) => c.customization_id === newCustom.customization_id
-      );
+      const existingIndex = merged.findIndex((c) => {
+        // ✅ Se ambos têm 'id' (record ID), usar para match exato
+        if (c.id && newCustom.id) {
+          return c.id === newCustom.id;
+        }
+        // ✅ Fallback: match por Rule ID (apenas para novas customizações ainda não salvas)
+        return c.customization_id === newCustom.customization_id;
+      });
 
       if (existingIndex >= 0) {
         // Atualizar customização existente

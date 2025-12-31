@@ -18,10 +18,7 @@ const FeedBannerCarousel = dynamic(
 const FeedSection = dynamic(() => import("./components/feed/FeedSection"), {
   loading: () => <div className="h-36 bg-gray-100 animate-pulse" />,
 });
-import { getInternalImageUrl } from "@/lib/image-helper";
-import Image from "next/image";
 import InfiniteScroll from "react-infinite-scroll-component";
-import WhatsappToggle from "./components/whatsappToggle";
 
 interface GridProduct {
   id: string;
@@ -33,10 +30,11 @@ interface GridProduct {
   categoryNames?: string[];
 }
 
+import HomeSkeleton from "./components/feed/HomeSkeleton";
+
 export default function Home() {
   const api = useApi();
   const [loading, setLoading] = useState(false);
-  const LOADER_SHOW_DELAY = 180;
   const [initialLoad, setInitialLoad] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [products, setProducts] = useState<GridProduct[]>([]);
@@ -92,6 +90,7 @@ export default function Home() {
 
   useEffect(() => {
     const loadData = async () => {
+      // 1. Tentar carregar do cache para renderização instantânea (opcional se feedData for rápido)
       if (cachedData?.products) {
         try {
           const productsCache = cachedData?.products as unknown as {
@@ -112,87 +111,55 @@ export default function Home() {
               }))
               .slice(0, 8);
             setProducts(featuredProducts);
-            setInitialLoad(false);
           }
         } catch { }
       }
 
-      const loaderTimer = window.setTimeout(
-        () => setLoading(true),
-        LOADER_SHOW_DELAY
-      );
-      const fallback = useFallback;
       setError(null);
 
       try {
         let feed: PublicFeedResponse | null = null;
         try {
+          // Busca o feed público (banners + seções iniciais)
           feed = await api.getPublicFeed(undefined, 1, perPage);
           setFeedData(feed);
           setSections(feed?.sections || []);
           setPagination(feed?.pagination || null);
           setPage(1);
-          if (feed && feed.sections && feed.sections.length > 0) {
-            setUseFallback(false);
-            if (loaderTimer) clearTimeout(loaderTimer);
-            setLoading(false);
-            setInitialLoad(false);
-          }
+          setUseFallback(false);
+          setInitialLoad(false);
         } catch (feedError) {
           console.error("❌ Erro ao carregar feed:", feedError);
           setUseFallback(true);
-        }
 
-        if (!feed || fallback) {
+          // Fallback para produtos se o feed falhar
           const productsResponse = await api.getProducts({ perPage: 8 });
           const featuredProducts = productsResponse.products.map(
-            (product: ApiProduct) => {
-              const categoryName =
-                product.categories && product.categories.length > 0
-                  ? product.categories[0].name
-                  : "Sem categoria";
-
-              return {
-                id: product.id,
-                name: product.name,
-                price: product.price,
-                discount: product.discount || undefined,
-                image_url: product.image_url || null,
-                categoryName,
-                categoryNames: product.categories?.map((cat) => cat.name) || [],
-              };
-            }
+            (product: ApiProduct) => ({
+              id: product.id,
+              name: product.name,
+              price: product.price,
+              discount: product.discount || undefined,
+              image_url: product.image_url || null,
+              categoryName: product.categories?.[0]?.name || "Sem categoria",
+              categoryNames: product.categories?.map((cat) => cat.name) || [],
+            })
           );
-
           setProducts(featuredProducts.slice(0, 8));
+          setInitialLoad(false);
         }
       } catch (err: unknown) {
         console.error("❌ Erro crítico ao carregar dados:", err);
-
-        const errorMessage =
-          err instanceof Error ? err.message : "Erro desconhecido";
-
-        if (
-          errorMessage.includes("database") ||
-          errorMessage.includes("connection") ||
-          errorMessage.includes("Network Error") ||
-          errorMessage.includes("ERR_CONNECTION")
-        ) {
-          setError(
-            "Erro de conexão com o servidor. Verifique se o ngrok está rodando e a URL está correta."
-          );
-        } else {
-          setError(`Não foi possível carregar os dados. Erro: ${errorMessage}`);
-        }
-      } finally {
-        if (loaderTimer) clearTimeout(loaderTimer);
-        setLoading(false);
+        const errorMessage = err instanceof Error ? err.message : "Erro desconhecido";
+        setError(errorMessage.includes("connection") ? "Erro de conexão com o servidor." : `Não foi possível carregar os dados: ${errorMessage}`);
         setInitialLoad(false);
+      } finally {
+        setLoading(false);
       }
     };
 
     loadData();
-  }, [api, cachedData, perPage, useFallback]);
+  }, [api, cachedData, perPage]);
 
   const handleRetry = () => {
     api.invalidateCache();
@@ -213,23 +180,8 @@ export default function Home() {
     }
   };
 
-  if (initialLoad || loading) {
-    return (
-      <div className="fixed z-50 bg-white flex justify-center items-center inset-0 h-[100vh]">
-        <div className="animate-pulse flex flex-col items-center">
-          <Image
-            src={getInternalImageUrl("/logocestodamore.png")}
-            alt="Cesto d'Amore"
-            className="w-14 h-14"
-            width={56}
-            height={56}
-          />
-          <span className="text-xs text-gray-500">
-            Preparando tudo para você
-          </span>
-        </div>
-      </div>
-    );
+  if (initialLoad) {
+    return <HomeSkeleton />;
   }
 
   return (

@@ -15,7 +15,11 @@ import {
 import { Button } from "@/app/components/ui/button";
 import { Badge } from "@/app/components/ui/badge";
 import { cn } from "@/app/lib/utils";
-import useApi, { Additional, Item, Product } from "@/app/hooks/use-api";
+import useApi, {
+  Additional,
+  Product,
+  ProductComponent,
+} from "@/app/hooks/use-api";
 import { useCartContext } from "@/app/hooks/cart-context";
 import type { CartCustomization } from "@/app/hooks/use-cart";
 import { Model3DViewer } from "./Model3DViewer";
@@ -49,8 +53,9 @@ const ClientProductPage = ({ id }: { id: string }) => {
   const [quantity, setQuantity] = useState(1);
   const [addingToCart, setAddingToCart] = useState(false);
   const [additionals, setAdditionals] = useState<Additional[]>([]);
-  const [components, setComponents] = useState<Item[]>([]);
-  const [selectedComponent, setSelectedComponent] = useState<Item | null>(null);
+  const [components, setComponents] = useState<ProductComponent[]>([]);
+  const [selectedComponent, setSelectedComponent] =
+    useState<ProductComponent | null>(null);
   const [itemCustomizations, setItemCustomizations] = useState<
     Record<string, CustomizationInput[]>
   >({});
@@ -97,59 +102,8 @@ const ClientProductPage = ({ id }: { id: string }) => {
     []
   );
 
-  // Persistence logic
-  useEffect(() => {
-    if (!id) return;
-    const key = `product_customization_v1_${id}`;
-    const saved = sessionStorage.getItem(key);
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (parsed.itemCustomizations)
-          setItemCustomizations(parsed.itemCustomizations);
-        if (parsed.additionalCustomizations)
-          setAdditionalCustomizations(parsed.additionalCustomizations);
-        if (parsed.customizationPreviews)
-          setCustomizationPreviews(parsed.customizationPreviews);
-
-        // Removed toast to avoid spam on every page load, or use a subtle indicator
-        // toast.info("Personalizações restauradas.");
-      } catch (e) {
-        console.error("Erro ao restaurar personalizações:", e);
-      }
-    }
-  }, [id]);
-
-  useEffect(() => {
-    if (!id) return;
-    const key = `product_customization_v1_${id}`;
-
-    // Check if we have any data to save
-    const hasData =
-      Object.keys(itemCustomizations).length > 0 ||
-      Object.keys(additionalCustomizations).length > 0;
-
-    if (hasData) {
-      const dataToSave = {
-        itemCustomizations,
-        additionalCustomizations,
-        customizationPreviews,
-      };
-      try {
-        sessionStorage.setItem(key, JSON.stringify(dataToSave));
-      } catch (e) {
-        console.warn(
-          "Falha ao salvar personalizações (provavelmente limite de quota):",
-          e
-        );
-      }
-    } else {
-      // Optional: clear if empty? Or keep previous?
-      // Keeping previous might be safer if state was just cleared by mistake, but usually we want to sync.
-      // However, cleaning up when empty is good.
-      // sessionStorage.removeItem(key);
-    }
-  }, [id, itemCustomizations, additionalCustomizations, customizationPreviews]);
+  // ❌ REMOVIDO: sessionStorage causava conflitos com dados do banco de dados
+  // As customizações agora são salvas diretamente no carrinho/pedido e recuperadas de lá
 
   const handleCustomizationComplete = useCallback(
     (
@@ -493,6 +447,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
 
             return {
               customization_id: input.ruleId || `item_${itemId}`,
+              componentId: itemId, // ✅ Add componentId
               title: customizationName,
               customization_type: "TEXT",
               is_required: false,
@@ -508,6 +463,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
 
             return {
               customization_id: input.ruleId || `item_${itemId}`,
+              componentId: itemId, // ✅ Add componentId
               title: customizationName,
               customization_type: "MULTIPLE_CHOICE",
               is_required: false,
@@ -578,6 +534,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
 
             return {
               customization_id: input.ruleId || `item_${itemId}`,
+              componentId: itemId, // ✅ Add componentId
               title: customizationName,
               customization_type: "IMAGES",
               is_required: false,
@@ -593,6 +550,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
 
             const baseObj = {
               customization_id: input.ruleId || `item_${itemId}`,
+              componentId: itemId, // ✅ Add componentId
               title: customizationName,
               customization_type: "BASE_LAYOUT" as const,
               is_required: false,
@@ -654,7 +612,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
           const componentCustomizations =
             itemCustomizations[component.id] || [];
           console.log(
-            `🔍 [handleAddAdditionalToCart] Customizações do componente ${component.name}:`,
+            `🔍 [handleAddAdditionalToCart] Customizações do componente ${component.item.name}:`,
             componentCustomizations
           );
           for (const custom of componentCustomizations) {
@@ -752,10 +710,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
           Array.isArray(data.components) &&
           data.components.length > 0
         ) {
-          const itemsFromProduct = data.components
-            .map((c: { item?: Item | null }) => c.item)
-            .filter(Boolean) as Item[];
-          setComponents(itemsFromProduct);
+          setComponents(data.components);
         } else {
           await fetchComponents();
         }
@@ -780,7 +735,14 @@ const ClientProductPage = ({ id }: { id: string }) => {
     const fetchComponents = async () => {
       try {
         const data = await getItemsByProduct(id);
-        setComponents(data || []);
+        const mapped: ProductComponent[] = (data || []).map((item) => ({
+          id: item.id, // Fallback: use item.id as component.id
+          product_id: id,
+          item_id: item.id,
+          quantity: 1,
+          item: item,
+        }));
+        setComponents(mapped);
       } catch (error) {
         console.error("Erro ao carregar componentes:", error);
         toast.error("Erro ao carregar componentes");
@@ -886,7 +848,9 @@ const ClientProductPage = ({ id }: { id: string }) => {
         }
 
         return (
-          previewComponent.image_url || product.image_url || "/placeholder.png"
+          previewComponent.item.image_url ||
+          product.image_url ||
+          "/placeholder.png"
         );
       }
     }
@@ -896,7 +860,9 @@ const ClientProductPage = ({ id }: { id: string }) => {
     }
 
     return (
-      selectedComponent?.image_url || product.image_url || "/placeholder.png"
+      selectedComponent?.item.image_url ||
+      product.image_url ||
+      "/placeholder.png"
     );
   }, [
     selectedComponent,
@@ -907,7 +873,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
     itemCustomizations,
   ]);
 
-  const currentName = selectedComponent?.name || product.name;
+  const currentName = selectedComponent?.item.name || product.name;
 
   const { shouldShow3D, modelUrl, textureUrl, shouldUse3D, itemType } =
     useMemo(() => {
@@ -923,7 +889,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
           shouldUse3D: false,
           itemType: undefined,
         };
-      if (!componentToCheck.allows_customization)
+      if (!componentToCheck.item.allows_customization)
         return {
           shouldShow3D: false,
           modelUrl: undefined,
@@ -985,17 +951,19 @@ const ClientProductPage = ({ id }: { id: string }) => {
     const missingCustomizations: string[] = [];
 
     components.forEach((component) => {
-      if (!component.allows_customization) return;
+      if (!component.item.allows_customization) return;
 
       const requiredCustomizations =
-        component.customizations?.filter((c) => c.isRequired) || [];
+        component.item.customizations?.filter((c) => c.isRequired) || [];
       const componentData = itemCustomizations[component.id] || [];
 
       requiredCustomizations.forEach((reqCustom) => {
         const hasData = componentData.some((c) => c.ruleId === reqCustom.id);
 
         if (!hasData) {
-          missingCustomizations.push(`${component.name} - ${reqCustom.name}`);
+          missingCustomizations.push(
+            `${component.item.name} - ${reqCustom.name}`
+          );
         } else {
           // Verificar se os dados estão preenchidos
           const customData = componentData.find(
@@ -1012,8 +980,13 @@ const ClientProductPage = ({ id }: { id: string }) => {
                     fields?: Array<{ id: string }>;
                   }
                 )?.fields || [];
+
+              // ✅ Aceitar tanto data[field.id] quanto data.fields[field.id]
+              const fieldsData =
+                (data.fields as Record<string, string> | undefined) || data;
+
               const hasEmptyField = fields.some((field) => {
-                const value = data[field.id];
+                const value = fieldsData[field.id];
                 return (
                   !value || (typeof value === "string" && value.trim() === "")
                 );
@@ -1021,7 +994,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
 
               if (hasEmptyField) {
                 missingCustomizations.push(
-                  `${component.name} - ${reqCustom.name} (campo vazio)`
+                  `${component.item.name} - ${reqCustom.name} (campo vazio)`
                 );
               }
             }
@@ -1049,27 +1022,37 @@ const ClientProductPage = ({ id }: { id: string }) => {
 
               if (!hasPhotos) {
                 missingCustomizations.push(
-                  `${component.name} - ${reqCustom.name} (sem fotos)`
+                  `${component.item.name} - ${reqCustom.name} (sem fotos)`
                 );
               }
             }
 
             // Validar MULTIPLE_CHOICE
             if (reqCustom.type === "MULTIPLE_CHOICE") {
-              const choice = data as { id?: string } | undefined;
-              if (!choice || !choice.id) {
+              const choice = data as
+                | { id?: string; selected_option?: string }
+                | undefined;
+              // ✅ Aceitar tanto id quanto selected_option para compatibilidade
+              const hasOptionSelected =
+                choice && (choice.id || choice.selected_option);
+              if (!hasOptionSelected) {
                 missingCustomizations.push(
-                  `${component.name} - ${reqCustom.name} (nenhuma opção selecionada)`
+                  `${component.item.name} - ${reqCustom.name} (nenhuma opção selecionada)`
                 );
               }
             }
 
             // Validar BASE_LAYOUT
             if (reqCustom.type === "BASE_LAYOUT") {
-              const layout = data as { id?: string } | undefined;
-              if (!layout || !layout.id) {
+              const layout = data as
+                | { id?: string; layout_id?: string }
+                | undefined;
+              // Aceitar tanto id quanto layout_id para compatibilidade
+              const hasLayoutSelected =
+                layout && (layout.id || layout.layout_id);
+              if (!hasLayoutSelected) {
                 missingCustomizations.push(
-                  `${component.name} - ${reqCustom.name} (nenhum layout selecionado)`
+                  `${component.item.name} - ${reqCustom.name} (nenhum layout selecionado)`
                 );
               }
             }
@@ -1104,6 +1087,9 @@ const ClientProductPage = ({ id }: { id: string }) => {
       for (const [itemId, customizationInputs] of Object.entries(
         itemCustomizations
       )) {
+        // ✅ itemId é na verdade o component.id (ProductComponent.id)
+        const componentId = itemId;
+
         for (const input of customizationInputs) {
           const data = input.data as Record<string, unknown>;
           const customizationName =
@@ -1118,6 +1104,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
 
             cartCustomizations.push({
               customization_id: input.ruleId || `item_${itemId}`,
+              componentId, // ✅ Add componentId
               title: customizationName,
               customization_type: "TEXT",
               is_required: false,
@@ -1133,6 +1120,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
 
             cartCustomizations.push({
               customization_id: input.ruleId || `item_${itemId}`,
+              componentId, // ✅ Add componentId
               title: customizationName,
               customization_type: "MULTIPLE_CHOICE",
               is_required: false,
@@ -1203,6 +1191,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
 
             cartCustomizations.push({
               customization_id: input.ruleId || `item_${itemId}`,
+              componentId, // ✅ Add componentId
               title: customizationName,
               customization_type: "IMAGES",
               is_required: false,
@@ -1224,6 +1213,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
 
             const cartCustomization: CartCustomization = {
               customization_id: input.ruleId || `item_${itemId}`,
+              componentId, // ✅ Add componentId
               title: customizationName,
               customization_type: "BASE_LAYOUT",
               is_required: false,
@@ -1501,20 +1491,20 @@ const ClientProductPage = ({ id }: { id: string }) => {
                           ? "border-blue-500 ring-2 ring-blue-100"
                           : "border-gray-300"
                       )}
-                      title={component.name}
+                      title={component.item.name}
                     >
                       <Button
                         asChild
                         className="w-full h-full p-0 rounded-lg overflow-hidden"
                         onClick={() => setSelectedComponent(component)}
-                        aria-label={`Selecionar componente ${component.name}`}
+                        aria-label={`Selecionar componente ${component.item.name}`}
                       >
                         <Image
                           src={
-                            getInternalImageUrl(component.image_url) ||
+                            getInternalImageUrl(component.item.image_url) ||
                             "/placeholder.png"
                           }
-                          alt={component.name}
+                          alt={component.item.name}
                           fill
                           className="object-cover rounded-lg"
                           priority
@@ -1607,7 +1597,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
 
             <div className="flex flex-col h-fit overflow-hidden">
               <div className="flex-1 overflow-y-auto space-y-6 pr-2">
-                {components.filter((c) => c.allows_customization).length >
+                {components.filter((c) => c.item.allows_customization).length >
                   0 && (
                   <div className="space-y-4 border-t pt-4">
                     <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
@@ -1617,20 +1607,21 @@ const ClientProductPage = ({ id }: { id: string }) => {
 
                     <div className="space-y-2">
                       {components
-                        .filter((c) => c.allows_customization)
+                        .filter((c) => c.item.allows_customization)
                         .map((component) => {
                           const hasCustomizations =
                             itemCustomizations[component.id]?.length > 0;
                           const requiredCount =
-                            component.customizations?.filter(
+                            component.item.customizations?.filter(
                               (c) => c.isRequired
                             ).length || 0;
                           const totalCount =
-                            component.customizations?.length || 0;
+                            component.item.customizations?.length || 0;
 
-                          const hasBaseLayout = component.customizations?.some(
-                            (c) => c.type === "BASE_LAYOUT"
-                          );
+                          const hasBaseLayout =
+                            component.item.customizations?.some(
+                              (c) => c.type === "BASE_LAYOUT"
+                            );
 
                           return (
                             <Button
@@ -1649,17 +1640,17 @@ const ClientProductPage = ({ id }: { id: string }) => {
                                   <Image
                                     src={
                                       getInternalImageUrl(
-                                        component.image_url
+                                        component.item.image_url
                                       ) || "/placeholder.png"
                                     }
-                                    alt={component.name}
+                                    alt={component.item.name}
                                     fill
                                     className="object-cover"
                                   />
                                 </div>
                                 <div className="text-left min-w-0 flex-1">
                                   <p className="font-medium text-sm sm:text-base truncate">
-                                    {component.name}{" "}
+                                    {component.item.name}{" "}
                                     {requiredCount > 0 && (
                                       <span className="text-red-500">*</span>
                                     )}
@@ -1750,7 +1741,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
                   {(() => {
                     const hasProductRequiredCustomizations = components.some(
                       (component) =>
-                        component.customizations?.some((c) => c.isRequired)
+                        component.item.customizations?.some((c) => c.isRequired)
                     );
 
                     let hasCompletedProductCustomizations = true;
@@ -1758,7 +1749,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
                       hasCompletedProductCustomizations = components.every(
                         (component) => {
                           const requiredCustomizations =
-                            component.customizations?.filter(
+                            component.item.customizations?.filter(
                               (c) => c.isRequired
                             ) || [];
                           if (requiredCustomizations.length === 0) return true;
@@ -1792,14 +1783,16 @@ const ClientProductPage = ({ id }: { id: string }) => {
                     {additionals.map((additional) => {
                       const hasProductRequiredCustomizations = components.some(
                         (component) =>
-                          component.customizations?.some((c) => c.isRequired)
+                          component.item.customizations?.some(
+                            (c) => c.isRequired
+                          )
                       );
                       let hasCompletedProductCustomizations = true;
                       if (hasProductRequiredCustomizations) {
                         hasCompletedProductCustomizations = components.every(
                           (component) => {
                             const requiredCustomizations =
-                              component.customizations?.filter(
+                              component.item.customizations?.filter(
                                 (c) => c.isRequired
                               ) || [];
                             if (requiredCustomizations.length === 0)
@@ -1877,15 +1870,15 @@ const ClientProductPage = ({ id }: { id: string }) => {
       </div>
 
       {components
-        .filter((c) => c.allows_customization)
+        .filter((c) => c.item.allows_customization)
         .map((component) => (
           <ItemCustomizationModal
             key={component.id}
             isOpen={activeCustomizationModal === component.id}
             onClose={() => setActiveCustomizationModal(null)}
-            itemId={component.id}
-            itemName={component.name}
-            customizations={(component.customizations || []).map((c) => ({
+            itemId={component.item.id}
+            itemName={component.item.name}
+            customizations={(component.item.customizations || []).map((c) => ({
               id: c.id,
               name: c.name,
               description: c.description,
@@ -1935,7 +1928,9 @@ const ClientProductPage = ({ id }: { id: string }) => {
               url !== "3D_MODEL" &&
               handlePreviewChange(component.id, url)
             }
-            onImagesUpdate={handleImagesUpdate}
+            onImagesUpdate={(id, current, max) =>
+              handleImagesUpdate(component.id, current, max)
+            }
           />
         ))}
 

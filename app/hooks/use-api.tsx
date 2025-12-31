@@ -354,19 +354,19 @@ export type CustomizationTypeValue =
 
 export type CustomizationAvailableOptions =
   | Array<{
-    label: string;
-    value: string;
-    price_adjustment?: number;
-  }>
+      label: string;
+      value: string;
+      price_adjustment?: number;
+    }>
   | {
-    items: Array<{
-      original_item: string;
-      available_substitutes: Array<{
-        item: string;
-        price_adjustment: number;
+      items: Array<{
+        original_item: string;
+        available_substitutes: Array<{
+          item: string;
+          price_adjustment: number;
+        }>;
       }>;
-    }>;
-  };
+    };
 
 export interface OrderItemAdditional {
   id: string;
@@ -378,6 +378,7 @@ export interface OrderItemAdditional {
 
 export interface OrderItemCustomizationSummary {
   id: string;
+  customization_id?: string | null;
   title: string;
   customization_type: CustomizationTypeValue;
   google_drive_url?: string | null;
@@ -1432,7 +1433,7 @@ class ApiService {
     onUpdate: (customizations: unknown[]) => void,
     interval = 10000
   ) {
-    if (typeof window === "undefined") return () => { };
+    if (typeof window === "undefined") return () => {};
     if (this.activePollers[orderId]) clearInterval(this.activePollers[orderId]);
     const id = window.setInterval(async () => {
       try {
@@ -1483,6 +1484,34 @@ class ApiService {
     }>;
   }> => {
     const res = await this.client.get(`/orders/${orderId}/customizations`);
+    return res.data;
+  };
+
+  getCustomizationReviewData = async (
+    orderId: string
+  ): Promise<
+    Array<{
+      orderItemId: string;
+      productId: string;
+      productName: string;
+      availableCustomizations: Array<{
+        id: string;
+        name: string;
+        type: string;
+        isRequired: boolean;
+        itemId: string;
+        itemName: string;
+        componentId: string;
+      }>;
+      filledCustomizations: Array<{
+        id: string;
+        order_item_id: string;
+        customization_id: string;
+        value: Record<string, unknown> | null;
+      }>;
+    }>
+  > => {
+    const res = await this.client.get(`/customization/review/${orderId}`);
     return res.data;
   };
 
@@ -1672,7 +1701,8 @@ class ApiService {
       );
       photos.forEach((photo: Record<string, unknown>, idx: number) => {
         console.log(
-          `   [${idx}] ${photo.original_name
+          `   [${idx}] ${
+            photo.original_name
           }: base64=${!!photo.base64}, preview_url=${photo.preview_url}`
         );
       });
@@ -2019,8 +2049,8 @@ class ApiService {
         console.error("📄 Data:", axiosError.response.data);
         throw new Error(
           axiosError.response.data?.error ||
-          axiosError.response.data?.message ||
-          "Erro na requisição"
+            axiosError.response.data?.message ||
+            "Erro na requisição"
         );
       }
       throw error;
@@ -2256,8 +2286,9 @@ class ApiService {
     page?: number,
     perPage?: number
   ): Promise<PublicFeedResponse> => {
-    const cacheKey = `publicFeed_${configId || "default"}_page_${page ?? "all"
-      }_per_${perPage ?? "all"}`;
+    const cacheKey = `publicFeed_${configId || "default"}_page_${
+      page ?? "all"
+    }_per_${perPage ?? "all"}`;
 
     // Retornar do cache se disponível
     if (ApiService.cache[cacheKey]) {

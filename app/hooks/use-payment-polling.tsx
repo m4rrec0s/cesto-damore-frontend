@@ -56,6 +56,7 @@ export function usePaymentPolling({
 
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const attemptsRef = useRef(0);
+  const hasTimeoutRef = useRef(false); // Previne restart após timeout
 
   const stopPolling = useCallback(() => {
     if (intervalRef.current) {
@@ -190,6 +191,7 @@ export function usePaymentPolling({
           "[Payment Polling] ⏱️ Timeout - máximo de tentativas atingido"
         );
         setStatus("timeout");
+        hasTimeoutRef.current = true; // Marca como com timeout para evitar restart
         stopPolling();
         onTimeout?.();
         return;
@@ -209,6 +211,7 @@ export function usePaymentPolling({
       // Em caso de erro, continua tentando até o timeout
       if (attemptsRef.current >= maxAttempts) {
         setStatus("timeout");
+        hasTimeoutRef.current = true; // Marca como com timeout para evitar restart
         stopPolling();
         onTimeout?.();
       }
@@ -254,11 +257,12 @@ export function usePaymentPolling({
     setAttempts(0);
     setError(null);
     attemptsRef.current = 0;
+    hasTimeoutRef.current = false; // Reset o flag de timeout
   }, [stopPolling]);
 
   // Auto-start quando enabled e orderId são fornecidos
   useEffect(() => {
-    if (enabled && orderId && status === "idle") {
+    if (enabled && orderId && status === "idle" && !hasTimeoutRef.current) {
       startPolling();
     }
 

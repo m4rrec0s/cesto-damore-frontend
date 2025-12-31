@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect } from "react";
 import { useAuth } from "../../hooks/use-auth";
 import { OrdersManager } from "../components/orders-manager";
 import { useRouter } from "next/navigation";

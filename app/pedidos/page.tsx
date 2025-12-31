@@ -17,25 +17,8 @@ import {
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { useApi } from "@/app/hooks/use-api";
+import { useApi, Order } from "@/app/hooks/use-api";
 import { getInternalImageUrl } from "@/lib/image-helper";
-
-interface Order {
-  id: string;
-  status: "PENDING" | "PAID" | "SHIPPED" | "DELIVERED" | "CANCELED";
-  total: number;
-  grand_total: number;
-  delivery_date: string | null;
-  created_at: string;
-  items: Array<{
-    product: {
-      name: string;
-      image_url?: string | null;
-    };
-    quantity: number;
-    price: number;
-  }>;
-}
 
 const statusConfig = {
   PENDING: {
@@ -252,10 +235,12 @@ export default function PedidosPage() {
                           key={idx}
                           className="flex items-center gap-3 bg-gray-50 rounded-lg p-2.5 sm:p-3"
                         >
-                          {item.product.image_url && (
+                          {item.product?.image_url && (
                             <div className="relative w-12 h-12 sm:w-14 sm:h-14 rounded-lg overflow-hidden bg-white flex-shrink-0">
                               <Image
-                                src={getInternalImageUrl(item.product.image_url)}
+                                src={getInternalImageUrl(
+                                  item.product.image_url
+                                )}
                                 alt={item.product.name}
                                 fill
                                 className="object-cover"
@@ -264,7 +249,7 @@ export default function PedidosPage() {
                           )}
                           <div className="flex-1 min-w-0">
                             <p className="text-xs sm:text-sm font-medium text-gray-900 truncate">
-                              {item.product.name}
+                              {item.product?.name}
                             </p>
                             <p className="text-xs text-gray-500">
                               Qtd: {item.quantity}

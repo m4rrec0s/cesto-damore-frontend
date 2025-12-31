@@ -130,7 +130,7 @@ export default function OrderDetailsPage() {
 
   useWebhookNotification({
     orderId: id,
-    enabled: Boolean(id),
+    enabled: false, // Desabilitar temporariamente para investigar loop
     onPaymentApproved: sseOnPaymentApproved,
   });
 

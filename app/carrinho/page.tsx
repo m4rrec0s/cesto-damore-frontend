@@ -3,43 +3,21 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useAuth } from "@/app/hooks/use-auth";
 import { useCartContext } from "@/app/hooks/cart-context";
-import { motion, AnimatePresence, easeIn, easeOut } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { type Order, useApi } from "@/app/hooks/use-api";
 import { usePaymentManager } from "@/app/hooks/use-payment-manager";
 import type { CartCustomization } from "@/app/hooks/use-cart";
 import { Card } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
-import { Label } from "@/app/components/ui/label";
-import { Calendar } from "@/app/components/ui/calendar";
-import { Alert, AlertDescription } from "@/app/components/ui/alert";
 import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/app/components/ui/popover";
-import {
-  Plus,
-  Minus,
-  Trash2,
   User,
   CreditCard,
   Loader2,
-  AlertCircle,
   MapPin,
-  CalendarIcon,
   ShoppingCart,
   CheckCircle2,
-  ArrowLeft,
-  XCircle,
-  RefreshCcw,
-  Car,
-  Store,
-  Info,
 } from "lucide-react";
-import { CustomizationsReview } from "./components/CustomizationsReview";
-import { TimeSlotSelector } from "./components/TimeSlotSelector";
 import Link from "next/link";
-import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
@@ -47,18 +25,13 @@ import {
   normalizePhoneForBackend,
   formatPhoneNumber,
 } from "@/app/lib/phoneMask";
-import { getInternalImageUrl } from "@/lib/image-helper";
-import { LoadingPayment } from "@/app/components/LoadingPayment";
 import { OrderConfirmationTicket } from "@/app/components/OrderConfirmationTicket";
 import { usePaymentPolling } from "@/app/hooks/use-payment-polling";
 import { useWebhookNotification } from "@/app/hooks/use-webhook-notification";
-import { QRCodePIX, type PixData } from "@/app/components/QRCodePIX";
-import {
-  MPCardPaymentForm,
-  type MPCardFormData,
-} from "@/app/components/mp-card-payment-form";
-import { PaymentMethodSelector } from "@/app/components/payment-method-selector";
-import { Input } from "../components/ui/input";
+import { type PixData } from "@/app/components/QRCodePIX";
+import { StepCart } from "./components/steps/StepCart";
+import { StepDelivery } from "./components/steps/StepDelivery";
+import { StepPayment } from "./components/steps/StepPayment";
 
 const ACCEPTED_CITIES = [
   "Campina Grande",
@@ -145,61 +118,6 @@ interface CartItem {
   customization_total?: number;
 }
 
-interface ProductCardProps {
-  item: CartItem;
-  updateQuantity: (
-    productId: string,
-    quantity: number,
-    additionalIds?: string[],
-    customizations?: CartCustomization[],
-    additionalColors?: Record<string, string>
-  ) => void;
-  removeFromCart: (
-    productId: string,
-    additionalIds?: string[],
-    customizations?: CartCustomization[],
-    additionalColors?: Record<string, string>
-  ) => void;
-  onEditCustomizations?: (item: CartItem) => void;
-  isProcessing?: boolean;
-}
-
-const formatCustomizationValue = (custom: CartCustomization) => {
-  switch (custom.customization_type) {
-    case "TEXT":
-      return custom.text?.trim() || "Mensagem não informada";
-    case "MULTIPLE_CHOICE":
-      return (
-        custom.label_selected ||
-        custom.selected_option_label ||
-        custom.selected_option ||
-        "Opção não selecionada"
-      );
-    case "BASE_LAYOUT":
-      // BASE_LAYOUT sempre deve retornar o label_selected
-      if (custom.label_selected) return custom.label_selected;
-      // Fallback se não houver label_selected
-      if (custom.selected_item_label) return custom.selected_item_label;
-      if (typeof custom.selected_item === "string") {
-        return custom.selected_item;
-      }
-      if (
-        custom.selected_item &&
-        typeof custom.selected_item === "object" &&
-        "selected_item" in custom.selected_item
-      ) {
-        return (
-          (custom.selected_item as { selected_item?: string }).selected_item ||
-          "Layout selecionado"
-        );
-      }
-      return "Layout selecionado";
-    case "IMAGES":
-      return `${custom.photos?.length || 0} foto(s)`;
-    default:
-      return "Personalização";
-  }
-};
 // Componente de Stepper Modernizado - Vertical em Mobile, Horizontal em Desktop
 const CheckoutStepper = ({ currentStep }: { currentStep: CheckoutStep }) => {
   const steps = [
@@ -372,144 +290,6 @@ const CheckoutStepper = ({ currentStep }: { currentStep: CheckoutStep }) => {
 };
 
 // Componentes funcionais para o layout responsivo
-const ProductCard = ({
-  item,
-  updateQuantity,
-  removeFromCart,
-  isProcessing,
-}: ProductCardProps) => {
-  return (
-    <div className="flex gap-6 py-6 border-b border-gray-100 last:border-0">
-      <div className="relative w-24 h-24 flex-shrink-0 rounded-xl overflow-hidden bg-gray-50">
-        <Image
-          src={
-            getInternalImageUrl(item.product.image_url) || "/placeholder.png"
-          }
-          alt={item.product.name}
-          fill
-          className="object-cover"
-        />
-      </div>
-
-      <div className="flex flex-1 flex-col justify-between min-w-0">
-        <div className="flex justify-between items-start gap-4">
-          <div>
-            <h3 className="font-bold text-gray-900 text-lg leading-tight mb-1">
-              {item.product.name}
-            </h3>
-            <p className="text-sm text-gray-500 line-clamp-1">
-              {item.product.description}
-            </p>
-          </div>
-          <Button
-            onClick={() =>
-              removeFromCart(
-                item.product_id,
-                item.additional_ids,
-                item.customizations
-              )
-            }
-            disabled={isProcessing}
-            className="text-gray-400 hover:text-red-500 transition-colors p-1"
-          >
-            <Trash2 className="h-5 w-5" />
-          </Button>
-        </div>
-
-        <div className="mt-3 space-y-2">
-          {item.additionals && item.additionals.length > 0 && (
-            <div className="flex flex-wrap gap-2">
-              {item.additionals.map((add) => {
-                return (
-                  <span
-                    key={add.id}
-                    className="inline-flex items-center px-2 py-1 rounded-md bg-rose-50 text-rose-700 text-xs font-medium"
-                  >
-                    + {add.name}
-                  </span>
-                );
-              })}
-            </div>
-          )}
-
-          {item.customizations && item.customizations.length > 0 && (
-            <div className="space-y-1">
-              {item.customizations.map((customization, index) => (
-                <div
-                  key={`${customization.customization_id}-${index}`}
-                  className="text-xs text-gray-600 flex items-center gap-1"
-                >
-                  <span className="font-medium">{customization.title}:</span>
-                  <span className="truncate max-w-[200px]">
-                    {formatCustomizationValue(customization)}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        <div className="flex items-center justify-between mt-4">
-          <div className="flex items-center gap-3">
-            <div className="flex items-center border border-gray-200 rounded-lg p-1">
-              <Button
-                onClick={() =>
-                  updateQuantity(
-                    item.product_id,
-                    item.quantity - 1,
-                    item.additional_ids,
-                    item.customizations
-                  )
-                }
-                disabled={isProcessing || item.quantity <= 1}
-                className="w-8 h-8 flex items-center justify-center text-gray-500 hover:bg-gray-100 rounded-md disabled:opacity-50"
-              >
-                <Minus className="h-3 w-3" />
-              </Button>
-              <span className="w-8 text-center text-sm font-semibold text-gray-900">
-                {item.quantity}
-              </span>
-              <Button
-                onClick={() =>
-                  updateQuantity(
-                    item.product_id,
-                    item.quantity + 1,
-                    item.additional_ids,
-                    item.customizations
-                  )
-                }
-                disabled={isProcessing}
-                className="w-8 h-8 flex items-center justify-center text-gray-500 hover:bg-gray-100 rounded-md disabled:opacity-50"
-              >
-                <Plus className="h-3 w-3" />
-              </Button>
-            </div>
-          </div>
-
-          <div className="text-right">
-            <span className="font-bold text-gray-900 text-lg">
-              R${" "}
-              {(
-                (item.effectivePrice ?? item.price) * item.quantity +
-                (item.additionals?.reduce(
-                  (sum: number, add) =>
-                    sum +
-                    getAdditionalFinalPrice(
-                      add.id,
-                      add.price,
-                      item.customizations
-                    ) *
-                      item.quantity,
-                  0
-                ) || 0)
-              ).toFixed(2)}
-            </span>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
 
 export default function CarrinhoPage() {
   const router = useRouter();
@@ -528,23 +308,15 @@ export default function CarrinhoPage() {
     updateQuantity,
     removeFromCart,
     clearCart,
-    setOrderMetadata,
     createOrder,
-    getMinPreparationHours,
     getMaxProductionTime,
     generateTimeSlots,
     getDeliveryDateBounds,
     isDateDisabledInCalendar,
-    updateCustomizations,
   } = useCartContext();
 
-  const {
-    pendingOrder,
-    hasPendingOrder,
-    handleCancelOrder,
-    clearPendingOrder,
-    isCanceling,
-  } = usePaymentManager();
+  const { pendingOrder, hasPendingOrder, clearPendingOrder } =
+    usePaymentManager();
 
   const [currentStep, setCurrentStep] = useState<1 | 2 | 3>(1);
   const [paymentStatus, setPaymentStatus] = useState<PaymentStatusType>("");
@@ -554,77 +326,8 @@ export default function CarrinhoPage() {
   const [paymentError, setPaymentError] = useState<string | null>(null);
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [isGeneratingPix, setIsGeneratingPix] = useState(false);
-  const [optionSelected, setOptionSelected] = useState<string>("delivery");
-
-  // Callback para atualizar customizações no carrinho (quando não há orderId)
-  const handleCustomizationUpdate = useCallback(
-    (
-      productId: string,
-      customizations: import("@/app/types/customization").CustomizationInput[]
-    ) => {
-      // Encontrar o item no carrinho
-      const cartItem = cart.items.find((item) => item.product_id === productId);
-      if (!cartItem) {
-        console.warn("Item não encontrado no carrinho:", productId);
-        return;
-      }
-
-      // Converter CustomizationInput[] para CartCustomization[]
-      const newCartCustomizations: CartCustomization[] = customizations.map(
-        (c) => {
-          const data = c.data as Record<string, unknown>;
-          return {
-            customization_id: c.ruleId || c.customizationRuleId || "",
-            customization_type:
-              c.customizationType as import("@/app/hooks/use-api").CustomizationTypeValue,
-            title: (data?._customizationName as string) || c.customizationType,
-            is_required: true,
-            price_adjustment: (data?._priceAdjustment as number) || 0,
-            // Campos específicos por tipo
-            text:
-              c.customizationType === "TEXT"
-                ? (data?.text as string)
-                : undefined,
-            photos:
-              c.customizationType === "IMAGES"
-                ? (data?.photos as CartCustomization["photos"])
-                : undefined,
-            // ✅ Map missed fields
-            selected_option: (data?.selected_option as string) || undefined,
-            selected_option_label:
-              (data?.selected_option_label as string) || undefined,
-            label_selected:
-              (data?.label_selected as string) ||
-              (data?.selected_option_label as string) ||
-              undefined,
-            selected_item:
-              (data?.selected_item as
-                | {
-                    original_item: string;
-                    selected_item: string;
-                    price_adjustment: number;
-                  }
-                | undefined) || undefined,
-            selected_item_label:
-              (data?.selected_item_label as string) || undefined,
-            additional_time: (data?.additional_time as number) || 0,
-            data: data, // ✅ Store full data object
-          };
-        }
-      );
-
-      // Atualizar no carrinho
-      updateCustomizations(
-        productId,
-        cartItem.customizations || [],
-        newCartCustomizations,
-        cartItem.additional_ids,
-        cartItem.additional_colors
-      );
-
-      toast.success("Personalização atualizada no carrinho!");
-    },
-    [cart.items, updateCustomizations]
+  const [optionSelected, setOptionSelected] = useState<"delivery" | "pickup">(
+    "delivery"
   );
 
   // Helper para formatar CPF/CNPJ visualmente
@@ -706,11 +409,22 @@ export default function CarrinhoPage() {
   const pollingStartedRef = useRef(false);
   const sseDisconnectCountRef = useRef(0);
   const pixGeneratedForOrderRef = useRef<string | null>(null);
+  const updatingOrderMetadataRef = useRef(false);
 
   useEffect(() => {
     pollingStartedRef.current = false;
     sseDisconnectCountRef.current = 0;
   }, [currentOrderId]);
+
+  // Cleanup quando componente desmontar ou usuário sair da página
+  useEffect(() => {
+    return () => {
+      // Parar polling ao desmontar
+      setCurrentOrderId(null);
+      setPaymentStatus("");
+      disconnectSSERef.current?.();
+    };
+  }, []);
 
   const mapPaymentStatus = useCallback(
     (status?: string | null): PaymentStatusType => {
@@ -761,8 +475,8 @@ export default function CarrinhoPage() {
   const { startPolling } = usePaymentPolling({
     orderId: currentOrderId,
     enabled: Boolean(currentOrderId && paymentStatus === "pending"),
-    maxAttempts: 60,
-    intervalMs: 3000,
+    maxAttempts: 3, // Apenas 3 tentativas (15 segundos total)
+    intervalMs: 5000, // 5 segundos entre tentativas
     onSuccess: handlePaymentSuccess,
     onFailure: () => {
       setPaymentStatus("failure");
@@ -772,6 +486,9 @@ export default function CarrinhoPage() {
       toast.error("Pagamento recusado. Verifique os dados do pagamento.");
     },
     onTimeout: () => {
+      // Parar o polling quando o timeout é atingido
+      setPaymentStatus(""); // Resetar status para parar o polling
+      setCurrentOrderId(null); // Limpar order ID para evitar restart do polling
       setPaymentError(
         "O tempo de espera expirou. Verifique o status do seu pedido na página 'Meus Pedidos'."
       );
@@ -801,11 +518,17 @@ export default function CarrinhoPage() {
 
   const sseOnDisconnected = useCallback(() => {
     sseDisconnectCountRef.current += 1;
-    if (sseDisconnectCountRef.current >= 3 && !pollingStartedRef.current) {
+    // Só iniciar polling fallback se ainda temos um pedido em progresso e SSE desconectou
+    if (
+      sseDisconnectCountRef.current >= 3 &&
+      !pollingStartedRef.current &&
+      currentOrderId &&
+      paymentStatus === "pending"
+    ) {
       pollingStartedRef.current = true;
       startPolling();
     }
-  }, [startPolling]);
+  }, [startPolling, currentOrderId, paymentStatus]);
 
   const sseOnError = useCallback(
     (error: unknown) => {
@@ -814,12 +537,18 @@ export default function CarrinhoPage() {
         `❌ SSE Error (${sseDisconnectCountRef.current}/3):`,
         error
       );
-      if (sseDisconnectCountRef.current >= 3 && !pollingStartedRef.current) {
+      // Só iniciar polling fallback se ainda temos um pedido em progresso
+      if (
+        sseDisconnectCountRef.current >= 3 &&
+        !pollingStartedRef.current &&
+        currentOrderId &&
+        paymentStatus === "pending"
+      ) {
         pollingStartedRef.current = true;
         startPolling();
       }
     },
-    [startPolling]
+    [startPolling, currentOrderId, paymentStatus]
   );
 
   const sseOnPaymentApproved = useCallback(
@@ -914,12 +643,9 @@ export default function CarrinhoPage() {
 
   const { disconnect: disconnectSSE } = useWebhookNotification({
     orderId: currentOrderId,
-    // Habilitar SSE enquanto houver um pedido pendente (evitar loops causados por toggles de enabled)
-    enabled: Boolean(
-      currentOrderId &&
-        paymentStatus !== "success" &&
-        paymentStatus !== "failure"
-    ),
+    // SSE DESABILITADO TEMPORARIAMENTE - causando loop de requisições
+    // Usar apenas polling como fallback
+    enabled: false,
     onPaymentUpdate: sseOnPaymentUpdate,
     onPaymentApproved: sseOnPaymentApproved,
     onPaymentRejected: sseOnPaymentRejected,
@@ -1098,15 +824,9 @@ export default function CarrinhoPage() {
           }
           if (typeof pendingOrder.complement === "string") {
             setComplemento(pendingOrder.complement || "");
-            setOrderMetadata({
-              complement: pendingOrder.complement || undefined,
-            });
           }
           if (typeof pendingOrder.send_anonymously === "boolean") {
             setSendAnonymously(Boolean(pendingOrder.send_anonymously));
-            setOrderMetadata({
-              send_anonymously: Boolean(pendingOrder.send_anonymously),
-            });
           }
           if (pendingOrder.recipient_phone) {
             // Format: stored as +55XXXXXXXXXXX or 55xxxxxxxxx or only digits
@@ -1167,7 +887,7 @@ export default function CarrinhoPage() {
     };
 
     detect();
-  }, [hasPendingOrder, pendingOrder, setOrderMetadata]);
+  }, [hasPendingOrder, pendingOrder]);
 
   // Se não houver pedido pendente, desconectar o SSE e limpar pendingOrderId local
   useEffect(() => {
@@ -1457,111 +1177,8 @@ export default function CarrinhoPage() {
     );
   }
 
-  // Handler para pagamento com cartão via MP SDK (já vem tokenizado)
-  const handleMPCardPayment = async (cardData: MPCardFormData) => {
-    setIsProcessing(true);
-    setPaymentError(null);
-
-    try {
-      let orderId = currentOrderId;
-
-      if (!orderId) {
-        const storedOrderId = localStorage.getItem("pendingOrderId");
-        if (storedOrderId) {
-          orderId = storedOrderId;
-          setCurrentOrderId(orderId);
-        }
-      }
-
-      if (!orderId) {
-        throw new Error("Pedido não encontrado. Por favor, tente novamente.");
-      }
-
-      // Salvar documento do pagador
-      if (cardData.payer?.identification?.number) {
-        setUserDocument(cardData.payer.identification.number);
-      }
-
-      // ✅ Atualizar frete no backend antes de processar pagamento
-      // Isso garante que o grand_total no backend bata com o valor enviado
-      if (typeof shippingCost === "number") {
-        await updateOrderMetadata(orderId, {
-          shipping_price: shippingCost,
-        });
-      }
-
-      const paymentResponse = await createTransparentPayment({
-        orderId: orderId,
-        paymentMethodId: "credit_card",
-        installments: cardData.installments || 1,
-        payerEmail: cardData.payer.email,
-        payerName: user?.name || "Cliente",
-        payerDocument: cardData.payer.identification.number,
-        payerDocumentType:
-          cardData.payer.identification.type === "CPF" ? "CPF" : "CNPJ",
-        cardToken: cardData.token,
-        cardholderName: user?.name || "Cliente",
-        issuer_id: cardData.issuer_id,
-        payment_method_id: cardData.payment_method_id,
-      });
-
-      // Verificar se a requisição foi bem-sucedida
-      if (!paymentResponse?.success) {
-        throw new Error(
-          paymentResponse?.message || "Erro ao processar pagamento"
-        );
-      }
-
-      // Verificar o status real do pagamento retornado pelo MP
-      const rawStatus =
-        paymentResponse.data?.status || paymentResponse.status || "pending";
-      const statusDetail =
-        paymentResponse.data?.status_detail ||
-        paymentResponse.status_detail ||
-        "";
-      const normalizedStatus = mapPaymentStatus(rawStatus) || "pending";
-
-      console.log("📊 Status do pagamento:", {
-        rawStatus,
-        statusDetail,
-        normalizedStatus,
-      });
-
-      setPaymentStatus(normalizedStatus);
-
-      if (normalizedStatus === "success") {
-        toast.success("Pagamento aprovado! Pedido confirmado.");
-        localStorage.removeItem("pendingOrderId");
-        clearPendingOrder();
-        clearCart();
-        setTimeout(() => {
-          router.push("/pedidos");
-        }, 1000);
-      } else if (normalizedStatus === "pending") {
-        toast.info("Pagamento em análise. Aguardando confirmação...", {
-          duration: 5000,
-        });
-      } else if (normalizedStatus === "failure") {
-        // Pagamento foi rejeitado - permitir nova tentativa
-        const friendlyMessage = getFriendlyPaymentError(statusDetail);
-        setPaymentError(friendlyMessage);
-        toast.error(friendlyMessage);
-        // Não lançar erro - apenas mostrar mensagem e permitir nova tentativa
-      } else {
-        throw new Error("Pagamento recusado. Verifique os dados do cartão.");
-      }
-    } catch (error) {
-      console.error("❌ Erro ao processar pagamento MP Card:", error);
-      const errorMessage =
-        error instanceof Error ? error.message : "Erro desconhecido";
-      setPaymentError(errorMessage);
-      toast.error(`Erro no pagamento: ${errorMessage}`);
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
   // Função para traduzir erros do Mercado Pago para mensagens amigáveis
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const getFriendlyPaymentError = (statusDetail: string): string => {
     const errorMap: Record<string, string> = {
       cc_rejected_bad_filled_card_number:
@@ -1632,6 +1249,12 @@ export default function CarrinhoPage() {
   })();
 
   const handleNextStep = async () => {
+    // Evitar múltiplas chamadas simultâneas
+    if (isProcessing) {
+      console.warn("Requisição em progresso, ignorando clique duplicado");
+      return;
+    }
+
     let finalDeliveryDate: Date | null = null;
     if (selectedDate && selectedTime) {
       try {
@@ -1760,6 +1383,15 @@ export default function CarrinhoPage() {
       }
 
       if (currentOrderId) {
+        // Evitar múltiplas chamadas simultâneas a updateOrderMetadata
+        if (updatingOrderMetadataRef.current) {
+          console.warn(
+            "Já há uma atualização em progresso, ignorando requisição duplicada"
+          );
+          return;
+        }
+
+        updatingOrderMetadataRef.current = true;
         try {
           const isPickup = optionSelected === "pickup";
           const deliveryAddress = isPickup
@@ -1792,17 +1424,12 @@ export default function CarrinhoPage() {
           } catch {
             // Ignore cleanup errors
           }
+        } finally {
+          updatingOrderMetadataRef.current = false;
         }
       }
 
       setCurrentStep(3);
-      window.scrollTo({ top: 0, behavior: "smooth" });
-    }
-  };
-
-  const handlePreviousStep = () => {
-    if (currentStep > 1) {
-      setCurrentStep((prev) => (prev - 1) as CheckoutStep);
       window.scrollTo({ top: 0, behavior: "smooth" });
     }
   };
@@ -1959,20 +1586,6 @@ export default function CarrinhoPage() {
     );
   };
 
-  const stepVariants = {
-    hidden: { opacity: 0, y: 40 },
-    visible: {
-      opacity: 1,
-      y: 0,
-      transition: { duration: 0.5, ease: easeOut },
-    },
-    exit: {
-      opacity: 0,
-      y: -40,
-      transition: { duration: 0.3, ease: easeIn },
-    },
-  };
-
   return (
     <>
       {confirmationState === "confirmed" && confirmedOrder ? (
@@ -2047,806 +1660,78 @@ export default function CarrinhoPage() {
 
                 <AnimatePresence mode="wait">
                   {/* Etapa 1: Revisão do Carrinho */}
+                  {/* Etapa 1: Revisão do Carrinho */}
                   {currentStep === 1 && (
-                    <motion.div
-                      key="step-1"
-                      variants={stepVariants}
-                      initial="hidden"
-                      animate="visible"
-                      exit="exit"
-                      className="space-y-6"
-                    >
-                      <Card className="bg-white p-6 lg:p-8 rounded-3xl shadow-lg border border-gray-100 hover:shadow-xl transition-shadow">
-                        <div className="flex items-center gap-3 mb-8">
-                          <ShoppingCart className="h-7 w-7 text-rose-600" />
-                          <h2 className="text-3xl font-bold text-gray-900">
-                            Seus Produtos ({cartItems.length})
-                          </h2>
-                        </div>
-                        <div className="space-y-4">
-                          {cartItems.map((item, index) => (
-                            <ProductCard
-                              key={`${item.product_id}-${index}`}
-                              item={item}
-                              updateQuantity={updateQuantity}
-                              removeFromCart={removeFromCart}
-                              isProcessing={isProcessing}
-                              onEditCustomizations={handleEditCustomizations}
-                            />
-                          ))}
-                        </div>
-                      </Card>
-                    </motion.div>
+                    <StepCart
+                      cartItems={cartItems}
+                      updateQuantity={updateQuantity}
+                      removeFromCart={removeFromCart}
+                      isProcessing={isProcessing}
+                      onEditCustomizations={handleEditCustomizations}
+                    />
                   )}
 
                   {currentStep === 2 && (
-                    <motion.div
-                      key="step-2"
-                      variants={stepVariants}
-                      initial="hidden"
-                      animate="visible"
-                      exit="exit"
-                      className="space-y-6"
-                    >
-                      <Card className="bg-white p-6 lg:p-8 rounded-3xl shadow-lg border border-gray-100 hover:shadow-xl transition-shadow">
-                        <div className="flex items-center gap-3 mb-8">
-                          <MapPin className="h-7 w-7 text-rose-600" />
-                          <h2 className="text-3xl font-bold text-gray-900">
-                            Dados de Entrega
-                          </h2>
-                        </div>
-
-                        <div className="space-y-6">
-                          {/* Telefone */}
-                          {/* Opção de Entrega (Delivery / Pickup) */}
-                          <div className="mb-8">
-                            <label className="block text-sm font-bold text-gray-900 mb-4">
-                              Como você quer receber seu pedido?
-                            </label>
-                            <div className="grid grid-cols-2 gap-4">
-                              <button
-                                onClick={() => setOptionSelected("delivery")}
-                                className={`
-                                  relative p-4 rounded-xl border-2 transition-all duration-300 flex flex-col items-center gap-3
-                                  ${
-                                    optionSelected === "delivery"
-                                      ? "border-rose-500 bg-rose-50 text-rose-700 shadow-md transform scale-105"
-                                      : "border-gray-100 bg-white text-gray-500 hover:border-gray-200 hover:bg-gray-50"
-                                  }
-                                `}
-                              >
-                                {optionSelected === "delivery" && (
-                                  <div className="absolute top-2 right-2 text-rose-500">
-                                    <CheckCircle2 className="w-5 h-5" />
-                                  </div>
-                                )}
-                                <Car
-                                  className={`w-8 h-8 ${
-                                    optionSelected === "delivery"
-                                      ? "text-rose-600"
-                                      : "text-gray-400"
-                                  }`}
-                                />
-                                <span className="font-bold">Entrega</span>
-                              </button>
-
-                              <button
-                                onClick={() => setOptionSelected("pickup")}
-                                className={`
-                                  relative p-4 rounded-xl border-2 transition-all duration-300 flex flex-col items-center gap-3
-                                  ${
-                                    optionSelected === "pickup"
-                                      ? "border-purple-500 bg-purple-50 text-purple-700 shadow-md transform scale-105"
-                                      : "border-gray-100 bg-white text-gray-500 hover:border-gray-200 hover:bg-gray-50"
-                                  }
-                                `}
-                              >
-                                {optionSelected === "pickup" && (
-                                  <div className="absolute top-2 right-2 text-purple-500">
-                                    <CheckCircle2 className="w-5 h-5" />
-                                  </div>
-                                )}
-                                <Store
-                                  className={`w-8 h-8 ${
-                                    optionSelected === "pickup"
-                                      ? "text-purple-600"
-                                      : "text-gray-400"
-                                  }`}
-                                />
-                                <span className="font-bold">Retirada</span>
-                                {paymentMethod === "pix" && (
-                                  <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-bold animate-pulse">
-                                    - R$ 10,00 OFF
-                                  </span>
-                                )}
-                              </button>
-                            </div>
-                          </div>
-
-                          {/* Se for Delivery: Mostra campos de endereço */}
-                          {optionSelected === "delivery" ? (
-                            <div className="space-y-6 animate-in fade-in slide-in-from-top-4 duration-500">
-                              {/* Campos de endereço existentes */}
-                              <div>
-                                <label className="block text-sm font-bold text-gray-900 mb-2">
-                                  CEP *
-                                </label>
-                                <div className="flex gap-2">
-                                  <Input
-                                    type="text"
-                                    value={zipCode}
-                                    onChange={(e) => {
-                                      const value = e.target.value.replace(
-                                        /\D/g,
-                                        ""
-                                      );
-                                      setZipCode(value);
-                                      if (value.length === 8)
-                                        handleCepSearch(value);
-                                    }}
-                                    maxLength={8}
-                                    placeholder="00000000"
-                                    className="flex-1 px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent transition-all"
-                                  />
-                                  <button
-                                    onClick={() => handleCepSearch(zipCode)}
-                                    disabled={
-                                      isLoadingCep || zipCode.length !== 8
-                                    }
-                                    className="px-4 py-2 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 disabled:opacity-50 transition-colors font-medium text-sm"
-                                  >
-                                    {isLoadingCep ? (
-                                      <Loader2 className="w-5 h-5 animate-spin" />
-                                    ) : (
-                                      "Buscar"
-                                    )}
-                                  </button>
-                                </div>
-                              </div>
-
-                              <div className="grid grid-cols-3 gap-4">
-                                <div className="col-span-2">
-                                  <label className="block text-sm font-bold text-gray-900 mb-2">
-                                    Rua *
-                                  </label>
-                                  <Input
-                                    placeholder="Rua. ABC"
-                                    type="text"
-                                    value={address}
-                                    onChange={(e) => setAddress(e.target.value)}
-                                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent transition-all"
-                                  />
-                                </div>
-                                <div>
-                                  <label className="block text-sm font-bold text-gray-900 mb-2">
-                                    Número *
-                                  </label>
-                                  <Input
-                                    placeholder="001"
-                                    type="text"
-                                    value={houseNumber}
-                                    onChange={(e) =>
-                                      setHouseNumber(e.target.value)
-                                    }
-                                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent transition-all"
-                                  />
-                                </div>
-                              </div>
-
-                              <div>
-                                <label className="block text-sm font-bold text-gray-900 mb-2">
-                                  Complemento
-                                </label>
-                                <Input
-                                  type="text"
-                                  value={complemento}
-                                  onChange={(e) =>
-                                    setComplemento(e.target.value)
-                                  }
-                                  placeholder="Apto, Bloco, Ponto de referência..."
-                                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent transition-all"
-                                />
-                              </div>
-
-                              <div>
-                                <label className="block text-sm font-bold text-gray-900 mb-2">
-                                  Bairro *
-                                </label>
-                                <Input
-                                  placeholder="Jardim Tavares"
-                                  type="text"
-                                  value={neighborhood}
-                                  onChange={(e) =>
-                                    setNeighborhood(e.target.value)
-                                  }
-                                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent transition-all"
-                                />
-                              </div>
-
-                              <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                  <label className="block text-sm font-bold text-gray-900 mb-2">
-                                    Cidade *
-                                  </label>
-                                  <Input
-                                    placeholder="Campina Grande"
-                                    type="text"
-                                    value={city}
-                                    onChange={(e) => setCity(e.target.value)}
-                                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent transition-all"
-                                  />
-                                </div>
-                                <div>
-                                  <label className="block text-sm font-bold text-gray-900 mb-2">
-                                    Estado *
-                                  </label>
-                                  <Input
-                                    type="text"
-                                    value={state}
-                                    onChange={(e) =>
-                                      setState(e.target.value.toUpperCase())
-                                    }
-                                    maxLength={2}
-                                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent transition-all"
-                                  />
-                                </div>
-                              </div>
-
-                              {addressWarning && (
-                                <Alert
-                                  variant="destructive"
-                                  className="bg-red-50 border-red-200 text-red-800"
-                                >
-                                  <AlertCircle className="h-4 w-4" />
-                                  <AlertDescription className="text-sm font-medium">
-                                    {addressWarning}
-                                  </AlertDescription>
-                                </Alert>
-                              )}
-                            </div>
-                          ) : (
-                            // Se for Retirada: Mostra local de retirada
-                            <div className="bg-purple-50 p-6 rounded-2xl border border-purple-100 animate-in fade-in slide-in-from-top-4 duration-500 mb-6">
-                              <div className="flex items-start gap-4">
-                                <div className="bg-purple-100 p-3 rounded-full">
-                                  <MapPin className="w-6 h-6 text-purple-600" />
-                                </div>
-                                <div>
-                                  <h3 className="font-bold text-purple-900 text-lg mb-1">
-                                    Local de Retirada
-                                  </h3>
-                                  <p className="text-purple-700 font-medium">
-                                    R. Dr. Raif Ramalho, 350 - Jardim Tavares,
-                                    Campina Grande - PB, 58402-025
-                                  </p>
-                                  <p className="text-purple-600 text-sm mt-1">
-                                    O endereço completo será enviado após a
-                                    confirmação do pedido.
-                                  </p>
-                                  <div className="mt-4 flex items-center gap-2 text-sm text-purple-800 bg-white/50 p-2 rounded-lg">
-                                    <CheckCircle2 className="w-4 h-4 text-green-600" />
-                                    <span>Economize o valor do frete</span>
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          )}
-
-                          {/* Telefone para contato (Comum a ambos) */}
-                          <div>
-                            <label className="block text-sm font-bold text-gray-900 mb-2">
-                              Seu Telefone (WhatsApp) *
-                            </label>
-                            <Input
-                              type="tel"
-                              value={customerPhone}
-                              onChange={(e) => {
-                                const formatted = formatPhoneNumber(
-                                  e.target.value
-                                );
-                                setCustomerPhone(formatted);
-                              }}
-                              placeholder="+55 (XX) XXXXX-XXXX"
-                              className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent transition-all"
-                            />
-                            {customerPhone.length > 0 &&
-                              !isValidPhone(customerPhone) && (
-                                <p className="text-xs text-red-600 mt-2 font-medium">
-                                  Telefone incompleto
-                                </p>
-                              )}
-                          </div>
-
-                          <Label className="block text-sm font-bold text-gray-900 mb-2 mt-4">
-                            Documento (CPF ou CNPJ) *
-                          </Label>
-                          <Input
-                            type="text"
-                            placeholder="000.000.000-00 ou 00.000.000/0000-00"
-                            value={formatDocument(userDocument)}
-                            onChange={(e) => {
-                              const value = e.target.value.replace(/\D/g, "");
-                              setUserDocument(value);
-                            }}
-                            maxLength={18}
-                            className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent transition-all mb-6"
-                          />
-                          {userDocument.length > 0 &&
-                            userDocument.length < 11 && (
-                              <p className="text-xs text-red-600 font-medium mb-4">
-                                Documento inválido (mínimo 11 dígitos)
-                              </p>
-                            )}
-
-                          {optionSelected === "delivery" && (
-                            <div className="animate-in fade-in slide-in-from-top-2 duration-300">
-                              <label className="block text-sm font-bold text-gray-900 mb-2">
-                                Telefone do Destinatário *
-                              </label>
-                              <div className="mb-3">
-                                <label className="flex items-center gap-2 cursor-pointer">
-                                  <Input
-                                    type="checkbox"
-                                    checked={isSelfRecipient}
-                                    onChange={(e) => {
-                                      setIsSelfRecipient(e.target.checked);
-                                      if (e.target.checked) {
-                                        setRecipientPhone(customerPhone);
-                                      }
-                                    }}
-                                    className="w-4 h-4 text-rose-600 border-gray-300 rounded focus:ring-rose-500"
-                                  />
-                                  <span className="text-sm text-gray-700">
-                                    Eu vou receber
-                                  </span>
-                                </label>
-                              </div>
-                              {!isSelfRecipient && (
-                                <>
-                                  <Input
-                                    type="tel"
-                                    value={recipientPhone}
-                                    onChange={(e) => {
-                                      const formatted = formatPhoneNumber(
-                                        e.target.value
-                                      );
-                                      setRecipientPhone(formatted);
-                                    }}
-                                    placeholder="+55 (XX) XXXXX-XXXX"
-                                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent transition-all"
-                                  />
-                                  {recipientPhone.length > 0 &&
-                                    !isValidPhone(recipientPhone) && (
-                                      <p className="text-xs text-red-600 mt-2 font-medium">
-                                        Telefone incompleto
-                                      </p>
-                                    )}
-                                  <div className="mt-3 flex items-center gap-3">
-                                    <Info className="w-5 h-5 text-purple-600" />
-                                    <p className="text-sm text-gray-600">
-                                      Usaremos este número apenas se tivermos
-                                      problemas na entrega.
-                                    </p>
-                                  </div>
-                                </>
-                              )}
-                            </div>
-                          )}
-
-                          {optionSelected === "delivery" && (
-                            <label className="inline-flex items-center">
-                              <Input
-                                type="checkbox"
-                                checked={sendAnonymously}
-                                onChange={(e) => {
-                                  setSendAnonymously(e.target.checked);
-                                  setOrderMetadata({
-                                    send_anonymously: e.target.checked,
-                                  });
-                                }}
-                                className="w-4 h-4 text-rose-600 border-gray-300 rounded focus:ring-rose-500"
-                              />
-                              <span className="ml-2 text-sm text-gray-700">
-                                Enviar anonimamente
-                              </span>
-                            </label>
-                          )}
-                        </div>
-
-                        {addressWarning && (
-                          <Alert className="border-red-200 bg-red-50">
-                            <AlertCircle className="h-4 w-4 text-red-600" />
-                            <AlertDescription className="text-red-700 text-sm">
-                              {addressWarning}
-                            </AlertDescription>
-                          </Alert>
-                        )}
-
-                        {/* Agendamento */}
-                        <div className="pt-4 border-t border-gray-200">
-                          <h3 className="text-lg font-bold mb-4 text-gray-900 flex items-center gap-2">
-                            <CalendarIcon className="h-5 w-5 text-rose-600" />
-                            Agendar Entrega
-                          </h3>
-
-                          <div className="bg-blue-50 rounded-xl border border-blue-200 p-4 mb-4">
-                            <p className="text-xs text-blue-800">
-                              <strong>Tempo de preparo:</strong>{" "}
-                              {getMinPreparationHours()}h
-                            </p>
-                          </div>
-
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                              <Label className="block text-sm font-bold text-gray-900 mb-2">
-                                Data *
-                              </Label>
-                              <Popover
-                                open={calendarOpen}
-                                onOpenChange={setCalendarOpen}
-                              >
-                                <PopoverTrigger asChild>
-                                  <Button
-                                    variant="outline"
-                                    className="w-full justify-start text-left border-2 border-gray-200 hover:border-rose-300 rounded-xl py-6 bg-transparent"
-                                    disabled={isProcessing}
-                                  >
-                                    <CalendarIcon className="mr-2 h-4 w-4" />
-                                    {selectedDate
-                                      ? selectedDate.toLocaleDateString("pt-BR")
-                                      : "Selecione uma data"}
-                                  </Button>
-                                </PopoverTrigger>
-                                <PopoverContent
-                                  className="w-full max-w-[400px] min-w-[300px] p-0"
-                                  align="start"
-                                >
-                                  <Calendar
-                                    mode="single"
-                                    selected={selectedDate}
-                                    onSelect={(date: Date | undefined) => {
-                                      if (date) {
-                                        setSelectedDate(date);
-                                        setSelectedTime("");
-                                      }
-                                      setCalendarOpen(false);
-                                    }}
-                                    disabled={isDateDisabled}
-                                    className="rounded-md w-full border"
-                                  />
-                                </PopoverContent>
-                              </Popover>
-                            </div>
-
-                            {selectedDate && (
-                              <div>
-                                <Label className="block text-sm font-bold text-gray-900 mb-3">
-                                  Horário *
-                                </Label>
-                                <TimeSlotSelector
-                                  slots={generateTimeSlots(selectedDate)}
-                                  selectedValue={selectedTime}
-                                  onSelect={(value) => setSelectedTime(value)}
-                                  disabled={isProcessing}
-                                />
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </Card>
-
-                      <CustomizationsReview
-                        cartItems={cart.items}
-                        orderId={currentOrderId}
-                        onCustomizationUpdate={handleCustomizationUpdate}
-                        onCustomizationSaved={() => {
-                          // Recarregar dados após salvar customização
-                          console.log("✅ Customização salva com sucesso!");
-                        }}
-                      />
-
-                      <div className="flex justify-start gap-4">
-                        <Button
-                          onClick={handlePreviousStep}
-                          variant="outline"
-                          className="px-6 py-6 rounded-xl font-bold border-2 bg-transparent"
-                          disabled={isProcessing}
-                        >
-                          <ArrowLeft className="mr-2 h-5 w-5" />
-                          Voltar
-                        </Button>
-                      </div>
-                    </motion.div>
+                    <StepDelivery
+                      optionSelected={optionSelected}
+                      setOptionSelected={setOptionSelected}
+                      zipCode={zipCode}
+                      setZipCode={setZipCode}
+                      handleCepSearch={handleCepSearch}
+                      isLoadingCep={isLoadingCep}
+                      address={address}
+                      setAddress={setAddress}
+                      houseNumber={houseNumber}
+                      setHouseNumber={setHouseNumber}
+                      setNeighborhood={setNeighborhood}
+                      neighborhood={neighborhood}
+                      city={city}
+                      setCity={setCity}
+                      state={state}
+                      setState={setState}
+                      complemento={complemento}
+                      setComplemento={setComplemento}
+                      customerPhone={customerPhone}
+                      setCustomerPhone={setCustomerPhone}
+                      userDocument={userDocument}
+                      setUserDocument={setUserDocument}
+                      recipientPhone={recipientPhone}
+                      setRecipientPhone={setRecipientPhone}
+                      sendAnonymously={sendAnonymously}
+                      setSendAnonymously={setSendAnonymously}
+                      isSelfRecipient={isSelfRecipient}
+                      setIsSelfRecipient={setIsSelfRecipient}
+                      addressWarning={addressWarning}
+                      selectedDate={selectedDate}
+                      setSelectedDate={setSelectedDate}
+                      selectedTime={selectedTime}
+                      setSelectedTime={setSelectedTime}
+                      isDateDisabled={isDateDisabled}
+                      timeSlots={generateTimeSlots(selectedDate || new Date())}
+                      isGeneratingSlots={isProcessing}
+                      calendarOpen={calendarOpen}
+                      setCalendarOpen={setCalendarOpen}
+                      formatDocument={formatDocument}
+                      isValidPhone={isValidPhone}
+                      formatPhoneNumber={formatPhoneNumber}
+                    />
                   )}
 
-                  {/* Etapa 3: Pagamento */}
                   {currentStep === 3 && (
-                    <motion.div
-                      key="step-3"
-                      variants={stepVariants}
-                      initial="hidden"
-                      animate="visible"
-                      exit="exit"
-                      className="space-y-6"
-                    >
-                      {/* Status de sucesso */}
-                      {paymentStatus === "success" ? (
-                        <Card className="p-8 text-center bg-green-50 border-green-200">
-                          <CheckCircle2 className="h-16 w-16 text-green-500 mx-auto mb-4" />
-                          <h3 className="text-2xl font-bold text-green-800 mb-2">
-                            Pagamento Confirmado!
-                          </h3>
-                          <p className="text-green-700 mb-6">
-                            Seu pedido foi realizado com sucesso.
-                          </p>
-                          <Button
-                            onClick={() => {
-                              clearCart();
-                              clearPendingOrder();
-                              localStorage.removeItem("pendingOrderId");
-                              router.push("/pedidos");
-                            }}
-                            className="bg-green-600 hover:bg-green-700"
-                          >
-                            Ver Meus Pedidos
-                          </Button>
-                        </Card>
-                      ) : (
-                        <>
-                          {/* Seletor de Método de Pagamento */}
-                          {!paymentMethod && !isProcessing && (
-                            <Card className="p-6 bg-white border-0 shadow-lg rounded-2xl">
-                              <h3 className="text-xl font-bold text-gray-900 mb-6 flex items-center gap-2">
-                                <CreditCard className="h-6 w-6 text-rose-600" />
-                                Escolha a forma de pagamento
-                              </h3>
-
-                              {/* Info sobre frete */}
-                              <div className="mb-6 p-4 bg-blue-50 rounded-xl border border-blue-200">
-                                <p className="text-sm text-blue-800">
-                                  💡 <strong>Dica:</strong> O frete é calculado
-                                  de acordo com a forma de pagamento escolhida.
-                                  {shippingRule && (
-                                    <span className="block mt-1">
-                                      PIX:{" "}
-                                      <strong>
-                                        R$ {shippingRule.pix.toFixed(2)}
-                                      </strong>{" "}
-                                      | Cartão:{" "}
-                                      <strong>
-                                        R$ {shippingRule.card.toFixed(2)}
-                                      </strong>
-                                    </span>
-                                  )}
-                                </p>
-                              </div>
-
-                              <PaymentMethodSelector
-                                selectedMethod={paymentMethod}
-                                onMethodChange={(method) => {
-                                  setPaymentMethod(method);
-                                  setPaymentError(null);
-                                  setPixData(null);
-                                  // Tentar recuperar orderId do localStorage se não existir
-                                  if (!currentOrderId) {
-                                    const storedOrderId =
-                                      localStorage.getItem("pendingOrderId");
-                                    if (storedOrderId) {
-                                      setCurrentOrderId(storedOrderId);
-                                      console.log(
-                                        "📦 Pedido recuperado do localStorage:",
-                                        storedOrderId
-                                      );
-                                    }
-                                  }
-                                }}
-                              />
-                            </Card>
-                          )}
-
-                          {/* Processando */}
-                          {isProcessing && (
-                            <LoadingPayment paymentMethod={paymentMethod} />
-                          )}
-
-                          {/* Formulário PIX */}
-                          {paymentMethod === "pix" && !isProcessing && (
-                            <>
-                              {pixData ? (
-                                <QRCodePIX
-                                  pixData={pixData}
-                                  onCopyCode={() =>
-                                    toast.success("Código PIX copiado!")
-                                  }
-                                />
-                              ) : isGeneratingPix ? (
-                                <Card className="p-8 text-center">
-                                  <Loader2 className="h-12 w-12 animate-spin text-rose-500 mx-auto mb-4" />
-                                  <p className="text-gray-600">
-                                    Gerando QR Code PIX...
-                                  </p>
-                                </Card>
-                              ) : (
-                                <Card className="p-6 bg-white border-0 shadow-lg rounded-2xl">
-                                  <h3 className="text-lg font-bold text-gray-900 mb-4">
-                                    Pagamento via PIX
-                                  </h3>
-                                  <p className="text-gray-600 mb-4">
-                                    Clique no botão abaixo para gerar o QR Code
-                                    PIX.
-                                  </p>
-                                  <Button
-                                    onClick={generatePixPayment}
-                                    disabled={!currentOrderId}
-                                    className="w-full bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600 py-6 text-lg font-bold"
-                                  >
-                                    Gerar QR Code PIX
-                                  </Button>
-                                </Card>
-                              )}
-                            </>
-                          )}
-
-                          {/* Formulário de Cartão - MercadoPago */}
-                          {paymentMethod === "card" && !isProcessing && (
-                            <>
-                              {currentOrderId ? (
-                                <MPCardPaymentForm
-                                  key={grandTotal}
-                                  amount={grandTotal}
-                                  orderId={currentOrderId}
-                                  payerEmail={user?.email || ""}
-                                  payerName={user?.name || ""}
-                                  onSubmit={handleMPCardPayment}
-                                  isProcessing={isProcessing}
-                                />
-                              ) : (
-                                <Card className="p-6 bg-amber-50 border-amber-200">
-                                  <div className="flex items-start gap-3">
-                                    <AlertCircle className="h-5 w-5 text-amber-600 mt-0.5" />
-                                    <div>
-                                      <p className="text-amber-800 font-medium">
-                                        Pedido não encontrado
-                                      </p>
-                                      <p className="text-sm text-amber-700 mt-1">
-                                        Não foi possível carregar o formulário
-                                        de pagamento. Tente voltar ao passo
-                                        anterior e avançar novamente.
-                                      </p>
-                                      <Button
-                                        onClick={() => {
-                                          // Tentar recuperar do localStorage
-                                          const storedOrderId =
-                                            localStorage.getItem(
-                                              "pendingOrderId"
-                                            );
-                                          if (storedOrderId) {
-                                            setCurrentOrderId(storedOrderId);
-                                            toast.success("Pedido recuperado!");
-                                          } else {
-                                            setCurrentStep(2);
-                                            toast.info(
-                                              "Volte a avançar para criar o pedido."
-                                            );
-                                          }
-                                        }}
-                                        className="mt-3 bg-amber-600 hover:bg-amber-700"
-                                      >
-                                        Tentar novamente
-                                      </Button>
-                                    </div>
-                                  </div>
-                                </Card>
-                              )}
-                            </>
-                          )}
-
-                          {/* Erro */}
-                          {paymentError && (
-                            <Alert className="border-red-200 bg-red-50">
-                              <AlertCircle className="h-4 w-4 text-red-600" />
-                              <AlertDescription className="text-red-700">
-                                {paymentError}
-                              </AlertDescription>
-                            </Alert>
-                          )}
-
-                          {/* Botão para trocar método */}
-                          {paymentMethod && !isProcessing && !pixData && (
-                            <Button
-                              onClick={() => {
-                                setPaymentMethod(undefined);
-                                setPaymentError(null);
-                              }}
-                              variant="outline"
-                              className="w-full py-4"
-                            >
-                              <RefreshCcw className="mr-2 h-4 w-4" />
-                              Trocar forma de pagamento
-                            </Button>
-                          )}
-                        </>
-                      )}
-
-                      {/* Botões de Navegação */}
-                      <div className="flex flex-col sm:flex-row justify-between gap-4">
-                        <div className="flex gap-4">
-                          <Button
-                            onClick={handlePreviousStep}
-                            variant="outline"
-                            className="px-6 py-6 rounded-xl font-bold border-2 bg-transparent"
-                            disabled={
-                              isProcessing ||
-                              paymentStatus === "pending" ||
-                              isCanceling
-                            }
-                          >
-                            <ArrowLeft className="mr-2 h-5 w-5" />
-                            Voltar
-                          </Button>
-
-                          {currentOrderId && (
-                            <Button
-                              onClick={async () => {
-                                const confirmed = window.confirm(
-                                  "Tem certeza que deseja cancelar esta compra? Todos os dados serão perdidos."
-                                );
-
-                                if (confirmed) {
-                                  const success = await handleCancelOrder();
-                                  if (success) {
-                                    setCurrentOrderId(null);
-                                    setPixData(null);
-                                    setPaymentStatus("");
-                                    setPaymentError(null);
-                                    setPaymentMethod(undefined);
-                                    setCurrentStep(1);
-                                    window.scrollTo({
-                                      top: 0,
-                                      behavior: "smooth",
-                                    });
-                                    try {
-                                      disconnectSSE?.();
-                                    } catch {}
-                                  }
-                                }
-                              }}
-                              variant="destructive"
-                              className="px-6 py-6 rounded-xl font-bold"
-                              disabled={
-                                isProcessing ||
-                                paymentStatus === "success" ||
-                                isCanceling
-                              }
-                            >
-                              {isCanceling ? (
-                                <>
-                                  <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                                  Cancelando...
-                                </>
-                              ) : (
-                                <>
-                                  <XCircle className="mr-2 h-5 w-5" />
-                                  Cancelar Compra
-                                </>
-                              )}
-                            </Button>
-                          )}
-                        </div>
-
-                        {/* Status de espera PIX */}
-                        {paymentMethod === "pix" &&
-                          pixData &&
-                          paymentStatus === "pending" && (
-                            <Alert className="border-blue-200 bg-blue-50">
-                              <Loader2 className="h-4 w-4 text-blue-600 animate-spin" />
-                              <AlertDescription className="text-blue-800 text-sm">
-                                Aguardando confirmação do pagamento...
-                              </AlertDescription>
-                            </Alert>
-                          )}
-                      </div>
-                    </motion.div>
+                    <StepPayment
+                      paymentMethod={paymentMethod}
+                      setPaymentMethod={setPaymentMethod}
+                      grandTotal={grandTotal}
+                      pixData={pixData}
+                      currentOrderId={currentOrderId}
+                      isGeneratingPix={isGeneratingPix}
+                      isProcessing={isProcessing}
+                      paymentError={paymentError}
+                      handlePlaceOrder={handleNextStep}
+                      handleCardSubmit={generatePixPayment}
+                      payerEmail={user?.email || ""}
+                      payerName={user?.name || ""}
+                    />
                   )}
                 </AnimatePresence>
               </div>
@@ -2856,7 +1741,7 @@ export default function CarrinhoPage() {
                   initial={{ opacity: 0, x: 20 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ duration: 0.5 }}
-                  className="sticky top-6"
+                  className="sticky top-6 focus-within:z-10"
                 >
                   <OrderSummary />
                 </motion.div>
@@ -2865,11 +1750,12 @@ export default function CarrinhoPage() {
           </main>
         </div>
       )}
+
       {/* -- Overlay with check animation -- */}
       <AnimatePresence>
         {confirmationState === "animating" && (
           <motion.div
-            className="fixed inset-0 bg-white z-50 flex items-center justify-center"
+            className="fixed inset-0 bg-white z-[100] flex items-center justify-center"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}

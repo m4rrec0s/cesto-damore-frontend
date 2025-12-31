@@ -323,62 +323,54 @@ export function ItemCustomizationModal({
         "🔄 [ItemCustomizationModal] Initializing with:",
         initialValues
       );
+      const newData: Record<string, unknown> = {};
 
-      // ✅ Processar initialValues para garantir estrutura correta
-      const processedData: Record<string, unknown> = {};
-
-      for (const [customId, value] of Object.entries(initialValues)) {
-        console.log(`🔍 [ItemCustomizationModal] Processing ${customId}:`, {
-          valueType: typeof value,
-          value: value instanceof Object ? Object.keys(value as object) : value,
-        });
-
-        // Se value é um objeto (vem desserializado do backend)
-        if (value && typeof value === "object") {
-          const obj = value as Record<string, unknown>;
-
-          // Se tem "customization_type" e "title", é um objeto completo desserializado
-          if (obj.customization_type) {
-            // Processar baseado no tipo
-            if (obj.customization_type === "TEXT") {
-              // Se tem "fields", estruturar corretamente
-              if (obj.fields && typeof obj.fields === "object") {
-                processedData[customId] = obj.fields;
-              } else {
-                // Senão, guardar o objeto todo
-                processedData[customId] = obj;
-              }
-            } else if (obj.customization_type === "MULTIPLE_CHOICE") {
-              // Para MULTIPLE_CHOICE, tentar extrair selected_option
-              processedData[customId] = obj.selected_option || obj;
-            } else if (obj.customization_type === "IMAGES") {
-              // Para IMAGES, tentar extrair photos
-              processedData[customId] = obj.photos || obj;
-            } else if (obj.customization_type === "BASE_LAYOUT") {
-              // Para BASE_LAYOUT, manter todo o objeto
-              processedData[customId] = obj;
+      customizations.forEach((c) => {
+        const val = initialValues[c.id];
+        if (val) {
+          // Normalizar dados do MULTIPLE_CHOICE: aceitar 'id' (velho) ou 'selected_option' (novo)
+          if (c.type === "MULTIPLE_CHOICE") {
+            if (typeof val === "object" && val !== null) {
+              const obj = val as Record<string, unknown>;
+              newData[c.id] = {
+                id: obj.selected_option || obj.id,
+                label: obj.selected_option_label || obj.label,
+              };
+            } else if (typeof val === "string") {
+              const options = c.customization_data.options || [];
+              const matched = options.find(
+                (o) => o.id === val || o.value === val
+              );
+              newData[c.id] = {
+                id: val,
+                label: matched?.label || "",
+              };
+            }
+          } else if (c.type === "TEXT") {
+            // Se o valor for um objeto com campo 'text', extrair
+            if (
+              typeof val === "object" &&
+              val !== null &&
+              "fields" in (val as Record<string, unknown>)
+            ) {
+              newData[c.id] = (val as Record<string, unknown>).fields;
             } else {
-              processedData[customId] = obj;
+              newData[c.id] = val;
             }
           } else {
-            // Se não tem customization_type, é um mapeamento direto
-            processedData[customId] = value;
+            newData[c.id] = val;
           }
-        } else {
-          // Se é um valor simples (string, number, array), manter como está
-          processedData[customId] = value;
         }
-      }
+      });
 
-      console.log("🔄 [ItemCustomizationModal] Processed data:", processedData);
-      setCustomizationData(processedData);
+      setCustomizationData(newData);
 
       // ✅ Restore BASE_LAYOUT state if present
       const baseLayoutCustom = customizations.find(
         (c) => c.type === "BASE_LAYOUT"
       );
       if (baseLayoutCustom) {
-        const layoutData = processedData[baseLayoutCustom.id] as
+        const layoutData = newData[baseLayoutCustom.id] as
           | Record<string, unknown>
           | undefined;
         const layoutId = layoutData?.layout_id as string | undefined;
@@ -448,7 +440,8 @@ export function ItemCustomizationModal({
               customizationType: CustomizationType.BASE_LAYOUT,
               selectedLayoutId: layoutData.layout_id,
               data: {
-                id: layoutData.layout_id,
+                id: layoutData.layout_id, // ✅ id no nível raiz
+                layout_id: layoutData.layout_id, // ✅ Compatibilidade com código legado
                 name: layoutData.layout_name || "",
                 model_url: layoutData.model_url,
                 item_type: layoutData.item_type,
@@ -458,6 +451,7 @@ export function ItemCustomizationModal({
                 },
                 previewUrl: layoutData.previewUrl,
                 _customizationName: custom.name,
+                _priceAdjustment: custom.price || 0,
                 additional_time:
                   cachedLayout?.additional_time ||
                   fullLayoutBase?.additional_time ||
@@ -1044,16 +1038,21 @@ export function ItemCustomizationModal({
                   | undefined;
 
                 if (data && Object.keys(data).length > 0) {
-                  const textParts = fields
-                    .map((f) => `${f.label}: ${data[f.id] || ""}`)
-                    .join("\n");
+                  // Se houver apenas um campo, não repetir o label (ex: "Mesagem: Te amo") -> "Te amo"
+                  const textParts =
+                    fields.length === 1
+                      ? data[fields[0].id] || ""
+                      : fields
+                          .map((f) => `${f.label}: ${data[f.id] || ""}`)
+                          .join("\n");
 
                   result.push({
                     ruleId: customization.id,
                     customizationType: CustomizationType.TEXT,
                     data: {
+                      ...data, // ✅ Spread dos campos individuais no nível raiz
                       text: textParts,
-                      fields: data,
+                      fields: data, // ✅ Também manter em fields para retrocompatibilidade
                       _customizationName: customization.name,
                       _priceAdjustment: customization.price || 0,
                     } as unknown as Record<string, unknown>,
@@ -1471,13 +1470,24 @@ export function ItemCustomizationModal({
                         label?: string;
                       };
                       if (choiceData.id) {
+                        // ✅ Encontrar o price_adjustment da opção selecionada
+                        const selectedOption =
+                          custom.customization_data.options?.find(
+                            (opt: { id: string }) => opt.id === choiceData.id
+                          );
+                        const priceAdjustment =
+                          (selectedOption as { price_adjustment?: number })
+                            ?.price_adjustment || 0;
+
                         result.push({
                           ruleId: custom.id,
                           customizationType: CustomizationType.MULTIPLE_CHOICE,
                           data: {
-                            id: choiceData.id,
-                            label: choiceData.label || "",
+                            id: choiceData.id, // ✅ id no nível raiz para validação
+                            selected_option: choiceData.id,
+                            selected_option_label: choiceData.label || "",
                             _customizationName: custom.name,
+                            _priceAdjustment: priceAdjustment,
                           } as unknown as Record<string, unknown>,
                         });
                       }
