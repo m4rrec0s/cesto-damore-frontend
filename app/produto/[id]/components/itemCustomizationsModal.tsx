@@ -1046,15 +1046,12 @@ export function ItemCustomizationModal({
                           .map((f) => `${f.label}: ${data[f.id] || ""}`)
                           .join("\n");
 
+                  // ✅ Enviar apenas o texto limpo para o backend
                   result.push({
                     ruleId: customization.id,
                     customizationType: CustomizationType.TEXT,
                     data: {
-                      ...data, // ✅ Spread dos campos individuais no nível raiz
                       text: textParts,
-                      fields: data, // ✅ Também manter em fields para retrocompatibilidade
-                      _customizationName: customization.name,
-                      _priceAdjustment: customization.price || 0,
                     } as unknown as Record<string, unknown>,
                   });
                 }
