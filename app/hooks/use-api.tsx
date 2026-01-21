@@ -730,7 +730,7 @@ class ApiService {
       email: string | null;
       name: string | null;
       imageUrl: string | null;
-    }
+    },
   ) => {
     const payload: {
       idToken: string;
@@ -882,7 +882,7 @@ class ApiService {
     payload: Partial<Additional> & {
       colors?: Array<{ color_id: string; stock_quantity: number }>;
     },
-    imageFile?: File
+    imageFile?: File,
   ): Promise<Additional> => {
     if (imageFile) {
       // Enviar como FormData com imagem
@@ -915,7 +915,7 @@ class ApiService {
   updateAdditional = async (
     id: string,
     payload: Partial<Additional>,
-    imageFile?: File
+    imageFile?: File,
   ): Promise<Additional> => {
     if (imageFile) {
       // Enviar como FormData com imagem
@@ -953,7 +953,7 @@ class ApiService {
   linkAdditionalToProduct = async (
     additionalId: string,
     productId: string,
-    customPrice?: number
+    customPrice?: number,
   ) => {
     const res = await this.client.post(`/additional/${additionalId}/link`, {
       productId,
@@ -965,7 +965,7 @@ class ApiService {
   };
   unlinkAdditionalFromProduct = async (
     additionalId: string,
-    productId: string
+    productId: string,
   ) => {
     const res = await this.client.post(`/additional/${additionalId}/unlink`, {
       productId,
@@ -982,18 +982,18 @@ class ApiService {
   // ===== Product Components =====
   addProductComponent = async (
     productId: string,
-    component: { item_id: string; quantity: number }
+    component: { item_id: string; quantity: number },
   ) => {
     const res = await this.client.post(
       `/products/${productId}/components`,
-      component
+      component,
     );
     this.clearCache("products");
     return res.data;
   };
   updateProductComponent = async (
     componentId: string,
-    data: { quantity: number }
+    data: { quantity: number },
   ) => {
     const res = await this.client.put(`/components/${componentId}`, data);
     this.clearCache("products");
@@ -1016,6 +1016,7 @@ class ApiService {
     search?: string;
     category_id?: string;
     type_id?: string;
+    only_active?: boolean;
   }): Promise<ProductsResponse> => {
     const queryParams = new URLSearchParams();
     if (params?.page) queryParams.append("page", params.page.toString());
@@ -1025,6 +1026,13 @@ class ApiService {
     if (params?.category_id)
       queryParams.append("category_id", params.category_id);
     if (params?.type_id) queryParams.append("type_id", params.type_id);
+
+    // No frontend do cliente, sempre buscar apenas produtos ativos por padrão
+    const onlyActive =
+      params?.only_active !== undefined ? params.only_active : true;
+    if (onlyActive) {
+      queryParams.append("only_active", "true");
+    }
 
     const queryString = queryParams.toString();
     const url = `/products${queryString ? `?${queryString}` : ""}`;
@@ -1047,7 +1055,7 @@ class ApiService {
     (await this.client.get(`/products/${id}`)).data;
   createProduct = async (
     payload: Partial<ProductInput>,
-    imageFile?: File
+    imageFile?: File,
   ): Promise<Product> => {
     if (imageFile) {
       // Enviar como FormData com imagem
@@ -1082,7 +1090,7 @@ class ApiService {
   updateProduct = async (
     id: string,
     payload: Partial<ProductInput>,
-    imageFile?: File
+    imageFile?: File,
   ): Promise<Product> => {
     if (imageFile) {
       // Enviar como FormData com imagem
@@ -1178,7 +1186,7 @@ class ApiService {
     try {
       // Defensive: strip base64 content from customizations before sending order
       const sanitized = this.stripBase64FromOrderPayload(
-        payload as Record<string, unknown>
+        payload as Record<string, unknown>,
       );
       console.log("📡 Enviando pedido para o backend (sanitized):", sanitized);
       const res = await this.client.post("/orders", sanitized);
@@ -1237,7 +1245,7 @@ class ApiService {
       delivery_date?: string | Date | null;
       shipping_price?: number;
       delivery_method?: "delivery" | "pickup";
-    }
+    },
   ) => {
     const payload = { ...metadata } as {
       delivery_date?: string | Date | null;
@@ -1254,7 +1262,7 @@ class ApiService {
   updateOrderStatus = async (
     id: string,
     status: OrderStatus,
-    options?: { notifyCustomer?: boolean }
+    options?: { notifyCustomer?: boolean },
   ) => {
     const res = await this.client.patch(`/orders/${id}/status`, {
       status,
@@ -1270,7 +1278,7 @@ class ApiService {
    * Busca customizações de um produto (legado - retrocompatibilidade)
    */
   getProductCustomizations = async (
-    productId: string
+    productId: string,
   ): Promise<CustomizationRule[]> => {
     const res = await this.client.get(`/products/${productId}/customizations`);
     return res.data;
@@ -1280,17 +1288,17 @@ class ApiService {
    * Busca customizações de um adicional (legado - retrocompatibilidade)
    */
   getAdditionalCustomizations = async (
-    additionalId: string
+    additionalId: string,
   ): Promise<CustomizationRule[]> => {
     const res = await this.client.get(
-      `/additionals/${additionalId}/customizations`
+      `/additionals/${additionalId}/customizations`,
     );
     return res.data;
   };
 
   createProductCustomization = async (
     productId: string,
-    data: CustomizationRuleInput
+    data: CustomizationRuleInput,
   ): Promise<CustomizationRule> => {
     const res = await this.client.post(`/admin/customization/product`, {
       ...data,
@@ -1301,25 +1309,25 @@ class ApiService {
 
   updateProductCustomization = async (
     customizationId: string,
-    data: CustomizationRuleInput
+    data: CustomizationRuleInput,
   ): Promise<CustomizationRule> => {
     const res = await this.client.put(
       `/admin/customization/product/${customizationId}`,
-      data
+      data,
     );
     return res.data;
   };
 
   deleteProductCustomization = async (customizationId: string) => {
     const res = await this.client.delete(
-      `/admin/customization/product/${customizationId}`
+      `/admin/customization/product/${customizationId}`,
     );
     return res.data;
   };
 
   createAdditionalCustomization = async (
     additionalId: string,
-    data: CustomizationRuleInput
+    data: CustomizationRuleInput,
   ): Promise<CustomizationRule> => {
     const res = await this.client.post(`/admin/customization/additional`, {
       ...data,
@@ -1330,18 +1338,18 @@ class ApiService {
 
   updateAdditionalCustomization = async (
     customizationId: string,
-    data: CustomizationRuleInput
+    data: CustomizationRuleInput,
   ): Promise<CustomizationRule> => {
     const res = await this.client.put(
       `/admin/customization/additional/${customizationId}`,
-      data
+      data,
     );
     return res.data;
   };
 
   deleteAdditionalCustomization = async (customizationId: string) => {
     const res = await this.client.delete(
-      `/admin/customization/additional/${customizationId}`
+      `/admin/customization/additional/${customizationId}`,
     );
     return res.data;
   };
@@ -1354,7 +1362,7 @@ class ApiService {
     customizations: Array<{
       rule_id: string;
       data: Record<string, unknown>;
-    }>
+    }>,
   ): Promise<{ valid: boolean; errors: string[] }> => {
     const res = await this.client.post("/customization/validate", {
       productId,
@@ -1368,7 +1376,7 @@ class ApiService {
    */
   generateCustomizationPreview = async (
     productId: string,
-    customizationData: Record<string, unknown>
+    customizationData: Record<string, unknown>,
   ): Promise<{
     previewUrl?: string;
     model3d?: string;
@@ -1382,7 +1390,7 @@ class ApiService {
   };
 
   getItemCustomizations = async (
-    itemId: string
+    itemId: string,
   ): Promise<import("../types/customization").CustomizationConfigResponse> => {
     const res = await this.client.get(`/items/${itemId}/customizations`, {
       headers: { "ngrok-skip-browser-warning": "true" },
@@ -1391,13 +1399,13 @@ class ApiService {
   };
 
   getCustomizationsByReference = async (
-    referenceId: string
+    referenceId: string,
   ): Promise<{
     itemType: "PRODUCT" | "ADDITIONAL";
     config: import("../types/customization").CustomizationConfigResponse | null;
   }> => {
     const res = await this.client.get(
-      `/customizations/reference/${referenceId}`
+      `/customizations/reference/${referenceId}`,
     );
     return res.data;
   };
@@ -1419,7 +1427,7 @@ class ApiService {
   };
 
   getLayoutById = async (
-    layoutId: string
+    layoutId: string,
   ): Promise<import("../types/personalization").LayoutBase> => {
     const res = await this.client.get(`/layouts/${layoutId}`);
     return res.data;
@@ -1431,7 +1439,7 @@ class ApiService {
   pollOrderCustomizations(
     orderId: string,
     onUpdate: (customizations: unknown[]) => void,
-    interval = 10000
+    interval = 10000,
   ) {
     if (typeof window === "undefined") return () => {};
     if (this.activePollers[orderId]) clearInterval(this.activePollers[orderId]);
@@ -1458,7 +1466,7 @@ class ApiService {
   }
 
   listOrderCustomizations = async (
-    orderId: string
+    orderId: string,
   ): Promise<{
     orderId: string;
     items: Array<{
@@ -1488,7 +1496,7 @@ class ApiService {
   };
 
   getCustomizationReviewData = async (
-    orderId: string
+    orderId: string,
   ): Promise<
     Array<{
       orderItemId: string;
@@ -1517,7 +1525,7 @@ class ApiService {
 
   // Helper: recursively remove base64 fields and data URIs from an object
   private stripBase64FromCustomizationPayload(
-    payload: import("../types/customization").SaveOrderItemCustomizationPayload
+    payload: import("../types/customization").SaveOrderItemCustomizationPayload,
   ) {
     // deep clone
     const clone = JSON.parse(JSON.stringify(payload));
@@ -1663,7 +1671,7 @@ class ApiService {
   saveOrderItemCustomization = async (
     orderId: string,
     itemId: string,
-    payload: import("../types/customization").SaveOrderItemCustomizationPayload
+    payload: import("../types/customization").SaveOrderItemCustomizationPayload,
   ): Promise<{
     id: string;
     order_item_id: string;
@@ -1681,7 +1689,7 @@ class ApiService {
     // 🔍 DEBUG: Log do payload sendo enviado
     console.log(
       "🔍 [saveOrderItemCustomization] Payload sendo enviado:",
-      JSON.stringify(payloadSanitized, null, 2).substring(0, 1000)
+      JSON.stringify(payloadSanitized, null, 2).substring(0, 1000),
     );
 
     // 🔍 DEBUG: Verificar se tem base64 em photos
@@ -1694,16 +1702,16 @@ class ApiService {
         : [];
       const photoCount = photos.length;
       const photosWithBase64 = photos.filter(
-        (p: Record<string, unknown>) => p.base64
+        (p: Record<string, unknown>) => p.base64,
       ).length;
       console.log(
-        `🖼️  [saveOrderItemCustomization] Fotos: ${photoCount} total, ${photosWithBase64} com base64`
+        `🖼️  [saveOrderItemCustomization] Fotos: ${photoCount} total, ${photosWithBase64} com base64`,
       );
       photos.forEach((photo: Record<string, unknown>, idx: number) => {
         console.log(
           `   [${idx}] ${
             photo.original_name
-          }: base64=${!!photo.base64}, preview_url=${photo.preview_url}`
+          }: base64=${!!photo.base64}, preview_url=${photo.preview_url}`,
         );
       });
     }
@@ -1714,7 +1722,7 @@ class ApiService {
     ) {
       try {
         const layout = await this.getLayoutById(
-          payloadSanitized.selectedLayoutId
+          payloadSanitized.selectedLayoutId,
         );
         if (layout && layout.title) {
           payloadSanitized.data = payloadSanitized.data || {};
@@ -1729,14 +1737,14 @@ class ApiService {
 
     const res = await this.client.post(
       `/orders/${orderId}/items/${itemId}/customizations`,
-      payloadSanitized
+      payloadSanitized,
     );
     console.log(`✅ [saveOrderItemCustomization] Response:`, res.data);
     return res.data;
   };
 
   uploadCustomizationImage = async (
-    imageFile: File
+    imageFile: File,
   ): Promise<{
     success: boolean;
     imageUrl: string;
@@ -1752,7 +1760,7 @@ class ApiService {
       formData,
       {
         headers: { "Content-Type": "multipart/form-data" },
-      }
+      },
     );
     return res.data;
   };
@@ -1763,7 +1771,7 @@ class ApiService {
    * Retorna: { success, filename, url, size, mimeType, originalName }
    */
   uploadTempImage = async (
-    imageFile: File
+    imageFile: File,
   ): Promise<{
     success: boolean;
     filename: string;
@@ -1793,7 +1801,7 @@ class ApiService {
       await Promise.race([
         this.client.head(imageUrl),
         new Promise((_, reject) =>
-          setTimeout(() => reject(new Error("timeout")), 3000)
+          setTimeout(() => reject(new Error("timeout")), 3000),
         ),
       ]);
       return true;
@@ -1836,7 +1844,7 @@ class ApiService {
 
   getConstraintsByItem = async (
     itemType: "PRODUCT" | "ADDITIONAL",
-    itemId: string
+    itemId: string,
   ): Promise<
     Array<{
       id: string;
@@ -1853,13 +1861,13 @@ class ApiService {
     }>
   > => {
     const res = await this.client.get(
-      `/admin/constraints/item/${itemType}/${itemId}`
+      `/admin/constraints/item/${itemType}/${itemId}`,
     );
     return res.data;
   };
 
   searchItemsForConstraints = async (
-    query: string
+    query: string,
   ): Promise<{
     products: Array<{
       id: string;
@@ -1875,7 +1883,7 @@ class ApiService {
     }>;
   }> => {
     const res = await this.client.get(
-      `/admin/constraints/search?q=${encodeURIComponent(query)}`
+      `/admin/constraints/search?q=${encodeURIComponent(query)}`,
     );
     return res.data;
   };
@@ -1917,7 +1925,7 @@ class ApiService {
       related_item_id: string;
       related_item_type: "PRODUCT" | "ADDITIONAL";
       message: string;
-    }>
+    }>,
   ): Promise<{
     id: string;
     target_item_id: string;
@@ -1933,7 +1941,7 @@ class ApiService {
   }> => {
     const res = await this.client.put(
       `/admin/constraints/${constraintId}`,
-      payload
+      payload,
     );
     return res.data;
   };
@@ -2001,7 +2009,7 @@ class ApiService {
     try {
       const res = await this.client.post(
         "/payment/transparent-checkout",
-        payload
+        payload,
       );
       return res.data;
     } catch (error: unknown) {
@@ -2050,7 +2058,7 @@ class ApiService {
         throw new Error(
           axiosError.response.data?.error ||
             axiosError.response.data?.message ||
-            "Erro na requisição"
+            "Erro na requisição",
         );
       }
       throw error;
@@ -2120,7 +2128,7 @@ class ApiService {
   getInstallments = async (
     amount: number,
     bin: string,
-    paymentMethodId?: string
+    paymentMethodId?: string,
   ) => {
     const res = await this.client.post("/mercadopago/get-installments", {
       amount,
@@ -2154,7 +2162,7 @@ class ApiService {
   };
 
   createFeedConfiguration = async (
-    payload: CreateFeedConfigurationInput
+    payload: CreateFeedConfigurationInput,
   ): Promise<FeedConfiguration> => {
     const res = await this.client.post("/admin/feed/configurations", payload);
     ApiService.cache.feedConfigurations = null; // Invalidar cache
@@ -2163,11 +2171,11 @@ class ApiService {
 
   updateFeedConfiguration = async (
     id: string,
-    payload: UpdateFeedConfigurationInput
+    payload: UpdateFeedConfigurationInput,
   ): Promise<FeedConfiguration> => {
     const res = await this.client.put(
       `/admin/feed/configurations/${id}`,
-      payload
+      payload,
     );
     ApiService.cache.feedConfigurations = null; // Invalidar cache
     return res.data;
@@ -2180,7 +2188,7 @@ class ApiService {
 
   createFeedBanner = async (
     payload: CreateFeedBannerInput,
-    imageFile?: File
+    imageFile?: File,
   ): Promise<FeedBanner> => {
     if (imageFile) {
       const formData = new FormData();
@@ -2205,7 +2213,7 @@ class ApiService {
   updateFeedBanner = async (
     id: string,
     payload: UpdateFeedBannerInput,
-    imageFile?: File
+    imageFile?: File,
   ): Promise<FeedBanner> => {
     if (imageFile) {
       const formData = new FormData();
@@ -2233,7 +2241,7 @@ class ApiService {
   };
 
   createFeedSection = async (
-    payload: CreateFeedSectionInput
+    payload: CreateFeedSectionInput,
   ): Promise<FeedSection> => {
     const res = await this.client.post("/admin/feed/sections", payload);
     ApiService.cache.feedConfigurations = null;
@@ -2242,7 +2250,7 @@ class ApiService {
 
   updateFeedSection = async (
     id: string,
-    payload: UpdateFeedSectionInput
+    payload: UpdateFeedSectionInput,
   ): Promise<FeedSection> => {
     const res = await this.client.put(`/admin/feed/sections/${id}`, payload);
     ApiService.cache.feedConfigurations = null;
@@ -2256,7 +2264,7 @@ class ApiService {
 
   // ===== Feed Section Items =====
   createFeedSectionItem = async (
-    data: CreateFeedSectionItemInput
+    data: CreateFeedSectionItemInput,
   ): Promise<FeedSectionItem> => {
     const response = await this.client.post("/admin/feed/section-items", data);
     ApiService.cache.feedConfigurations = null;
@@ -2265,11 +2273,11 @@ class ApiService {
 
   updateFeedSectionItem = async (
     id: string,
-    data: UpdateFeedSectionItemInput
+    data: UpdateFeedSectionItemInput,
   ): Promise<FeedSectionItem> => {
     const response = await this.client.put(
       `/admin/feed/section-items/${id}`,
-      data
+      data,
     );
     ApiService.cache.feedConfigurations = null;
     return response.data;
@@ -2284,7 +2292,7 @@ class ApiService {
   getPublicFeed = async (
     configId?: string,
     page?: number,
-    perPage?: number
+    perPage?: number,
   ): Promise<PublicFeedResponse> => {
     const cacheKey = `publicFeed_${configId || "default"}_page_${
       page ?? "all"
@@ -2321,7 +2329,7 @@ class ApiService {
 
   checkLowStock = async (threshold: number = 3) => {
     const res = await this.client.get(
-      `/reports/stock/check?threshold=${threshold}`
+      `/reports/stock/check?threshold=${threshold}`,
     );
     return res.data;
   };
@@ -2365,7 +2373,7 @@ class ApiService {
   // Atualizar follow-up
   updateCustomerFollowUp = async (
     phone: string,
-    followUp: boolean
+    followUp: boolean,
   ): Promise<{ success: boolean }> => {
     const response = await this.client.patch(`/customers/${phone}/follow-up`, {
       follow_up: followUp,
@@ -2376,11 +2384,11 @@ class ApiService {
   // Atualizar status de serviço
   updateCustomerServiceStatus = async (
     phone: string,
-    status: string
+    status: string,
   ): Promise<{ success: boolean }> => {
     const response = await this.client.patch(
       `/customers/${phone}/service-status`,
-      { service_status: status }
+      { service_status: status },
     );
     return response.data;
   };
@@ -2388,11 +2396,11 @@ class ApiService {
   // Atualizar status de cliente
   updateCustomerStatus = async (
     phone: string,
-    alreadyCustomer: boolean
+    alreadyCustomer: boolean,
   ): Promise<{ success: boolean }> => {
     const response = await this.client.patch(
       `/customers/${phone}/customer-status`,
-      { already_a_customer: alreadyCustomer }
+      { already_a_customer: alreadyCustomer },
     );
     return response.data;
   };
@@ -2400,7 +2408,7 @@ class ApiService {
   // Atualizar nome do cliente
   updateCustomerName = async (
     phone: string,
-    name: string
+    name: string,
   ): Promise<{ success: boolean }> => {
     const response = await this.client.patch(`/customers/${phone}/name`, {
       name,
@@ -2411,11 +2419,11 @@ class ApiService {
   // Enviar mensagem ao cliente
   sendMessageToCustomer = async (
     phone: string,
-    message: string
+    message: string,
   ): Promise<{ success: boolean; customer?: N8NCustomer }> => {
     const response = await this.client.post(
       `/customers/${phone}/send-message`,
-      { message }
+      { message },
     );
     return response.data;
   };
@@ -2435,10 +2443,10 @@ class ApiService {
   // ===== Item Constraints =====
   getItemConstraints = async (
     itemId: string,
-    itemType: "PRODUCT" | "ADDITIONAL"
+    itemType: "PRODUCT" | "ADDITIONAL",
   ) => {
     const res = await this.client.get(
-      `/constraints/item/${itemType}/${itemId}`
+      `/constraints/item/${itemType}/${itemId}`,
     );
     return res.data;
   };
@@ -2456,7 +2464,7 @@ export function useApi() {
 
   const clearSpecificCache = useCallback(
     (key: string) => api.clearCache(key),
-    [api]
+    [api],
   );
   // Evita recriar objeto a cada render (quebrando dependências em useEffect em consumidores)
   const value = useMemo(
@@ -2465,7 +2473,7 @@ export function useApi() {
       invalidateCache,
       clearSpecificCache,
     }),
-    [api, invalidateCache, clearSpecificCache]
+    [api, invalidateCache, clearSpecificCache],
   );
 
   return value;
