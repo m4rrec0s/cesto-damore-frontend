@@ -22,6 +22,7 @@ export interface CartCustomization extends CustomizationValue {
   label_selected?: string;
   additional_time?: number;
   data?: Record<string, unknown>; // ✅ Store raw data for complex customizations (BASE_LAYOUT)
+  fabricState?: string; // ✅ Store Fabric.js JSON state
   value?: string; // ✅ Store serialized JSON value from backend
 }
 
@@ -87,7 +88,7 @@ const serializeAdditionals = (additionals?: string[]) => {
 const serializeAdditionalColors = (colors?: Record<string, string>): string => {
   if (!colors) return "{}";
   const normalized = Object.entries(colors).sort(([idA], [idB]) =>
-    idA.localeCompare(idB)
+    idA.localeCompare(idB),
   );
   return JSON.stringify(normalized);
 };
@@ -113,22 +114,23 @@ const serializeCustomizations = (customizations?: CartCustomization[]) => {
     selected_item_label: customization.selected_item_label || null,
     selected_option_label: customization.selected_option_label || null,
     data: customization.data || null, // ✅ Serialize raw data
+    fabricState: customization.fabricState || null, // ✅ Serialize Fabric.js state
     photos:
       customization.photos?.map(
         (photo) =>
-          photo.temp_file_id || photo.preview_url || photo.original_name
+          photo.temp_file_id || photo.preview_url || photo.original_name,
       ) || [],
   }));
 
   normalized.sort((a, b) =>
-    a.customization_id.localeCompare(b.customization_id)
+    a.customization_id.localeCompare(b.customization_id),
   );
 
   return JSON.stringify(normalized);
 };
 
 const cloneCustomizations = (
-  customizations?: CartCustomization[]
+  customizations?: CartCustomization[],
 ): CartCustomization[] => {
   if (!customizations || customizations.length === 0) return [];
 
@@ -144,12 +146,12 @@ const cloneCustomizations = (
 };
 
 const calculateCustomizationTotal = (
-  customizations?: CartCustomization[]
+  customizations?: CartCustomization[],
 ): number => {
   if (!customizations) return 0;
   return customizations.reduce(
     (sum, customization) => sum + (customization.price_adjustment || 0),
-    0
+    0,
   );
 };
 
@@ -160,27 +162,27 @@ interface CartContextType {
     quantity?: number,
     additionals?: string[],
     additionalColors?: Record<string, string>,
-    customizations?: CartCustomization[]
+    customizations?: CartCustomization[],
   ) => Promise<void>;
   removeFromCart: (
     productId: string,
     additionals?: string[],
     customizations?: CartCustomization[],
-    additionalColors?: Record<string, string>
+    additionalColors?: Record<string, string>,
   ) => void;
   updateQuantity: (
     productId: string,
     quantity: number,
     additionals?: string[],
     customizations?: CartCustomization[],
-    additionalColors?: Record<string, string>
+    additionalColors?: Record<string, string>,
   ) => void;
   updateCustomizations: (
     productId: string,
     oldCustomizations: CartCustomization[],
     newCustomizations: CartCustomization[],
     additionals?: string[],
-    additionalColors?: Record<string, string>
+    additionalColors?: Record<string, string>,
   ) => void;
   clearCart: () => void;
   createOrder: (
@@ -194,7 +196,7 @@ interface CartContextType {
       deliveryCity?: string;
       deliveryState?: string;
       recipientPhone?: string;
-    }
+    },
   ) => Promise<unknown>;
   createOrderWithTransparentCheckout: (
     userId: string,
@@ -207,7 +209,7 @@ interface CartContextType {
       deliveryCity?: string;
       deliveryState?: string;
       recipientPhone?: string;
-    }
+    },
   ) => Promise<{
     order: { id: number; status: string; total: number };
     checkoutUrl: string;
@@ -215,7 +217,7 @@ interface CartContextType {
   }>;
   createPaymentPreference: (
     userEmail: string,
-    orderId?: string
+    orderId?: string,
   ) => Promise<{
     init_point?: string;
     sandbox_init_point?: string;
@@ -237,7 +239,7 @@ interface CartContextType {
           number: string;
         };
       };
-    }
+    },
   ) => Promise<unknown>;
   getDeliveryWindows: () => {
     weekdays: DeliveryWindow[];
@@ -286,14 +288,14 @@ export function useCart(): CartContextType {
       const additionalsTotal =
         item.additionals?.reduce(
           (addSum, add) => addSum + add.price * item.quantity,
-          0
+          0,
         ) || 0;
       return sum + itemTotal + additionalsTotal;
     }, 0);
 
     const itemCount = safeItems.reduce(
       (count, item) => count + item.quantity,
-      0
+      0,
     );
 
     return {
@@ -312,7 +314,7 @@ export function useCart(): CartContextType {
     (metadata: { send_anonymously?: boolean; complement?: string }) => {
       _setOrderMetadata((prev) => ({ ...prev, ...metadata }));
     },
-    []
+    [],
   );
 
   // Quando metadata do pedido muda, sincronizar com o backend (se houver rascunho)
@@ -341,8 +343,8 @@ export function useCart(): CartContextType {
             orderItem.additionals && orderItem.additionals.length > 0
               ? await Promise.all(
                   orderItem.additionals.map((add: { additional_id: string }) =>
-                    api.getAdditional(add.additional_id)
-                  )
+                    api.getAdditional(add.additional_id),
+                  ),
                 )
               : [];
 
@@ -443,6 +445,7 @@ export function useCart(): CartContextType {
                       (data.selected_option_label as string),
                     additional_time: (data.additional_time as number) || 0,
                     data: data,
+                    fabricState: (data.fabricState as string) || undefined,
                     value:
                       typeof customization.value === "string"
                         ? customization.value
@@ -473,13 +476,13 @@ export function useCart(): CartContextType {
 
           const customizationTotal = customizations.reduce(
             (sum, c) => sum + (c.price_adjustment || 0),
-            0
+            0,
           );
 
           const baseEffective =
             product.price * (1 - (product.discount || 0) / 100);
           const effectivePrice = Number(
-            (baseEffective + customizationTotal).toFixed(2)
+            (baseEffective + customizationTotal).toFixed(2),
           );
 
           cartItems.push({
@@ -490,7 +493,7 @@ export function useCart(): CartContextType {
             discount: product.discount || 0,
             additional_ids:
               orderItem.additionals?.map(
-                (add: { additional_id: string }) => add.additional_id
+                (add: { additional_id: string }) => add.additional_id,
               ) || [],
             additionals,
             customizations:
@@ -506,7 +509,7 @@ export function useCart(): CartContextType {
 
       return cartItems;
     },
-    [api]
+    [api],
   );
 
   // Carregar pedido pendente existente quando usuário faz login
@@ -581,6 +584,7 @@ export function useCart(): CartContextType {
           label_selected: custom.label_selected,
           price_adjustment: custom.price_adjustment,
           additional_time: custom.additional_time || 0,
+          fabricState: custom.fabricState, // ✅ Include Fabric state in customization_data
           ...custom.data, // ✅ Merge raw data into customization_data
         },
       })),
@@ -641,7 +645,7 @@ export function useCart(): CartContextType {
             } catch (error) {
               console.error(
                 "Erro ao verificar/deletar pedido pendente:",
-                error
+                error,
               );
             }
           }
@@ -662,7 +666,7 @@ export function useCart(): CartContextType {
           } catch (error) {
             console.error(
               "Erro ao verificar pedido pendente existente:",
-              error
+              error,
             );
           }
 
@@ -693,7 +697,7 @@ export function useCart(): CartContextType {
         } else {
           const order = await api.updateOrderItems(
             pendingOrderId,
-            itemsPayload
+            itemsPayload,
           );
           await api.updateOrderMetadata(pendingOrderId, {
             send_anonymously: orderMetadata.send_anonymously,
@@ -724,7 +728,7 @@ export function useCart(): CartContextType {
           }
           if (status === 500) {
             toast.error(
-              "Erro ao sincronizar o carrinho com o servidor. Tente novamente mais tarde."
+              "Erro ao sincronizar o carrinho com o servidor. Tente novamente mais tarde.",
             );
           }
         } catch {
@@ -745,7 +749,7 @@ export function useCart(): CartContextType {
       transformOrderToCartItems,
       calculateTotals,
       setCart,
-    ]
+    ],
   );
 
   const syncTimeoutRef = useRef<number | null>(null);
@@ -764,7 +768,7 @@ export function useCart(): CartContextType {
         void syncCartToBackend(currentCart);
       }, 300);
     },
-    [syncCartToBackend]
+    [syncCartToBackend],
   );
 
   // ✅ Limpar cache de datas desabilitadas quando o carrinho muda
@@ -853,14 +857,14 @@ export function useCart(): CartContextType {
                         : Number(
                             (
                               item.price + (item.customization_total || 0)
-                            ).toFixed(2)
+                            ).toFixed(2),
                           ),
                     additionals,
                     customizations,
                     product: item.product,
                   };
                 });
-              })()
+              })(),
             );
             if (transformedCart.items.length > 0 && cart.items.length === 0) {
               setCart(transformedCart);
@@ -892,6 +896,8 @@ export function useCart(): CartContextType {
     api,
     calculateTotals,
     syncCartToBackend,
+    cart, // Added 'cart'
+    setOrderMetadata, // Added 'setOrderMetadata'
     cart.items.length,
   ]);
 
@@ -901,7 +907,7 @@ export function useCart(): CartContextType {
       quantity: number = 1,
       additionals?: string[],
       additionalColors?: Record<string, string>,
-      customizations?: CartCustomization[]
+      customizations?: CartCustomization[],
     ) => {
       try {
         const product = await api.getProduct(productId);
@@ -918,7 +924,7 @@ export function useCart(): CartContextType {
 
         const baseEffective = product.price * (1 - discount / 100);
         const effectivePrice = Number(
-          (baseEffective + customizationTotal).toFixed(2)
+          (baseEffective + customizationTotal).toFixed(2),
         );
 
         const newItem: CartItem = {
@@ -955,7 +961,7 @@ export function useCart(): CartContextType {
               serializeAdditionalColors(item.additional_colors) ===
                 targetColorsKey &&
               serializeCustomizations(item.customizations) ===
-                targetCustomizationsKey
+                targetCustomizationsKey,
           );
 
           let newItems: CartItem[] = [...currentItems];
@@ -966,7 +972,7 @@ export function useCart(): CartContextType {
             const existingBaseEffective =
               updatedItem.price * (1 - (updatedItem.discount || 0) / 100);
             updatedItem.effectivePrice = Number(
-              (existingBaseEffective + customizationTotal).toFixed(2)
+              (existingBaseEffective + customizationTotal).toFixed(2),
             );
             updatedItem.customization_total = customizationTotal;
             updatedItem.customizations =
@@ -989,7 +995,7 @@ export function useCart(): CartContextType {
         toast.error("Erro ao adicionar produto ao carrinho");
       }
     },
-    [api, calculateTotals, debouncedSync]
+    [api, calculateTotals, debouncedSync],
   );
 
   const removeFromCart = useCallback(
@@ -997,7 +1003,7 @@ export function useCart(): CartContextType {
       productId: string,
       additionals?: string[],
       customizations?: CartCustomization[],
-      additionalColors?: Record<string, string>
+      additionalColors?: Record<string, string>,
     ) => {
       let removedItem: CartItem | null = null;
 
@@ -1018,7 +1024,7 @@ export function useCart(): CartContextType {
               serializeAdditionalColors(item.additional_colors) ===
                 targetColors &&
               serializeCustomizations(item.customizations) ===
-                targetCustomizations
+                targetCustomizations,
           ) || null;
 
         const newItems = currentItems.filter(
@@ -1030,7 +1036,7 @@ export function useCart(): CartContextType {
                 targetColors &&
               serializeCustomizations(item.customizations) ===
                 targetCustomizations
-            )
+            ),
         );
         const updatedCart = calculateTotals(newItems);
 
@@ -1046,12 +1052,12 @@ export function useCart(): CartContextType {
                   try {
                     await api.deleteOrder(pendingOrderId);
                     console.log(
-                      `✅ [removeFromCart] Pedido rascunho ${pendingOrderId} deletado`
+                      `✅ [removeFromCart] Pedido rascunho ${pendingOrderId} deletado`,
                     );
                   } catch (deleteErr) {
                     console.error(
                       `❌ [removeFromCart] Erro ao deletar pedido rascunho ${pendingOrderId}:`,
-                      deleteErr
+                      deleteErr,
                     );
                   }
                   setPendingOrderId(null);
@@ -1066,7 +1072,7 @@ export function useCart(): CartContextType {
               } catch (err) {
                 console.error(
                   "Erro ao verificar pedido pendente ao remover item do carrinho:",
-                  err
+                  err,
                 );
               }
             }
@@ -1093,7 +1099,7 @@ export function useCart(): CartContextType {
       pendingOrderId,
       setPendingOrderId,
       setOrderMetadata,
-    ]
+    ],
   );
 
   const updateQuantity = useCallback(
@@ -1102,14 +1108,14 @@ export function useCart(): CartContextType {
       quantity: number,
       additionals?: string[],
       customizations?: CartCustomization[],
-      additionalColors?: Record<string, string>
+      additionalColors?: Record<string, string>,
     ) => {
       if (quantity <= 0) {
         removeFromCart(
           productId,
           additionals,
           customizations,
-          additionalColors
+          additionalColors,
         );
         return;
       }
@@ -1140,7 +1146,7 @@ export function useCart(): CartContextType {
         return updatedCart;
       });
     },
-    [calculateTotals, removeFromCart, debouncedSync]
+    [calculateTotals, removeFromCart, debouncedSync],
   );
 
   /**
@@ -1153,7 +1159,7 @@ export function useCart(): CartContextType {
       oldCustomizations: CartCustomization[],
       newCustomizations: CartCustomization[],
       additionals?: string[],
-      additionalColors?: Record<string, string>
+      additionalColors?: Record<string, string>,
     ) => {
       setCart((prevCart) => {
         const currentItems = Array.isArray(prevCart.items)
@@ -1172,7 +1178,7 @@ export function useCart(): CartContextType {
             serializeAdditionals(item.additional_ids) === targetAdditionals &&
             serializeCustomizations(item.customizations) ===
               targetOldCustomizations &&
-            serializeAdditionalColors(item.additional_colors) === targetColors
+            serializeAdditionalColors(item.additional_colors) === targetColors,
         );
 
         if (itemIndex === -1) {
@@ -1187,7 +1193,7 @@ export function useCart(): CartContextType {
         // Isso preserva as que não foram editadas
         const mergedCustomizations = mergeCustomizations(
           item.customizations || [],
-          newCustomizations
+          newCustomizations,
         );
 
         // Calcular novo total de customização
@@ -1198,7 +1204,7 @@ export function useCart(): CartContextType {
         // Recalcular preço efetivo
         const baseEffective = item.price * (1 - (item.discount || 0) / 100);
         const effectivePrice = Number(
-          (baseEffective + customizationTotal).toFixed(2)
+          (baseEffective + customizationTotal).toFixed(2),
         );
 
         // Atualizar item com customizações mescladas
@@ -1216,13 +1222,13 @@ export function useCart(): CartContextType {
         return updatedCart;
       });
     },
-    [calculateTotals, debouncedSync]
+    [calculateTotals, debouncedSync],
   );
 
   // ✅ FIX: Função para mesclar customizações (não perder as não editadas)
   const mergeCustomizations = (
     existing: CartCustomization[],
-    updated: CartCustomization[]
+    updated: CartCustomization[],
   ): CartCustomization[] => {
     const merged = [...existing];
 
@@ -1282,7 +1288,7 @@ export function useCart(): CartContextType {
         complement?: string;
         deliveryMethod?: "delivery" | "pickup";
         discount?: number;
-      }
+      },
     ) => {
       if (cart.items.length === 0) {
         throw new Error("Carrinho está vazio");
@@ -1325,7 +1331,7 @@ export function useCart(): CartContextType {
         (options.paymentMethod !== "pix" && options.paymentMethod !== "card")
       ) {
         throw new Error(
-          "Método de pagamento é obrigatório e deve ser 'pix' ou 'card'"
+          "Método de pagamento é obrigatório e deve ser 'pix' ou 'card'",
         );
       }
 
@@ -1397,13 +1403,13 @@ export function useCart(): CartContextType {
       } catch (err) {
         console.warn(
           "Não foi possível remover pending order do localStorage:",
-          err
+          err,
         );
       }
 
       return order;
     },
-    [cart, api]
+    [cart, api],
   );
 
   const createPaymentPreference = useCallback(
@@ -1414,14 +1420,14 @@ export function useCart(): CartContextType {
         shippingCost?: number;
         paymentMethod?: "pix" | "card";
         grandTotal?: number;
-      }
+      },
     ) => {
       if (
         !process.env.NEXT_PUBLIC_MERCADOPAGO_ACCESS_TOKEN ||
         process.env.NEXT_PUBLIC_MERCADOPAGO_ACCESS_TOKEN === "SEU_TOKEN_AQUI"
       ) {
         throw new Error(
-          "Token do Mercado Pago não configurado. Configure NEXT_PUBLIC_MERCADOPAGO_ACCESS_TOKEN no arquivo .env.local"
+          "Token do Mercado Pago não configurado. Configure NEXT_PUBLIC_MERCADOPAGO_ACCESS_TOKEN no arquivo .env.local",
         );
       }
 
@@ -1479,13 +1485,13 @@ export function useCart(): CartContextType {
               "Content-Type": "application/json",
             },
             body: JSON.stringify(requestBody),
-          }
+          },
         );
 
         if (!response.ok) {
           const errorText = await response.text();
           throw new Error(
-            `Erro ao criar preferência: ${response.status} ${response.statusText} - ${errorText}`
+            `Erro ao criar preferência: ${response.status} ${response.statusText} - ${errorText}`,
           );
         }
 
@@ -1496,7 +1502,7 @@ export function useCart(): CartContextType {
         throw error;
       }
     },
-    [cart.items]
+    [cart.items],
   );
 
   const getDeliveryWindows = useCallback((): {
@@ -1523,7 +1529,7 @@ export function useCart(): CartContextType {
 
       const hasCustomAdditionals =
         item.additionals?.some((add) =>
-          /quadro|polaroid|caneca|quebra.?cabeça/i.test(add.name)
+          /quadro|polaroid|caneca|quebra.?cabeça/i.test(add.name),
         ) || false;
 
       return isCustomProduct || hasCustomAdditionals;
@@ -1537,7 +1543,7 @@ export function useCart(): CartContextType {
       month: number,
       day: number,
       hour: number,
-      minute: number
+      minute: number,
     ): Date => {
       // Construct ISO string with fixed -03:00 offset
       const y = year;
@@ -1547,7 +1553,7 @@ export function useCart(): CartContextType {
       const min = String(minute).padStart(2, "0");
       return new Date(`${y}-${m}-${d}T${h}:${min}:00-03:00`);
     },
-    []
+    [],
   );
 
   const getBrazilTimeComponents = useCallback((date: Date) => {
@@ -1626,7 +1632,7 @@ export function useCart(): CartContextType {
           if (comp.item?.layout_base?.additional_time) {
             itemMaxTime = Math.max(
               itemMaxTime,
-              comp.item.layout_base.additional_time
+              comp.item.layout_base.additional_time,
             );
           }
         });
@@ -1673,7 +1679,7 @@ export function useCart(): CartContextType {
         return currentMinutes >= startTotal && currentMinutes <= endTotal;
       });
     },
-    [getDeliveryWindows, isWeekend, getBrazilTimeComponents]
+    [getDeliveryWindows, isWeekend, getBrazilTimeComponents],
   );
 
   /**
@@ -1702,7 +1708,7 @@ export function useCart(): CartContextType {
       }
       return 0;
     },
-    [getBrazilTimeComponents, isWeekend, getDeliveryWindows]
+    [getBrazilTimeComponents, isWeekend, getDeliveryWindows],
   );
 
   /**
@@ -1751,7 +1757,7 @@ export function useCart(): CartContextType {
             nextDayComponents.month,
             nextDayComponents.day,
             startH,
-            startM
+            startM,
           );
         }
 
@@ -1763,7 +1769,7 @@ export function useCart(): CartContextType {
       const { year, month, day } = getBrazilTimeComponents(candidate);
       return createBrazilDate(year, month, day + 1, 8, 0);
     },
-    [getBrazilTimeComponents, isWeekend, getDeliveryWindows, createBrazilDate]
+    [getBrazilTimeComponents, isWeekend, getDeliveryWindows, createBrazilDate],
   );
 
   const getEarliestDeliveryDateTime = useCallback(() => {
@@ -1790,7 +1796,7 @@ export function useCart(): CartContextType {
         if (remainingInWindow >= remainingProductionMinutes) {
           // Produção termina dentro desta janela
           current = new Date(
-            current.getTime() + remainingProductionMinutes * 60 * 1000
+            current.getTime() + remainingProductionMinutes * 60 * 1000,
           );
           remainingProductionMinutes = 0;
         } else {
@@ -1907,7 +1913,7 @@ export function useCart(): CartContextType {
       // Deduplicate by label just in case
       const uniqueSlots = slots.filter(
         (slot, index, self) =>
-          index === self.findIndex((t) => t.label === slot.label)
+          index === self.findIndex((t) => t.label === slot.label),
       );
 
       return uniqueSlots;
@@ -1918,7 +1924,7 @@ export function useCart(): CartContextType {
       getEarliestDeliveryDateTime,
       createBrazilDate,
       getBrazilTimeComponents,
-    ]
+    ],
   );
 
   const getAvailableDates = useCallback((): AvailableDate[] => {
@@ -1960,7 +1966,7 @@ export function useCart(): CartContextType {
 
       return isDisabled;
     },
-    [generateTimeSlots]
+    [generateTimeSlots],
   );
 
   /**
@@ -1988,7 +1994,7 @@ export function useCart(): CartContextType {
 
     // Quando a produção termina (tempo real, pode ser fora do expediente)
     const productionEndsAt = new Date(
-      now.getTime() + prodHours * 60 * 60 * 1000
+      now.getTime() + prodHours * 60 * 60 * 1000,
     );
 
     // Encontrar primeira disponibilidade de retirada/entrega APÓS término da produção
@@ -2051,7 +2057,7 @@ export function useCart(): CartContextType {
         grandTotal?: number;
         deliveryCity?: string;
         deliveryState?: string;
-      }
+      },
     ) => {
       if (cart.items.length === 0) {
         throw new Error("Carrinho está vazio");
@@ -2063,7 +2069,7 @@ export function useCart(): CartContextType {
         userId,
         deliveryAddress,
         deliveryDate,
-        options
+        options,
       );
 
       // Retornar URL para checkout transparente
@@ -2084,7 +2090,7 @@ export function useCart(): CartContextType {
         },
       };
     },
-    [cart, createOrder]
+    [cart, createOrder],
   );
 
   const processTransparentPayment = useCallback(
@@ -2104,7 +2110,7 @@ export function useCart(): CartContextType {
             number: string;
           };
         };
-      }
+      },
     ) => {
       try {
         const payer = paymentData.payer || { email: "" };
@@ -2150,7 +2156,7 @@ export function useCart(): CartContextType {
         throw error;
       }
     },
-    [api, clearCart]
+    [api, clearCart],
   );
 
   const formatDate = useCallback((date: Date): string => {

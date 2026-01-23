@@ -66,6 +66,40 @@ export function useLayoutApi() {
     }
   }, [getAuthHeaders]);
 
+  const fetchPublicLayouts = useCallback(
+    async (itemType?: string): Promise<LayoutBase[]> => {
+      setLoading(true);
+      setError(null);
+
+      try {
+        const url = new URL(`${API_URL}/layouts`);
+        if (itemType) url.searchParams.append("item_type", itemType);
+
+        const response = await fetch(url.toString(), {
+          headers: {
+            "ngrok-skip-browser-warning": "true",
+          },
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || "Erro ao buscar layouts");
+        }
+
+        const data = await response.json();
+        return data;
+      } catch (err) {
+        const message =
+          err instanceof Error ? err.message : "Erro ao buscar layouts";
+        setError(message);
+        throw err;
+      } finally {
+        setLoading(false);
+      }
+    },
+    []
+  );
+
   const fetchLayoutById = useCallback(
     async (id: string): Promise<LayoutBase> => {
       setLoading(true);
@@ -304,6 +338,7 @@ export function useLayoutApi() {
     loading,
     error,
     fetchLayouts,
+    fetchPublicLayouts,
     fetchLayoutById,
     createLayout,
     updateLayout,

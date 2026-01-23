@@ -26,6 +26,7 @@ export interface LayoutBase {
   height: number;
   slots: SlotDef[];
   additional_time: number;
+  fabric_json_state?: string | Record<string, unknown> | null;
   created_at: string;
   updated_at: string;
 }

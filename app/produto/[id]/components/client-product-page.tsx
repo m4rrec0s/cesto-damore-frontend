@@ -1,5 +1,6 @@
 "use client";
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import Image from "next/image";
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { toast } from "sonner";
@@ -22,6 +23,7 @@ import useApi, {
 } from "@/app/hooks/use-api";
 import { useCartContext } from "@/app/hooks/cart-context";
 import type { CartCustomization } from "@/app/hooks/use-cart";
+import { useLayoutApi } from "@/app/hooks/use-layout-api";
 import { Model3DViewer } from "./Model3DViewer";
 import AdditionalCard from "./additional-card";
 import Link from "next/link";
@@ -72,11 +74,16 @@ const ClientProductPage = ({ id }: { id: string }) => {
     string | null
   >(null);
   const [previewComponentId, setPreviewComponentId] = useState<string | null>(
-    null
+    null,
   );
   const [itemImagesCount, setItemImagesCount] = useState<
     Record<string, { current: number; max: number }>
   >({});
+  const { fetchPublicLayouts } = useLayoutApi();
+  const [availableLayoutsByComponent, setAvailableLayoutsByComponent] =
+    useState<Record<string, any[]>>({});
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [loadingLayouts, setLoadingLayouts] = useState(false);
   const isUploading = false;
 
   const isNewProduct = useCallback((createdAt: string) => {
@@ -99,7 +106,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
         [itemId]: { current: imageCount, max: maxImages },
       }));
     },
-    []
+    [],
   );
 
   // ❌ REMOVIDO: sessionStorage causava conflitos com dados do banco de dados
@@ -109,7 +116,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
     (
       itemId: string,
       hasCustomizations: boolean,
-      data: CustomizationInput[]
+      data: CustomizationInput[],
     ) => {
       if (hasCustomizations) {
         setItemCustomizations((prev) => ({
@@ -118,7 +125,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
         }));
 
         const hasBaseLayout = data.some(
-          (c) => c.customizationType === CustomizationType.BASE_LAYOUT
+          (c) => c.customizationType === CustomizationType.BASE_LAYOUT,
         );
 
         if (hasBaseLayout) {
@@ -142,14 +149,14 @@ const ClientProductPage = ({ id }: { id: string }) => {
 
       setActiveCustomizationModal(null);
     },
-    [previewComponentId]
+    [previewComponentId],
   );
 
   const handleAdditionalCustomizationComplete = useCallback(
     async (
       additionalId: string,
       hasCustomizations: boolean,
-      data: CustomizationInput[]
+      data: CustomizationInput[],
     ) => {
       if (hasCustomizations) {
         setAdditionalCustomizations((prev) => {
@@ -180,7 +187,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
 
         const convertToCartCustomization = async (
           input: CustomizationInput,
-          itemId: string
+          itemId: string,
         ): Promise<CartCustomization | null> => {
           const data = input.data as Record<string, unknown>;
           const customizationName =
@@ -191,7 +198,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
             const textFields = Object.entries(data)
               .filter(
                 ([key]) =>
-                  key !== "_customizationName" && key !== "_priceAdjustment"
+                  key !== "_customizationName" && key !== "_priceAdjustment",
               )
               .map(([key, value]) => `${key}: ${value}`)
               .join(", ");
@@ -242,27 +249,26 @@ const ClientProductPage = ({ id }: { id: string }) => {
                       try {
                         if (file) {
                           console.log(
-                            `📤 [IMAGES-1] Uploading file ${index}: ${fileName}`
+                            `📤 [IMAGES-1] Uploading file ${index}: ${fileName}`,
                           );
-                          const uploadResult = await uploadCustomizationImage(
-                            file
-                          );
+                          const uploadResult =
+                            await uploadCustomizationImage(file);
                           if (uploadResult.success) {
                             tempFileUrl = uploadResult.imageUrl;
                             uploadedFileName = uploadResult.filename;
                             console.log(
-                              `✅ [IMAGES-1] Upload bem-sucedido: ${uploadResult.imageUrl}`
+                              `✅ [IMAGES-1] Upload bem-sucedido: ${uploadResult.imageUrl}`,
                             );
                           } else {
                             console.warn(
-                              `⚠️ [IMAGES-1] Upload falhou para ${fileName}, usando base64`
+                              `⚠️ [IMAGES-1] Upload falhou para ${fileName}, usando base64`,
                             );
                           }
                         }
                       } catch (err) {
                         console.error(
                           `❌ [IMAGES-1] Erro ao fazer upload de ${fileName}:`,
-                          err
+                          err,
                         );
                         // Continuar com base64 se upload falhar
                       }
@@ -277,7 +283,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
                         mime_type: file?.type || "image/jpeg",
                         size: file?.size || 0,
                       };
-                    })
+                    }),
                   )
                 : [];
 
@@ -297,6 +303,8 @@ const ClientProductPage = ({ id }: { id: string }) => {
               item_type?: string;
               images?: Array<{ slot?: string; url?: string }>;
               previewUrl?: string;
+              fabricState?: string;
+              highQualityUrl?: string;
             };
 
             const imageCount = layoutData.images?.length || 0;
@@ -322,36 +330,39 @@ const ClientProductPage = ({ id }: { id: string }) => {
               text: undefined,
             };
 
-            // ✅ Upload BASE_LAYOUT preview if it's base64
+            // ✅ Upload BASE_LAYOUT final high-quality image if it exists, otherwise use preview
+            const finalImageToUpload =
+              layoutData.highQualityUrl || layoutData.previewUrl;
             let finalPreviewUrl = layoutData.previewUrl;
+
             if (
-              layoutData.previewUrl &&
-              layoutData.previewUrl.startsWith("data:image")
+              finalImageToUpload &&
+              finalImageToUpload.startsWith("data:image")
             ) {
               try {
-                const fetchRes = await fetch(layoutData.previewUrl);
+                const fetchRes = await fetch(finalImageToUpload);
                 const blob = await fetchRes.blob();
-                const file = new File([blob], "base-layout-preview.png", {
+                const file = new File([blob], "base-layout-final.png", {
                   type: "image/png",
                 });
 
-                console.log(`📤 [BASE_LAYOUT-Add] Uploading preview...`);
+                console.log(`📤 [BASE_LAYOUT-Add] Uploading final image...`);
                 const uploadResult = await uploadCustomizationImage(file);
 
                 if (uploadResult.success) {
                   console.log(
-                    `✅ [BASE_LAYOUT-Add] Upload OK: ${uploadResult.imageUrl}`
+                    `✅ [BASE_LAYOUT-Add] Upload OK: ${uploadResult.imageUrl}`,
                   );
                   finalPreviewUrl = uploadResult.imageUrl;
                 } else {
                   console.warn(
-                    `⚠️ [BASE_LAYOUT-Add] Upload failed, falling back to base64`
+                    `⚠️ [BASE_LAYOUT-Add] Upload failed, falling back to base64`,
                   );
                 }
               } catch (err) {
                 console.error(
-                  `❌ [BASE_LAYOUT-Add] Error uploading preview:`,
-                  err
+                  `❌ [BASE_LAYOUT-Add] Error uploading final image:`,
+                  err,
                 );
               }
             }
@@ -359,6 +370,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
             return {
               ...baseObj,
               text: finalPreviewUrl,
+              fabricState: layoutData.fabricState,
             };
           }
 
@@ -371,7 +383,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
           for (const custom of componentCustomizations) {
             const converted = await convertToCartCustomization(
               custom,
-              component.id
+              component.id,
             );
             if (converted) {
               cartCustomizations.push(converted);
@@ -383,7 +395,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
           for (const custom of data) {
             const converted = await convertToCartCustomization(
               custom,
-              additionalId
+              additionalId,
             );
             if (converted) {
               cartCustomizations.push(converted);
@@ -396,7 +408,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
           1,
           [additionalId],
           undefined,
-          cartCustomizations.length > 0 ? cartCustomizations : undefined
+          cartCustomizations.length > 0 ? cartCustomizations : undefined,
         );
 
         toast.success("Adicional adicionado ao carrinho!");
@@ -411,7 +423,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
       itemCustomizations,
       addToCart,
       uploadCustomizationImage,
-    ]
+    ],
   );
 
   const handleAddAdditionalToCart = useCallback(
@@ -429,7 +441,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
 
         const convertToCartCustomization = async (
           input: CustomizationInput,
-          itemId: string
+          itemId: string,
         ): Promise<CartCustomization | null> => {
           const data = input.data as Record<string, unknown>;
           const customizationName =
@@ -440,7 +452,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
             const textFields = Object.entries(data)
               .filter(
                 ([key]) =>
-                  key !== "_customizationName" && key !== "_priceAdjustment"
+                  key !== "_customizationName" && key !== "_priceAdjustment",
               )
               .map(([key, value]) => `${key}: ${value}`)
               .join(", ");
@@ -493,27 +505,26 @@ const ClientProductPage = ({ id }: { id: string }) => {
                       try {
                         if (file) {
                           console.log(
-                            `📤 [IMAGES-2] Uploading file ${index}: ${fileName}`
+                            `📤 [IMAGES-2] Uploading file ${index}: ${fileName}`,
                           );
-                          const uploadResult = await uploadCustomizationImage(
-                            file
-                          );
+                          const uploadResult =
+                            await uploadCustomizationImage(file);
                           if (uploadResult.success) {
                             tempFileUrl = uploadResult.imageUrl;
                             uploadedFileName = uploadResult.filename;
                             console.log(
-                              `✅ [IMAGES-2] Upload bem-sucedido: ${uploadResult.imageUrl}`
+                              `✅ [IMAGES-2] Upload bem-sucedido: ${uploadResult.imageUrl}`,
                             );
                           } else {
                             console.warn(
-                              `⚠️ [IMAGES-2] Upload falhou para ${fileName}, usando base64`
+                              `⚠️ [IMAGES-2] Upload falhou para ${fileName}, usando base64`,
                             );
                           }
                         }
                       } catch (err) {
                         console.error(
                           `❌ [IMAGES-2] Erro ao fazer upload de ${fileName}:`,
-                          err
+                          err,
                         );
                         // Continuar com base64 se upload falhar
                       }
@@ -528,7 +539,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
                         mime_type: file?.type || "image/jpeg",
                         size: file?.size || 0,
                       };
-                    })
+                    }),
                   )
                 : [];
 
@@ -546,6 +557,8 @@ const ClientProductPage = ({ id }: { id: string }) => {
               id?: string;
               name?: string;
               previewUrl?: string;
+              fabricState?: string;
+              highQualityUrl?: string;
             };
 
             const baseObj = {
@@ -564,36 +577,39 @@ const ClientProductPage = ({ id }: { id: string }) => {
               text: undefined,
             };
 
-            // ✅ Upload BASE_LAYOUT preview if it's base64
+            // ✅ Upload BASE_LAYOUT final high-quality image if it exists, otherwise use preview
+            const finalImageToUpload =
+              layoutData.highQualityUrl || layoutData.previewUrl;
             let finalPreviewUrl = layoutData.previewUrl;
+
             if (
-              layoutData.previewUrl &&
-              layoutData.previewUrl.startsWith("data:image")
+              finalImageToUpload &&
+              finalImageToUpload.startsWith("data:image")
             ) {
               try {
-                const fetchRes = await fetch(layoutData.previewUrl);
+                const fetchRes = await fetch(finalImageToUpload);
                 const blob = await fetchRes.blob();
-                const file = new File([blob], "base-layout-preview.png", {
+                const file = new File([blob], "base-layout-final.png", {
                   type: "image/png",
                 });
 
-                console.log(`📤 [BASE_LAYOUT-Add2] Uploading preview...`);
+                console.log(`📤 [BASE_LAYOUT-Add2] Uploading final image...`);
                 const uploadResult = await uploadCustomizationImage(file);
 
                 if (uploadResult.success) {
                   console.log(
-                    `✅ [BASE_LAYOUT-Add2] Upload OK: ${uploadResult.imageUrl}`
+                    `✅ [BASE_LAYOUT-Add2] Upload OK: ${uploadResult.imageUrl}`,
                   );
                   finalPreviewUrl = uploadResult.imageUrl;
                 } else {
                   console.warn(
-                    `⚠️ [BASE_LAYOUT-Add2] Upload failed, falling back to base64`
+                    `⚠️ [BASE_LAYOUT-Add2] Upload failed, falling back to base64`,
                   );
                 }
               } catch (err) {
                 console.error(
-                  `❌ [BASE_LAYOUT-Add2] Error uploading preview:`,
-                  err
+                  `❌ [BASE_LAYOUT-Add2] Error uploading final image:`,
+                  err,
                 );
               }
             }
@@ -601,6 +617,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
             return {
               ...baseObj,
               text: finalPreviewUrl,
+              fabricState: layoutData.fabricState,
             };
           }
 
@@ -613,12 +630,12 @@ const ClientProductPage = ({ id }: { id: string }) => {
             itemCustomizations[component.id] || [];
           console.log(
             `🔍 [handleAddAdditionalToCart] Customizações do componente ${component.item.name}:`,
-            componentCustomizations
+            componentCustomizations,
           );
           for (const custom of componentCustomizations) {
             const converted = await convertToCartCustomization(
               custom,
-              component.id
+              component.id,
             );
             console.log(`🔄 [handleAddAdditionalToCart] Convertido:`, {
               original: custom,
@@ -634,16 +651,16 @@ const ClientProductPage = ({ id }: { id: string }) => {
         if (savedCustomizations && savedCustomizations.length > 0) {
           console.log(
             `🔍 [handleAddAdditionalToCart] Customizações salvas do adicional:`,
-            savedCustomizations
+            savedCustomizations,
           );
           for (const custom of savedCustomizations) {
             const converted = await convertToCartCustomization(
               custom,
-              additionalId
+              additionalId,
             );
             console.log(
               `🔄 [handleAddAdditionalToCart] Convertido (adicional):`,
-              { original: custom, converted }
+              { original: custom, converted },
             );
             if (converted) {
               cartCustomizations.push(converted);
@@ -653,7 +670,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
 
         console.log(
           `📦 [handleAddAdditionalToCart] Total de customizações para carrinho:`,
-          cartCustomizations
+          cartCustomizations,
         );
 
         await addToCart(
@@ -661,7 +678,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
           1,
           [additionalId],
           undefined,
-          cartCustomizations.length > 0 ? cartCustomizations : undefined
+          cartCustomizations.length > 0 ? cartCustomizations : undefined,
         );
 
         toast.success("Adicional adicionado ao carrinho!");
@@ -677,7 +694,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
       additionalCustomizations,
       addToCart,
       uploadCustomizationImage,
-    ]
+    ],
   );
 
   const handlePreviewChange = useCallback(
@@ -695,7 +712,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
         });
       }
     },
-    []
+    [],
   );
 
   const router = useRouter();
@@ -711,6 +728,8 @@ const ClientProductPage = ({ id }: { id: string }) => {
           data.components.length > 0
         ) {
           setComponents(data.components);
+          // Fetch designs for components with BASE_LAYOUT
+          fetchDesignsForComponents(data.components);
         } else {
           await fetchComponents();
         }
@@ -719,6 +738,53 @@ const ClientProductPage = ({ id }: { id: string }) => {
         toast.error("Erro ao carregar produto");
       } finally {
         setLoadingProduct(false);
+      }
+    };
+
+    const fetchDesignsForComponents = async (comps: ProductComponent[]) => {
+      try {
+        setLoadingLayouts(true);
+        const layoutsMap: Record<string, any[]> = {};
+
+        for (const comp of comps) {
+          const layoutCustomization = comp.item.customizations?.find(
+            (c) => c.type === "BASE_LAYOUT",
+          );
+
+          if (layoutCustomization) {
+            const data = layoutCustomization.customization_data as any;
+            let layouts: any[] = [];
+
+            if (data?.autoSelectSameType) {
+              // Buscar layouts pelo tipo do item
+              // O tipo no design (LayoutBase) é em maiúsculo (CANECA, QUADRO...)
+              // O tipo no item pode vir de diferentes formas, vamos normalizar
+              const itemTypeUpper = comp.item.name
+                .toUpperCase()
+                .includes("CANECA")
+                ? "CANECA"
+                : comp.item.name.toUpperCase().includes("QUADRO")
+                  ? "QUADRO"
+                  : "QUEBRA_CABECA";
+
+              layouts = await fetchPublicLayouts(itemTypeUpper);
+            } else if (data?.layoutIds && Array.isArray(data.layoutIds)) {
+              // Buscar layouts específicos configurados
+              const allLayouts = await fetchPublicLayouts();
+              layouts = allLayouts.filter((l) => data.layoutIds.includes(l.id));
+            }
+
+            if (layouts.length > 0) {
+              layoutsMap[comp.id] = layouts;
+            }
+          }
+        }
+
+        setAvailableLayoutsByComponent(layoutsMap);
+      } catch (error) {
+        console.error("Erro ao carregar designs:", error);
+      } finally {
+        setLoadingLayouts(false);
       }
     };
 
@@ -755,7 +821,13 @@ const ClientProductPage = ({ id }: { id: string }) => {
     };
 
     run();
-  }, [id, getProduct, getAdditionalsByProduct, getItemsByProduct]);
+  }, [
+    id,
+    getProduct,
+    getAdditionalsByProduct,
+    getItemsByProduct,
+    fetchPublicLayouts,
+  ]);
 
   const customizationTotal = useMemo(() => 0, []);
 
@@ -766,7 +838,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
     components.forEach((comp) => {
       const customizations = itemCustomizations[comp.id] || [];
       const baseLayout = customizations.find(
-        (c) => c.customizationType === CustomizationType.BASE_LAYOUT
+        (c) => c.customizationType === CustomizationType.BASE_LAYOUT,
       );
       if (baseLayout) {
         // Check if data has additional_time
@@ -805,12 +877,12 @@ const ClientProductPage = ({ id }: { id: string }) => {
 
   const unitPriceWithCustomizations = useMemo(
     () => Number((basePrice + customizationTotal).toFixed(2)),
-    [basePrice, customizationTotal]
+    [basePrice, customizationTotal],
   );
 
   const totalPriceForQuantity = useMemo(
     () => unitPriceWithCustomizations * quantity,
-    [unitPriceWithCustomizations, quantity]
+    [unitPriceWithCustomizations, quantity],
   );
 
   const isItemInCart = useMemo(() => {
@@ -828,13 +900,13 @@ const ClientProductPage = ({ id }: { id: string }) => {
   const currentImageUrl = useMemo(() => {
     if (previewComponentId) {
       const previewComponent = components.find(
-        (c) => c.id === previewComponentId
+        (c) => c.id === previewComponentId,
       );
       if (previewComponent) {
         const componentCustomizations =
           itemCustomizations[previewComponentId] || [];
         const baseLayoutCustomization = componentCustomizations.find(
-          (c) => c.customizationType === CustomizationType.BASE_LAYOUT
+          (c) => c.customizationType === CustomizationType.BASE_LAYOUT,
         );
 
         if (baseLayoutCustomization) {
@@ -901,7 +973,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
       const componentCustomizations =
         itemCustomizations[componentToCheck.id] || [];
       const baseLayoutCustomization = componentCustomizations.find(
-        (c) => c.customizationType === CustomizationType.BASE_LAYOUT
+        (c) => c.customizationType === CustomizationType.BASE_LAYOUT,
       );
 
       if (baseLayoutCustomization) {
@@ -962,12 +1034,12 @@ const ClientProductPage = ({ id }: { id: string }) => {
 
         if (!hasData) {
           missingCustomizations.push(
-            `${component.item.name} - ${reqCustom.name}`
+            `${component.item.name} - ${reqCustom.name}`,
           );
         } else {
           // Verificar se os dados estão preenchidos
           const customData = componentData.find(
-            (c) => c.ruleId === reqCustom.id
+            (c) => c.ruleId === reqCustom.id,
           );
           if (customData) {
             const data = customData.data as Record<string, unknown>;
@@ -994,7 +1066,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
 
               if (hasEmptyField) {
                 missingCustomizations.push(
-                  `${component.item.name} - ${reqCustom.name} (campo vazio)`
+                  `${component.item.name} - ${reqCustom.name} (campo vazio)`,
                 );
               }
             }
@@ -1022,7 +1094,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
 
               if (!hasPhotos) {
                 missingCustomizations.push(
-                  `${component.item.name} - ${reqCustom.name} (sem fotos)`
+                  `${component.item.name} - ${reqCustom.name} (sem fotos)`,
                 );
               }
             }
@@ -1037,7 +1109,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
                 choice && (choice.id || choice.selected_option);
               if (!hasOptionSelected) {
                 missingCustomizations.push(
-                  `${component.item.name} - ${reqCustom.name} (nenhuma opção selecionada)`
+                  `${component.item.name} - ${reqCustom.name} (nenhuma opção selecionada)`,
                 );
               }
             }
@@ -1052,7 +1124,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
                 layout && (layout.id || layout.layout_id);
               if (!hasLayoutSelected) {
                 missingCustomizations.push(
-                  `${component.item.name} - ${reqCustom.name} (nenhum layout selecionado)`
+                  `${component.item.name} - ${reqCustom.name} (nenhum layout selecionado)`,
                 );
               }
             }
@@ -1073,7 +1145,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
             ))}
           </ul>
         </div>,
-        { duration: 5000 }
+        { duration: 5000 },
       );
       return;
     }
@@ -1085,7 +1157,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
       const cartCustomizations: CartCustomization[] = [];
 
       for (const [itemId, customizationInputs] of Object.entries(
-        itemCustomizations
+        itemCustomizations,
       )) {
         // ✅ itemId é na verdade o component.id (ProductComponent.id)
         const componentId = itemId;
@@ -1150,27 +1222,26 @@ const ClientProductPage = ({ id }: { id: string }) => {
                       try {
                         if (file) {
                           console.log(
-                            `📤 [IMAGES-3] Uploading file ${index}: ${fileName}`
+                            `📤 [IMAGES-3] Uploading file ${index}: ${fileName}`,
                           );
-                          const uploadResult = await uploadCustomizationImage(
-                            file
-                          );
+                          const uploadResult =
+                            await uploadCustomizationImage(file);
                           if (uploadResult.success) {
                             tempFileUrl = uploadResult.imageUrl;
                             uploadedFileName = uploadResult.filename;
                             console.log(
-                              `✅ [IMAGES-3] Upload bem-sucedido: ${uploadResult.imageUrl}`
+                              `✅ [IMAGES-3] Upload bem-sucedido: ${uploadResult.imageUrl}`,
                             );
                           } else {
                             console.warn(
-                              `⚠️ [IMAGES-3] Upload falhou para ${fileName}, usando base64`
+                              `⚠️ [IMAGES-3] Upload falhou para ${fileName}, usando base64`,
                             );
                           }
                         }
                       } catch (err) {
                         console.error(
                           `❌ [IMAGES-3] Erro ao fazer upload de ${fileName}:`,
-                          err
+                          err,
                         );
                         // Continuar com base64 se upload falhar
                       }
@@ -1185,7 +1256,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
                         mime_type: file?.type || "image/jpeg",
                         size: file?.size || 0,
                       };
-                    })
+                    }),
                   )
                 : [];
 
@@ -1207,6 +1278,8 @@ const ClientProductPage = ({ id }: { id: string }) => {
               images?: Array<{ slot?: string; url?: string }>;
               previewUrl?: string;
               additional_time?: number;
+              fabricState?: string;
+              highQualityUrl?: string; // ✅ Added
             };
 
             const imageCount = layoutData.images?.length || 0;
@@ -1232,38 +1305,44 @@ const ClientProductPage = ({ id }: { id: string }) => {
               }`,
               text: undefined,
               additional_time: layoutData.additional_time || 0,
+              fabricState: layoutData.fabricState,
             };
 
-            // ✅ Upload BASE_LAYOUT preview if it's base64
+            // ✅ Upload BASE_LAYOUT final high-quality image if it exists, otherwise use preview
+            const finalImageToUpload =
+              layoutData.highQualityUrl || layoutData.previewUrl;
             let finalPreviewUrl = layoutData.previewUrl;
+
             if (
-              layoutData.previewUrl &&
-              layoutData.previewUrl.startsWith("data:image")
+              finalImageToUpload &&
+              finalImageToUpload.startsWith("data:image")
             ) {
               try {
-                const fetchRes = await fetch(layoutData.previewUrl);
+                const fetchRes = await fetch(finalImageToUpload);
                 const blob = await fetchRes.blob();
-                const file = new File([blob], "base-layout-preview.png", {
+                const file = new File([blob], "base-layout-final.png", {
                   type: "image/png",
                 });
 
-                console.log(`📤 [BASE_LAYOUT-AddToCart] Uploading preview...`);
+                console.log(
+                  `📤 [BASE_LAYOUT-AddToCart] Uploading final image...`,
+                );
                 const uploadResult = await uploadCustomizationImage(file);
 
                 if (uploadResult.success) {
                   console.log(
-                    `✅ [BASE_LAYOUT-AddToCart] Upload OK: ${uploadResult.imageUrl}`
+                    `✅ [BASE_LAYOUT-AddToCart] Upload OK: ${uploadResult.imageUrl}`,
                   );
                   finalPreviewUrl = uploadResult.imageUrl;
                 } else {
                   console.warn(
-                    `⚠️ [BASE_LAYOUT-AddToCart] Upload failed, falling back to base64`
+                    `⚠️ [BASE_LAYOUT-AddToCart] Upload failed, falling back to base64`,
                   );
                 }
               } catch (err) {
                 console.error(
-                  `❌ [BASE_LAYOUT-AddToCart] Error uploading preview:`,
-                  err
+                  `❌ [BASE_LAYOUT-AddToCart] Error uploading final image:`,
+                  err,
                 );
               }
             }
@@ -1276,7 +1355,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
 
       console.log(
         "🛒 Customizações convertidas para carrinho:",
-        cartCustomizations
+        cartCustomizations,
       );
 
       await addToCart(
@@ -1284,7 +1363,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
         quantity,
         undefined,
         undefined,
-        cartCustomizations
+        cartCustomizations,
       );
       toast.success("Produto adicionado ao carrinho!");
     } catch (error) {
@@ -1420,7 +1499,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
                     "rounded-lg bg-white",
                     shouldUse3D || itemType === "quadro"
                       ? "object-contain"
-                      : "object-cover"
+                      : "object-cover",
                   )}
                   priority
                 />
@@ -1457,7 +1536,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
                     "relative w-[100px] h-[100px] bg-gray-200 rounded-lg border-2 flex-shrink-0 cursor-pointer",
                     selectedComponent === null
                       ? "border-blue-500 ring-2 ring-blue-100"
-                      : "border-gray-300"
+                      : "border-gray-300",
                   )}
                   title="Imagem padrão do produto"
                 >
@@ -1489,7 +1568,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
                         "relative w-[100px] h-[100px] bg-gray-200 rounded-lg border-2 flex-shrink-0 cursor-pointer",
                         selectedComponent?.id === component.id
                           ? "border-blue-500 ring-2 ring-blue-100"
-                          : "border-gray-300"
+                          : "border-gray-300",
                       )}
                       title={component.item.name}
                     >
@@ -1578,7 +1657,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
                   "flex w-fit items-center gap-2 text-sm bg-neutral-500 text-white mt-4 px-2 py-1 rounded-full",
                   currentProductionTime && currentProductionTime > 1
                     ? ""
-                    : "bg-green-500"
+                    : "bg-green-500",
                 )}
               >
                 <Clock className="w-4 h-4" />
@@ -1602,6 +1681,118 @@ const ClientProductPage = ({ id }: { id: string }) => {
                   <div className="space-y-4 border-t pt-4">
                     <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
                       <span className="text-2xl">🎨</span>
+                      Selecione seu Design
+                    </h3>
+
+                    {/* Galeria de Designs Integrada */}
+                    <div className="space-y-4">
+                      {components.map((component) => {
+                        const layouts =
+                          availableLayoutsByComponent[component.id];
+                        if (!layouts || layouts.length === 0) return null;
+
+                        return (
+                          <div
+                            key={`gallery-${component.id}`}
+                            className="space-y-3"
+                          >
+                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">
+                              Opções para: {component.item.name}
+                            </p>
+                            <div className="flex gap-3 overflow-x-auto pb-4 scrollbar-hide px-1">
+                              {layouts.map((layout) => {
+                                const customization = itemCustomizations[
+                                  component.id
+                                ]?.find(
+                                  (c) =>
+                                    c.customizationType ===
+                                    CustomizationType.BASE_LAYOUT,
+                                );
+                                const isSelected =
+                                  (customization?.data as any)?.id ===
+                                  (layout as any).id;
+
+                                return (
+                                  <div
+                                    key={(layout as any).id}
+                                    onClick={() => {
+                                      const currentData =
+                                        itemCustomizations[component.id] || [];
+                                      const otherData = currentData.filter(
+                                        (c) =>
+                                          c.customizationType !==
+                                          CustomizationType.BASE_LAYOUT,
+                                      );
+
+                                      const rule =
+                                        component.item.customizations?.find(
+                                          (c) => c.type === "BASE_LAYOUT",
+                                        );
+
+                                      if (rule) {
+                                        const newData: CustomizationInput = {
+                                          ruleId: rule.id,
+                                          customizationType:
+                                            CustomizationType.BASE_LAYOUT,
+                                          data: {
+                                            ...layout,
+                                            _customizationName: rule.name,
+                                            _priceAdjustment: rule.price,
+                                          },
+                                        };
+
+                                        handleCustomizationComplete(
+                                          component.id,
+                                          true,
+                                          [...otherData, newData],
+                                        );
+
+                                        if (
+                                          layout.slots &&
+                                          layout.slots.length > 0
+                                        ) {
+                                          setActiveCustomizationModal(
+                                            component.id,
+                                          );
+                                        }
+                                      }
+                                    }}
+                                    className={cn(
+                                      "relative w-32 sm:w-44 flex-shrink-0 aspect-square rounded-3xl border-4 transition-all cursor-pointer overflow-hidden shadow-sm",
+                                      isSelected
+                                        ? "border-green-500 ring-4 ring-green-100 scale-95"
+                                        : "border-white hover:border-gray-100 hover:scale-[1.02]",
+                                    )}
+                                  >
+                                    <Image
+                                      src={getInternalImageUrl(
+                                        layout.image_url,
+                                      )}
+                                      alt={layout.name}
+                                      fill
+                                      className="object-cover"
+                                    />
+                                    {isSelected && (
+                                      <div className="absolute top-3 right-3 bg-green-500 text-white rounded-full p-1.5 shadow-lg z-10">
+                                        <CheckCircle2 className="w-4 h-4" />
+                                      </div>
+                                    )}
+                                    <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent p-3 pt-6">
+                                      <p className="text-[11px] text-white font-black truncate uppercase tracking-tight">
+                                        {layout.name}
+                                      </p>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2 mt-8">
+                      <span className="text-2xl">⚙️</span>
                       Personalizações Disponíveis
                     </h3>
 
@@ -1613,14 +1804,14 @@ const ClientProductPage = ({ id }: { id: string }) => {
                             itemCustomizations[component.id]?.length > 0;
                           const requiredCount =
                             component.item.customizations?.filter(
-                              (c) => c.isRequired
+                              (c) => c.isRequired,
                             ).length || 0;
                           const totalCount =
                             component.item.customizations?.length || 0;
 
                           const hasBaseLayout =
                             component.item.customizations?.some(
-                              (c) => c.type === "BASE_LAYOUT"
+                              (c) => c.type === "BASE_LAYOUT",
                             );
 
                           return (
@@ -1640,7 +1831,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
                                   <Image
                                     src={
                                       getInternalImageUrl(
-                                        component.item.image_url
+                                        component.item.image_url,
                                       ) || "/placeholder.png"
                                     }
                                     alt={component.item.name}
@@ -1728,7 +1919,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
                     {isItemInCart
                       ? "Já adicionado ao carrinho"
                       : `Adicionar por ${formatCurrency(
-                          totalPriceForQuantity
+                          totalPriceForQuantity,
                         )}`}
                   </>
                 )}
@@ -1741,7 +1932,9 @@ const ClientProductPage = ({ id }: { id: string }) => {
                   {(() => {
                     const hasProductRequiredCustomizations = components.some(
                       (component) =>
-                        component.item.customizations?.some((c) => c.isRequired)
+                        component.item.customizations?.some(
+                          (c) => c.isRequired,
+                        ),
                     );
 
                     let hasCompletedProductCustomizations = true;
@@ -1750,16 +1943,18 @@ const ClientProductPage = ({ id }: { id: string }) => {
                         (component) => {
                           const requiredCustomizations =
                             component.item.customizations?.filter(
-                              (c) => c.isRequired
+                              (c) => c.isRequired,
                             ) || [];
                           if (requiredCustomizations.length === 0) return true;
 
                           const componentData =
                             itemCustomizations[component.id] || [];
                           return requiredCustomizations.every((reqCustom) =>
-                            componentData.some((c) => c.ruleId === reqCustom.id)
+                            componentData.some(
+                              (c) => c.ruleId === reqCustom.id,
+                            ),
                           );
-                        }
+                        },
                       );
                     }
 
@@ -1784,8 +1979,8 @@ const ClientProductPage = ({ id }: { id: string }) => {
                       const hasProductRequiredCustomizations = components.some(
                         (component) =>
                           component.item.customizations?.some(
-                            (c) => c.isRequired
-                          )
+                            (c) => c.isRequired,
+                          ),
                       );
                       let hasCompletedProductCustomizations = true;
                       if (hasProductRequiredCustomizations) {
@@ -1793,7 +1988,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
                           (component) => {
                             const requiredCustomizations =
                               component.item.customizations?.filter(
-                                (c) => c.isRequired
+                                (c) => c.isRequired,
                               ) || [];
                             if (requiredCustomizations.length === 0)
                               return true;
@@ -1801,10 +1996,10 @@ const ClientProductPage = ({ id }: { id: string }) => {
                               itemCustomizations[component.id] || [];
                             return requiredCustomizations.every((reqCustom) =>
                               componentData.some(
-                                (c) => c.ruleId === reqCustom.id
-                              )
+                                (c) => c.ruleId === reqCustom.id,
+                              ),
                             );
-                          }
+                          },
                         );
                       }
                       return (
@@ -1990,7 +2185,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
               handleAdditionalCustomizationComplete(
                 additional.id,
                 hasCustomizations,
-                data
+                data,
               )
             }
             onImagesUpdate={handleImagesUpdate}

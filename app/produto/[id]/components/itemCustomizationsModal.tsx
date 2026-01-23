@@ -11,6 +11,7 @@ import { Button } from "@/app/components/ui/button";
 import { Badge } from "@/app/components/ui/badge";
 import { Card } from "@/app/components/ui/card";
 import { Input } from "@/app/components/ui/input";
+import { Textarea } from "@/app/components/ui/textarea";
 import { Label } from "@/app/components/ui/label";
 import {
   Upload,
@@ -37,7 +38,7 @@ import type {
   SlotDef,
 } from "@/app/types/personalization";
 import { getDirectImageUrl } from "@/app/helpers/drive-normalize";
-import ClientPersonalizationEditor from "@/app/components/client-personalization-editor";
+import ClientFabricEditor from "@/app/components/client-fabric-editor";
 import useApi from "@/app/hooks/use-api";
 import { ImageCropDialog } from "@/app/components/ui/image-crop-dialog";
 import Image from "next/image";
@@ -271,7 +272,7 @@ export function ItemCustomizationModal({
           const token =
             typeof window !== "undefined"
               ? localStorage.getItem("appToken") ||
-                localStorage.getItem("token")
+              localStorage.getItem("token")
               : null;
 
           const response = await fetch(`${API_URL}/layouts/${layoutId}`, {
@@ -290,8 +291,8 @@ export function ItemCustomizationModal({
           layoutData.item_type?.toLowerCase() === "caneca"
             ? "/3DModels/caneca.glb"
             : layoutData.item_type?.toLowerCase() === "quadro"
-            ? "/3DModels/quadro.glb"
-            : undefined;
+              ? "/3DModels/quadro.glb"
+              : undefined;
 
         setCustomizationData((prev) => ({
           ...prev,
@@ -389,14 +390,11 @@ export function ItemCustomizationModal({
   }, [isOpen, initialValues, customizations, handleLayoutSelect]);
 
   const handleLayoutComplete = useCallback(
-    async (images: ImageData[], previewUrl: string) => {
+    async (images: ImageData[], previewUrl: string, fabricState?: string, highQualityUrl?: string) => {
       const baseLayoutCustom = customizations.find(
         (c) => c.type === "BASE_LAYOUT"
       );
       if (!baseLayoutCustom) return;
-
-      // 🔄 DEFERRED UPLOAD: We simply save the preview URL (which might be base64)
-      // The actual upload will happen in `client-product-page.tsx` when adding to cart.
 
       const existingData =
         (customizationData[baseLayoutCustom.id] as Record<string, unknown>) ||
@@ -407,7 +405,9 @@ export function ItemCustomizationModal({
         [baseLayoutCustom.id]: {
           ...existingData,
           images,
-          previewUrl, // Can be base64
+          previewUrl,
+          fabricState,
+          highQualityUrl,
         },
       };
 
@@ -430,9 +430,10 @@ export function ItemCustomizationModal({
             item_type?: string;
             images?: ImageData[];
             previewUrl?: string;
+            fabricState?: string;
+            highQualityUrl?: string;
           };
           if (layoutData.layout_id) {
-            // Get additional_time from cached full layout
             const cachedLayout = layoutCacheRef.current[layoutData.layout_id];
             result.push({
               ruleId: custom.id,
@@ -440,12 +441,14 @@ export function ItemCustomizationModal({
               customizationType: CustomizationType.BASE_LAYOUT,
               selectedLayoutId: layoutData.layout_id,
               data: {
-                id: layoutData.layout_id, // ✅ id no nível raiz
-                layout_id: layoutData.layout_id, // ✅ Compatibilidade com código legado
+                id: layoutData.layout_id,
+                layout_id: layoutData.layout_id,
                 name: layoutData.layout_name || "",
                 model_url: layoutData.model_url,
                 item_type: layoutData.item_type,
                 images: layoutData.images || [],
+                fabricState: layoutData.fabricState,
+                highQualityUrl: layoutData.highQualityUrl,
                 image: {
                   preview_url: layoutData.previewUrl,
                 },
@@ -785,18 +788,16 @@ export function ItemCustomizationModal({
               return (
                 <div
                   key={fullLayout.id}
-                  className={`group cursor-pointer transition-all duration-300 overflow-hidden hover:shadow-2xl hover:scale-105 border-2 border-gray-200 hover:border-purple-300 ${
-                    isQuadro ? "rounded-lg shadow-lg" : ""
-                  }`}
+                  className={`group cursor-pointer transition-all duration-300 overflow-hidden hover:shadow-2xl hover:scale-105 border-2 border-gray-200 hover:border-purple-300 ${isQuadro ? "rounded-lg shadow-lg" : ""
+                    }`}
                   onClick={() => handleLayoutSelect(fullLayout.id)}
                 >
                   {/* Para quadros: aspect-square para parecer um quadro real. Para outros: aspect-video */}
                   <div
-                    className={`relative bg-gradient-to-br from-gray-50 to-gray-100 ${
-                      isQuadro
-                        ? "aspect-square p-3"
-                        : "aspect-video max-h-[200px]"
-                    }`}
+                    className={`relative bg-gradient-to-br from-gray-50 to-gray-100 ${isQuadro
+                      ? "aspect-square p-3"
+                      : "aspect-video max-h-[200px]"
+                      }`}
                   >
                     {/* Moldura visual para quadros */}
                     {isQuadro && (
@@ -811,19 +812,16 @@ export function ItemCustomizationModal({
 
                     {imageUrl ? (
                       <div
-                        className={`relative w-full h-full ${
-                          isQuadro ? "p-1" : ""
-                        }`}
+                        className={`relative w-full h-full ${isQuadro ? "p-1" : ""
+                          }`}
                       >
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
                           src={imageUrl}
                           alt={fullLayout.name}
-                          className={`w-full h-full transition-all duration-300 ${
-                            imageLoaded ? "opacity-100" : "opacity-0"
-                          } ${
-                            isQuadro ? "object-contain rounded" : "object-cover"
-                          }`}
+                          className={`w-full h-full transition-all duration-300 ${imageLoaded ? "opacity-100" : "opacity-0"
+                            } ${isQuadro ? "object-contain rounded" : "object-cover"
+                            }`}
                           onLoad={() => {
                             setImageLoadStates((prev) => ({
                               ...prev,
@@ -982,21 +980,38 @@ export function ItemCustomizationModal({
               >
                 {field.label}
               </Label>
-              <Input
-                id={field.id}
-                type="text"
-                placeholder={field.placeholder}
-                maxLength={field.max_length}
-                value={value}
-                onChange={(e) =>
-                  handleTextChange(customization.id, field.id, e.target.value)
-                }
-                className="bg-gradient-to-b from-yellow-50 to-white border-amber-200 focus:border-amber-500 focus:ring-amber-200 text-gray-800 placeholder:text-amber-400 shadow-inner"
-                style={{
-                  fontFamily: '"Georgia", serif',
-                  letterSpacing: "0.5px",
-                }}
-              />
+              {field.max_length && field.max_length > 20 ? (
+                <Textarea
+                  id={field.id}
+                  placeholder={field.placeholder}
+                  maxLength={field.max_length}
+                  value={value}
+                  onChange={(e) =>
+                    handleTextChange(customization.id, field.id, e.target.value)
+                  }
+                  className="bg-gradient-to-b from-yellow-50 to-white border-amber-200 focus:border-amber-500 focus:ring-amber-200 text-gray-800 placeholder:text-amber-400 shadow-inner min-h-[100px]"
+                  style={{
+                    fontFamily: '"Georgia", serif',
+                    letterSpacing: "0.5px",
+                  }}
+                />
+              ) : (
+                <Input
+                  id={field.id}
+                  type="text"
+                  placeholder={field.placeholder}
+                  maxLength={field.max_length}
+                  value={value}
+                  onChange={(e) =>
+                    handleTextChange(customization.id, field.id, e.target.value)
+                  }
+                  className="bg-gradient-to-b from-yellow-50 to-white border-amber-200 focus:border-amber-500 focus:ring-amber-200 text-gray-800 placeholder:text-amber-400 shadow-inner"
+                  style={{
+                    fontFamily: '"Georgia", serif',
+                    letterSpacing: "0.5px",
+                  }}
+                />
+              )}
               {field.max_length && (
                 <p
                   className="text-xs text-amber-700"
@@ -1043,8 +1058,8 @@ export function ItemCustomizationModal({
                     fields.length === 1
                       ? data[fields[0].id] || ""
                       : fields
-                          .map((f) => `${f.label}: ${data[f.id] || ""}`)
-                          .join("\n");
+                        .map((f) => `${f.label}: ${data[f.id] || ""}`)
+                        .join("\n");
 
                   // ✅ Enviar apenas o texto limpo para o backend
                   result.push({
@@ -1242,13 +1257,13 @@ export function ItemCustomizationModal({
                   const result: CustomizationInput[] = [];
                   const filesData = customizationData[customization.id] as
                     | Array<{
-                        file: File;
-                        preview: string;
-                        position: number;
-                        base64?: string;
-                        mime_type?: string;
-                        size?: number;
-                      }>
+                      file: File;
+                      preview: string;
+                      position: number;
+                      base64?: string;
+                      mime_type?: string;
+                      size?: number;
+                    }>
                     | undefined;
 
                   if (filesData && filesData.length > 0) {
@@ -1370,11 +1385,10 @@ export function ItemCustomizationModal({
                 whileTap={{ scale: 0.98 }}
               >
                 <Card
-                  className={`p-4 cursor-pointer transition-all ${
-                    isSelected
-                      ? "border-2 border-rose-500 bg-gradient-to-r from-rose-50 to-pink-50 shadow-md"
-                      : "border-2 border-rose-200 hover:border-rose-400 hover:bg-rose-50/30"
-                  }`}
+                  className={`p-4 cursor-pointer transition-all ${isSelected
+                    ? "border-2 border-rose-500 bg-gradient-to-r from-rose-50 to-pink-50 shadow-md"
+                    : "border-2 border-rose-200 hover:border-rose-400 hover:bg-rose-50/30"
+                    }`}
                   onClick={() =>
                     handleOptionSelect(
                       customization.id,
@@ -1409,9 +1423,8 @@ export function ItemCustomizationModal({
                     />
                     <div className="flex-1">
                       <p
-                        className={`font-semibold ${
-                          isSelected ? "text-rose-900" : "text-rose-800"
-                        }`}
+                        className={`font-semibold ${isSelected ? "text-rose-900" : "text-rose-800"
+                          }`}
                       >
                         {option.label}
                       </p>
@@ -1605,16 +1618,16 @@ export function ItemCustomizationModal({
           ) : (
             <div>
               {fullLayoutBase && (
-                <ClientPersonalizationEditor
+                <ClientFabricEditor
                   layoutBase={fullLayoutBase}
-                  onComplete={handleLayoutComplete}
                   onBack={handleBackToSelection}
-                  initialImages={
+                  onComplete={handleLayoutComplete}
+                  initialState={
                     (
                       customizationData[fullLayoutBase.id] as
-                        | { images?: unknown }
-                        | undefined
-                    )?.images as ImageData[]
+                      | { fabricState?: string }
+                      | undefined
+                    )?.fabricState
                   }
                 />
               )}
