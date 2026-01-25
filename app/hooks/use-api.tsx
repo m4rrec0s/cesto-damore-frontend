@@ -347,7 +347,7 @@ export type OrderStatus =
   | "CANCELED";
 
 export type CustomizationTypeValue =
-  | "BASE_LAYOUT"
+  | "DYNAMIC_LAYOUT"
   | "IMAGES"
   | "TEXT"
   | "MULTIPLE_CHOICE";
@@ -596,9 +596,8 @@ class ApiService {
   };
 
   private client = axios.create({
-    baseURL: process.env.NEXT_PUBLIC_API_URL || "",
+    baseURL: process.env.NEXT_PUBLIC_API_URL,
   });
-
   // ===== Utilidades de Cache =====
   static getCache() {
     return ApiService.cache;
@@ -1429,7 +1428,9 @@ class ApiService {
   getLayoutById = async (
     layoutId: string,
   ): Promise<import("../types/personalization").LayoutBase> => {
-    const res = await this.client.get(`/layouts/${layoutId}`);
+    const res = await this.client.get(`/layouts/dynamic/${layoutId}`, {
+      headers: { "ngrok-skip-browser-warning": "true" },
+    });
     return res.data;
   };
 
@@ -1578,7 +1579,7 @@ class ApiService {
   private stripBase64FromOrderPayload(payload: Record<string, unknown>) {
     const clone = JSON.parse(JSON.stringify(payload));
 
-    // ✅ For IMAGES and BASE_LAYOUT customizations, we now REMOVE base64 data
+    // ✅ For IMAGES and DYNAMIC_LAYOUT customizations, we now REMOVE base64 data
     // We only store file paths (URLs) in the database.
     // This function will:
     // 1. Remove base64 fields
@@ -1612,7 +1613,7 @@ class ApiService {
         // Remove strings starting with data: or blob:
         if (typeof val === "string") {
           if (val.startsWith("data:") || val.startsWith("blob:")) {
-            // For 'text' field in 'BASE_LAYOUT', if it's base64, we delete it.
+            // For 'text' field in 'DYNAMIC_LAYOUT', if it's base64, we delete it.
             // Ideally it should have been replaced by a URL by the caller.
             delete record[key];
             continue;
@@ -1717,7 +1718,7 @@ class ApiService {
     }
 
     if (
-      payloadSanitized.customizationType === "BASE_LAYOUT" &&
+      payloadSanitized.customizationType === "DYNAMIC_LAYOUT" &&
       payloadSanitized.selectedLayoutId
     ) {
       try {
@@ -1765,11 +1766,6 @@ class ApiService {
     return res.data;
   };
 
-  /**
-   * Upload de imagem temporária para VPS (durante customização)
-   * POST /api/temp/upload
-   * Retorna: { success, filename, url, size, mimeType, originalName }
-   */
   uploadTempImage = async (
     imageFile: File,
   ): Promise<{
@@ -1810,10 +1806,6 @@ class ApiService {
     }
   };
 
-  /**
-   * Deleta um arquivo temporário específico
-   * DELETE /api/temp/files/:filename (admin only)
-   */
   deleteTempFile = async (filename: string): Promise<{ success: boolean }> => {
     const res = await this.client.delete(`/temp/files/${filename}`);
     return res.data;

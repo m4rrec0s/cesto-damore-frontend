@@ -45,20 +45,23 @@ export default function ClientPersonalizationEditor({
   useEffect(() => {
     const loadBaseImage = async () => {
       try {
-        if (layoutBase.image_url.startsWith("data:")) {
+        const imageUrl = layoutBase.previewImageUrl;
+        if (!imageUrl) return;
+
+        if (imageUrl.startsWith("data:")) {
           const img = new Image();
           img.onload = () => {
             baseImageRef.current = img;
             setBaseImageLoaded(true);
             setTimeout(() => updateCanvasPreview(), 0);
           };
-          img.src = layoutBase.image_url;
+          img.src = imageUrl;
           return;
         }
 
-        const normalizedUrl = normalizeGoogleDriveUrl(layoutBase.image_url);
+        const normalizedUrl = normalizeGoogleDriveUrl(imageUrl);
         const proxyUrl = `/api/proxy-image?url=${encodeURIComponent(
-          normalizedUrl
+          normalizedUrl,
         )}`;
 
         const response = await fetch(proxyUrl);
@@ -92,7 +95,7 @@ export default function ClientPersonalizationEditor({
 
     loadBaseImage();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [layoutBase.image_url]);
+  }, [layoutBase.previewImageUrl]);
 
   // Restore state from initialImages
   useEffect(() => {
@@ -156,9 +159,8 @@ export default function ClientPersonalizationEditor({
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-
     const sortedSlots = [...layoutBase.slots].sort(
-      (a, b) => (a.zIndex || 0) - (b.zIndex || 0)
+      (a, b) => (a.zIndex || 0) - (b.zIndex || 0),
     );
 
     sortedSlots.forEach((slot) => {
@@ -203,11 +205,11 @@ export default function ClientPersonalizationEditor({
           slotX + offsetX,
           slotY + offsetY,
           drawWidth,
-          drawHeight
+          drawHeight,
         );
       } else if (!imageData) {
         console.log(
-          `🖼️ [updateCanvasPreview] Slot ${slot.id}: SEM imagem - desenhando placeholder`
+          `🖼️ [updateCanvasPreview] Slot ${slot.id}: SEM imagem - desenhando placeholder`,
         );
         ctx.fillStyle = "#e5e7eb";
         ctx.fillRect(slotX, slotY, slotWidth, slotHeight);
@@ -225,11 +227,11 @@ export default function ClientPersonalizationEditor({
         ctx.fillText(
           "Adicione sua foto",
           slotX + slotWidth / 2,
-          slotY + slotHeight / 2 + 15
+          slotY + slotHeight / 2 + 15,
         );
       } else {
         console.log(
-          `🖼️ [updateCanvasPreview] Slot ${slot.id}: Imagem carregando...`
+          `🖼️ [updateCanvasPreview] Slot ${slot.id}: Imagem carregando...`,
         );
       }
 

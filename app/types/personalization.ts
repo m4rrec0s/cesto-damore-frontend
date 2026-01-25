@@ -20,13 +20,15 @@ export interface LayoutBase {
   name: string;
   title: string;
   item_type: string; // "caneca" | "quadro" | ...
-  image_url: string; // URL da imagem base
+  previewImageUrl: string; // URL da imagem base
   model_url?: string; // URL do modelo 3D (opcional)
   width: number; // px reais da imagem base
   height: number;
   slots: SlotDef[];
   additional_time: number;
   fabric_json_state?: string | Record<string, unknown> | null;
+  fabricJsonState?: string | Record<string, unknown> | null;
+  is_dynamic?: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -65,7 +67,8 @@ export interface Personalization {
   id: string;
   order_id: string;
   item_id: string;
-  layout_base_id: string;
+  layout_base_id?: string;
+  dynamic_layout_id?: string;
   config_json: Record<string, unknown>;
   images: ImageData[];
   final_image_url?: string;

@@ -42,8 +42,8 @@ export function CartSheet({ isOpen, onClose, onCheckout }: CartSheetProps) {
           custom.selected_option ||
           "Opção não selecionada"
         );
-      case "BASE_LAYOUT":
-        // BASE_LAYOUT sempre deve retornar o label_selected
+      case "DYNAMIC_LAYOUT":
+        // DYNAMIC_LAYOUT sempre deve retornar o label_selected
         if (custom.label_selected) return custom.label_selected;
         // Fallback se não houver label_selected
         if (custom.selected_item_label) return custom.selected_item_label;
@@ -55,9 +55,12 @@ export function CartSheet({ isOpen, onClose, onCheckout }: CartSheetProps) {
           typeof custom.selected_item === "object" &&
           "selected_item" in custom.selected_item
         ) {
-          return (custom.selected_item as { selected_item?: string }).selected_item || "Layout selecionado";
+          return (
+            (custom.selected_item as { selected_item?: string })
+              .selected_item || "Design selecionado"
+          );
         }
-        return "Layout selecionado";
+        return "Design selecionado";
       case "IMAGES":
         return `${custom.photos?.length || 0} foto(s)`;
       default:
@@ -194,7 +197,7 @@ export function CartSheet({ isOpen, onClose, onCheckout }: CartSheetProps) {
                                 item.quantity - 1,
                                 item.additional_ids,
                                 item.customizations,
-                                item.additional_colors
+                                item.additional_colors,
                               )
                             }
                             disabled={item.quantity <= 1}
@@ -214,7 +217,7 @@ export function CartSheet({ isOpen, onClose, onCheckout }: CartSheetProps) {
                                 item.quantity + 1,
                                 item.additional_ids,
                                 item.customizations,
-                                item.additional_colors
+                                item.additional_colors,
                               )
                             }
                             className="w-7 h-7 p-0"
@@ -245,7 +248,7 @@ export function CartSheet({ isOpen, onClose, onCheckout }: CartSheetProps) {
                                       (item.additionals?.reduce(
                                         (sum, add) =>
                                           sum + add.price * item.quantity,
-                                        0
+                                        0,
                                       ) || 0)
                                     ).toFixed(2)}
                                   </span>
@@ -256,7 +259,7 @@ export function CartSheet({ isOpen, onClose, onCheckout }: CartSheetProps) {
                                       (item.additionals?.reduce(
                                         (sum, add) =>
                                           sum + add.price * item.quantity,
-                                        0
+                                        0,
                                       ) || 0)
                                     ).toFixed(2)}
                                   </span>
@@ -269,7 +272,7 @@ export function CartSheet({ isOpen, onClose, onCheckout }: CartSheetProps) {
                                     (item.additionals?.reduce(
                                       (sum, add) =>
                                         sum + add.price * item.quantity,
-                                      0
+                                      0,
                                     ) || 0)
                                   ).toFixed(2)}
                                 </span>
@@ -285,7 +288,7 @@ export function CartSheet({ isOpen, onClose, onCheckout }: CartSheetProps) {
                                 item.product_id,
                                 item.additional_ids,
                                 item.customizations,
-                                item.additional_colors
+                                item.additional_colors,
                               )
                             }
                             className="text-red-600 hover:text-red-700 hover:bg-red-50 p-1 h-auto"

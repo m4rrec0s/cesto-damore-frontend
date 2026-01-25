@@ -21,7 +21,7 @@ export interface CartCustomization extends CustomizationValue {
   selected_item_label?: string;
   label_selected?: string;
   additional_time?: number;
-  data?: Record<string, unknown>; // ✅ Store raw data for complex customizations (BASE_LAYOUT)
+  data?: Record<string, unknown>; // ✅ Store raw data for complex customizations (DYNAMIC_LAYOUT)
   fabricState?: string; // ✅ Store Fabric.js JSON state
   value?: string; // ✅ Store serialized JSON value from backend
 }
@@ -105,11 +105,11 @@ const serializeCustomizations = (customizations?: CartCustomization[]) => {
     selected_option: customization.selected_option || null,
     selected_item: customization.selected_item
       ? {
-          original_item: customization.selected_item.original_item,
-          selected_item: customization.selected_item.selected_item,
-        }
+        original_item: customization.selected_item.original_item,
+        selected_item: customization.selected_item.selected_item,
+      }
       : null,
-    // ✅ Include label fields for BASE_LAYOUT duplicate detection
+    // ✅ Include label fields for DYNAMIC_LAYOUT duplicate detection
     label_selected: customization.label_selected || null,
     selected_item_label: customization.selected_item_label || null,
     selected_option_label: customization.selected_option_label || null,
@@ -342,10 +342,10 @@ export function useCart(): CartContextType {
           const additionals =
             orderItem.additionals && orderItem.additionals.length > 0
               ? await Promise.all(
-                  orderItem.additionals.map((add: { additional_id: string }) =>
-                    api.getAdditional(add.additional_id),
-                  ),
-                )
+                orderItem.additionals.map((add: { additional_id: string }) =>
+                  api.getAdditional(add.additional_id),
+                ),
+              )
               : [];
 
           const customizations: CartCustomization[] = [];
@@ -425,13 +425,13 @@ export function useCart(): CartContextType {
                         ? customization.value
                         : JSON.stringify(customization.value),
                   });
-                } else if (customizationType === "BASE_LAYOUT") {
+                } else if (customizationType === "DYNAMIC_LAYOUT") {
                   customizations.push({
                     id: customization.id,
                     componentId, // ✅ Set componentId
                     customization_id: customizationId,
-                    title: (data.title as string) || "Layout",
-                    customization_type: "BASE_LAYOUT",
+                    title: (data.title as string) || "Design",
+                    customization_type: "DYNAMIC_LAYOUT",
                     is_required: false,
                     price_adjustment: (data.price_adjustment as number) || 0,
                     text: (data.text as string) || "",
@@ -578,7 +578,7 @@ export function useCart(): CartContextType {
           selected_item: custom.selected_item,
           // ✅ CRITICAL: Include componentId for instance isolation
           componentId: custom.componentId,
-          // ✅ Include all label fields for BASE_LAYOUT and other types
+          // ✅ Include all label fields for DYNAMIC_LAYOUT and other types
           selected_option_label: custom.selected_option_label,
           selected_item_label: custom.selected_item_label,
           label_selected: custom.label_selected,
@@ -827,23 +827,23 @@ export function useCart(): CartContextType {
 
                   const customizations = item.customizations
                     ? item.customizations.map((c) => {
-                        const parsed = (() => {
-                          try {
-                            return JSON.parse(c.value || "{}") as Record<
-                              string,
-                              unknown
-                            >;
-                          } catch {
-                            return {};
-                          }
-                        })();
+                      const parsed = (() => {
+                        try {
+                          return JSON.parse(c.value || "{}") as Record<
+                            string,
+                            unknown
+                          >;
+                        } catch {
+                          return {};
+                        }
+                      })();
 
-                        return {
-                          ...parsed,
-                          customization_id: c.customization_id,
-                          title: (parsed.title as string) || undefined,
-                        };
-                      })
+                      return {
+                        ...parsed,
+                        customization_id: c.customization_id,
+                        title: (parsed.title as string) || undefined,
+                      };
+                    })
                     : undefined;
 
                   return {
@@ -855,10 +855,10 @@ export function useCart(): CartContextType {
                       item.effectivePrice !== undefined
                         ? item.effectivePrice
                         : Number(
-                            (
-                              item.price + (item.customization_total || 0)
-                            ).toFixed(2),
-                          ),
+                          (
+                            item.price + (item.customization_total || 0)
+                          ).toFixed(2),
+                        ),
                     additionals,
                     customizations,
                     product: item.product,
@@ -957,11 +957,11 @@ export function useCart(): CartContextType {
             (item) =>
               item.product_id === productId &&
               serializeAdditionals(item.additional_ids) ===
-                targetAdditionalsKey &&
+              targetAdditionalsKey &&
               serializeAdditionalColors(item.additional_colors) ===
-                targetColorsKey &&
+              targetColorsKey &&
               serializeCustomizations(item.customizations) ===
-                targetCustomizationsKey,
+              targetCustomizationsKey,
           );
 
           let newItems: CartItem[] = [...currentItems];
@@ -1022,9 +1022,9 @@ export function useCart(): CartContextType {
               item.product_id === productId &&
               serializeAdditionals(item.additional_ids) === targetAdditionals &&
               serializeAdditionalColors(item.additional_colors) ===
-                targetColors &&
+              targetColors &&
               serializeCustomizations(item.customizations) ===
-                targetCustomizations,
+              targetCustomizations,
           ) || null;
 
         const newItems = currentItems.filter(
@@ -1033,9 +1033,9 @@ export function useCart(): CartContextType {
               item.product_id === productId &&
               serializeAdditionals(item.additional_ids) === targetAdditionals &&
               serializeAdditionalColors(item.additional_colors) ===
-                targetColors &&
+              targetColors &&
               serializeCustomizations(item.customizations) ===
-                targetCustomizations
+              targetCustomizations
             ),
         );
         const updatedCart = calculateTotals(newItems);
@@ -1134,7 +1134,7 @@ export function useCart(): CartContextType {
             item.product_id === productId &&
             serializeAdditionals(item.additional_ids) === targetAdditionals &&
             serializeCustomizations(item.customizations) ===
-              targetCustomizations &&
+            targetCustomizations &&
             serializeAdditionalColors(item.additional_colors) === targetColors
           ) {
             return { ...item, quantity };
@@ -1177,7 +1177,7 @@ export function useCart(): CartContextType {
             item.product_id === productId &&
             serializeAdditionals(item.additional_ids) === targetAdditionals &&
             serializeCustomizations(item.customizations) ===
-              targetOldCustomizations &&
+            targetOldCustomizations &&
             serializeAdditionalColors(item.additional_colors) === targetColors,
         );
 
@@ -1596,9 +1596,9 @@ export function useCart(): CartContextType {
   /**
    * ✅ CORRIGIDO: Calcula o tempo MÁXIMO de produção considerando:
    * 1. product.production_time
-   * 2. additional_time de BASE_LAYOUT selecionado (stored em customization.additional_time)
-   * 3. additional_time de componentes (comp.item.layout_base.additional_time)
-   * 4. additional_time de adicionais (add.layout_base.additional_time)
+   * 2. additional_time de DYNAMIC_LAYOUT selecionado (stored em customization.additional_time)
+   * 3. additional_time de componentes (comp.item.dynamic_layout.additional_time)
+   * 4. additional_time de adicionais (add.dynamic_layout.additional_time)
    * 5. Toma o MÁXIMO entre todos (não soma)
    *
    * O tempo retornado é o tempo REAL de produção em horas.
@@ -1612,21 +1612,21 @@ export function useCart(): CartContextType {
       const productTime = item.product.production_time || 0;
       let itemMaxTime = productTime;
 
-      // 2. ✅ CORRIGIDO: Buscar additional_time do BASE_LAYOUT selecionado
+      // 2. ✅ CORRIGIDO: Buscar additional_time do DYNAMIC_LAYOUT selecionado
       // O additional_time é armazenado direto na customização (vem de client-product-page.tsx)
       if (item.customizations) {
         item.customizations.forEach((custom) => {
-          if (custom.customization_type === "BASE_LAYOUT") {
-            // Verificar se existe additional_time (já vem preenchido do BASE_LAYOUT selecionado)
-            const baseLayoutTime = custom.additional_time || 0;
-            if (baseLayoutTime > 0) {
-              itemMaxTime = Math.max(itemMaxTime, baseLayoutTime);
+          if (custom.customization_type === "DYNAMIC_LAYOUT") {
+            // Verificar se existe additional_time (já vem preenchido do DYNAMIC_LAYOUT selecionado)
+            const dynamicLayoutTime = custom.additional_time || 0;
+            if (dynamicLayoutTime > 0) {
+              itemMaxTime = Math.max(itemMaxTime, dynamicLayoutTime);
             }
           }
         });
       }
 
-      // 3. Verificar componentes do produto (que podem ter layout_base)
+      // 3. Verificar componentes do produto (que podem ter dynamic_layout)
       if (item.product.components) {
         item.product.components.forEach((comp) => {
           if (comp.item?.layout_base?.additional_time) {
@@ -1640,11 +1640,11 @@ export function useCart(): CartContextType {
 
       maxTime = Math.max(maxTime, itemMaxTime);
 
-      // 4. Adicionais podem ter seu próprio layout_base
-      // (Nota: Por enquanto, a estrutura de adicionais não inclui layout_base)
+      // 4. Adicionais podem ter seu próprio dynamic_layout
+      // (Nota: Por enquanto, a estrutura de adicionais não inclui dynamic_layout)
       // item.additionals?.forEach((add) => {
-      //   if (add.item?.layout_base?.additional_time) {
-      //     maxTime = Math.max(maxTime, add.item.layout_base.additional_time);
+      //   if (add.item?.dynamic_layout?.additional_time) {
+      //     maxTime = Math.max(maxTime, add.item.dynamic_layout.additional_time);
       //   }
       // });
     });

@@ -33,12 +33,12 @@ interface StepCartProps {
     productId: string,
     quantity: number,
     additionalIds?: string[],
-    customizations?: CartCustomization[]
+    customizations?: CartCustomization[],
   ) => void;
   removeFromCart: (
     productId: string,
     additionalIds?: string[],
-    customizations?: CartCustomization[]
+    customizations?: CartCustomization[],
   ) => void;
   isProcessing: boolean;
   onEditCustomizations?: (item: CartItem) => void;
@@ -55,7 +55,7 @@ const formatCustomizationValue = (custom: CartCustomization) => {
         custom.selected_option ||
         "Opção não selecionada"
       );
-    case "BASE_LAYOUT":
+    case "DYNAMIC_LAYOUT":
       if (custom.label_selected) return custom.label_selected;
       if (custom.selected_item_label) return custom.selected_item_label;
       if (typeof custom.selected_item === "string") return custom.selected_item;
@@ -66,10 +66,10 @@ const formatCustomizationValue = (custom: CartCustomization) => {
       ) {
         return (
           (custom.selected_item as { selected_item?: string }).selected_item ||
-          "Layout selecionado"
+          "Design selecionado"
         );
       }
-      return "Layout selecionado";
+      return "Design selecionado";
     case "IMAGES":
       return `${custom.photos?.length || 0} foto(s)`;
     default:
@@ -80,18 +80,18 @@ const formatCustomizationValue = (custom: CartCustomization) => {
 const getAdditionalFinalPrice = (
   additionalId: string,
   basePrice: number,
-  customizations?: CartCustomization[]
+  customizations?: CartCustomization[],
 ): number => {
   if (!customizations || customizations.length === 0) return basePrice;
   const additionalCustomizations = customizations.filter(
     (c) =>
       c.customization_id?.includes(additionalId) ||
-      c.customization_id?.endsWith(`_${additionalId}`)
+      c.customization_id?.endsWith(`_${additionalId}`),
   );
   if (additionalCustomizations.length === 0) return basePrice;
   const adjustmentTotal = additionalCustomizations.reduce(
     (sum, c) => sum + (c.price_adjustment || 0),
-    0
+    0,
   );
   return basePrice + adjustmentTotal;
 };
@@ -163,7 +163,7 @@ const ProductCard = ({
                   removeFromCart(
                     item.product_id,
                     item.additional_ids,
-                    item.customizations
+                    item.customizations,
                   )
                 }
                 disabled={isProcessing}
@@ -182,7 +182,7 @@ const ProductCard = ({
                     item.product_id,
                     item.quantity - 1,
                     item.additional_ids,
-                    item.customizations
+                    item.customizations,
                   )
                 }
                 disabled={isProcessing || item.quantity <= 1}
@@ -200,7 +200,7 @@ const ProductCard = ({
                     item.product_id,
                     item.quantity + 1,
                     item.additional_ids,
-                    item.customizations
+                    item.customizations,
                   )
                 }
                 disabled={isProcessing}
@@ -222,10 +222,10 @@ const ProductCard = ({
                       getAdditionalFinalPrice(
                         add.id,
                         add.price,
-                        item.customizations
+                        item.customizations,
                       ) *
                         item.quantity,
-                    0
+                    0,
                   ) || 0)
                 ).toFixed(2)}
               </span>

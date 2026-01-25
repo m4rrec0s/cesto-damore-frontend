@@ -9,7 +9,7 @@ import { toast } from "sonner";
 export interface Customization {
   id: string;
   item_id: string;
-  type: "BASE_LAYOUT" | "TEXT" | "IMAGES" | "MULTIPLE_CHOICE";
+  type: "DYNAMIC_LAYOUT" | "TEXT" | "IMAGES" | "MULTIPLE_CHOICE";
   name: string;
   description?: string;
   isRequired: boolean;
@@ -19,7 +19,7 @@ export interface Customization {
   updated_at?: string;
 }
 
-export interface BaseLayoutData {
+export interface DynamicLayoutData {
   layouts: Array<{ id: string; name: string }>;
 }
 
@@ -34,7 +34,7 @@ export interface TextCustomizationData {
 }
 
 export interface ImageCustomizationData {
-  base_layout: {
+  dynamic_layout: {
     max_images: number;
     min_width?: number;
     min_height?: number;
@@ -57,7 +57,7 @@ export interface MultipleChoiceData {
 }
 
 export type CustomizationData =
-  | BaseLayoutData
+  | DynamicLayoutData
   | TextCustomizationData
   | ImageCustomizationData
   | MultipleChoiceData;
@@ -110,7 +110,7 @@ export function useCustomizationManager({
         `${API_URL}/items/${itemId}/customizations`,
         {
           headers: getAuthHeaders(),
-        }
+        },
       );
 
       if (!response.ok) {
@@ -164,7 +164,9 @@ export function useCustomizationManager({
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({}));
           throw new Error(
-            errorData.error || errorData.message || "Erro ao criar customização"
+            errorData.error ||
+              errorData.message ||
+              "Erro ao criar customização",
           );
         }
 
@@ -186,7 +188,7 @@ export function useCustomizationManager({
         setLoading(false);
       }
     },
-    [itemId, getAuthHeaders, fetchCustomizations]
+    [itemId, getAuthHeaders, fetchCustomizations],
   );
 
   /**
@@ -201,7 +203,7 @@ export function useCustomizationManager({
         isRequired?: boolean;
         customization_data?: Record<string, unknown>;
         price?: number;
-      }
+      },
     ): Promise<Customization | null> => {
       setLoading(true);
       setError(null);
@@ -218,7 +220,7 @@ export function useCustomizationManager({
           throw new Error(
             errorData.error ||
               errorData.message ||
-              "Erro ao atualizar customização"
+              "Erro ao atualizar customização",
           );
         }
 
@@ -240,7 +242,7 @@ export function useCustomizationManager({
         setLoading(false);
       }
     },
-    [getAuthHeaders, fetchCustomizations]
+    [getAuthHeaders, fetchCustomizations],
   );
 
   /**
@@ -266,7 +268,7 @@ export function useCustomizationManager({
           throw new Error(
             errorData.error ||
               errorData.message ||
-              "Erro ao deletar customização"
+              "Erro ao deletar customização",
           );
         }
 
@@ -287,7 +289,7 @@ export function useCustomizationManager({
         setLoading(false);
       }
     },
-    [getAuthHeaders, fetchCustomizations]
+    [getAuthHeaders, fetchCustomizations],
   );
 
   /**

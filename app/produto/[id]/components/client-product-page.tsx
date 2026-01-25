@@ -125,7 +125,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
         }));
 
         const hasBaseLayout = data.some(
-          (c) => c.customizationType === CustomizationType.BASE_LAYOUT,
+          (c) => c.customizationType === CustomizationType.DYNAMIC_LAYOUT,
         );
 
         if (hasBaseLayout) {
@@ -295,7 +295,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
               price_adjustment: priceAdjustment,
               photos: photos,
             };
-          } else if (input.customizationType === "BASE_LAYOUT") {
+          } else if (input.customizationType === "DYNAMIC_LAYOUT") {
             const layoutData = data as {
               id?: string;
               name?: string;
@@ -312,16 +312,16 @@ const ClientProductPage = ({ id }: { id: string }) => {
             const baseObj = {
               customization_id: input.ruleId || `item_${itemId}`,
               title: customizationName,
-              customization_type: "BASE_LAYOUT" as const,
+              customization_type: "DYNAMIC_LAYOUT" as const,
               is_required: false,
               price_adjustment: priceAdjustment,
               selected_item: {
-                original_item: "Layout Base",
+                original_item: "Design Dinâmico",
                 selected_item: layoutData.name || "Personalizado",
                 price_adjustment: priceAdjustment,
               },
               selected_item_label: `${
-                layoutData.name || "Layout Personalizado"
+                layoutData.name || "Design Personalizado"
               }${
                 imageCount > 0
                   ? ` (${imageCount} foto${imageCount > 1 ? "s" : ""})`
@@ -330,7 +330,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
               text: undefined,
             };
 
-            // ✅ Upload BASE_LAYOUT final high-quality image if it exists, otherwise use preview
+            // ✅ Upload DYNAMIC_LAYOUT final high-quality image if it exists, otherwise use preview
             const finalImageToUpload =
               layoutData.highQualityUrl || layoutData.previewUrl;
             let finalPreviewUrl = layoutData.previewUrl;
@@ -342,26 +342,26 @@ const ClientProductPage = ({ id }: { id: string }) => {
               try {
                 const fetchRes = await fetch(finalImageToUpload);
                 const blob = await fetchRes.blob();
-                const file = new File([blob], "base-layout-final.png", {
+                const file = new File([blob], "dynamic-layout-final.png", {
                   type: "image/png",
                 });
 
-                console.log(`📤 [BASE_LAYOUT-Add] Uploading final image...`);
+                console.log(`📤 [DYNAMIC_LAYOUT-Add] Uploading final image...`);
                 const uploadResult = await uploadCustomizationImage(file);
 
                 if (uploadResult.success) {
                   console.log(
-                    `✅ [BASE_LAYOUT-Add] Upload OK: ${uploadResult.imageUrl}`,
+                    `✅ [DYNAMIC_LAYOUT-Add] Upload OK: ${uploadResult.imageUrl}`,
                   );
                   finalPreviewUrl = uploadResult.imageUrl;
                 } else {
                   console.warn(
-                    `⚠️ [BASE_LAYOUT-Add] Upload failed, falling back to base64`,
+                    `⚠️ [DYNAMIC_LAYOUT-Add] Upload failed, falling back to base64`,
                   );
                 }
               } catch (err) {
                 console.error(
-                  `❌ [BASE_LAYOUT-Add] Error uploading final image:`,
+                  `❌ [DYNAMIC_LAYOUT-Add] Error uploading final image:`,
                   err,
                 );
               }
@@ -552,7 +552,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
               price_adjustment: priceAdjustment,
               photos: photos,
             };
-          } else if (input.customizationType === "BASE_LAYOUT") {
+          } else if (input.customizationType === "DYNAMIC_LAYOUT") {
             const layoutData = data as {
               id?: string;
               name?: string;
@@ -565,19 +565,19 @@ const ClientProductPage = ({ id }: { id: string }) => {
               customization_id: input.ruleId || `item_${itemId}`,
               componentId: itemId, // ✅ Add componentId
               title: customizationName,
-              customization_type: "BASE_LAYOUT" as const,
+              customization_type: "DYNAMIC_LAYOUT" as const,
               is_required: false,
               price_adjustment: priceAdjustment,
               selected_item: {
-                original_item: "Layout Base",
+                original_item: "Design Dinâmico",
                 selected_item: layoutData.name || "Personalizado",
                 price_adjustment: priceAdjustment,
               },
-              selected_item_label: layoutData.name || "Layout Personalizado",
+              selected_item_label: layoutData.name || "Design Personalizado",
               text: undefined,
             };
 
-            // ✅ Upload BASE_LAYOUT final high-quality image if it exists, otherwise use preview
+            // ✅ Upload DYNAMIC_LAYOUT final high-quality image if it exists, otherwise use preview
             const finalImageToUpload =
               layoutData.highQualityUrl || layoutData.previewUrl;
             let finalPreviewUrl = layoutData.previewUrl;
@@ -589,26 +589,28 @@ const ClientProductPage = ({ id }: { id: string }) => {
               try {
                 const fetchRes = await fetch(finalImageToUpload);
                 const blob = await fetchRes.blob();
-                const file = new File([blob], "base-layout-final.png", {
+                const file = new File([blob], "design-final.png", {
                   type: "image/png",
                 });
 
-                console.log(`📤 [BASE_LAYOUT-Add2] Uploading final image...`);
+                console.log(
+                  `📤 [DYNAMIC_LAYOUT-Add2] Uploading final image...`,
+                );
                 const uploadResult = await uploadCustomizationImage(file);
 
                 if (uploadResult.success) {
                   console.log(
-                    `✅ [BASE_LAYOUT-Add2] Upload OK: ${uploadResult.imageUrl}`,
+                    `✅ [DYNAMIC_LAYOUT-Add2] Upload OK: ${uploadResult.imageUrl}`,
                   );
                   finalPreviewUrl = uploadResult.imageUrl;
                 } else {
                   console.warn(
-                    `⚠️ [BASE_LAYOUT-Add2] Upload failed, falling back to base64`,
+                    `⚠️ [DYNAMIC_LAYOUT-Add2] Upload failed, falling back to base64`,
                   );
                 }
               } catch (err) {
                 console.error(
-                  `❌ [BASE_LAYOUT-Add2] Error uploading final image:`,
+                  `❌ [DYNAMIC_LAYOUT-Add2] Error uploading final image:`,
                   err,
                 );
               }
@@ -728,7 +730,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
           data.components.length > 0
         ) {
           setComponents(data.components);
-          // Fetch designs for components with BASE_LAYOUT
+          // Fetch designs for components with DYNAMIC_LAYOUT
           fetchDesignsForComponents(data.components);
         } else {
           await fetchComponents();
@@ -748,7 +750,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
 
         for (const comp of comps) {
           const layoutCustomization = comp.item.customizations?.find(
-            (c) => c.type === "BASE_LAYOUT",
+            (c) => c.type === "DYNAMIC_LAYOUT",
           );
 
           if (layoutCustomization) {
@@ -834,11 +836,11 @@ const ClientProductPage = ({ id }: { id: string }) => {
   const currentProductionTime = useMemo(() => {
     let time = product.production_time || 0;
 
-    // Check components for BASE_LAYOUT additional_time
+    // Check components for DYNAMIC_LAYOUT additional_time
     components.forEach((comp) => {
       const customizations = itemCustomizations[comp.id] || [];
       const baseLayout = customizations.find(
-        (c) => c.customizationType === CustomizationType.BASE_LAYOUT,
+        (c) => c.customizationType === CustomizationType.DYNAMIC_LAYOUT,
       );
       if (baseLayout) {
         // Check if data has additional_time
@@ -853,7 +855,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
     Object.values(additionalCustomizations)
       .flat()
       .forEach((cust) => {
-        if (cust.customizationType === CustomizationType.BASE_LAYOUT) {
+        if (cust.customizationType === CustomizationType.DYNAMIC_LAYOUT) {
           const data = cust.data as { additional_time?: number };
           if (data && typeof data.additional_time === "number") {
             time = Math.max(time, data.additional_time);
@@ -906,7 +908,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
         const componentCustomizations =
           itemCustomizations[previewComponentId] || [];
         const baseLayoutCustomization = componentCustomizations.find(
-          (c) => c.customizationType === CustomizationType.BASE_LAYOUT,
+          (c) => c.customizationType === CustomizationType.DYNAMIC_LAYOUT,
         );
 
         if (baseLayoutCustomization) {
@@ -973,7 +975,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
       const componentCustomizations =
         itemCustomizations[componentToCheck.id] || [];
       const baseLayoutCustomization = componentCustomizations.find(
-        (c) => c.customizationType === CustomizationType.BASE_LAYOUT,
+        (c) => c.customizationType === CustomizationType.DYNAMIC_LAYOUT,
       );
 
       if (baseLayoutCustomization) {
@@ -1114,8 +1116,8 @@ const ClientProductPage = ({ id }: { id: string }) => {
               }
             }
 
-            // Validar BASE_LAYOUT
-            if (reqCustom.type === "BASE_LAYOUT") {
+            // Validar DYNAMIC_LAYOUT
+            if (reqCustom.type === "DYNAMIC_LAYOUT") {
               const layout = data as
                 | { id?: string; layout_id?: string }
                 | undefined;
@@ -1269,7 +1271,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
               price_adjustment: 0,
               photos: photos,
             });
-          } else if (input.customizationType === "BASE_LAYOUT") {
+          } else if (input.customizationType === "DYNAMIC_LAYOUT") {
             const layoutData = data as {
               id?: string;
               name?: string;
@@ -1288,16 +1290,16 @@ const ClientProductPage = ({ id }: { id: string }) => {
               customization_id: input.ruleId || `item_${itemId}`,
               componentId, // ✅ Add componentId
               title: customizationName,
-              customization_type: "BASE_LAYOUT",
+              customization_type: "DYNAMIC_LAYOUT",
               is_required: false,
               price_adjustment: 0,
               selected_item: {
-                original_item: "Layout Base",
+                original_item: "Design Dinâmico",
                 selected_item: layoutData.name || "Personalizado",
                 price_adjustment: 0,
               },
               selected_item_label: `${
-                layoutData.name || "Layout Personalizado"
+                layoutData.name || "Design Personalizado"
               }${
                 imageCount > 0
                   ? ` (${imageCount} foto${imageCount > 1 ? "s" : ""})`
@@ -1308,7 +1310,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
               fabricState: layoutData.fabricState,
             };
 
-            // ✅ Upload BASE_LAYOUT final high-quality image if it exists, otherwise use preview
+            // ✅ Upload DYNAMIC_LAYOUT final high-quality image if it exists, otherwise use preview
             const finalImageToUpload =
               layoutData.highQualityUrl || layoutData.previewUrl;
             let finalPreviewUrl = layoutData.previewUrl;
@@ -1320,28 +1322,28 @@ const ClientProductPage = ({ id }: { id: string }) => {
               try {
                 const fetchRes = await fetch(finalImageToUpload);
                 const blob = await fetchRes.blob();
-                const file = new File([blob], "base-layout-final.png", {
+                const file = new File([blob], "design-final.png", {
                   type: "image/png",
                 });
 
                 console.log(
-                  `📤 [BASE_LAYOUT-AddToCart] Uploading final image...`,
+                  `📤 [DYNAMIC_LAYOUT-AddToCart] Uploading final image...`,
                 );
                 const uploadResult = await uploadCustomizationImage(file);
 
                 if (uploadResult.success) {
                   console.log(
-                    `✅ [BASE_LAYOUT-AddToCart] Upload OK: ${uploadResult.imageUrl}`,
+                    `✅ [DYNAMIC_LAYOUT-AddToCart] Upload OK: ${uploadResult.imageUrl}`,
                   );
                   finalPreviewUrl = uploadResult.imageUrl;
                 } else {
                   console.warn(
-                    `⚠️ [BASE_LAYOUT-AddToCart] Upload failed, falling back to base64`,
+                    `⚠️ [DYNAMIC_LAYOUT-AddToCart] Upload failed, falling back to base64`,
                   );
                 }
               } catch (err) {
                 console.error(
-                  `❌ [BASE_LAYOUT-AddToCart] Error uploading final image:`,
+                  `❌ [DYNAMIC_LAYOUT-AddToCart] Error uploading final image:`,
                   err,
                 );
               }
@@ -1706,7 +1708,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
                                 ]?.find(
                                   (c) =>
                                     c.customizationType ===
-                                    CustomizationType.BASE_LAYOUT,
+                                    CustomizationType.DYNAMIC_LAYOUT,
                                 );
                                 const isSelected =
                                   (customization?.data as any)?.id ===
@@ -1721,19 +1723,19 @@ const ClientProductPage = ({ id }: { id: string }) => {
                                       const otherData = currentData.filter(
                                         (c) =>
                                           c.customizationType !==
-                                          CustomizationType.BASE_LAYOUT,
+                                          CustomizationType.DYNAMIC_LAYOUT,
                                       );
 
                                       const rule =
                                         component.item.customizations?.find(
-                                          (c) => c.type === "BASE_LAYOUT",
+                                          (c) => c.type === "DYNAMIC_LAYOUT",
                                         );
 
                                       if (rule) {
                                         const newData: CustomizationInput = {
                                           ruleId: rule.id,
                                           customizationType:
-                                            CustomizationType.BASE_LAYOUT,
+                                            CustomizationType.DYNAMIC_LAYOUT,
                                           data: {
                                             ...layout,
                                             _customizationName: rule.name,
@@ -1811,7 +1813,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
 
                           const hasBaseLayout =
                             component.item.customizations?.some(
-                              (c) => c.type === "BASE_LAYOUT",
+                              (c) => c.type === "DYNAMIC_LAYOUT",
                             );
 
                           return (
@@ -2078,7 +2080,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
               name: c.name,
               description: c.description,
               type: c.type as
-                | "BASE_LAYOUT"
+                | "DYNAMIC_LAYOUT"
                 | "TEXT"
                 | "IMAGES"
                 | "MULTIPLE_CHOICE",
@@ -2098,7 +2100,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
                   placeholder?: string;
                   max_length?: number;
                 }>;
-                base_layout?: {
+                dynamic_layout?: {
                   max_images: number;
                   min_width?: number;
                   min_height?: number;
@@ -2144,7 +2146,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
               name: c.name,
               description: c.description,
               type: c.type as
-                | "BASE_LAYOUT"
+                | "DYNAMIC_LAYOUT"
                 | "TEXT"
                 | "IMAGES"
                 | "MULTIPLE_CHOICE",
@@ -2164,7 +2166,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
                   placeholder?: string;
                   max_length?: number;
                 }>;
-                base_layout?: {
+                dynamic_layout?: {
                   max_images: number;
                   min_width?: number;
                   min_height?: number;

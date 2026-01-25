@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 
 export interface CustomizationType {
   id: string;
-  customization_type: "IMAGES" | "TEXT" | "BASE_LAYOUT" | "MULTIPLE_CHOICE";
+  customization_type: "IMAGES" | "TEXT" | "DYNAMIC_LAYOUT" | "MULTIPLE_CHOICE";
   label: string;
   title?: string;
   description?: string;
@@ -74,13 +74,13 @@ interface UploadedFile {
  */
 export function useCustomization(
   itemId: string,
-  itemType: "product" | "additional"
+  itemType: "product" | "additional",
 ) {
   const baseURL = process.env.NEXT_PUBLIC_API_URL;
 
   const [sessionId, setSessionId] = useState<string>("");
   const [customizations, setCustomizations] = useState<CustomizationValue[]>(
-    []
+    [],
   );
   const [availableCustomizations, setAvailableCustomizations] = useState<
     CustomizationType[]
@@ -112,7 +112,7 @@ export function useCustomization(
     (_data: CustomizationValue[]) => {
       // No-op: localStorage disabled
     },
-    []
+    [],
   );
 
   /**
@@ -171,7 +171,7 @@ export function useCustomization(
           {
             method: "POST",
             body: formData,
-          }
+          },
         );
 
         if (!response.ok) {
@@ -195,7 +195,7 @@ export function useCustomization(
         setLoading(false);
       }
     },
-    [sessionId]
+    [sessionId],
   );
 
   /**
@@ -212,7 +212,7 @@ export function useCustomization(
           {
             method: "DELETE",
             headers: { "ngrok-skip-browser-warning": "true" },
-          }
+          },
         );
 
         if (!response.ok) {
@@ -230,7 +230,7 @@ export function useCustomization(
         setLoading(false);
       }
     },
-    [baseURL]
+    [baseURL],
   );
 
   /**
@@ -240,7 +240,7 @@ export function useCustomization(
     (customizationId: string, value: Partial<CustomizationValue>) => {
       setCustomizations((prev) => {
         const existingIndex = prev.findIndex(
-          (c) => c.customization_id === customizationId
+          (c) => c.customization_id === customizationId,
         );
 
         let updated: CustomizationValue[];
@@ -258,7 +258,7 @@ export function useCustomization(
         return updated;
       });
     },
-    [saveToLocalStorage]
+    [saveToLocalStorage],
   );
 
   /**
@@ -268,13 +268,13 @@ export function useCustomization(
     (customizationId: string) => {
       setCustomizations((prev) => {
         const updated = prev.filter(
-          (c) => c.customization_id !== customizationId
+          (c) => c.customization_id !== customizationId,
         );
         saveToLocalStorage(updated);
         return updated;
       });
     },
-    [saveToLocalStorage]
+    [saveToLocalStorage],
   );
 
   /**
@@ -290,7 +290,7 @@ export function useCustomization(
       if (!custom.is_required) return;
 
       const userValue = customizations.find(
-        (c) => c.customization_id === custom.id
+        (c) => c.customization_id === custom.id,
       );
 
       if (!userValue) {
@@ -315,7 +315,7 @@ export function useCustomization(
             missingFields.push(custom.label);
           }
           break;
-        case "BASE_LAYOUT":
+        case "DYNAMIC_LAYOUT":
           if (!userValue.selected_item) {
             missingFields.push(custom.label);
           }
@@ -336,7 +336,7 @@ export function useCustomization(
     (customizationId: string): CustomizationValue | undefined => {
       return customizations.find((c) => c.customization_id === customizationId);
     },
-    [customizations]
+    [customizations],
   );
 
   /**
@@ -361,7 +361,7 @@ export function useCustomization(
         `${baseURL}/customization/session/${sessionId}/files`,
         {
           headers: { "ngrok-skip-browser-warning": "true" },
-        }
+        },
       );
 
       if (!response.ok) {

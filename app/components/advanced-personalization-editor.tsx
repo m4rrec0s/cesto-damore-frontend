@@ -77,7 +77,7 @@ export default function AdvancedPersonalizationEditor({
   const uploadOptionImage = async (file: File, optionId: string) => {
     try {
       setMultipleChoiceOptions((prev) =>
-        prev.map((o) => (o.id === optionId ? { ...o, uploading: true } : o))
+        prev.map((o) => (o.id === optionId ? { ...o, uploading: true } : o)),
       );
 
       const token =
@@ -93,7 +93,7 @@ export default function AdvancedPersonalizationEditor({
           method: "POST",
           headers: token ? { Authorization: `Bearer ${token}` } : undefined,
           body: form,
-        }
+        },
       );
 
       if (!res.ok) {
@@ -112,8 +112,8 @@ export default function AdvancedPersonalizationEditor({
                 filename: data.filename || data.filename,
                 uploading: false,
               }
-            : o
-        )
+            : o,
+        ),
       );
 
       toast.success("Imagem carregada para opção");
@@ -121,7 +121,7 @@ export default function AdvancedPersonalizationEditor({
       console.error("Erro upload option image:", err);
       toast.error((err as Error).message || "Erro ao enviar imagem");
       setMultipleChoiceOptions((prev) =>
-        prev.map((o) => (o.id === optionId ? { ...o, uploading: false } : o))
+        prev.map((o) => (o.id === optionId ? { ...o, uploading: false } : o)),
       );
     }
   };
@@ -132,8 +132,8 @@ export default function AdvancedPersonalizationEditor({
       if (!opt?.filename) {
         setMultipleChoiceOptions((prev) =>
           prev.map((o) =>
-            o.id === optionId ? { ...o, imageUrl: null, filename: null } : o
-          )
+            o.id === optionId ? { ...o, imageUrl: null, filename: null } : o,
+          ),
         );
         return;
       }
@@ -149,7 +149,7 @@ export default function AdvancedPersonalizationEditor({
         {
           method: "DELETE",
           headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-        }
+        },
       );
 
       if (!res.ok) throw new Error("Erro ao deletar imagem");
@@ -158,8 +158,8 @@ export default function AdvancedPersonalizationEditor({
         prev.map((o) =>
           o.id === optionId
             ? { ...o, imageUrl: undefined, filename: undefined }
-            : o
-        )
+            : o,
+        ),
       );
       toast.success("Imagem removida");
     } catch (err) {
@@ -186,7 +186,14 @@ export default function AdvancedPersonalizationEditor({
   useEffect(() => {
     const loadBaseImage = async () => {
       try {
-        if (layoutBase.image_url.startsWith("data:")) {
+        const imageUrl = layoutBase.previewImageUrl;
+
+        if (!imageUrl) {
+          console.warn("Layout sem imagem base!");
+          return;
+        }
+
+        if (imageUrl.startsWith("data:")) {
           const img = new Image();
           img.onload = () => {
             baseImageRef.current = img;
@@ -196,20 +203,20 @@ export default function AdvancedPersonalizationEditor({
           img.onerror = () => {
             toast.error("Erro ao carregar imagem base64");
           };
-          img.src = layoutBase.image_url;
+          img.src = imageUrl;
           return;
         }
 
-        const normalizedUrl = normalizeGoogleDriveUrl(layoutBase.image_url);
+        const normalizedUrl = normalizeGoogleDriveUrl(imageUrl);
 
         const proxyUrl = `/api/proxy-image?url=${encodeURIComponent(
-          normalizedUrl
+          normalizedUrl,
         )}`;
 
         const response = await fetch(proxyUrl);
         if (!response.ok) {
           throw new Error(
-            `Falha ao carregar imagem via proxy: ${response.status}`
+            `Falha ao carregar imagem via proxy: ${response.status}`,
           );
         }
 
@@ -218,7 +225,7 @@ export default function AdvancedPersonalizationEditor({
         if (!blob.type.startsWith("image/")) {
           toast.error(
             "Erro: Imagem do Google Drive não acessível. Por favor, faça upload da imagem novamente.",
-            { duration: 5000 }
+            { duration: 5000 },
           );
           setBaseImageLoaded(false);
           return;
@@ -239,7 +246,7 @@ export default function AdvancedPersonalizationEditor({
         };
         img.onerror = () => {
           toast.error(
-            "Erro ao processar imagem. Formato inválido ou corrompido."
+            "Erro ao processar imagem. Formato inválido ou corrompido.",
           );
         };
         img.src = base64;
@@ -251,7 +258,7 @@ export default function AdvancedPersonalizationEditor({
 
     loadBaseImage();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [layoutBase.image_url]);
+  }, [layoutBase.previewImageUrl]);
 
   useEffect(() => {
     if (showCanvasPreview) {
@@ -277,7 +284,7 @@ export default function AdvancedPersonalizationEditor({
     ctx.drawImage(baseImageRef.current, 0, 0, canvas.width, canvas.height);
 
     const sortedSlots = [...layoutBase.slots].sort(
-      (a, b) => (a.zIndex || 0) - (b.zIndex || 0)
+      (a, b) => (a.zIndex || 0) - (b.zIndex || 0),
     );
 
     sortedSlots.forEach((slot) => {
@@ -313,7 +320,7 @@ export default function AdvancedPersonalizationEditor({
         ctx.fillText(
           "SUA FOTO AQUI",
           slotX + slotWidth / 2,
-          slotY + slotHeight / 2
+          slotY + slotHeight / 2,
         );
       } else if (!img || !img.complete) {
         ctx.fillStyle = "#1f2937";
@@ -340,7 +347,7 @@ export default function AdvancedPersonalizationEditor({
           slotX + offsetX,
           slotY + offsetY,
           drawWidth,
-          drawHeight
+          drawHeight,
         );
       }
 
@@ -417,7 +424,7 @@ export default function AdvancedPersonalizationEditor({
 
   const [viewMode, setViewMode] = useState<"2d" | "3d">("2d");
   const [previewTextureUrl, setPreviewTextureUrl] = useState<string | null>(
-    null
+    null,
   );
 
   const handleSwitchTo3D = async () => {
@@ -644,7 +651,7 @@ export default function AdvancedPersonalizationEditor({
                             // Limitar para não invadir as asas
                             thetaLength = Math.min(
                               thetaLength,
-                              FULL_WRAP_MAX_THETA
+                              FULL_WRAP_MAX_THETA,
                             );
 
                             // Usar configurações padrão do viewer para theta start/length
@@ -709,7 +716,11 @@ export default function AdvancedPersonalizationEditor({
                 </p>
                 <p className="text-blue-600">
                   URL:{" "}
-                  {getDirectImageUrl(layoutBase.image_url).substring(0, 50)}...
+                  {getDirectImageUrl(layoutBase.previewImageUrl).substring(
+                    0,
+                    50,
+                  )}
+                  ...
                 </p>
               </div>
             )}
@@ -749,7 +760,7 @@ export default function AdvancedPersonalizationEditor({
                       ...prev,
                       {
                         id: `opt-${Date.now()}-${Math.floor(
-                          Math.random() * 1000
+                          Math.random() * 1000,
                         )}`,
                         label: `Opção ${prev.length + 1}`,
                       },
@@ -776,8 +787,8 @@ export default function AdvancedPersonalizationEditor({
                           prev.map((o) =>
                             o.id === opt.id
                               ? { ...o, label: e.target.value }
-                              : o
-                          )
+                              : o,
+                          ),
                         )
                       }
                       className="flex-1"
@@ -807,7 +818,7 @@ export default function AdvancedPersonalizationEditor({
                       size="sm"
                       onClick={() =>
                         setMultipleChoiceOptions((prev) =>
-                          prev.filter((o) => o.id !== opt.id)
+                          prev.filter((o) => o.id !== opt.id),
                         )
                       }
                     >

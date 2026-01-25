@@ -48,7 +48,7 @@ interface Customization {
   id: string;
   name: string;
   description?: string;
-  type: "BASE_LAYOUT" | "TEXT" | "IMAGES" | "MULTIPLE_CHOICE";
+  type: "DYNAMIC_LAYOUT" | "TEXT" | "IMAGES" | "MULTIPLE_CHOICE";
   isRequired: boolean;
   price: number;
   customization_data: {
@@ -66,7 +66,7 @@ interface Customization {
       placeholder?: string;
       max_length?: number;
     }>;
-    base_layout?: {
+    dynamic_layout?: {
       max_images: number;
       min_width?: number;
       min_height?: number;
@@ -95,7 +95,7 @@ interface Props {
   onImagesUpdate?: (
     itemId: string,
     imageCount: number,
-    maxImages: number
+    maxImages: number,
   ) => void;
   initialValues?: Record<string, unknown>;
 }
@@ -121,7 +121,7 @@ export function ItemCustomizationModal({
   >({});
 
   const [uploadingFiles, setUploadingFiles] = useState<Record<string, File[]>>(
-    {}
+    {},
   );
   const [selectedLayoutId, setSelectedLayoutId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -137,7 +137,7 @@ export function ItemCustomizationModal({
       {
         id: string;
         name: string;
-        image_url: string;
+        previewImageUrl: string;
         slots?: SlotDef[];
         additional_time?: number;
         item_type?: string;
@@ -173,7 +173,7 @@ export function ItemCustomizationModal({
 
     const fetchLayouts = async () => {
       const baseLayoutCustom = customizations.find(
-        (c) => c.type === "BASE_LAYOUT"
+        (c) => c.type === "DYNAMIC_LAYOUT",
       );
       if (!baseLayoutCustom) return;
 
@@ -186,7 +186,7 @@ export function ItemCustomizationModal({
         {
           id: string;
           name: string;
-          image_url: string;
+          previewImageUrl: string;
           slots?: SlotDef[];
           item_type?: string;
         }
@@ -201,7 +201,7 @@ export function ItemCustomizationModal({
           return {
             id: fullLayout.id,
             name: fullLayout.name,
-            image_url: fullLayout.image_url,
+            previewImageUrl: fullLayout.previewImageUrl,
             slots: fullLayout.slots,
             item_type: fullLayout.item_type,
           };
@@ -223,7 +223,7 @@ export function ItemCustomizationModal({
           fetchedLayouts[layout.id] = {
             id: fullLayout.id,
             name: fullLayout.name,
-            image_url: fullLayout.image_url,
+            previewImageUrl: fullLayout.previewImageUrl,
             slots: fullLayout.slots,
             item_type: fullLayout.item_type,
           };
@@ -243,12 +243,12 @@ export function ItemCustomizationModal({
       setLoadingLayout(true);
 
       const baseLayoutCustom = customizations.find(
-        (c) => c.type === "BASE_LAYOUT"
+        (c) => c.type === "DYNAMIC_LAYOUT",
       );
       if (!baseLayoutCustom) return;
 
       const layout = baseLayoutCustom.customization_data.layouts?.find(
-        (l) => l.id === layoutId
+        (l) => l.id === layoutId,
       );
       if (!layout) return;
 
@@ -272,20 +272,38 @@ export function ItemCustomizationModal({
           const token =
             typeof window !== "undefined"
               ? localStorage.getItem("appToken") ||
-              localStorage.getItem("token")
+                localStorage.getItem("token")
               : null;
 
-          const response = await fetch(`${API_URL}/layouts/${layoutId}`, {
-            headers: token ? { Authorization: `Bearer ${token}` } : {},
-          });
+          const response = await fetch(
+            `${API_URL}/layouts/dynamic/${layoutId}`,
+            {
+              headers: {
+                ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                "ngrok-skip-browser-warning": "true",
+              },
+            },
+          );
 
           if (!response.ok) throw new Error("Erro ao buscar layout");
 
-          layoutData = (await response.json()) as LayoutBase;
-          layoutCacheRef.current[layoutId] = layoutData;
+          const rawData = (await response.json()) as LayoutBase & {
+            baseImageUrl?: string;
+          };
+
+          // Compatibilidade: DynamicLayout usa baseImageUrl, LayoutBase usa previewImageUrl
+          if (rawData && !rawData.previewImageUrl && rawData.baseImageUrl) {
+            rawData.previewImageUrl = rawData.baseImageUrl;
+          }
+
+          layoutData = rawData;
+
+          if (layoutData) layoutCacheRef.current[layoutId] = layoutData;
         }
 
-        setFullLayoutBase(layoutData);
+        if (!layoutData) throw new Error("Layout não encontrado");
+
+        setFullLayoutBase(layoutData as LayoutBase);
 
         const modelUrl =
           layoutData.item_type?.toLowerCase() === "caneca"
@@ -299,7 +317,7 @@ export function ItemCustomizationModal({
           [baseLayoutCustom.id]: {
             ...((prev[baseLayoutCustom.id] as Record<string, unknown>) || {}),
             model_url: modelUrl,
-            item_type: layoutData.item_type,
+            item_type: layoutData?.item_type,
           },
         }));
 
@@ -312,7 +330,7 @@ export function ItemCustomizationModal({
         setLoadingLayout(false);
       }
     },
-    [customizations]
+    [customizations],
   );
 
   // ✅ Initialize customizationData from initialValues (fallback for reopening modal)
@@ -322,7 +340,7 @@ export function ItemCustomizationModal({
     if (initialValues && Object.keys(initialValues).length > 0) {
       console.log(
         "🔄 [ItemCustomizationModal] Initializing with:",
-        initialValues
+        initialValues,
       );
       const newData: Record<string, unknown> = {};
 
@@ -340,7 +358,7 @@ export function ItemCustomizationModal({
             } else if (typeof val === "string") {
               const options = c.customization_data.options || [];
               const matched = options.find(
-                (o) => o.id === val || o.value === val
+                (o) => o.id === val || o.value === val,
               );
               newData[c.id] = {
                 id: val,
@@ -366,9 +384,9 @@ export function ItemCustomizationModal({
 
       setCustomizationData(newData);
 
-      // ✅ Restore BASE_LAYOUT state if present
+      // ✅ Restore DYNAMIC_LAYOUT state if present
       const baseLayoutCustom = customizations.find(
-        (c) => c.type === "BASE_LAYOUT"
+        (c) => c.type === "DYNAMIC_LAYOUT",
       );
       if (baseLayoutCustom) {
         const layoutData = newData[baseLayoutCustom.id] as
@@ -390,9 +408,14 @@ export function ItemCustomizationModal({
   }, [isOpen, initialValues, customizations, handleLayoutSelect]);
 
   const handleLayoutComplete = useCallback(
-    async (images: ImageData[], previewUrl: string, fabricState?: string, highQualityUrl?: string) => {
+    async (
+      images: ImageData[],
+      previewUrl: string,
+      fabricState?: string,
+      highQualityUrl?: string,
+    ) => {
       const baseLayoutCustom = customizations.find(
-        (c) => c.type === "BASE_LAYOUT"
+        (c) => c.type === "DYNAMIC_LAYOUT",
       );
       if (!baseLayoutCustom) return;
 
@@ -422,7 +445,7 @@ export function ItemCustomizationModal({
       customizations.forEach((custom) => {
         const data = updatedData[custom.id];
 
-        if (custom.type === "BASE_LAYOUT" && data) {
+        if (custom.type === "DYNAMIC_LAYOUT" && data) {
           const layoutData = data as {
             layout_id?: string;
             layout_name?: string;
@@ -438,7 +461,7 @@ export function ItemCustomizationModal({
             result.push({
               ruleId: custom.id,
               customizationRuleId: custom.id,
-              customizationType: CustomizationType.BASE_LAYOUT,
+              customizationType: CustomizationType.DYNAMIC_LAYOUT,
               selectedLayoutId: layoutData.layout_id,
               data: {
                 id: layoutData.layout_id,
@@ -478,7 +501,7 @@ export function ItemCustomizationModal({
       onPreviewChange,
       onComplete,
       fullLayoutBase?.additional_time,
-    ]
+    ],
   );
 
   const handleBackToSelection = useCallback(() => {
@@ -497,7 +520,7 @@ export function ItemCustomizationModal({
         },
       }));
     },
-    []
+    [],
   );
 
   // Effect to process the next file in the queue
@@ -516,7 +539,7 @@ export function ItemCustomizationModal({
 
       if (customization.type === "IMAGES") {
         aspect = 1;
-      } else if (customization.type === "BASE_LAYOUT") {
+      } else if (customization.type === "DYNAMIC_LAYOUT") {
         aspect = undefined;
       }
 
@@ -538,7 +561,7 @@ export function ItemCustomizationModal({
       if (!files || files.length === 0) return;
 
       const customization = customizations.find(
-        (c) => c.id === customizationId
+        (c) => c.id === customizationId,
       );
       if (!customization) return;
 
@@ -548,7 +571,7 @@ export function ItemCustomizationModal({
       setImagesCustomizationId(customizationId);
       setPendingFiles((prev) => [...prev, ...fileArray]);
     },
-    [customizations]
+    [customizations],
   );
 
   const handleCropComplete = useCallback(
@@ -560,7 +583,7 @@ export function ItemCustomizationModal({
       }
 
       const customization = customizations.find(
-        (c) => c.id === currentCustomizationId
+        (c) => c.id === currentCustomizationId,
       );
       if (!customization) return;
 
@@ -572,7 +595,7 @@ export function ItemCustomizationModal({
           });
 
           const maxImages =
-            customization.customization_data.base_layout?.max_images || 10;
+            customization.customization_data.dynamic_layout?.max_images || 10;
 
           // Use Ref to get latest files, avoiding stale closures
           const currentFiles =
@@ -581,7 +604,7 @@ export function ItemCustomizationModal({
             "💾 [Crop] Saving. Current:",
             currentFiles.length,
             "Max:",
-            maxImages
+            maxImages,
           );
 
           const totalFiles = [...currentFiles, file].slice(0, maxImages);
@@ -630,7 +653,13 @@ export function ItemCustomizationModal({
           console.error("Erro ao processar imagem cortada:", error);
         });
     },
-    [currentCustomizationId, customizations, fileToCrop, onImagesUpdate, itemId]
+    [
+      currentCustomizationId,
+      customizations,
+      fileToCrop,
+      onImagesUpdate,
+      itemId,
+    ],
   );
 
   const handleDetailsConfirm = (croppedImageUrl: string) => {
@@ -663,11 +692,11 @@ export function ItemCustomizationModal({
 
       // Notificar pai sobre o novo número de imagens
       const customization = customizations.find(
-        (c) => c.id === customizationId
+        (c) => c.id === customizationId,
       );
       if (customization && customization.type === "IMAGES" && onImagesUpdate) {
         const maxImages =
-          customization.customization_data.base_layout?.max_images || 10;
+          customization.customization_data.dynamic_layout?.max_images || 10;
         console.log("📸 [handleRemoveFile] Atualizando contador:", {
           itemId: itemId,
           newCount: newFiles.length,
@@ -701,7 +730,7 @@ export function ItemCustomizationModal({
         [customizationId]: filesData,
       }));
     },
-    [uploadingFiles, customizations, itemId, onImagesUpdate]
+    [uploadingFiles, customizations, itemId, onImagesUpdate],
   );
 
   const handleOptionSelect = useCallback(
@@ -711,10 +740,10 @@ export function ItemCustomizationModal({
         [customizationId]: { id: optionId, label: optionLabel },
       }));
     },
-    []
+    [],
   );
 
-  const renderBaseLayoutSelection = (customization: Customization) => {
+  const renderDynamicLayoutSelection = (customization: Customization) => {
     const layouts = customization.customization_data.layouts || [];
 
     return (
@@ -773,31 +802,48 @@ export function ItemCustomizationModal({
                   if (normalizedUrl.includes("drive.google.com")) {
                     normalizedUrl += "&sz=w500";
                   }
-                  return `/api/proxy-image?url=${encodeURIComponent(
-                    normalizedUrl
+                  return `/proxy-image?url=${encodeURIComponent(
+                    normalizedUrl,
                   )}`;
                 }
 
                 return url;
               };
 
-              const imageUrl = getProxiedImageUrl(fullLayout.image_url || "");
-              const hasSlots = fullLayout.slots && fullLayout.slots.length > 0;
-              const isQuadro = fullLayout.item_type?.toLowerCase() === "quadro";
+              const imageUrl = getProxiedImageUrl(
+                (fullLayout as { previewImageUrl?: string; image_url?: string })
+                  .previewImageUrl ||
+                  (
+                    fullLayout as {
+                      previewImageUrl?: string;
+                      image_url?: string;
+                    }
+                  ).image_url ||
+                  "",
+              );
+              const hasSlots =
+                (fullLayout as { slots?: SlotDef[] }).slots &&
+                (fullLayout as { slots?: SlotDef[] }).slots!.length > 0;
+              const isQuadro =
+                (
+                  fullLayout as { item_type?: string }
+                ).item_type?.toLowerCase() === "quadro";
 
               return (
                 <div
                   key={fullLayout.id}
-                  className={`group cursor-pointer transition-all duration-300 overflow-hidden hover:shadow-2xl hover:scale-105 border-2 border-gray-200 hover:border-purple-300 ${isQuadro ? "rounded-lg shadow-lg" : ""
-                    }`}
+                  className={`group cursor-pointer transition-all duration-300 overflow-hidden hover:shadow-2xl hover:scale-105 border-2 border-gray-200 hover:border-purple-300 ${
+                    isQuadro ? "rounded-lg shadow-lg" : ""
+                  }`}
                   onClick={() => handleLayoutSelect(fullLayout.id)}
                 >
                   {/* Para quadros: aspect-square para parecer um quadro real. Para outros: aspect-video */}
                   <div
-                    className={`relative bg-gradient-to-br from-gray-50 to-gray-100 ${isQuadro
-                      ? "aspect-square p-3"
-                      : "aspect-video max-h-[200px]"
-                      }`}
+                    className={`relative bg-gradient-to-br from-gray-50 to-gray-100 ${
+                      isQuadro
+                        ? "aspect-square p-3"
+                        : "aspect-video max-h-[200px]"
+                    }`}
                   >
                     {/* Moldura visual para quadros */}
                     {isQuadro && (
@@ -812,16 +858,19 @@ export function ItemCustomizationModal({
 
                     {imageUrl ? (
                       <div
-                        className={`relative w-full h-full ${isQuadro ? "p-1" : ""
-                          }`}
+                        className={`relative w-full h-full ${
+                          isQuadro ? "p-1" : ""
+                        }`}
                       >
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
                           src={imageUrl}
                           alt={fullLayout.name}
-                          className={`w-full h-full transition-all duration-300 ${imageLoaded ? "opacity-100" : "opacity-0"
-                            } ${isQuadro ? "object-contain rounded" : "object-cover"
-                            }`}
+                          className={`w-full h-full transition-all duration-300 ${
+                            imageLoaded ? "opacity-100" : "opacity-0"
+                          } ${
+                            isQuadro ? "object-contain rounded" : "object-cover"
+                          }`}
                           onLoad={() => {
                             setImageLoadStates((prev) => ({
                               ...prev,
@@ -831,7 +880,7 @@ export function ItemCustomizationModal({
                           onError={(e) => {
                             console.error(
                               `❌ [Layout ${fullLayout.name}] Erro ao carregar imagem:`,
-                              e
+                              e,
                             );
                             setImageLoadStates((prev) => ({
                               ...prev,
@@ -1058,8 +1107,8 @@ export function ItemCustomizationModal({
                     fields.length === 1
                       ? data[fields[0].id] || ""
                       : fields
-                        .map((f) => `${f.label}: ${data[f.id] || ""}`)
-                        .join("\n");
+                          .map((f) => `${f.label}: ${data[f.id] || ""}`)
+                          .join("\n");
 
                   // ✅ Enviar apenas o texto limpo para o backend
                   result.push({
@@ -1083,7 +1132,7 @@ export function ItemCustomizationModal({
                     (customizationData[customization.id] as Record<
                       string,
                       string
-                    >) || {}
+                    >) || {},
                   )
                     .join("")
                     .trim().length >= 3
@@ -1102,7 +1151,7 @@ export function ItemCustomizationModal({
   const renderImageCustomization = (customization: Customization) => {
     let currentFiles = uploadingFiles[customization.id] || [];
     const maxImages =
-      customization.customization_data.base_layout?.max_images || 10;
+      customization.customization_data.dynamic_layout?.max_images || 10;
 
     // ✅ FIX: Se não temos files em uploadingFiles, tentar restaurar de customizationData ou initialValues
     if (currentFiles.length === 0) {
@@ -1116,7 +1165,7 @@ export function ItemCustomizationModal({
         const initialPhotos = initialValues[customization.id] as unknown[];
         // Se são strings ou objetos com preview_url, manter para referência
         console.log(
-          `✅ [renderImageCustomization] Restaurou ${initialPhotos.length} imagens de initialValues`
+          `✅ [renderImageCustomization] Restaurou ${initialPhotos.length} imagens de initialValues`,
         );
       }
     }
@@ -1257,13 +1306,13 @@ export function ItemCustomizationModal({
                   const result: CustomizationInput[] = [];
                   const filesData = customizationData[customization.id] as
                     | Array<{
-                      file: File;
-                      preview: string;
-                      position: number;
-                      base64?: string;
-                      mime_type?: string;
-                      size?: number;
-                    }>
+                        file: File;
+                        preview: string;
+                        position: number;
+                        base64?: string;
+                        mime_type?: string;
+                        size?: number;
+                      }>
                     | undefined;
 
                   if (filesData && filesData.length > 0) {
@@ -1274,7 +1323,7 @@ export function ItemCustomizationModal({
                       data: {
                         files: filesData.map((item) => item.file),
                         previews: filesData.map(
-                          (item) => item.base64 || item.preview
+                          (item) => item.base64 || item.preview,
                         ),
                         count: filesData.length,
                         _customizationName: customization.name,
@@ -1319,14 +1368,14 @@ export function ItemCustomizationModal({
         // String: procurar pela opção correspondente
         matchedOption = options.find(
           (opt: (typeof options)[0]) =>
-            opt.id === initialValue || opt.value === initialValue
+            opt.id === initialValue || opt.value === initialValue,
         );
       } else if (initialValue !== null && typeof initialValue === "object") {
         // Object: verificar se tem id property
         const objValue = initialValue as Record<string, unknown>;
         if (typeof objValue.id === "string") {
           matchedOption = options.find(
-            (opt: (typeof options)[0]) => opt.id === objValue.id
+            (opt: (typeof options)[0]) => opt.id === objValue.id,
           );
         }
       }
@@ -1385,15 +1434,16 @@ export function ItemCustomizationModal({
                 whileTap={{ scale: 0.98 }}
               >
                 <Card
-                  className={`p-4 cursor-pointer transition-all ${isSelected
-                    ? "border-2 border-rose-500 bg-gradient-to-r from-rose-50 to-pink-50 shadow-md"
-                    : "border-2 border-rose-200 hover:border-rose-400 hover:bg-rose-50/30"
-                    }`}
+                  className={`p-4 cursor-pointer transition-all ${
+                    isSelected
+                      ? "border-2 border-rose-500 bg-gradient-to-r from-rose-50 to-pink-50 shadow-md"
+                      : "border-2 border-rose-200 hover:border-rose-400 hover:bg-rose-50/30"
+                  }`}
                   onClick={() =>
                     handleOptionSelect(
                       customization.id,
                       option.id,
-                      option.label
+                      option.label,
                     )
                   }
                 >
@@ -1423,8 +1473,9 @@ export function ItemCustomizationModal({
                     />
                     <div className="flex-1">
                       <p
-                        className={`font-semibold ${isSelected ? "text-rose-900" : "text-rose-800"
-                          }`}
+                        className={`font-semibold ${
+                          isSelected ? "text-rose-900" : "text-rose-800"
+                        }`}
                       >
                         {option.label}
                       </p>
@@ -1483,7 +1534,7 @@ export function ItemCustomizationModal({
                         // ✅ Encontrar o price_adjustment da opção selecionada
                         const selectedOption =
                           custom.customization_data.options?.find(
-                            (opt: { id: string }) => opt.id === choiceData.id
+                            (opt: { id: string }) => opt.id === choiceData.id,
                           );
                         const priceAdjustment =
                           (selectedOption as { price_adjustment?: number })
@@ -1533,7 +1584,7 @@ export function ItemCustomizationModal({
             "pendingFiles:",
             pendingFiles.length,
             "isCropping:",
-            isCropping
+            isCropping,
           );
           return;
         }
@@ -1584,10 +1635,10 @@ export function ItemCustomizationModal({
           {step === "selection" ? (
             <div className="space-y-8">
               {customizations.map((customization) => {
-                if (customization.type === "BASE_LAYOUT") {
+                if (customization.type === "DYNAMIC_LAYOUT") {
                   return (
                     <div key={customization.id}>
-                      {renderBaseLayoutSelection(customization)}
+                      {renderDynamicLayoutSelection(customization)}
                     </div>
                   );
                 }
@@ -1625,8 +1676,8 @@ export function ItemCustomizationModal({
                   initialState={
                     (
                       customizationData[fullLayoutBase.id] as
-                      | { fabricState?: string }
-                      | undefined
+                        | { fabricState?: string }
+                        | undefined
                     )?.fabricState
                   }
                 />

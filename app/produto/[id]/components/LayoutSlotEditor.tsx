@@ -35,14 +35,14 @@ export function LayoutSlotEditor({
   onPreviewChange,
 }: LayoutSlotEditorProps) {
   const [slotImages, setSlotImages] = useState<Record<string, SlotImageData>>(
-    {}
+    {},
   );
   const [baseImageLoaded, setBaseImageLoaded] = useState(false);
   const [viewMode, setViewMode] = useState<
     "edit" | "preview-2d" | "preview-3d"
   >("edit");
   const [previewTextureUrl, setPreviewTextureUrl] = useState<string | null>(
-    null
+    null,
   );
 
   // Estados para crop de imagem
@@ -73,12 +73,12 @@ export function LayoutSlotEditor({
         };
 
         // Normalizar URL do Google Drive
-        const normalizedUrl = getDirectImageUrl(layoutBase.image_url);
+        const normalizedUrl = getDirectImageUrl(layoutBase.previewImageUrl);
 
         // Se for URL do Google Drive, usar proxy
         if (normalizedUrl.includes("drive.google.com")) {
           const proxyUrl = `/api/proxy-image?url=${encodeURIComponent(
-            normalizedUrl
+            normalizedUrl,
           )}`;
           const response = await fetch(proxyUrl);
           if (!response.ok) throw new Error("Erro ao carregar via proxy");
@@ -95,7 +95,7 @@ export function LayoutSlotEditor({
 
     loadBaseImage();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [layoutBase.image_url]);
+  }, [layoutBase.previewImageUrl]);
 
   const updateCanvasPreview = useCallback(() => {
     if (!canvasRef.current || !baseImageRef.current) return;
@@ -109,9 +109,8 @@ export function LayoutSlotEditor({
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-
     const sortedSlots = [...layoutBase.slots].sort(
-      (a, b) => (a.zIndex || 0) - (b.zIndex || 0)
+      (a, b) => (a.zIndex || 0) - (b.zIndex || 0),
     );
 
     sortedSlots.forEach((slot) => {
@@ -146,7 +145,7 @@ export function LayoutSlotEditor({
         ctx.fillText(
           "SUA FOTO AQUI",
           slotX + slotWidth / 2,
-          slotY + slotHeight / 2
+          slotY + slotHeight / 2,
         );
       } else if (img && img.complete) {
         const imgRatio = img.naturalWidth / img.naturalHeight;
@@ -170,7 +169,7 @@ export function LayoutSlotEditor({
           slotX + offsetX,
           slotY + offsetY,
           drawWidth,
-          drawHeight
+          drawHeight,
         );
       }
 
@@ -179,7 +178,6 @@ export function LayoutSlotEditor({
 
     // Draw base image LAST so it overlays the slots (handling transparency)
     ctx.drawImage(baseImageRef.current, 0, 0, canvas.width, canvas.height);
-
 
     // Atualizar preview URL
     try {
@@ -200,7 +198,7 @@ export function LayoutSlotEditor({
 
   const fileToImageData = async (
     file: File,
-    slotId: string
+    slotId: string,
   ): Promise<ImageData> => {
     const arrayBuffer = await file.arrayBuffer();
     const uint8Array = new Uint8Array(arrayBuffer);
@@ -212,7 +210,7 @@ export function LayoutSlotEditor({
           resolve({ width: img.naturalWidth, height: img.naturalHeight });
         img.onerror = reject;
         img.src = URL.createObjectURL(file);
-      }
+      },
     );
 
     return {
@@ -365,7 +363,7 @@ export function LayoutSlotEditor({
 
     try {
       updateCanvasPreview();
-    } catch { }
+    } catch {}
 
     await new Promise((r) => setTimeout(r, 80));
 
@@ -558,42 +556,42 @@ export function LayoutSlotEditor({
                 textures={[
                   layoutBase.item_type?.toLowerCase() === "caneca"
                     ? {
-                      areaId: "main",
-                      imageUrl: previewTextureUrl,
-                      mapping: "cylinder" as const,
-                      cylinder: (() => {
-                        const CYLINDER_RADIUS = 0.46;
-                        const PRINT_AREA_HEIGHT = 0.95;
-                        const CYLINDER_HANDLE_GAP = Math.PI / 8;
-                        const FULL_WRAP_MAX_THETA =
-                          Math.PI * 2 - CYLINDER_HANDLE_GAP * 2;
+                        areaId: "main",
+                        imageUrl: previewTextureUrl,
+                        mapping: "cylinder" as const,
+                        cylinder: (() => {
+                          const CYLINDER_RADIUS = 0.46;
+                          const PRINT_AREA_HEIGHT = 0.95;
+                          const CYLINDER_HANDLE_GAP = Math.PI / 8;
+                          const FULL_WRAP_MAX_THETA =
+                            Math.PI * 2 - CYLINDER_HANDLE_GAP * 2;
 
-                        const widthMeters =
-                          (layoutBase.width / layoutBase.height) *
-                          PRINT_AREA_HEIGHT;
-                        let thetaLength = widthMeters / CYLINDER_RADIUS;
-                        if (!isFinite(thetaLength) || thetaLength <= 0) {
-                          thetaLength = Math.PI / 2;
-                        }
-                        thetaLength = Math.min(
-                          thetaLength,
-                          FULL_WRAP_MAX_THETA
-                        );
+                          const widthMeters =
+                            (layoutBase.width / layoutBase.height) *
+                            PRINT_AREA_HEIGHT;
+                          let thetaLength = widthMeters / CYLINDER_RADIUS;
+                          if (!isFinite(thetaLength) || thetaLength <= 0) {
+                            thetaLength = Math.PI / 2;
+                          }
+                          thetaLength = Math.min(
+                            thetaLength,
+                            FULL_WRAP_MAX_THETA,
+                          );
 
-                        return {
-                          radius: CYLINDER_RADIUS,
-                          height: PRINT_AREA_HEIGHT,
-                          segments: 200,
-                          thetaStart: CYLINDER_HANDLE_GAP,
-                          thetaLength: thetaLength,
-                        };
-                      })(),
-                    }
+                          return {
+                            radius: CYLINDER_RADIUS,
+                            height: PRINT_AREA_HEIGHT,
+                            segments: 200,
+                            thetaStart: CYLINDER_HANDLE_GAP,
+                            thetaLength: thetaLength,
+                          };
+                        })(),
+                      }
                     : {
-                      areaId: "main",
-                      imageUrl: previewTextureUrl,
-                      mapping: "plane" as const,
-                    },
+                        areaId: "main",
+                        imageUrl: previewTextureUrl,
+                        mapping: "plane" as const,
+                      },
                 ]}
               />
             </div>

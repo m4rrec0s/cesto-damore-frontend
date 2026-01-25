@@ -97,7 +97,7 @@ export function useLayoutApi() {
         setLoading(false);
       }
     },
-    []
+    [],
   );
 
   const fetchLayoutById = useCallback(
@@ -129,13 +129,13 @@ export function useLayoutApi() {
         setLoading(false);
       }
     },
-    [getAuthHeaders]
+    [getAuthHeaders],
   );
 
   const createLayout = useCallback(
     async (
       layoutData: CreateLayoutBaseInput,
-      imageFile: File
+      imageFile: File,
     ): Promise<LayoutBase> => {
       setLoading(true);
       setError(null);
@@ -149,7 +149,7 @@ export function useLayoutApi() {
         formData.append("slots", JSON.stringify(layoutData.slots));
         formData.append(
           "additional_time",
-          (layoutData.additional_time || 0).toString()
+          (layoutData.additional_time || 0).toString(),
         );
         formData.append("image", imageFile);
 
@@ -171,7 +171,7 @@ export function useLayoutApi() {
 
           const errorData = await response.json().catch(() => ({}));
           throw new Error(
-            errorData.error || errorData.message || "Erro ao criar layout"
+            errorData.error || errorData.message || "Erro ao criar layout",
           );
         }
 
@@ -186,14 +186,14 @@ export function useLayoutApi() {
         setLoading(false);
       }
     },
-    [getAuthHeadersForFormData]
+    [getAuthHeadersForFormData],
   );
 
   const updateLayout = useCallback(
     async (
       id: string,
       layoutData: Partial<CreateLayoutBaseInput>,
-      imageFile?: File
+      imageFile?: File,
     ): Promise<LayoutBase> => {
       setLoading(true);
       setError(null);
@@ -213,7 +213,7 @@ export function useLayoutApi() {
         if (layoutData.additional_time !== undefined)
           formData.append(
             "additional_time",
-            layoutData.additional_time.toString()
+            layoutData.additional_time.toString(),
           );
         if (imageFile) formData.append("image", imageFile);
 
@@ -235,7 +235,7 @@ export function useLayoutApi() {
 
           const errorData = await response.json().catch(() => ({}));
           throw new Error(
-            errorData.error || errorData.message || "Erro ao atualizar layout"
+            errorData.error || errorData.message || "Erro ao atualizar layout",
           );
         }
 
@@ -250,7 +250,7 @@ export function useLayoutApi() {
         setLoading(false);
       }
     },
-    [getAuthHeadersForFormData]
+    [getAuthHeadersForFormData],
   );
 
   const deleteLayout = useCallback(
@@ -277,7 +277,7 @@ export function useLayoutApi() {
 
           const errorData = await response.json().catch(() => ({}));
           throw new Error(
-            errorData.error || errorData.message || "Erro ao deletar layout"
+            errorData.error || errorData.message || "Erro ao deletar layout",
           );
         }
       } catch (err) {
@@ -289,7 +289,7 @@ export function useLayoutApi() {
         setLoading(false);
       }
     },
-    [getAuthHeaders]
+    [getAuthHeaders],
   );
 
   const uploadImage = useCallback(
@@ -316,7 +316,7 @@ export function useLayoutApi() {
 
           const errorData = await response.json().catch(() => ({}));
           throw new Error(
-            errorData.error || errorData.message || "Erro ao fazer upload"
+            errorData.error || errorData.message || "Erro ao fazer upload",
           );
         }
 
@@ -331,7 +331,7 @@ export function useLayoutApi() {
         setLoading(false);
       }
     },
-    [getAuthHeadersForFormData]
+    [getAuthHeadersForFormData],
   );
 
   return {

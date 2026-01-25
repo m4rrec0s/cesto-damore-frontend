@@ -21,11 +21,11 @@ export function Cart({ onClose }: { onClose?: () => void }) {
 
   const renderCustomizationValue = (customization: CartCustomization) => {
     switch (customization.customization_type) {
-      case "BASE_LAYOUT":
+      case "DYNAMIC_LAYOUT":
         return (
           customization.label_selected ||
           customization.selected_item_label ||
-          "Layout selecionado"
+          "Design selecionado"
         );
       case "TEXT":
         return customization.text || "";
@@ -71,14 +71,14 @@ export function Cart({ onClose }: { onClose?: () => void }) {
         {cart.items.map((item) => (
           <div
             key={`${item.product_id}-${(item.additional_ids || []).join(
-              "-"
+              "-",
             )}-${JSON.stringify(item.customizations)}`}
             className="flex gap-4 bg-white p-3 rounded-xl border border-gray-100 shadow-sm"
           >
             <div className="relative w-20 h-20 rounded-lg overflow-hidden flex-shrink-0 bg-gray-50">
               <Image
                 src={getInternalImageUrl(
-                  item.product.image_url || "/placeholder.png"
+                  item.product.image_url || "/placeholder.png",
                 )}
                 alt={item.product.name}
                 fill
@@ -147,7 +147,7 @@ export function Cart({ onClose }: { onClose?: () => void }) {
                         item.quantity - 1,
                         item.additional_ids,
                         item.customizations,
-                        item.additional_colors
+                        item.additional_colors,
                       )
                     }
                     disabled={item.quantity <= 1}
@@ -164,7 +164,7 @@ export function Cart({ onClose }: { onClose?: () => void }) {
                         item.quantity + 1,
                         item.additional_ids,
                         item.customizations,
-                        item.additional_colors
+                        item.additional_colors,
                       )
                     }
                   >
@@ -179,7 +179,7 @@ export function Cart({ onClose }: { onClose?: () => void }) {
                       item.effectivePrice * item.quantity +
                       (item.additionals?.reduce(
                         (sum, add) => sum + add.price * item.quantity,
-                        0
+                        0,
                       ) || 0)
                     ).toFixed(2)}
                   </span>
@@ -191,7 +191,7 @@ export function Cart({ onClose }: { onClose?: () => void }) {
                         item.product_id,
                         item.additional_ids,
                         item.customizations,
-                        item.additional_colors
+                        item.additional_colors,
                       )
                     }
                     className="text-red-600 hover:text-red-700 hover:bg-red-50"

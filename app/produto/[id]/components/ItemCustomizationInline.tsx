@@ -26,7 +26,7 @@ interface Customization {
   id: string;
   name: string;
   description?: string;
-  type: "BASE_LAYOUT" | "TEXT" | "IMAGES" | "MULTIPLE_CHOICE";
+  type: "DYNAMIC_LAYOUT" | "TEXT" | "IMAGES" | "MULTIPLE_CHOICE";
   isRequired: boolean;
   price: number;
   customization_data: {
@@ -42,7 +42,7 @@ interface Customization {
       placeholder?: string;
       max_length?: number;
     }>;
-    base_layout?: {
+    dynamic_layout?: {
       max_images: number;
       min_width?: number;
       min_height?: number;
@@ -79,7 +79,7 @@ export function ItemCustomizationInline({
     Record<string, unknown>
   >({});
   const [uploadingFiles, setUploadingFiles] = useState<Record<string, File[]>>(
-    {}
+    {},
   );
   const [selectedLayoutId, setSelectedLayoutId] = useState<string | null>(null);
   const [hasChanges, setHasChanges] = useState(false);
@@ -102,11 +102,11 @@ export function ItemCustomizationInline({
   useEffect(() => {
     if (onPreviewChange && selectedLayoutId) {
       const baseLayoutCustom = customizations.find(
-        (c) => c.type === "BASE_LAYOUT"
+        (c) => c.type === "DYNAMIC_LAYOUT",
       );
       if (baseLayoutCustom?.customization_data.layouts) {
         const layout = baseLayoutCustom.customization_data.layouts.find(
-          (l) => l.id === selectedLayoutId
+          (l) => l.id === selectedLayoutId,
         );
         if (layout) {
           onPreviewChange(layout.model_url || layout.image_url || null);
@@ -125,7 +125,7 @@ export function ItemCustomizationInline({
         },
       }));
     },
-    []
+    [],
   );
 
   const handleFileUpload = useCallback(
@@ -134,7 +134,7 @@ export function ItemCustomizationInline({
       if (!files || files.length === 0) return;
 
       const customization = customizations.find(
-        (c) => c.id === customizationId
+        (c) => c.id === customizationId,
       );
       if (!customization) return;
 
@@ -148,11 +148,11 @@ export function ItemCustomizationInline({
         // IMAGES sempre quadrado (1:1)
         aspect = 1;
         console.log("🔵 Tipo IMAGES - aspect 1:1");
-      } else if (customization.type === "BASE_LAYOUT") {
-        // BASE_LAYOUT usa proporção dos slots se houver
+      } else if (customization.type === "DYNAMIC_LAYOUT") {
+        // DYNAMIC_LAYOUT usa proporção dos slots se houver
         // Por enquanto, deixar livre (undefined) ou calcular baseado nos slots
         aspect = undefined;
-        console.log("🔵 Tipo BASE_LAYOUT - aspect undefined");
+        console.log("🔵 Tipo DYNAMIC_LAYOUT - aspect undefined");
       }
 
       // Abrir dialog de crop
@@ -162,7 +162,7 @@ export function ItemCustomizationInline({
       setCurrentCustomizationId(customizationId);
       setCropDialogOpen(true);
     },
-    [customizations]
+    [customizations],
   );
 
   const handleCropComplete = useCallback(
@@ -170,7 +170,7 @@ export function ItemCustomizationInline({
       if (!currentCustomizationId) return;
 
       const customization = customizations.find(
-        (c) => c.id === currentCustomizationId
+        (c) => c.id === currentCustomizationId,
       );
       if (!customization) return;
 
@@ -183,7 +183,7 @@ export function ItemCustomizationInline({
           });
 
           const maxImages =
-            customization.customization_data.base_layout?.max_images || 10;
+            customization.customization_data.dynamic_layout?.max_images || 10;
           const currentFiles = uploadingFiles[currentCustomizationId] || [];
           const totalFiles = [...currentFiles, file].slice(0, maxImages);
 
@@ -222,7 +222,7 @@ export function ItemCustomizationInline({
           console.error("Erro ao processar imagem cortada:", error);
         });
     },
-    [currentCustomizationId, customizations, uploadingFiles]
+    [currentCustomizationId, customizations, uploadingFiles],
   );
 
   const handleRemoveFile = useCallback(
@@ -261,7 +261,7 @@ export function ItemCustomizationInline({
         [customizationId]: filesData,
       }));
     },
-    [uploadingFiles]
+    [uploadingFiles],
   );
 
   const handleOptionSelect = useCallback(
@@ -274,7 +274,7 @@ export function ItemCustomizationInline({
         },
       }));
     },
-    []
+    [],
   );
 
   const handleLayoutSelect = useCallback(
@@ -282,11 +282,11 @@ export function ItemCustomizationInline({
       setSelectedLayoutId(layoutId);
 
       const baseLayoutCustom = customizations.find(
-        (c) => c.type === "BASE_LAYOUT"
+        (c) => c.type === "DYNAMIC_LAYOUT",
       );
       if (baseLayoutCustom) {
         const layout = baseLayoutCustom.customization_data.layouts?.find(
-          (l) => l.id === layoutId
+          (l) => l.id === layoutId,
         );
         if (layout) {
           setCustomizationData((prev) => ({
@@ -299,7 +299,7 @@ export function ItemCustomizationInline({
         }
       }
     },
-    [customizations]
+    [customizations],
   );
 
   const handleAutoSave = useCallback(() => {
@@ -311,8 +311,8 @@ export function ItemCustomizationInline({
 
       let customizationType: CustomizationType;
       switch (custom.type) {
-        case "BASE_LAYOUT":
-          customizationType = CustomizationType.BASE_LAYOUT;
+        case "DYNAMIC_LAYOUT":
+          customizationType = CustomizationType.DYNAMIC_LAYOUT;
           break;
         case "TEXT":
           customizationType = CustomizationType.TEXT;
@@ -332,7 +332,7 @@ export function ItemCustomizationInline({
         unknown
       >;
 
-      // Ensure selectedLayoutId is present for BASE_LAYOUT
+      // Ensure selectedLayoutId is present for DYNAMIC_LAYOUT
       const selectedLayoutIdField =
         ((baseData as Record<string, unknown>).layout_id as string) ||
         ((baseData as Record<string, unknown>).id as string);
@@ -355,7 +355,7 @@ export function ItemCustomizationInline({
     }
   }, [hasChanges, handleAutoSave]);
 
-  const renderBaseLayoutCustomization = (customization: Customization) => {
+  const renderDynamicLayoutCustomization = (customization: Customization) => {
     const layouts = customization.customization_data.layouts || [];
 
     return (
@@ -493,7 +493,7 @@ export function ItemCustomizationInline({
   const renderImageCustomization = (customization: Customization) => {
     const currentFiles = uploadingFiles[customization.id] || [];
     const maxImages =
-      customization.customization_data.base_layout?.max_images || 10;
+      customization.customization_data.dynamic_layout?.max_images || 10;
     const canAddMore = currentFiles.length < maxImages;
 
     return (
@@ -675,8 +675,8 @@ export function ItemCustomizationInline({
         .sort((a) => (a.isRequired ? -1 : 1))
         .map((customization) => (
           <Card key={customization.id} className="p-4 bg-white">
-            {customization.type === "BASE_LAYOUT" &&
-              renderBaseLayoutCustomization(customization)}
+            {customization.type === "DYNAMIC_LAYOUT" &&
+              renderDynamicLayoutCustomization(customization)}
             {customization.type === "TEXT" &&
               renderTextCustomization(customization)}
             {customization.type === "IMAGES" &&

@@ -33,7 +33,7 @@ export function useValidateCustomizationImages() {
         photos?: Array<{ preview_url?: string }>;
         image?: { preview_url?: string };
         text?: string;
-      }>
+      }>,
     ): Promise<ValidationResult> => {
       const invalidImages: string[] = [];
       const missingImages: string[] = [];
@@ -72,8 +72,8 @@ export function useValidateCustomizationImages() {
           });
         }
 
-        // BASE_LAYOUT customization - validar image.preview_url
-        if (customizationType === "BASE_LAYOUT") {
+        // DYNAMIC_LAYOUT customization - validar image.preview_url
+        if (customizationType === "DYNAMIC_LAYOUT") {
           if (custom.image?.preview_url) {
             if (
               custom.image.preview_url.includes("/uploads/temp/") ||
@@ -81,14 +81,14 @@ export function useValidateCustomizationImages() {
             ) {
               urlsToValidate.push({
                 url: custom.image.preview_url,
-                customizationType: "BASE_LAYOUT",
+                customizationType: "DYNAMIC_LAYOUT",
                 customizationTitle,
               });
             }
           } else if (custom.is_required) {
-            // Se é BASE_LAYOUT obrigatório e não tem imagem, adicionar erro
+            // Se é DYNAMIC_LAYOUT obrigatório e não tem imagem, adicionar erro
             missingImages.push(
-              `${customizationTitle} - Imagem obrigatória não foi enviada`
+              `${customizationTitle} - Imagem obrigatória não foi enviada`,
             );
           }
         }
@@ -102,7 +102,7 @@ export function useValidateCustomizationImages() {
           message: `${
             missingImages.length
           } customização(ões) obrigatória(s) sem imagem:\n${missingImages.join(
-            "\n"
+            "\n",
           )}`,
         };
       }
@@ -127,7 +127,7 @@ export function useValidateCustomizationImages() {
             exists: false,
             customizationType: item.customizationType,
             customizationTitle: item.customizationTitle,
-          }))
+          })),
       );
 
       const results = await Promise.all(validationPromises);
@@ -149,7 +149,7 @@ export function useValidateCustomizationImages() {
 
       return { isValid: true, invalidImages: [] };
     },
-    [api]
+    [api],
   );
 
   /**
@@ -163,7 +163,7 @@ export function useValidateCustomizationImages() {
         photos?: Array<{ preview_url?: string }>;
         image?: { preview_url?: string };
       }>,
-      invalidImageUrls: string[]
+      invalidImageUrls: string[],
     ) => {
       return customizations
         .map((custom) => {
@@ -174,7 +174,7 @@ export function useValidateCustomizationImages() {
             clone.photos = clone.photos.filter(
               (photo) =>
                 !invalidImageUrls.includes(photo.preview_url || "") &&
-                photo.preview_url // Também remover entries com preview_url vazio
+                photo.preview_url, // Também remover entries com preview_url vazio
             );
 
             // Se ficou sem fotos, remover a customização
@@ -183,8 +183,8 @@ export function useValidateCustomizationImages() {
             }
           }
 
-          // Se é BASE_LAYOUT, limpar image se URL for inválida
-          if (clone.customization_type === "BASE_LAYOUT" && clone.image) {
+          // Se é DYNAMIC_LAYOUT, limpar image se URL for inválida
+          if (clone.customization_type === "DYNAMIC_LAYOUT" && clone.image) {
             if (invalidImageUrls.includes(clone.image.preview_url || "")) {
               clone.image = undefined;
             }
@@ -194,7 +194,7 @@ export function useValidateCustomizationImages() {
         })
         .filter((item) => item !== null);
     },
-    []
+    [],
   );
 
   return {

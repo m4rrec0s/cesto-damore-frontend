@@ -31,7 +31,7 @@ interface CustomizationsReviewProps {
   onCustomizationUpdate?: (
     productId: string,
     customizations: CustomizationInput[],
-    componentId?: string
+    componentId?: string,
   ) => void;
   onCustomizationSaved?: () => void;
 }
@@ -60,7 +60,7 @@ interface ModalCustomization {
   id: string;
   name: string;
   description?: string;
-  type: "BASE_LAYOUT" | "TEXT" | "IMAGES" | "MULTIPLE_CHOICE";
+  type: "DYNAMIC_LAYOUT" | "TEXT" | "IMAGES" | "MULTIPLE_CHOICE";
   isRequired: boolean;
   price: number;
   customization_data: Record<string, unknown>;
@@ -70,7 +70,7 @@ interface ModalCustomization {
 type Customization = ModalCustomization;
 
 const isCustomizationFilled = (
-  custom: CartCustomization | undefined
+  custom: CartCustomization | undefined,
 ): boolean => {
   if (!custom) return false;
 
@@ -79,8 +79,8 @@ const isCustomizationFilled = (
       return Boolean(custom.text && custom.text.trim().length > 0);
     case "MULTIPLE_CHOICE":
       return Boolean(custom.label_selected || custom.selected_option);
-    case "BASE_LAYOUT":
-      // BASE_LAYOUT é preenchido se tiver um item selecionado, um label ou dados brutos reais
+    case "DYNAMIC_LAYOUT":
+      // DYNAMIC_LAYOUT é preenchido se tiver um item selecionado, um label ou dados brutos reais
       if (
         custom.selected_item_label ||
         custom.label_selected ||
@@ -91,11 +91,11 @@ const isCustomizationFilled = (
       const data = custom.data as Record<string, unknown>;
       return Boolean(
         data.selected_item ||
-          data.label_selected ||
-          data.selected_item_label ||
-          data.text ||
-          (Array.isArray(data.photos) && data.photos.length > 0) ||
-          (Array.isArray(data.images) && data.images.length > 0)
+        data.label_selected ||
+        data.selected_item_label ||
+        data.text ||
+        (Array.isArray(data.photos) && data.photos.length > 0) ||
+        (Array.isArray(data.images) && data.images.length > 0),
       );
     case "IMAGES":
       return Boolean(custom.photos && custom.photos.length > 0);
@@ -164,11 +164,11 @@ const getCustomizationSummary = (custom: CartCustomization): string => {
       return custom.photos && custom.photos.length > 0
         ? `${custom.photos.length} foto(s)`
         : "";
-    case "BASE_LAYOUT":
+    case "DYNAMIC_LAYOUT":
       return (
         custom.label_selected ||
         custom.selected_item_label ||
-        "Layout personalizado"
+        "Design personalizado"
       );
     default:
       return "";
@@ -180,7 +180,7 @@ const mapCustomizationType = (backendType: string): string => {
     IMAGES: "IMAGES",
     TEXT: "TEXT",
     MULTIPLE_CHOICE: "MULTIPLE_CHOICE",
-    BASE_LAYOUT: "BASE_LAYOUT",
+    DYNAMIC_LAYOUT: "DYNAMIC_LAYOUT",
   };
   return typeMap[backendType] || backendType;
 };
@@ -215,7 +215,7 @@ export function CustomizationsReview({
   >([]);
   const [activeProductId, setActiveProductId] = useState<string | null>(null);
   const [activeComponentId, setActiveComponentId] = useState<string | null>(
-    null
+    null,
   );
   const [activeInitialValues, setActiveInitialValues] = useState<
     Record<string, unknown>
@@ -257,7 +257,7 @@ export function CustomizationsReview({
                 componentId: val.componentId as string | undefined,
                 data: val,
               };
-            }
+            },
           );
 
           const missingRequired = data.availableCustomizations.filter(
@@ -267,12 +267,12 @@ export function CustomizationsReview({
                   (f.customization_id === avail.id ||
                     f.customization_id?.includes(avail.id)) &&
                   (f.componentId === avail.componentId ||
-                    f.componentId === avail.itemId)
+                    f.componentId === avail.itemId),
               );
 
               const isFilled = isCustomizationFilled(filledCustom);
               return avail.isRequired && !isFilled;
-            }
+            },
           );
 
           return {
@@ -315,7 +315,7 @@ export function CustomizationsReview({
 
             try {
               const configResponse = await getItemCustomizations(
-                component.item_id
+                component.item_id,
               );
               const itemCustomizations = configResponse?.customizations || [];
 
@@ -334,7 +334,7 @@ export function CustomizationsReview({
             } catch (itemError) {
               console.warn(
                 `Erro ao buscar customizações do item ${component.item_id}:`,
-                itemError
+                itemError,
               );
             }
           }
@@ -348,7 +348,7 @@ export function CustomizationsReview({
               (f.customization_id === avail.id ||
                 f.customization_id?.includes(avail.id)) &&
               (f.componentId === avail.componentId ||
-                f.componentId === avail.itemId) // ✅ Match by both rule and component
+                f.componentId === avail.itemId), // ✅ Match by both rule and component
           );
           // Se é obrigatória E não está preenchida, adicionar na lista
           if (avail.isRequired && !isCustomizationFilled(filledCustom)) {
@@ -370,12 +370,12 @@ export function CustomizationsReview({
       } catch (error) {
         console.error(
           `Erro ao buscar customizações do produto ${productId}:`,
-          error
+          error,
         );
 
         const filled = cartItem.customizations || [];
         const missingFromFilled = filled.filter(
-          (f) => f.is_required && !isCustomizationFilled(f)
+          (f) => f.is_required && !isCustomizationFilled(f),
         );
 
         results.push({
@@ -417,7 +417,7 @@ export function CustomizationsReview({
   }, [cartItems, fetchAvailableCustomizations]);
 
   const deserializeCustomizationValue = (
-    value: string | undefined
+    value: string | undefined,
   ): Record<string, unknown> => {
     if (!value) return {};
     try {
@@ -433,7 +433,7 @@ export function CustomizationsReview({
       productId: string,
       itemId: string,
       itemName: string,
-      componentId: string
+      componentId: string,
     ) => {
       try {
         const configResponse = await getItemCustomizations(itemId);
@@ -443,7 +443,11 @@ export function CustomizationsReview({
           id: c.id,
           name: c.name,
           description: c.description,
-          type: c.type as "BASE_LAYOUT" | "TEXT" | "IMAGES" | "MULTIPLE_CHOICE",
+          type: c.type as
+            | "DYNAMIC_LAYOUT"
+            | "TEXT"
+            | "IMAGES"
+            | "MULTIPLE_CHOICE",
           isRequired: c.isRequired,
           price: c.price,
           customization_data: c.customization_data,
@@ -452,7 +456,7 @@ export function CustomizationsReview({
         const cartItem = cartItems.find((i) => i.product_id === productId);
         const filled =
           cartItem?.customizations?.filter(
-            (f) => f.componentId === componentId
+            (f) => f.componentId === componentId,
           ) || [];
         const initialData: Record<string, unknown> = {};
 
@@ -472,7 +476,7 @@ export function CustomizationsReview({
             initialData[ruleId] = fc.selected_option;
           } else if (fc.customization_type === "IMAGES") {
             initialData[ruleId] = fc.photos || [];
-          } else if (fc.customization_type === "BASE_LAYOUT") {
+          } else if (fc.customization_type === "DYNAMIC_LAYOUT") {
             initialData[ruleId] = fc.data || fc;
           }
         });
@@ -488,7 +492,7 @@ export function CustomizationsReview({
         console.error("Erro ao carregar customizações:", error);
       }
     },
-    [getItemCustomizations, cartItems, setModalOpen]
+    [getItemCustomizations, cartItems, setModalOpen],
   );
 
   const [isSaving, setIsSaving] = useState(false);
@@ -507,13 +511,13 @@ export function CustomizationsReview({
 
           const orderItem = order?.items?.find(
             (item: { product_id: string }) =>
-              item.product_id === activeProductId
+              item.product_id === activeProductId,
           );
 
           if (!orderItem) {
             console.error(
               "❌ OrderItem não encontrado para o produto:",
-              activeProductId
+              activeProductId,
             );
             toast.error("Item do pedido não encontrado.");
             setIsSaving(false);
@@ -539,7 +543,7 @@ export function CustomizationsReview({
                   // eslint-disable-next-line @typescript-eslint/no-unused-vars
                   const { imageBuffer, ...rest } = img;
                   return rest;
-                }
+                },
               );
             }
 
@@ -558,14 +562,14 @@ export function CustomizationsReview({
             };
 
             if (
-              customization.customizationType === "BASE_LAYOUT" &&
+              customization.customizationType === "DYNAMIC_LAYOUT" &&
               previewUrl
             ) {
               if (previewUrl.startsWith("data:")) {
                 payload.finalArtwork = {
                   base64: previewUrl,
                   mimeType: "image/png",
-                  fileName: "artwork.png",
+                  fileName: "design-final.png",
                 };
               }
             }
@@ -578,7 +582,7 @@ export function CustomizationsReview({
         } catch (error) {
           console.error(
             "❌ [CustomizationsReview] Erro ao salvar customização:",
-            error
+            error,
           );
           toast.error("Erro ao salvar personalização. Tente novamente.");
         } finally {
@@ -590,7 +594,7 @@ export function CustomizationsReview({
         onCustomizationUpdate(
           activeProductId,
           data,
-          activeComponentId || undefined
+          activeComponentId || undefined,
         );
       }
 
@@ -608,12 +612,12 @@ export function CustomizationsReview({
       fetchAvailableCustomizations,
       getOrder,
       setModalOpen,
-    ]
+    ],
   );
 
   const hasRelevantValidations = validations.some(
     (v) =>
-      v.availableCustomizations.length > 0 || v.filledCustomizations.length > 0
+      v.availableCustomizations.length > 0 || v.filledCustomizations.length > 0,
   );
 
   if (!hasRelevantValidations && !isLoading) {
@@ -622,7 +626,7 @@ export function CustomizationsReview({
 
   const totalMissing = validations.reduce(
     (acc, v) => acc + v.missingRequired.length,
-    0
+    0,
   );
   const allComplete = validations.every((v) => v.isComplete);
 
@@ -713,7 +717,7 @@ export function CustomizationsReview({
                   (f.customization_id === avail.id ||
                     f.customization_id?.includes(avail.id)) &&
                   (f.componentId === avail.componentId ||
-                    f.componentId === avail.itemId)
+                    f.componentId === avail.itemId),
               );
 
               if (filledCustom && isCustomizationFilled(filledCustom)) {
@@ -729,7 +733,7 @@ export function CustomizationsReview({
                 const entry = itemsMap.get(avail.componentId)!;
                 if (
                   !entry.filled.some(
-                    (f) => f.customization_id === filledCustom.customization_id
+                    (f) => f.customization_id === filledCustom.customization_id,
                   )
                 ) {
                   entry.filled.push(filledCustom);
@@ -818,7 +822,7 @@ export function CustomizationsReview({
                                 validation.productId,
                                 itemId,
                                 itemName || "Item",
-                                componentId
+                                componentId,
                               )
                             }
                             className={`h-9 px-3 font-medium text-sm ${
@@ -853,7 +857,7 @@ export function CustomizationsReview({
                         )}
                       </div>
                     );
-                  }
+                  },
                 )}
               </div>
             );
@@ -895,7 +899,7 @@ export function CustomizationsReview({
 export function validateCustomizations(
   cartItems: Array<{
     customizations?: CartCustomization[];
-  }>
+  }>,
 ): boolean {
   for (const item of cartItems) {
     for (const custom of item.customizations || []) {
