@@ -250,6 +250,7 @@ export default function ClientFabricEditor({
         top: center.y,
         originX: "center",
         originY: "center",
+        angle: frame.angle || 0, // Sincronizar rotação da moldura
         selectable: true,
         hasControls: true,
         name: `uploaded-img-${frameId}`,
