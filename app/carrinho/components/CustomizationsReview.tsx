@@ -55,6 +55,31 @@ interface ProductValidation {
   isComplete: boolean;
 }
 
+// Interfaces para evitar erros de tipo e uso de 'any'
+interface CustomizationPreview {
+  preview_url?: string;
+}
+
+interface PersonalizationData {
+  customization_type?: CustomizationTypeValue;
+  title?: string;
+  _customizationName?: string;
+  is_required?: boolean | number;
+  text?: string;
+  photos?: PhotoUploadData[];
+  selected_option?: string;
+  selected_item_label?: string;
+  selected_option_label?: string;
+  label_selected?: string;
+  componentId?: string;
+  final_artwork?: CustomizationPreview;
+  image?: CustomizationPreview;
+  final_artworks?: CustomizationPreview[];
+  previewUrl?: string;
+  images?: Array<Record<string, unknown>>;
+  [key: string]: unknown;
+}
+
 // Tipo para customizações do modal (compatível com ItemCustomizationModal)
 interface ModalCustomization {
   id: string;
@@ -93,13 +118,21 @@ const isCustomizationFilled = (
 
       if (!hasSelection) return false;
 
-      // 🔥 NOVO: Verificar se o design foi finalizado (tem preview_url)
-      const data = (custom.data as Record<string, any>) || {};
+      // 🔥 NOVO: Verificar se o design foi finalizado
+      // Pode estar em custom.text (URL da imagem final) ou em custom.data
+      const textUrl = custom.text?.trim() || "";
+      const hasTextUrl =
+        textUrl &&
+        (textUrl.startsWith("http://") || textUrl.startsWith("https://")) &&
+        !textUrl.startsWith("blob:") &&
+        !textUrl.startsWith("data:");
+
+      const data = (custom.data as PersonalizationData) || {};
       const hasPreview = Boolean(
         data.final_artwork?.preview_url ||
         data.image?.preview_url ||
         (Array.isArray(data.final_artworks) &&
-          data.final_artworks.some((a: any) => a.preview_url)),
+          data.final_artworks.some((a: CustomizationPreview) => a.preview_url)),
       );
 
       // 🔥 NOVO: Verificar que preview não é blob ou base64
@@ -117,14 +150,15 @@ const isCustomizationFilled = (
         }
       }
 
-      return hasSelection && hasPreview;
+      // Aceitar se tem seleção E (URL em text OU preview válido)
+      return hasSelection && (hasTextUrl || hasPreview);
     }
     case "IMAGES": {
       if (!custom.photos || custom.photos.length === 0) return false;
 
       // 🔥 NOVO: Verificar se todas as fotos têm preview_url válido
       return custom.photos.every(
-        (p: any) =>
+        (p: PhotoUploadData) =>
           p.preview_url &&
           !p.preview_url.startsWith("blob:") &&
           !p.preview_url.startsWith("data:"),
@@ -151,32 +185,41 @@ const getCustomizationHint = (type: string, name: string): string => {
 const extractCleanText = (text: string | undefined): string => {
   if (!text) return "";
 
+  let cleaned = text;
+
   // Se começar com "field-", extrair o valor após o ": "
-  if (text.startsWith("field-")) {
-    const colonIndex = text.indexOf(":");
+  if (cleaned.startsWith("field-")) {
+    const colonIndex = cleaned.indexOf(":");
     if (colonIndex !== -1) {
-      let extracted = text.substring(colonIndex + 1).trim();
+      cleaned = cleaned.substring(colonIndex + 1).trim();
       // Remover ", text: ", ", fields: ", etc. se existirem
-      const commaIndex = extracted.indexOf(",");
+      const commaIndex = cleaned.indexOf(",");
       if (commaIndex !== -1) {
-        extracted = extracted.substring(0, commaIndex).trim();
+        cleaned = cleaned.substring(0, commaIndex).trim();
       }
-      return extracted;
     }
   }
 
   // Se contiver ", text: ", extrair o valor após isso
-  if (text.includes(", text: ")) {
-    const textMatch = text.match(/,\s*text:\s*([^,]+)/);
+  if (cleaned.includes(", text: ")) {
+    const textMatch = cleaned.match(/,\s*text:\s*([^,]+)/);
     if (textMatch && textMatch[1]) {
-      return textMatch[1].trim();
+      cleaned = textMatch[1].trim();
     }
+  }
+
+  // 🔥 NOVO: Remover prefixo "text: " se existir
+  if (cleaned.startsWith('"text: ') && cleaned.endsWith('"')) {
+    // Remove aspas externas e o prefixo "text: "
+    cleaned = cleaned.slice(7, -1);
+  } else if (cleaned.startsWith("text: ")) {
+    cleaned = cleaned.substring(6);
   }
 
   // Se for JSON, tentar parsear
   try {
-    if (text.startsWith("{")) {
-      const obj = JSON.parse(text);
+    if (cleaned.startsWith("{")) {
+      const obj = JSON.parse(cleaned);
       if (obj.text) return obj.text;
       // Procurar por propriedade que começe com "field-"
       for (const key of Object.keys(obj)) {
@@ -189,8 +232,8 @@ const extractCleanText = (text: string | undefined): string => {
     // Não é JSON válido, continuar
   }
 
-  // Retornar o texto como está
-  return text;
+  // Retornar o texto limpo
+  return cleaned;
 };
 
 const getCustomizationSummary = (custom: CartCustomization): string => {
@@ -274,7 +317,7 @@ export function CustomizationsReview({
         const results: ProductValidation[] = reviewData.map((data) => {
           const filled: CartCustomization[] = data.filledCustomizations.map(
             (f) => {
-              const val = (f.value || {}) as Record<string, unknown>;
+              const val = (f.value || {}) as PersonalizationData;
 
               return {
                 id: f.id,
@@ -571,7 +614,7 @@ export function CustomizationsReview({
           const orderItemId = orderItem.id;
 
           for (const customization of data) {
-            const customData = customization.data as Record<string, unknown>;
+            const customData = customization.data as PersonalizationData;
             const previewUrl = customData?.previewUrl as string | undefined;
 
             const sanitizedData = { ...customData };
@@ -902,8 +945,8 @@ export function CustomizationsReview({
                               ))}
                             </div>
                             <p className="text-xs text-amber-800 mt-2 font-medium">
-                              ⚠️ Clique em "Editar" acima para preencher as
-                              personalizações
+                              ⚠️ Clique em &quot;Editar&quot; acima para
+                              preencher as personalizações
                             </p>
                           </div>
                         )}

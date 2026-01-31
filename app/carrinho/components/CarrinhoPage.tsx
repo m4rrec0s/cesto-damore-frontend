@@ -26,7 +26,10 @@ import type { CustomizationInput } from "@/app/types/customization";
 import { StepCart } from "@/app/carrinho/components/steps/StepCart";
 import { StepDelivery } from "@/app/carrinho/components/steps/StepDelivery";
 import { StepPayment } from "@/app/carrinho/components/steps/StepPayment";
-import { CustomizationsReview } from "./CustomizationsReview";
+import {
+  CustomizationsReview,
+  validateCustomizations,
+} from "./CustomizationsReview";
 
 const ACCEPTED_CITIES = [
   "Campina Grande",
@@ -203,10 +206,6 @@ export default function CarrinhoPageContent() {
         .replace(/\.(\d{3})(\d)/, ".$1/$2")
         .replace(/(\d{4})(\d)/, "$1-$2");
     }
-  };
-
-  const validateCustomizations = (items: CartItem[]): boolean => {
-    return items.length > 0;
   };
 
   const isDateDisabled = useCallback(
@@ -1104,7 +1103,8 @@ export default function CarrinhoPageContent() {
     );
   };
 
-  const canProceedToStep2 = cartItems.length > 0;
+  const canProceedToStep2 =
+    cartItems.length > 0 && validateCustomizations(cartItems);
 
   const canProceedToStep3 = (() => {
     // Validações comuns
@@ -1375,35 +1375,49 @@ export default function CarrinhoPageContent() {
           </div>
 
           {currentStep < 3 && (
-            <div className="flex gap-3">
-              {currentStep > 1 && (
-                <Button
-                  onClick={() => updateStepUrl((currentStep - 1) as 1 | 2 | 3)}
-                  variant="outline"
-                  className="flex-1 py-6 rounded-lg font-bold text-base"
-                >
-                  Voltar
-                </Button>
-              )}
-              <Button
-                onClick={handleNextStep}
-                disabled={
-                  isProcessing ||
-                  (currentStep === 1 && !canProceedToStep2) ||
-                  (currentStep === 2 && !canProceedToStep3)
-                }
-                className="flex-1 bg-[#3483fa] hover:bg-[#2968c8] text-white py-6 rounded-lg font-bold text-base transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {isProcessing ? (
-                  <>
-                    <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                    Processando...
-                  </>
-                ) : (
-                  "Continuar a compra"
+            <>
+              {currentStep === 1 &&
+                !canProceedToStep2 &&
+                cartItems.length > 0 && (
+                  <div className="mb-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                    <p className="text-sm text-amber-800 font-medium">
+                      ⚠️ Complete todas as personalizações obrigatórias antes de
+                      continuar
+                    </p>
+                  </div>
                 )}
-              </Button>
-            </div>
+              <div className="flex gap-3">
+                {currentStep > 1 && (
+                  <Button
+                    onClick={() =>
+                      updateStepUrl((currentStep - 1) as 1 | 2 | 3)
+                    }
+                    variant="outline"
+                    className="flex-1 py-6 rounded-lg font-bold text-base"
+                  >
+                    Voltar
+                  </Button>
+                )}
+                <Button
+                  onClick={handleNextStep}
+                  disabled={
+                    isProcessing ||
+                    (currentStep === 1 && !canProceedToStep2) ||
+                    (currentStep === 2 && !canProceedToStep3)
+                  }
+                  className="flex-1 bg-[#3483fa] hover:bg-[#2968c8] text-white py-6 rounded-lg font-bold text-base transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isProcessing ? (
+                    <>
+                      <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                      Processando...
+                    </>
+                  ) : (
+                    "Continuar a compra"
+                  )}
+                </Button>
+              </div>
+            </>
           )}
         </div>
       </Card>
