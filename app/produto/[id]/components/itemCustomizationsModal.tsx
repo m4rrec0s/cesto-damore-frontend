@@ -25,6 +25,7 @@ import {
 import { motion } from "motion/react";
 import { AnimatedFramesLoader } from "@/app/components/ui/animated-frames-loader";
 import { toast } from "sonner";
+import { dataURLtoBlob } from "@/app/lib/utils";
 import {
   CustomizationType,
   type CustomizationInput,
@@ -40,6 +41,15 @@ import useApi from "@/app/hooks/use-api";
 import { ImageCropDialog } from "@/app/components/ui/image-crop-dialog";
 import Image from "next/image";
 import { getInternalImageUrl } from "@/lib/image-helper";
+
+interface ProcessedFile {
+  file: File;
+  preview: string;
+  position: number;
+  base64: string;
+  mime_type: string;
+  size: number;
+}
 
 interface Customization {
   id: string;
@@ -533,7 +543,7 @@ export function ItemCustomizationModal({
       customizationData,
       onPreviewChange,
       onComplete,
-      fullLayoutBase?.additional_time,
+      fullLayoutBase,
     ],
   );
 
@@ -608,7 +618,7 @@ export function ItemCustomizationModal({
   );
 
   const handleCropComplete = useCallback(
-    (croppedImageUrl: string) => {
+    async (croppedImageUrl: string) => {
       console.log("[Crop] Complete triggered");
       if (!currentCustomizationId) {
         console.warn("⚠️ [Crop] No current customization ID");
@@ -620,71 +630,59 @@ export function ItemCustomizationModal({
       );
       if (!customization) return;
 
-      fetch(croppedImageUrl)
-        .then((res) => res.blob())
-        .then(async (blob) => {
-          const file = new File([blob], fileToCrop?.name || "cropped.png", {
-            type: "image/png",
-          });
-
-          const maxImages =
-            customization.customization_data.dynamic_layout?.max_images || 10;
-
-          // Use Ref to get latest files, avoiding stale closures
-          const currentFiles =
-            uploadingFilesRef.current[currentCustomizationId] || [];
-          console.log(
-            "💾 [Crop] Saving. Current:",
-            currentFiles.length,
-            "Max:",
-            maxImages,
-          );
-
-          const totalFiles = [...currentFiles, file].slice(0, maxImages);
-
-          setUploadingFiles((prev) => ({
-            ...prev,
-            [currentCustomizationId]: totalFiles,
-          }));
-
-          // Notificar pai sobre o número de imagens adicionadas
-          if (onImagesUpdate && itemId) {
-            console.log("📸 [onImagesUpdate] Chamando callback:", {
-              itemId: itemId,
-              current: totalFiles.length,
-              max: maxImages,
-            });
-            onImagesUpdate(itemId, totalFiles.length, maxImages);
-          }
-
-          const filesDataPromises = totalFiles.map(async (f, index) => {
-            const reader = new FileReader();
-            const base64Promise = new Promise<string>((resolve) => {
-              reader.onloadend = () => resolve(reader.result as string);
-              reader.readAsDataURL(f);
-            });
-            const base64 = await base64Promise;
-
-            return {
-              file: f,
-              preview: URL.createObjectURL(f),
-              position: index,
-              base64, // ✅ Dados base64 para upload ao Drive
-              mime_type: f.type,
-              size: f.size,
-            };
-          });
-
-          const filesData = await Promise.all(filesDataPromises);
-
-          setCustomizationData((prev) => ({
-            ...prev,
-            [currentCustomizationId]: filesData,
-          }));
-        })
-        .catch((error) => {
-          console.error("Erro ao processar imagem cortada:", error);
+      try {
+        const blob = dataURLtoBlob(croppedImageUrl);
+        const file = new File([blob], fileToCrop?.name || "cropped.png", {
+          type: "image/png",
         });
+
+        const maxImages =
+          customization.customization_data.dynamic_layout?.max_images || 10;
+
+        // Use Ref to get latest files, avoiding stale closures
+        const currentFiles =
+          uploadingFilesRef.current[currentCustomizationId] || [];
+
+        const totalFiles = [...currentFiles, file].slice(0, maxImages);
+
+        setUploadingFiles((prev) => ({
+          ...prev,
+          [currentCustomizationId]: totalFiles,
+        }));
+
+        // Notificar pai sobre o número de imagens adicionadas
+        if (onImagesUpdate && itemId) {
+          onImagesUpdate(itemId, totalFiles.length, maxImages);
+        }
+
+        // Processar arquivos para preview/base64
+        const processedFiles: ProcessedFile[] = [];
+        for (let i = 0; i < totalFiles.length; i++) {
+          const f = totalFiles[i];
+          const reader = new FileReader();
+          const base64Promise = new Promise<string>((resolve) => {
+            reader.onloadend = () => resolve(reader.result as string);
+            reader.readAsDataURL(f);
+          });
+          const base64 = await base64Promise;
+
+          processedFiles.push({
+            file: f,
+            preview: URL.createObjectURL(f),
+            position: i,
+            base64,
+            mime_type: f.type,
+            size: f.size,
+          });
+        }
+
+        setCustomizationData((prev) => ({
+          ...prev,
+          [currentCustomizationId]: processedFiles,
+        }));
+      } catch (error) {
+        console.error("❌ [Crop] Erro ao processar imagem:", error);
+      }
     },
     [
       currentCustomizationId,
@@ -1255,14 +1253,7 @@ export function ItemCustomizationModal({
                 onClick={() => {
                   const result: CustomizationInput[] = [];
                   const filesData = customizationData[customization.id] as
-                    | Array<{
-                        file: File;
-                        preview: string;
-                        position: number;
-                        base64?: string;
-                        mime_type?: string;
-                        size?: number;
-                      }>
+                    | ProcessedFile[]
                     | undefined;
 
                   if (filesData && filesData.length > 0) {

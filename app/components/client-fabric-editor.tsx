@@ -22,6 +22,7 @@ import { toast } from "sonner";
 import type { LayoutBase, ImageData } from "../types/personalization";
 import { ImageCropDialog } from "./ui/image-crop-dialog";
 import Image from "next/image";
+import { dataURLtoBlob } from "@/app/lib/utils";
 
 // Multiplicador para renderização interna de alta qualidade
 const INTERNAL_DPI_MULTIPLIER = 2;
@@ -33,7 +34,7 @@ const loadGoogleFont = (fontFamily: string) => {
   )
     return Promise.resolve();
 
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve) => {
     const link = document.createElement("link");
     link.id = `font-${fontFamily.replace(/\s+/g, "-")}`;
     link.rel = "stylesheet";
@@ -41,10 +42,29 @@ const loadGoogleFont = (fontFamily: string) => {
       /\s+/g,
       "+",
     )}:wght@400;700&display=swap`;
+
+    // Timeout de segurança de 3 segundos para evitar travamento do editor
+    const timeout = setTimeout(() => {
+      console.warn(`Font load timeout: ${fontFamily}`);
+      resolve(null);
+    }, 3000);
+
     link.onload = () => {
-      document.fonts.load(`1em "${fontFamily}"`).then(resolve).catch(resolve);
+      document.fonts
+        .load(`1em "${fontFamily}"`)
+        .then(() => {
+          clearTimeout(timeout);
+          resolve(null);
+        })
+        .catch(() => {
+          clearTimeout(timeout);
+          resolve(null);
+        });
     };
-    link.onerror = reject;
+    link.onerror = () => {
+      clearTimeout(timeout);
+      resolve(null);
+    };
     document.head.appendChild(link);
   });
 };
@@ -101,6 +121,7 @@ export default function ClientFabricEditor({
   const [cropDialogOpen, setCropDialogOpen] = useState(false);
   const [fileToCrop, setFileToCrop] = useState<File | null>(null);
   const [currentFrameId, setCurrentFrameId] = useState<string | null>(null);
+  const [cropAspect, setCropAspect] = useState<number | undefined>(undefined);
   const [isProcessingImage, setIsProcessingImage] = useState(false);
 
   // Calcular zoom ideal baseado no container
@@ -162,7 +183,7 @@ export default function ClientFabricEditor({
 
   // Funções Auxiliares de Placeholders
   const addFramePlaceholder = async (canvas: any, frame: any) => {
-    const { FabricImage } = await import("fabric");
+    const { FabricImage, Rect, Circle } = await import("fabric");
 
     // Fundo cinza suave
     frame.set("fill", "#f3f4f6");
@@ -194,7 +215,41 @@ export default function ClientFabricEditor({
         evented: false,
         opacity: 0.5,
         name: `placeholder-img-${frame.id || frame.name}`,
+        angle: frame.angle || 0,
       });
+
+      // Clip Path para garantir que o placeholder não vaze da moldura
+      let mask: any;
+      if (frame.type === "circle") {
+        mask = new Circle({
+          radius: (frame as any).radius || frame.width / 2,
+          scaleX: frame.scaleX,
+          scaleY: frame.scaleY,
+          originX: "center",
+          originY: "center",
+          left: center.x,
+          top: center.y,
+          angle: frame.angle || 0,
+          absolutePositioned: true,
+        });
+      } else {
+        mask = new Rect({
+          width: frame.width,
+          height: frame.height,
+          rx: frame.rx,
+          ry: frame.ry,
+          scaleX: frame.scaleX,
+          scaleY: frame.scaleY,
+          originX: "center",
+          originY: "center",
+          left: center.x,
+          top: center.y,
+          angle: frame.angle || 0,
+          absolutePositioned: true,
+        });
+      }
+
+      placeholderImg.set("clipPath", mask);
 
       canvas.add(placeholderImg);
       canvas.renderAll();
@@ -217,7 +272,8 @@ export default function ClientFabricEditor({
       .filter(
         (o: any) =>
           o.name === `placeholder-icon-${frameId}` ||
-          o.name === `placeholder-text-${frameId}`,
+          o.name === `placeholder-text-${frameId}` ||
+          o.name === `placeholder-img-${frameId}`,
       );
     placeholders.forEach((p: any) => canvas.remove(p));
 
@@ -392,6 +448,8 @@ export default function ClientFabricEditor({
                 await Promise.all(
                   Array.from(fontsToLoad).map((f) => loadGoogleFont(f)),
                 );
+                // Pequena pausa para o browser processar o registro das fontes
+                await new Promise((r) => setTimeout(r, 250));
               }
 
               // 2. Normalizar e Preparar Objetos
@@ -551,7 +609,19 @@ export default function ClientFabricEditor({
     frameId: string,
   ) => {
     const file = e.target.files?.[0];
-    if (file) {
+    if (file && fabricRef) {
+      // Calcular o aspect ratio da moldura para o crop
+      const frame = fabricRef
+        .getObjects()
+        .find((o: any) => o.id === frameId || o.name === frameId);
+      if (frame) {
+        const width = frame.width * frame.scaleX;
+        const height = frame.height * frame.scaleY;
+        setCropAspect(width / height);
+      } else {
+        setCropAspect(undefined);
+      }
+
       setFileToCrop(file);
       setCurrentFrameId(frameId);
       setCropDialogOpen(true);
@@ -565,9 +635,8 @@ export default function ClientFabricEditor({
     const tid = toast.loading("Processando imagem...");
 
     try {
-      // 1. Converter DataURL para Blob para upload
-      const res = await fetch(croppedImageUrl);
-      const blob = await res.blob();
+      // 1. Converter DataURL para Blob para upload (Sem usar fetch para evitar problemas de CSP/DataURL)
+      const blob = dataURLtoBlob(croppedImageUrl);
       const file = new File([blob], `crop_${currentFrameId}.png`, {
         type: "image/png",
       });
@@ -879,6 +948,7 @@ export default function ClientFabricEditor({
             setFileToCrop(null);
           }}
           onCropComplete={handleCropComplete}
+          aspect={cropAspect}
           title="Ajuste sua Foto"
           description="Posicione a foto para que ela preencha perfeitamente a moldura"
         />

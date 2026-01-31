@@ -781,9 +781,6 @@ export function useCart(): CartContextType {
       user,
       orderMetadata,
       setOrderMetadata,
-      transformOrderToCartItems,
-      calculateTotals,
-      setCart,
     ],
   );
 

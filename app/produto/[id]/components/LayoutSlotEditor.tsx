@@ -12,6 +12,7 @@ import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
 import { Upload, X, Download, Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
+import { dataURLtoBlob } from "@/app/lib/utils";
 import type { LayoutBase, ImageData } from "@/app/types/personalization";
 import { getDirectImageUrl } from "@/app/helpers/drive-normalize";
 import { Model3DViewer } from "./Model3DViewer";
@@ -234,8 +235,11 @@ export function LayoutSlotEditor({
       return;
     }
 
-    // SEMPRE usar crop quadrado (1:1) para evitar problemas
-    const aspect = 1;
+    // Calcular o aspect ratio do slot para o crop
+    const slot = layoutBase.slots.find((s) => s.id === slotId);
+    const aspect = slot
+      ? (slot.width * layoutBase.width) / (slot.height * layoutBase.height)
+      : 1;
 
     setFileToCrop(file);
     setCropAspect(aspect);
@@ -247,9 +251,8 @@ export function LayoutSlotEditor({
     if (!currentSlotId) return;
 
     try {
-      // Converter data URL para File
-      const response = await fetch(croppedImageUrl);
-      const blob = await response.blob();
+      // 1. Converter DataURL para Blob para upload (Sem usar fetch para evitar problemas de CSP/DataURL)
+      const blob = dataURLtoBlob(croppedImageUrl);
       const file = new File([blob], "cropped-image.png", {
         type: "image/png",
       });

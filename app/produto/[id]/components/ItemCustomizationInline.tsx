@@ -21,6 +21,7 @@ import {
   type CustomizationInput,
 } from "@/app/types/customization";
 import { ImageCropDialog } from "@/app/components/ui/image-crop-dialog";
+import { dataURLtoBlob } from "@/app/lib/utils";
 
 interface Customization {
   id: string;
@@ -166,7 +167,7 @@ export function ItemCustomizationInline({
   );
 
   const handleCropComplete = useCallback(
-    (croppedImageUrl: string) => {
+    async (croppedImageUrl: string) => {
       if (!currentCustomizationId) return;
 
       const customization = customizations.find(
@@ -174,53 +175,51 @@ export function ItemCustomizationInline({
       );
       if (!customization) return;
 
-      // Converter data URL para File
-      fetch(croppedImageUrl)
-        .then((res) => res.blob())
-        .then(async (blob) => {
-          const file = new File([blob], "cropped-image.png", {
-            type: "image/png",
-          });
-
-          const maxImages =
-            customization.customization_data.dynamic_layout?.max_images || 10;
-          const currentFiles = uploadingFiles[currentCustomizationId] || [];
-          const totalFiles = [...currentFiles, file].slice(0, maxImages);
-
-          setUploadingFiles((prev) => ({
-            ...prev,
-            [currentCustomizationId]: totalFiles,
-          }));
-
-          // Converter cada arquivo para base64
-          const filesDataPromises = totalFiles.map(async (f, index) => {
-            const reader = new FileReader();
-            const base64Promise = new Promise<string>((resolve) => {
-              reader.onloadend = () => resolve(reader.result as string);
-              reader.readAsDataURL(f);
-            });
-            const base64 = await base64Promise;
-
-            return {
-              file: f,
-              preview: URL.createObjectURL(f),
-              position: index,
-              base64, // ✅ Dados base64 para upload ao Drive
-              mime_type: f.type,
-              size: f.size,
-            };
-          });
-
-          const filesData = await Promise.all(filesDataPromises);
-
-          setCustomizationData((prev) => ({
-            ...prev,
-            [currentCustomizationId]: filesData,
-          }));
-        })
-        .catch((error) => {
-          console.error("Erro ao processar imagem cortada:", error);
+      try {
+        // 1. Converter DataURL para Blob para upload (Sem usar fetch para evitar problemas de CSP/DataURL)
+        const blob = dataURLtoBlob(croppedImageUrl);
+        const file = new File([blob], "cropped-image.png", {
+          type: "image/png",
         });
+
+        const maxImages =
+          customization.customization_data.dynamic_layout?.max_images || 10;
+        const currentFiles = uploadingFiles[currentCustomizationId] || [];
+        const totalFiles = [...currentFiles, file].slice(0, maxImages);
+
+        setUploadingFiles((prev) => ({
+          ...prev,
+          [currentCustomizationId]: totalFiles,
+        }));
+
+        // Converter cada arquivo para base64
+        const filesDataPromises = totalFiles.map(async (f, index) => {
+          const reader = new FileReader();
+          const base64Promise = new Promise<string>((resolve) => {
+            reader.onloadend = () => resolve(reader.result as string);
+            reader.readAsDataURL(f);
+          });
+          const base64 = await base64Promise;
+
+          return {
+            file: f,
+            preview: URL.createObjectURL(f),
+            position: index,
+            base64, // ✅ Dados base64 para upload ao Drive
+            mime_type: f.type,
+            size: f.size,
+          };
+        });
+
+        const filesData = await Promise.all(filesDataPromises);
+
+        setCustomizationData((prev) => ({
+          ...prev,
+          [currentCustomizationId]: filesData,
+        }));
+      } catch (error) {
+        console.error("Erro ao processar imagem cortada:", error);
+      }
     },
     [currentCustomizationId, customizations, uploadingFiles],
   );
@@ -248,7 +247,7 @@ export function ItemCustomizationInline({
           file,
           preview: URL.createObjectURL(file),
           position: idx,
-          base64, // ✅ Dados base64 para upload ao Drive
+          base64,
           mime_type: file.type,
           size: file.size,
         };

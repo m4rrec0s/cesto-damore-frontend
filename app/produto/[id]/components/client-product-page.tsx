@@ -35,7 +35,6 @@ import {
   type CustomizationInput,
 } from "@/app/types/customization";
 import type { SlotDef } from "@/app/types/personalization";
-import { Separator } from "@/app/components/ui/separator";
 import { ItemCustomizationModal } from "./itemCustomizationsModal";
 import { getInternalImageUrl } from "@/lib/image-helper";
 
@@ -64,9 +63,6 @@ const ClientProductPage = ({ id }: { id: string }) => {
   >({});
   const [additionalCustomizations, setAdditionalCustomizations] = useState<
     Record<string, CustomizationInput[]>
-  >({});
-  const [customizationPreviews, setCustomizationPreviews] = useState<
-    Record<string, string>
   >({});
   const [activeCustomizationModal, setActiveCustomizationModal] = useState<
     string | null
@@ -708,24 +704,6 @@ const ClientProductPage = ({ id }: { id: string }) => {
     ],
   );
 
-  const handlePreviewChange = useCallback(
-    (itemId: string, previewUrl: string | null) => {
-      if (previewUrl) {
-        setCustomizationPreviews((prev) => ({
-          ...prev,
-          [itemId]: previewUrl,
-        }));
-      } else {
-        setCustomizationPreviews((prev) => {
-          const copy = { ...prev };
-          delete copy[itemId];
-          return copy;
-        });
-      }
-    },
-    [],
-  );
-
   const router = useRouter();
 
   useEffect(() => {
@@ -908,112 +886,59 @@ const ClientProductPage = ({ id }: { id: string }) => {
   //   [cartCustomizations]
   // );
 
-  const currentImageUrl = useMemo(() => {
-    if (previewComponentId) {
-      const previewComponent = components.find(
-        (c) => c.id === previewComponentId,
+  const { shouldShow3D, modelUrl, textureUrl, itemType } = useMemo(() => {
+    // Prioridade: previewComponentId > selectedComponent > any customizable component
+    const componentsToSearch = [
+      ...(previewComponentId
+        ? [components.find((c) => c.id === previewComponentId)]
+        : []),
+      ...(selectedComponent ? [selectedComponent] : []),
+      ...components.filter((c) => c.item.allows_customization),
+    ].filter(Boolean) as ProductComponent[];
+
+    for (const component of componentsToSearch) {
+      const customizations = itemCustomizations[component.id] || [];
+      const layoutCustomization = customizations.find(
+        (c) => c.customizationType === CustomizationType.DYNAMIC_LAYOUT,
       );
-      if (previewComponent) {
-        const componentCustomizations =
-          itemCustomizations[previewComponentId] || [];
-        const baseLayoutCustomization = componentCustomizations.find(
-          (c) => c.customizationType === CustomizationType.DYNAMIC_LAYOUT,
-        );
 
-        if (baseLayoutCustomization) {
-          const layoutData = baseLayoutCustomization.data as
-            | { id?: string; image_url?: string }
-            | undefined;
+      if (layoutCustomization) {
+        const layoutData = layoutCustomization.data as any;
+        if (layoutData?.previewUrl) {
+          const detectedItemType = layoutData.item_type?.toLowerCase();
+          const isMug =
+            detectedItemType === "mug" || detectedItemType === "caneca";
+          const isFrame =
+            detectedItemType === "frame" || detectedItemType === "quadro";
 
-          if (layoutData?.image_url) {
-            return layoutData.image_url;
-          }
+          console.log("🎨 [Preview Detection]", {
+            componentId: component.id,
+            itemType: detectedItemType,
+            isMug,
+            isFrame,
+            hasModelUrl: !!layoutData.model_url,
+            hasPreviewUrl: !!layoutData.previewUrl,
+            modelUrl: layoutData.model_url,
+            previewUrl: layoutData.previewUrl,
+          });
+
+          return {
+            shouldShow3D: isMug,
+            modelUrl: layoutData.model_url,
+            textureUrl: layoutData.previewUrl,
+            itemType: detectedItemType,
+          };
         }
-
-        return (
-          previewComponent.item.image_url ||
-          product.image_url ||
-          "/placeholder.png"
-        );
       }
     }
 
-    if (selectedComponent && customizationPreviews[selectedComponent.id]) {
-      return customizationPreviews[selectedComponent.id];
-    }
-
-    return (
-      selectedComponent?.item.image_url ||
-      product.image_url ||
-      "/placeholder.png"
-    );
-  }, [
-    selectedComponent,
-    customizationPreviews,
-    product.image_url,
-    previewComponentId,
-    components,
-    itemCustomizations,
-  ]);
-
-  const currentName = selectedComponent?.item.name || product.name;
-
-  const { shouldShow3D, modelUrl, textureUrl, shouldUse3D, itemType } =
-    useMemo(() => {
-      // Prioridade: previewComponentId > selectedComponent > any customizable component
-      const componentsToSearch = [
-        ...(previewComponentId
-          ? [components.find((c) => c.id === previewComponentId)]
-          : []),
-        ...(selectedComponent ? [selectedComponent] : []),
-        ...components.filter((c) => c.item.allows_customization),
-      ].filter(Boolean) as ProductComponent[];
-
-      for (const component of componentsToSearch) {
-        const customizations = itemCustomizations[component.id] || [];
-        const layoutCustomization = customizations.find(
-          (c) => c.customizationType === CustomizationType.DYNAMIC_LAYOUT,
-        );
-
-        if (layoutCustomization) {
-          const layoutData = layoutCustomization.data as any;
-          if (layoutData?.previewUrl) {
-            const detectedItemType = layoutData.item_type?.toLowerCase();
-            const isMug =
-              detectedItemType === "mug" || detectedItemType === "caneca";
-            const isFrame =
-              detectedItemType === "frame" || detectedItemType === "quadro";
-
-            console.log("🎨 [Preview Detection]", {
-              componentId: component.id,
-              itemType: detectedItemType,
-              isMug,
-              isFrame,
-              hasModelUrl: !!layoutData.model_url,
-              hasPreviewUrl: !!layoutData.previewUrl,
-              modelUrl: layoutData.model_url,
-              previewUrl: layoutData.previewUrl,
-            });
-
-            return {
-              shouldShow3D: isMug,
-              modelUrl: layoutData.model_url,
-              textureUrl: layoutData.previewUrl,
-              shouldUse3D: isMug,
-              itemType: detectedItemType,
-            };
-          }
-        }
-      }
-
-      return {
-        shouldShow3D: false,
-        modelUrl: undefined,
-        textureUrl: undefined,
-        shouldUse3D: false,
-        itemType: undefined,
-      };
-    }, [itemCustomizations, previewComponentId, selectedComponent, components]);
+    return {
+      shouldShow3D: false,
+      modelUrl: undefined,
+      textureUrl: undefined,
+      itemType: undefined,
+    };
+  }, [itemCustomizations, previewComponentId, selectedComponent, components]);
 
   const handleAddToCart = async () => {
     if (!product.id) return;
@@ -2063,11 +1988,6 @@ const ClientProductPage = ({ id }: { id: string }) => {
             }))}
             onComplete={(hasCustomizations, data) =>
               handleCustomizationComplete(component.id, hasCustomizations, data)
-            }
-            onPreviewChange={(url) =>
-              url &&
-              url !== "3D_MODEL" &&
-              handlePreviewChange(component.id, url)
             }
             onImagesUpdate={(id, current, max) =>
               handleImagesUpdate(component.id, current, max)

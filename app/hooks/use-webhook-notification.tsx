@@ -80,6 +80,97 @@ export function useWebhookNotification({
   const lastConnectTimeRef = useRef<number | null>(null);
   const lastPaymentStatusRef = useRef<string | null>(null); // 🔥 NOVO: Evita notificações duplicadas
 
+  // 🔥 NOVO: Parar polling
+  const stopPolling = useCallback(() => {
+    if (pollingIntervalRef.current) {
+      clearInterval(pollingIntervalRef.current);
+      pollingIntervalRef.current = null;
+      setIsPolling(false);
+      console.log("⏹️ Polling fallback parado");
+    }
+  }, []);
+
+  // 🔥 NOVO: Função de polling como fallback
+  const pollOrderStatus = useCallback(async () => {
+    if (!orderId) return;
+
+    try {
+      const order = await api.getOrder(orderId);
+
+      if (!order || !order.payment) return;
+
+      const currentStatus = order.payment.status;
+
+      // Evitar notificações duplicadas
+      if (lastPaymentStatusRef.current === currentStatus) {
+        return;
+      }
+
+      lastPaymentStatusRef.current = currentStatus;
+
+      const paymentData: PaymentUpdateData = {
+        type: "payment_update",
+        orderId: order.id,
+        status: currentStatus,
+        paymentId: order.payment.id,
+        mercadoPagoId: order.payment.mercado_pago_id || undefined,
+        approvedAt: order.payment.approved_at
+          ? new Date(order.payment.approved_at).toLocaleString("pt-BR")
+          : undefined,
+        paymentMethod: order.payment.payment_method || undefined,
+        timestamp: new Date().toLocaleString("pt-BR"),
+      };
+
+      onPaymentUpdate?.(paymentData);
+
+      // Disparar callbacks específicos
+      if (currentStatus === "APPROVED") {
+        onPaymentApproved?.(paymentData);
+        stopPolling(); // 🔥 Parar polling após aprovação
+      } else if (
+        currentStatus === "REJECTED" ||
+        currentStatus === "CANCELLED"
+      ) {
+        onPaymentRejected?.(paymentData);
+        stopPolling(); // 🔥 Parar polling após rejeição
+      } else if (
+        currentStatus === "PENDING" ||
+        currentStatus === "IN_PROCESS"
+      ) {
+        onPaymentPending?.(paymentData);
+      }
+    } catch (error) {
+      console.error("❌ Erro ao fazer polling de status:", error);
+      // Não parar polling em caso de erro - pode ser temporário
+    }
+  }, [
+    orderId,
+    api,
+    onPaymentUpdate,
+    onPaymentApproved,
+    onPaymentRejected,
+    onPaymentPending,
+    stopPolling,
+  ]);
+
+  // 🔥 NOVO: Iniciar polling
+  const startPolling = useCallback(() => {
+    if (pollingIntervalRef.current) return; // Já está fazendo polling
+
+    console.log(
+      `🔄 Iniciando polling fallback (intervalo: ${pollingInterval}ms)`,
+    );
+    setIsPolling(true);
+
+    // Poll imediatamente
+    pollOrderStatus();
+
+    // Configurar intervalo
+    pollingIntervalRef.current = window.setInterval(() => {
+      pollOrderStatus();
+    }, pollingInterval);
+  }, [pollOrderStatus, pollingInterval]);
+
   const handleMessage = useCallback(
     (event: MessageEvent) => {
       try {
@@ -189,7 +280,7 @@ export function useWebhookNotification({
         startPolling();
       }
     },
-    [onDisconnected, orderId, enabled, enablePollingFallback],
+    [onDisconnected, orderId, enabled, enablePollingFallback, startPolling],
   );
 
   const connect = useCallback(() => {
@@ -261,97 +352,7 @@ export function useWebhookNotification({
 
     // 🔥 NOVO: Limpar polling também
     stopPolling();
-  }, [onDisconnected]);
-
-  // 🔥 NOVO: Função de polling como fallback
-  const pollOrderStatus = useCallback(async () => {
-    if (!orderId) return;
-
-    try {
-      const order = await api.getOrder(orderId);
-
-      if (!order || !order.payment) return;
-
-      const currentStatus = order.payment.status;
-
-      // Evitar notificações duplicadas
-      if (lastPaymentStatusRef.current === currentStatus) {
-        return;
-      }
-
-      lastPaymentStatusRef.current = currentStatus;
-
-      const paymentData: PaymentUpdateData = {
-        type: "payment_update",
-        orderId: order.id,
-        status: currentStatus,
-        paymentId: order.payment.id,
-        mercadoPagoId: order.payment.mercado_pago_id || undefined,
-        approvedAt: order.payment.approved_at
-          ? new Date(order.payment.approved_at).toLocaleString("pt-BR")
-          : undefined,
-        paymentMethod: order.payment.payment_method || undefined,
-        timestamp: new Date().toLocaleString("pt-BR"),
-      };
-
-      onPaymentUpdate?.(paymentData);
-
-      // Disparar callbacks específicos
-      if (currentStatus === "APPROVED") {
-        onPaymentApproved?.(paymentData);
-        stopPolling(); // 🔥 Parar polling após aprovação
-      } else if (
-        currentStatus === "REJECTED" ||
-        currentStatus === "CANCELLED"
-      ) {
-        onPaymentRejected?.(paymentData);
-        stopPolling(); // 🔥 Parar polling após rejeição
-      } else if (
-        currentStatus === "PENDING" ||
-        currentStatus === "IN_PROCESS"
-      ) {
-        onPaymentPending?.(paymentData);
-      }
-    } catch (error) {
-      console.error("❌ Erro ao fazer polling de status:", error);
-      // Não parar polling em caso de erro - pode ser temporário
-    }
-  }, [
-    orderId,
-    api,
-    onPaymentUpdate,
-    onPaymentApproved,
-    onPaymentRejected,
-    onPaymentPending,
-  ]);
-
-  // 🔥 NOVO: Iniciar polling
-  const startPolling = useCallback(() => {
-    if (pollingIntervalRef.current) return; // Já está fazendo polling
-
-    console.log(
-      `🔄 Iniciando polling fallback (intervalo: ${pollingInterval}ms)`,
-    );
-    setIsPolling(true);
-
-    // Poll imediatamente
-    pollOrderStatus();
-
-    // Configurar intervalo
-    pollingIntervalRef.current = window.setInterval(() => {
-      pollOrderStatus();
-    }, pollingInterval);
-  }, [pollOrderStatus, pollingInterval]);
-
-  // 🔥 NOVO: Parar polling
-  const stopPolling = useCallback(() => {
-    if (pollingIntervalRef.current) {
-      clearInterval(pollingIntervalRef.current);
-      pollingIntervalRef.current = null;
-      setIsPolling(false);
-      console.log("⏹️ Polling fallback parado");
-    }
-  }, []);
+  }, [onDisconnected, stopPolling]);
 
   useEffect(() => {
     if (enabled && orderId) {

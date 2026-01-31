@@ -7,6 +7,7 @@ import { Label } from "./ui/label";
 import { Input } from "./ui/input";
 import { Trash2, Upload, Check, ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
+import { dataURLtoBlob } from "@/app/lib/utils";
 import { usePersonalization } from "../hooks/use-personalization";
 import type { LayoutBase, ImageData, SlotDef } from "../types/personalization";
 import { normalizeGoogleDriveUrl } from "../helpers/drive-normalize";
@@ -267,9 +268,8 @@ export default function ClientPersonalizationEditor({
     if (!currentSlotId) return;
 
     try {
-      // Converter data URL para File
-      const response = await fetch(croppedImageUrl);
-      const blob = await response.blob();
+      // 1. Converter DataURL para Blob para upload (Sem usar fetch para evitar problemas de CSP/DataURL)
+      const blob = dataURLtoBlob(croppedImageUrl);
       const file = new File([blob], "cropped-image.png", {
         type: "image/png",
       });

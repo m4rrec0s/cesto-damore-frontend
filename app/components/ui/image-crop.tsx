@@ -29,7 +29,7 @@ import "react-image-crop/dist/ReactCrop.css";
 const centerAspectCrop = (
   mediaWidth: number,
   mediaHeight: number,
-  aspect: number | undefined
+  aspect: number | undefined,
 ): PercentCrop => {
   // Se aspect não definido, usar quadrado (1:1)
   const targetAspect = aspect || 1;
@@ -69,7 +69,7 @@ const getCroppedPngImage = async (
   imageSrc: HTMLImageElement,
   scaleFactor: number,
   pixelCrop: PixelCrop,
-  maxImageSize: number
+  maxImageSize: number,
 ): Promise<string> => {
   const canvas = document.createElement("canvas");
   const ctx = canvas.getContext("2d");
@@ -94,19 +94,28 @@ const getCroppedPngImage = async (
     0,
     0,
     canvas.width,
-    canvas.height
+    canvas.height,
   );
 
   const croppedImageUrl = canvas.toDataURL("image/png");
-  const response = await fetch(croppedImageUrl);
-  const blob = await response.blob();
+
+  // Converter dataURL para Blob manualmente para evitar erros de "Failed to fetch"
+  // que ocorrem em alguns casos com fetch(dataURL)
+  const byteString = atob(croppedImageUrl.split(",")[1]);
+  const mimeString = croppedImageUrl.split(",")[0].split(":")[1].split(";")[0];
+  const ab = new ArrayBuffer(byteString.length);
+  const ia = new Uint8Array(ab);
+  for (let i = 0; i < byteString.length; i++) {
+    ia[i] = byteString.charCodeAt(i);
+  }
+  const blob = new Blob([ab], { type: mimeString });
 
   if (blob.size > maxImageSize) {
     return await getCroppedPngImage(
       imageSrc,
       scaleFactor * 0.9,
       pixelCrop,
-      maxImageSize
+      maxImageSize,
     );
   }
 
@@ -125,7 +134,7 @@ type ImageCropContextType = {
   handleChange: (pixelCrop: PixelCrop, percentCrop: PercentCrop) => void;
   handleComplete: (
     pixelCrop: PixelCrop,
-    percentCrop: PercentCrop
+    percentCrop: PercentCrop,
   ) => Promise<void>;
   onImageLoad: (e: SyntheticEvent<HTMLImageElement>) => void;
   applyCrop: () => Promise<void>;
@@ -182,7 +191,7 @@ export const ImageCrop = ({
       setCrop(newCrop);
       setInitialCrop(newCrop);
     },
-    [reactCropProps.aspect]
+    [reactCropProps.aspect],
   );
 
   const handleChange = (pixelCrop: PixelCrop, percentCrop: PercentCrop) => {
@@ -192,7 +201,7 @@ export const ImageCrop = ({
 
   const handleComplete = async (
     pixelCrop: PixelCrop,
-    percentCrop: PercentCrop
+    percentCrop: PercentCrop,
   ) => {
     setCompletedCrop(pixelCrop);
     onComplete?.(pixelCrop, percentCrop);
@@ -204,7 +213,7 @@ export const ImageCrop = ({
           imgRef.current,
           1,
           pixelCrop,
-          maxImageSize
+          maxImageSize,
         );
         onCrop?.(croppedImage);
       } catch (error) {
@@ -222,7 +231,7 @@ export const ImageCrop = ({
       imgRef.current,
       1,
       completedCrop,
-      maxImageSize
+      maxImageSize,
     );
 
     onCrop?.(croppedImage);
