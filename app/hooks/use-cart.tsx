@@ -105,9 +105,9 @@ const serializeCustomizations = (customizations?: CartCustomization[]) => {
     selected_option: customization.selected_option || null,
     selected_item: customization.selected_item
       ? {
-        original_item: customization.selected_item.original_item,
-        selected_item: customization.selected_item.selected_item,
-      }
+          original_item: customization.selected_item.original_item,
+          selected_item: customization.selected_item.selected_item,
+        }
       : null,
     // ✅ Include label fields for DYNAMIC_LAYOUT duplicate detection
     label_selected: customization.label_selected || null,
@@ -319,14 +319,31 @@ export function useCart(): CartContextType {
 
   // Quando metadata do pedido muda, sincronizar com o backend (se houver rascunho)
   useEffect(() => {
-    // Debounce sending metadata to server via existing debouncedSync
     if (!user) return;
     // Apenas sincronizar metadata se houver pendingOrderId (evita criar pedido sem itens)
     if (!pendingOrderId) return;
-    // reutiliza o debouncedSync para enviar a atualização
-    debouncedSync(cart);
+
+    // ✅ Sincronizar apenas metadata (não itens) para evitar loop
+    const syncMetadata = async () => {
+      try {
+        await api.updateOrderMetadata(pendingOrderId, {
+          send_anonymously: orderMetadata.send_anonymously,
+          complement: orderMetadata.complement,
+        });
+      } catch (error) {
+        console.error("❌ Erro ao sincronizar metadata:", error);
+      }
+    };
+
+    const timeoutId = setTimeout(syncMetadata, 500);
+    return () => clearTimeout(timeoutId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [orderMetadata, pendingOrderId, user]);
+  }, [
+    orderMetadata.send_anonymously,
+    orderMetadata.complement,
+    pendingOrderId,
+    user,
+  ]);
 
   // ✅ NOVO: Helper para converter pedido do backend em itens do carrinho local
   const transformOrderToCartItems = useCallback(
@@ -342,10 +359,10 @@ export function useCart(): CartContextType {
           const additionals =
             orderItem.additionals && orderItem.additionals.length > 0
               ? await Promise.all(
-                orderItem.additionals.map((add: { additional_id: string }) =>
-                  api.getAdditional(add.additional_id),
-                ),
-              )
+                  orderItem.additionals.map((add: { additional_id: string }) =>
+                    api.getAdditional(add.additional_id),
+                  ),
+                )
               : [];
 
           const customizations: CartCustomization[] = [];
@@ -517,6 +534,9 @@ export function useCart(): CartContextType {
     const loadPendingOrder = async () => {
       if (!user) return;
 
+      // Prevenir múltiplas execuções simultâneas
+      if (isInitializedRef.current) return;
+
       try {
         const pendingOrder = await api.getPendingOrder(user.id);
         if (
@@ -526,12 +546,12 @@ export function useCart(): CartContextType {
         ) {
           const cartItems = await transformOrderToCartItems(pendingOrder);
 
-          // Carregar metadata do pedido
+          // Carregar metadata do pedido (sem disparar sync)
           if (
             pendingOrder.send_anonymously !== undefined ||
             pendingOrder.complement
           ) {
-            setOrderMetadata({
+            _setOrderMetadata({
               send_anonymously: pendingOrder.send_anonymously || false,
               complement: pendingOrder.complement || undefined,
             });
@@ -657,7 +677,9 @@ export function useCart(): CartContextType {
             const existingPending = await api.getPendingOrder(user.id);
             if (existingPending) {
               setPendingOrderId(existingPending.id);
-              setOrderMetadata({
+              // ✅ Metadata será sincronizado pelo useEffect separado
+              // Carregar apenas os dados locais sem disparar sync
+              _setOrderMetadata({
                 send_anonymously: !!existingPending.send_anonymously,
                 complement: existingPending.complement || undefined,
               });
@@ -685,28 +707,44 @@ export function useCart(): CartContextType {
           };
           const order = await api.createOrder(payload);
           setPendingOrderId(order?.id || null);
-          if (order) {
-            setOrderMetadata({
-              send_anonymously: !!order.send_anonymously,
-              complement: order.complement || undefined,
-            });
-            // ✅ Sincronizar estado local com IDs do backend
-            const updatedItems = await transformOrderToCartItems(order);
-            setCart(calculateTotals(updatedItems));
-          }
+          // ✅ Não chamar transformOrderToCartItems aqui - evita loop de requisições
+          // Os itens já estão no cart local e foram sincronizados
         } else {
-          const order = await api.updateOrderItems(
-            pendingOrderId,
-            itemsPayload,
-          );
-          await api.updateOrderMetadata(pendingOrderId, {
-            send_anonymously: orderMetadata.send_anonymously,
-            complement: orderMetadata.complement,
-          });
-          // ✅ Sincronizar estado local com novos IDs (o backend deleta e recria)
-          if (order) {
-            const updatedItems = await transformOrderToCartItems(order);
-            setCart(calculateTotals(updatedItems));
+          try {
+            await api.updateOrderItems(pendingOrderId, itemsPayload);
+            // ✅ Metadata já é sincronizado pelo useEffect separado, não chamar aqui
+            // ✅ Não chamar transformOrderToCartItems aqui - evita loop de requisições
+          } catch (updateError: unknown) {
+            console.error("Erro ao atualizar pedido:", updateError);
+            const maybe = updateError as { response?: { status: number } };
+            const status = maybe?.response?.status;
+
+            // Se 403/404, o pedido não existe mais ou não temos permissão
+            if (status === 403 || status === 404) {
+              console.warn("⚠️ Pedido inválido, criando novo...");
+              setPendingOrderId(null);
+
+              // Recriar pedido
+              const payload: {
+                user_id: string;
+                items: OrderItem[];
+                is_draft: boolean;
+                send_anonymously: boolean;
+                complement?: string;
+              } = {
+                user_id: user.id,
+                items: itemsPayload,
+                is_draft: true,
+                send_anonymously: orderMetadata.send_anonymously || false,
+                complement: orderMetadata.complement || undefined,
+              };
+              const newOrder = await api.createOrder(payload);
+              setPendingOrderId(newOrder?.id || null);
+              // ✅ Não chamar transformOrderToCartItems aqui - evita loop de requisições
+            } else {
+              // Outros erros, propagar
+              throw updateError;
+            }
           }
         }
       } catch (error: unknown) {
@@ -717,9 +755,6 @@ export function useCart(): CartContextType {
           const status = maybe?.response?.status;
           if (status === 403 || status === 404) {
             setPendingOrderId(null);
-            if (typeof window !== "undefined") {
-              // localStorage.removeItem("pendingOrderId");
-            }
             setOrderMetadata({
               send_anonymously: false,
               complement: undefined,
@@ -827,23 +862,23 @@ export function useCart(): CartContextType {
 
                   const customizations = item.customizations
                     ? item.customizations.map((c) => {
-                      const parsed = (() => {
-                        try {
-                          return JSON.parse(c.value || "{}") as Record<
-                            string,
-                            unknown
-                          >;
-                        } catch {
-                          return {};
-                        }
-                      })();
+                        const parsed = (() => {
+                          try {
+                            return JSON.parse(c.value || "{}") as Record<
+                              string,
+                              unknown
+                            >;
+                          } catch {
+                            return {};
+                          }
+                        })();
 
-                      return {
-                        ...parsed,
-                        customization_id: c.customization_id,
-                        title: (parsed.title as string) || undefined,
-                      };
-                    })
+                        return {
+                          ...parsed,
+                          customization_id: c.customization_id,
+                          title: (parsed.title as string) || undefined,
+                        };
+                      })
                     : undefined;
 
                   return {
@@ -855,10 +890,10 @@ export function useCart(): CartContextType {
                       item.effectivePrice !== undefined
                         ? item.effectivePrice
                         : Number(
-                          (
-                            item.price + (item.customization_total || 0)
-                          ).toFixed(2),
-                        ),
+                            (
+                              item.price + (item.customization_total || 0)
+                            ).toFixed(2),
+                          ),
                     additionals,
                     customizations,
                     product: item.product,
@@ -957,11 +992,11 @@ export function useCart(): CartContextType {
             (item) =>
               item.product_id === productId &&
               serializeAdditionals(item.additional_ids) ===
-              targetAdditionalsKey &&
+                targetAdditionalsKey &&
               serializeAdditionalColors(item.additional_colors) ===
-              targetColorsKey &&
+                targetColorsKey &&
               serializeCustomizations(item.customizations) ===
-              targetCustomizationsKey,
+                targetCustomizationsKey,
           );
 
           let newItems: CartItem[] = [...currentItems];
@@ -1022,9 +1057,9 @@ export function useCart(): CartContextType {
               item.product_id === productId &&
               serializeAdditionals(item.additional_ids) === targetAdditionals &&
               serializeAdditionalColors(item.additional_colors) ===
-              targetColors &&
+                targetColors &&
               serializeCustomizations(item.customizations) ===
-              targetCustomizations,
+                targetCustomizations,
           ) || null;
 
         const newItems = currentItems.filter(
@@ -1033,9 +1068,9 @@ export function useCart(): CartContextType {
               item.product_id === productId &&
               serializeAdditionals(item.additional_ids) === targetAdditionals &&
               serializeAdditionalColors(item.additional_colors) ===
-              targetColors &&
+                targetColors &&
               serializeCustomizations(item.customizations) ===
-              targetCustomizations
+                targetCustomizations
             ),
         );
         const updatedCart = calculateTotals(newItems);
@@ -1061,9 +1096,6 @@ export function useCart(): CartContextType {
                     );
                   }
                   setPendingOrderId(null);
-                  if (typeof window !== "undefined") {
-                    localStorage.removeItem("pendingOrderId");
-                  }
                   setOrderMetadata({
                     send_anonymously: false,
                     complement: undefined,
@@ -1134,7 +1166,7 @@ export function useCart(): CartContextType {
             item.product_id === productId &&
             serializeAdditionals(item.additional_ids) === targetAdditionals &&
             serializeCustomizations(item.customizations) ===
-            targetCustomizations &&
+              targetCustomizations &&
             serializeAdditionalColors(item.additional_colors) === targetColors
           ) {
             return { ...item, quantity };
@@ -1177,7 +1209,7 @@ export function useCart(): CartContextType {
             item.product_id === productId &&
             serializeAdditionals(item.additional_ids) === targetAdditionals &&
             serializeCustomizations(item.customizations) ===
-            targetOldCustomizations &&
+              targetOldCustomizations &&
             serializeAdditionalColors(item.additional_colors) === targetColors,
         );
 
@@ -1395,17 +1427,6 @@ export function useCart(): CartContextType {
 
       // Pedido final criado com sucesso: remover rascunho do backend
       setPendingOrderId(null);
-      try {
-        if (typeof window !== "undefined") {
-          // Consistent key: 'pendingOrderId' is used elsewhere
-          localStorage.removeItem("pendingOrderId");
-        }
-      } catch (err) {
-        console.warn(
-          "Não foi possível remover pending order do localStorage:",
-          err,
-        );
-      }
 
       return order;
     },

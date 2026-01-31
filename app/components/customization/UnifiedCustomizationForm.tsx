@@ -108,7 +108,7 @@ export function UnifiedCustomizationForm({
           try {
             // Buscar layout base da API
             const response = await fetch(
-              `${process.env.NEXT_PUBLIC_API_URL}/admin/layouts/${itemLayoutId}`,
+              `${process.env.NEXT_PUBLIC_API_URL}/layouts/dynamic/${itemLayoutId}`,
               {
                 headers: {
                   Authorization: `Bearer ${localStorage.getItem("token")}`,
@@ -200,7 +200,7 @@ export function UnifiedCustomizationForm({
               );
               toast.error(
                 constraint.message ||
-                  `Não é possível selecionar "${optionLabel}" pois "${conflictingSelection?.label}" já está selecionado em outro componente.`
+                `Não é possível selecionar "${optionLabel}" pois "${conflictingSelection?.label}" já está selecionado em outro componente.`
               );
               return; // Bloquear a seleção
             }
@@ -233,7 +233,7 @@ export function UnifiedCustomizationForm({
                 // Mostrar mensagem ao usuário
                 toast.info(
                   constraint.message ||
-                    `"${value.label}" foi desmarcado pois não é compatível com "${optionLabel}"`
+                  `"${value.label}" foi desmarcado pois não é compatível com "${optionLabel}"`
                 );
               }
             }
@@ -405,65 +405,56 @@ export function UnifiedCustomizationForm({
   );
 
   return (
-    <div className="space-y-6 w-full">
-      <div className="flex flex-col gap-6 w-full">
-        {layoutBaseCustomization && layoutBase && (
-          <div className="mb-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  {layoutBaseCustomization.name}
-                  {layoutBaseCustomization.isRequired && (
-                    <Badge variant="destructive" className="text-xs">
-                      Obrigatório
-                    </Badge>
-                  )}
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <AdvancedPersonalizationEditor
-                  layoutBase={layoutBase}
-                  onComplete={handleLayoutBaseComplete}
-                  onCancel={() => {}}
-                  showCanvasPreview={true}
-                />
-              </CardContent>
-            </Card>
+    <div className="space-y-4 w-full">
+      {layoutBaseCustomization && layoutBase && (
+        <div className="mb-6">
+          <div className="space-y-3">
+            <div>
+              <h3 className="text-base font-semibold text-gray-900">
+                {layoutBaseCustomization.name}
+                {layoutBaseCustomization.isRequired && (
+                  <span className="ml-2 text-sm text-red-500">*</span>
+                )}
+              </h3>
+            </div>
+            <div className="bg-gray-50 rounded-xl p-4">
+              <AdvancedPersonalizationEditor
+                layoutBase={layoutBase}
+                onComplete={handleLayoutBaseComplete}
+                onCancel={() => {}}
+                showCanvasPreview={true}
+              />
+            </div>
           </div>
-        )}
+        </div>
+      )}
 
-        {/* Outras Customizações */}
-        <div className="w-full">
-          {otherCustomizations.map((customization) => (
-            <section key={customization.id} className="space-y-3 w-full">
-              <div>
-                <div className="flex items-center gap-2 text-base">
-                  {customization.name}
-                  {customization.isRequired && (
-                    <Badge variant="destructive" className="text-xs">
-                      Obrigatório
-                    </Badge>
-                  )}
-                </div>
-                {customization.description && (
-                  <p className="text-sm text-muted-foreground">
-                    {customization.description}
-                  </p>
+      {/* Outras Customizações */}
+      <div className="w-full space-y-4">
+        {otherCustomizations.map((customization) => (
+          <div key={customization.id} className="space-y-2 w-full">
+            <div>
+              <h4 className="text-sm font-medium text-gray-900">
+                {customization.name}
+                {customization.isRequired && (
+                  <span className="ml-1 text-red-500">*</span>
                 )}
-                {customization.price > 0 && (
-                  <p className="text-sm text-emerald-600 font-medium">
-                    +R$ {customization.price.toFixed(2)}
-                  </p>
-                )}
-              </div>
-              <div className="w-full">
+              </h4>
+              {customization.description && (
+                <p className="text-xs text-gray-600 mt-1">
+                  {customization.description}
+                </p>
+              )}
+              {customization.price > 0 && (
+                <p className="text-xs text-green-600 font-medium mt-1">
+                  +R$ {customization.price.toFixed(2)}
+                </p>
+              )}
+            </div>
+            <div className="w-full">
                 {/* TEXT */}
                 {customization.type === "TEXT" && (
                   <div className="space-y-2">
-                    <Label htmlFor={`text-${customization.id}`}>
-                      <Type className="inline h-4 w-4 mr-2" />
-                      Seu texto
-                    </Label>
                     <Textarea
                       id={`text-${customization.id}`}
                       placeholder="Digite sua mensagem..."
@@ -480,17 +471,14 @@ export function UnifiedCustomizationForm({
                         )
                       }
                       rows={3}
+                      className="w-full"
                     />
                   </div>
                 )}
 
                 {/* IMAGES */}
                 {customization.type === "IMAGES" && (
-                  <div className="space-y-4">
-                    <Label htmlFor={`photo-${customization.id}`}>
-                      <ImageIcon className="inline h-4 w-4 mr-2" />
-                      Enviar Fotos
-                    </Label>
+                  <div className="space-y-3">
                     <Input
                       id={`photo-${customization.id}`}
                       type="file"
@@ -499,10 +487,12 @@ export function UnifiedCustomizationForm({
                       onChange={(e) =>
                         handleFileUpload(customization.id, e.target.files)
                       }
+                      className="w-full"
+                    />
                       className="cursor-pointer"
                     />
                     {customizationData[customization.id]?.value != null &&
-                    Array.isArray(customizationData[customization.id].value) ? (
+                      Array.isArray(customizationData[customization.id].value) ? (
                       <PhotoPreviewGrid
                         photos={
                           customizationData[customization.id].value as Array<{
@@ -516,8 +506,8 @@ export function UnifiedCustomizationForm({
 
                 {/* MULTIPLE_CHOICE */}
                 {customization.type === "MULTIPLE_CHOICE" && (
-                  <div className="space-y-3 w-full">
-                    <div className="grid grid-cols-2 gap-3 mt-2">
+                  <div className="space-y-2 w-full">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                       {(
                         customization.customization_data.options as Array<{
                           id: string;
@@ -533,17 +523,20 @@ export function UnifiedCustomizationForm({
                             : `${API_URL}${option.image_url}`
                           : null;
 
+                        const isSelected =
+                          (
+                            customizationData[customization.id]?.value as
+                              | { id: string }
+                              | undefined
+                          )?.id === option.id;
+
                         return (
                           <div
                             key={option.id}
-                            className={`p-2 cursor-pointer transition-all hover:border-purple-600 flex rounded-lg border hover:bg-gray-200 ${
-                              (
-                                customizationData[customization.id]?.value as
-                                  | { id: string }
-                                  | undefined
-                              )?.id === option.id
-                                ? "border-2 border-purple-600 ring-2 ring-purple-200"
-                                : ""
+                            className={`p-3 cursor-pointer transition-all rounded-lg border-2 ${
+                              isSelected
+                                ? "border-gray-900 bg-gray-50"
+                                : "border-gray-200 hover:border-gray-400"
                             }`}
                             onClick={() =>
                               handleOptionSelect(
@@ -553,36 +546,32 @@ export function UnifiedCustomizationForm({
                               )
                             }
                           >
-                            {imageUrl && (
-                              <div className="aspect-square w-16 relative rounded overflow-hidden mr-4">
-                                <Image
-                                  src={getInternalImageUrl(imageUrl)}
-                                  alt={option.label}
-                                  className="h-full w-full rounded object-cover"
-                                  layout="fill"
-                                  priority
-                                />
-                                {(
-                                  customizationData[customization.id]?.value as
-                                    | { id: string }
-                                    | undefined
-                                )?.id === option.id && (
-                                  <div className="absolute inset-0 bg-purple-500/20 flex items-center justify-center">
-                                    <Check className="h-8 w-8 text-purple-600" />
-                                  </div>
-                                )}
-                              </div>
-                            )}
-                            <div>
-                              <p className="font-medium text-sm">
-                                {option.label}
-                              </p>
-                              {option.price_modifier &&
-                              option.price_modifier > 0 ? (
-                                <p className="text-xs text-emerald-600 mt-1">
-                                  +R$ {option.price_modifier.toFixed(2)}
+                            <div className="flex items-center gap-3">
+                              {imageUrl && (
+                                <div className="w-12 h-12 relative rounded-lg overflow-hidden flex-shrink-0 bg-gray-100">
+                                  <Image
+                                    src={getInternalImageUrl(imageUrl)}
+                                    alt={option.label}
+                                    fill
+                                    className="object-cover"
+                                    priority
+                                  />
+                                </div>
+                              )}
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium text-gray-900 truncate">
+                                  {option.label}
                                 </p>
-                              ) : null}
+                                {option.price_modifier &&
+                                  option.price_modifier > 0 && (
+                                    <p className="text-xs text-green-600 mt-0.5">
+                                      +R$ {option.price_modifier.toFixed(2)}
+                                    </p>
+                                  )}
+                              </div>
+                              {isSelected && (
+                                <Check className="h-5 w-5 text-gray-900 flex-shrink-0" />
+                              )}
                             </div>
                           </div>
                         );
@@ -591,7 +580,7 @@ export function UnifiedCustomizationForm({
                   </div>
                 )}
               </div>
-            </section>
+            </div>
           ))}
         </div>
       </div>
@@ -609,7 +598,7 @@ function PhotoPreviewGrid({ photos }: { photos: Array<{ preview: string }> }) {
           <img
             src={photo.preview}
             alt={`Preview ${index + 1}`}
-            className="h-full w-full rounded-lg object-cover border-2"
+            className="h-full w-full rounded-lg object-contain bg-neutral-50 border-2"
           />
         </div>
       ))}

@@ -7,6 +7,7 @@ import { Card, CardContent } from "./ui/card";
 import { Button } from "./ui/button";
 import { Label } from "./ui/label";
 import { Input } from "./ui/input";
+import { Textarea } from "./ui/textarea";
 import {
   Upload,
   Check,
@@ -161,42 +162,45 @@ export default function ClientFabricEditor({
 
   // Funções Auxiliares de Placeholders
   const addFramePlaceholder = async (canvas: any, frame: any) => {
-    const { Text } = await import("fabric");
+    const { FabricImage } = await import("fabric");
 
     // Fundo cinza suave
     frame.set("fill", "#f3f4f6");
 
     const center = frame.getCenterPoint();
-    const frameSize = Math.min(
-      frame.width * frame.scaleX,
-      frame.height * frame.scaleY,
-    );
+    const frameWidth = frame.width * frame.scaleX;
+    const frameHeight = frame.height * frame.scaleY;
 
-    const icon = new Text("📷", {
-      fontSize: frameSize * 0.3,
-      left: center.x,
-      top: center.y - 10,
-      originX: "center",
-      originY: "center",
-      selectable: false,
-      evented: false,
-      name: `placeholder-icon-${frame.id || frame.name}`,
-    });
+    try {
+      const placeholderImg = await FabricImage.fromURL(
+        "/placeholder_design.png",
+        { crossOrigin: "anonymous" },
+      );
 
-    const label = new Text("Clique para adicionar foto", {
-      fontSize: frameSize * 0.08,
-      left: center.x,
-      top: center.y + 20,
-      originX: "center",
-      originY: "center",
-      fill: "#9ca3af",
-      selectable: false,
-      evented: false,
-      name: `placeholder-text-${frame.id || frame.name}`,
-    });
+      // Calcular escala para cobrir toda a moldura (object-cover)
+      const scale = Math.max(
+        frameWidth / placeholderImg.width!,
+        frameHeight / placeholderImg.height!,
+      );
 
-    canvas.add(icon, label);
-    canvas.renderAll();
+      placeholderImg.set({
+        scaleX: scale,
+        scaleY: scale,
+        left: center.x,
+        top: center.y,
+        originX: "center",
+        originY: "center",
+        selectable: false,
+        evented: false,
+        opacity: 0.5,
+        name: `placeholder-img-${frame.id || frame.name}`,
+      });
+
+      canvas.add(placeholderImg);
+      canvas.renderAll();
+    } catch (err) {
+      console.error("Erro ao carregar placeholder:", err);
+    }
   };
 
   const loadLocalImageToFrame = async (
@@ -268,6 +272,7 @@ export default function ClientFabricEditor({
           originY: "center",
           left: center.x,
           top: center.y,
+          angle: frame.angle || 0,
           absolutePositioned: true,
         });
       } else {
@@ -282,6 +287,7 @@ export default function ClientFabricEditor({
           originY: "center",
           left: center.x,
           top: center.y,
+          angle: frame.angle || 0,
           absolutePositioned: true,
         });
       }
@@ -481,7 +487,7 @@ export default function ClientFabricEditor({
           if (isFrame) {
             obj.isFrame = true;
             const id = obj.id || obj.name;
-            labels[id] = obj.label || "Moldura de Foto";
+            labels[id] = obj.name || "Moldura de Foto";
 
             // Se não tem imagem (nem no canvas nem local), add placeholder
             const hasImg = objects.some(
@@ -498,7 +504,7 @@ export default function ClientFabricEditor({
             if (obj.type === "textbox" || obj.type === "i-text") {
               const id = obj.id || obj.name;
               texts[id] = obj.text || "";
-              labels[id] = obj.label || id;
+              labels[id] = obj.name || "Campo de Texto";
             }
           }
         }
@@ -509,7 +515,6 @@ export default function ClientFabricEditor({
           canvasInstance.renderAll();
           setFabricRef(canvasInstance);
           setLoading(false);
-          console.log("✅ Fabric.js inicializado com sucesso");
         }
       } catch (err) {
         console.error("❌ Erro ao inicializar Fabric.js:", err);
@@ -726,19 +731,49 @@ export default function ClientFabricEditor({
                   <Label className="text-xs font-bold uppercase text-gray-400 tracking-widest flex items-center gap-2">
                     <Type className="h-3 w-3" /> Textos Editáveis
                   </Label>
-                  {Object.entries(editableTexts).map(([id, text]) => (
-                    <div key={id} className="space-y-2">
-                      <Label className="text-sm font-semibold text-gray-700">
-                        {fieldLabels[id] || id}
-                      </Label>
-                      <Input
-                        value={text}
-                        onChange={(e) => handleTextChange(id, e.target.value)}
-                        className="border-gray-200 focus:border-purple-400 focus:ring-purple-100 h-11"
-                        placeholder="Escreva algo especial..."
-                      />
-                    </div>
-                  ))}
+                  {Object.entries(editableTexts).map(([id, text]) => {
+                    // Encontrar o objeto no canvas para verificar maxChars
+                    const obj = fabricRef
+                      ?.getObjects()
+                      .find((o: any) => (o.id || o.name) === id);
+                    const maxChars = (obj as any)?.maxChars || 50;
+                    const isLongText = maxChars > 20;
+
+                    return (
+                      <div key={id} className="space-y-2">
+                        <Label className="text-sm font-semibold text-gray-700">
+                          {fieldLabels[id] || "Campo de Texto"}
+                        </Label>
+                        {isLongText ? (
+                          <Textarea
+                            value={text}
+                            onChange={(e) =>
+                              handleTextChange(id, e.target.value)
+                            }
+                            maxLength={maxChars}
+                            className="border-gray-200 focus:border-purple-400 focus:ring-purple-100 min-h-[80px] resize-none"
+                            placeholder="Escreva algo especial..."
+                          />
+                        ) : (
+                          <Input
+                            value={text}
+                            onChange={(e) =>
+                              handleTextChange(id, e.target.value)
+                            }
+                            maxLength={maxChars}
+                            className="border-gray-200 focus:border-purple-400 focus:ring-purple-100 h-11"
+                            placeholder="Escreva algo especial..."
+                          />
+                        )}
+                        <div className="flex justify-between text-xs text-gray-500">
+                          <span>Limite: {maxChars}</span>
+                          <span>
+                            {text.length}/{maxChars}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
 
@@ -750,8 +785,9 @@ export default function ClientFabricEditor({
                   {fabricRef
                     ?.getObjects()
                     .filter((o: any) => o.isFrame)
-                    .map((frame: any) => {
+                    .map((frame: any, index: number) => {
                       const id = frame.id || frame.name;
+                      const uniqueKey = `${id}-${index}`;
                       const label = fieldLabels[id] || "Sua Foto";
                       let imageUrl = localImages[id];
 
@@ -765,7 +801,7 @@ export default function ClientFabricEditor({
 
                       const hasImage = !!imageUrl;
                       return (
-                        <div key={id} className="space-y-2">
+                        <div key={uniqueKey} className="space-y-2">
                           <Label className="text-[10px] font-bold text-gray-500 uppercase truncate block text-center">
                             {label}
                           </Label>

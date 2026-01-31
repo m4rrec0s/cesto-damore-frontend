@@ -23,8 +23,8 @@ export function usePersonalization() {
         const token =
           localStorage.getItem("token") || localStorage.getItem("appToken");
         const url = itemType
-          ? `${API_URL}/admin/layouts?item_type=${itemType}`
-          : `${API_URL}/admin/layouts`;
+          ? `${API_URL}/layouts/dynamic?item_type=${itemType}`
+          : `${API_URL}/layouts/dynamic`;
 
         const response = await fetch(url, {
           headers: {

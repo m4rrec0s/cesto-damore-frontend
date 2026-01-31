@@ -69,39 +69,82 @@ interface ModalCustomization {
 // Alias para compatibilidade com o modal
 type Customization = ModalCustomization;
 
+// 🔥 NOVO: Validação robusta com verificação de preview_url
 const isCustomizationFilled = (
   custom: CartCustomization | undefined,
 ): boolean => {
   if (!custom) return false;
 
   switch (custom.customization_type) {
-    case "TEXT":
-      return Boolean(custom.text && custom.text.trim().length > 0);
+    case "TEXT": {
+      const text = custom.text?.trim() || "";
+      // 🔥 NOVO: Validar comprimento mínimo (3 caracteres)
+      return text.length >= 3;
+    }
     case "MULTIPLE_CHOICE":
       return Boolean(custom.label_selected || custom.selected_option);
-    case "DYNAMIC_LAYOUT":
-      // DYNAMIC_LAYOUT é preenchido se tiver um item selecionado, um label ou dados brutos reais
-      if (
+    case "DYNAMIC_LAYOUT": {
+      // Verificar se tem label selecionado
+      const hasSelection = Boolean(
         custom.selected_item_label ||
         custom.label_selected ||
-        custom.selected_item
-      )
-        return true;
-      if (!custom.data) return false;
-      const data = custom.data as Record<string, unknown>;
-      return Boolean(
-        data.selected_item ||
-        data.label_selected ||
-        data.selected_item_label ||
-        data.text ||
-        (Array.isArray(data.photos) && data.photos.length > 0) ||
-        (Array.isArray(data.images) && data.images.length > 0),
+        custom.selected_item,
       );
-    case "IMAGES":
-      return Boolean(custom.photos && custom.photos.length > 0);
+
+      if (!hasSelection) return false;
+
+      // 🔥 NOVO: Verificar se o design foi finalizado (tem preview_url)
+      const data = (custom.data as Record<string, any>) || {};
+      const hasPreview = Boolean(
+        data.final_artwork?.preview_url ||
+        data.image?.preview_url ||
+        (Array.isArray(data.final_artworks) &&
+          data.final_artworks.some((a: any) => a.preview_url)),
+      );
+
+      // 🔥 NOVO: Verificar que preview não é blob ou base64
+      if (hasPreview) {
+        const previewUrl =
+          data.final_artwork?.preview_url ||
+          data.image?.preview_url ||
+          data.final_artworks?.[0]?.preview_url;
+
+        if (
+          previewUrl?.startsWith("blob:") ||
+          previewUrl?.startsWith("data:")
+        ) {
+          return false; // Preview não foi enviado ao servidor
+        }
+      }
+
+      return hasSelection && hasPreview;
+    }
+    case "IMAGES": {
+      if (!custom.photos || custom.photos.length === 0) return false;
+
+      // 🔥 NOVO: Verificar se todas as fotos têm preview_url válido
+      return custom.photos.every(
+        (p: any) =>
+          p.preview_url &&
+          !p.preview_url.startsWith("blob:") &&
+          !p.preview_url.startsWith("data:"),
+      );
+    }
     default:
       return true;
   }
+};
+
+// 🔥 NOVO: Obter dica específica por tipo de customização
+const getCustomizationHint = (type: string, name: string): string => {
+  const hints: Record<string, string> = {
+    TEXT: `Digite um texto personalizado (mínimo 3 caracteres)`,
+    MULTIPLE_CHOICE: `Selecione uma opção disponível`,
+    IMAGES: `Envie pelo menos 1 foto (clique para fazer upload)`,
+    DYNAMIC_LAYOUT: `Escolha um design e personalize-o (não esqueça de salvar)`,
+  };
+
+  return hints[type] || `Complete a personalização "${name}"`;
 };
 
 // Extrai o texto limpo de um valor que pode estar serializado
@@ -840,19 +883,28 @@ export function CustomizationsReview({
                         {missing.length > 0 && (
                           <div className="space-y-2 mt-3 pt-3 border-t border-amber-200">
                             <p className="text-xs font-semibold text-amber-900 uppercase tracking-wide">
-                              Pendentes
+                              Pendentes ({missing.length})
                             </p>
-                            <div className="flex flex-wrap gap-2">
+                            <div className="space-y-2">
                               {missing.map((m) => (
-                                <Badge
+                                <div
                                   key={m.id}
-                                  className="bg-amber-100 text-amber-900 font-medium text-xs py-1 px-2.5 border-0"
+                                  className="bg-amber-50 p-2 rounded-md border border-amber-200"
                                 >
-                                  <span className="inline-block w-2 h-2 rounded-full bg-amber-500 mr-1.5" />
-                                  {m.name}
-                                </Badge>
+                                  <Badge className="bg-amber-100 text-amber-900 font-medium text-xs py-1 px-2.5 border-0 mb-1">
+                                    <span className="inline-block w-2 h-2 rounded-full bg-amber-500 mr-1.5" />
+                                    {m.name}
+                                  </Badge>
+                                  <p className="text-xs text-amber-700 mt-1 ml-1">
+                                    💡 {getCustomizationHint(m.type, m.name)}
+                                  </p>
+                                </div>
                               ))}
                             </div>
+                            <p className="text-xs text-amber-800 mt-2 font-medium">
+                              ⚠️ Clique em "Editar" acima para preencher as
+                              personalizações
+                            </p>
                           </div>
                         )}
                       </div>

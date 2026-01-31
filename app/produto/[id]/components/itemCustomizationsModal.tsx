@@ -20,10 +20,7 @@ import {
   CheckCircle2,
   Palette,
   Loader2,
-  Sparkles,
-  ImageIcon,
   Check,
-  Clock,
 } from "lucide-react";
 import { motion } from "motion/react";
 import { AnimatedFramesLoader } from "@/app/components/ui/animated-frames-loader";
@@ -140,6 +137,7 @@ export function ItemCustomizationModal({
         previewImageUrl: string;
         slots?: SlotDef[];
         additional_time?: number;
+        productionTime?: number;
         item_type?: string;
       }
     >
@@ -189,6 +187,8 @@ export function ItemCustomizationModal({
           previewImageUrl: string;
           slots?: SlotDef[];
           item_type?: string;
+          additional_time?: number;
+          productionTime?: number;
         }
       > = {};
 
@@ -204,6 +204,8 @@ export function ItemCustomizationModal({
             previewImageUrl: fullLayout.previewImageUrl,
             slots: fullLayout.slots,
             item_type: fullLayout.item_type,
+            additional_time: fullLayout.additional_time,
+            productionTime: fullLayout.productionTime,
           };
         } catch (error) {
           console.error(`❌ Erro ao carregar layout ${l.id}:`, error);
@@ -226,6 +228,8 @@ export function ItemCustomizationModal({
             previewImageUrl: fullLayout.previewImageUrl,
             slots: fullLayout.slots,
             item_type: fullLayout.item_type,
+            additional_time: fullLayout.additional_time,
+            productionTime: fullLayout.productionTime,
           };
         }
       }
@@ -291,7 +295,6 @@ export function ItemCustomizationModal({
             baseImageUrl?: string;
           };
 
-          // Compatibilidade: DynamicLayout usa baseImageUrl, LayoutBase usa previewImageUrl
           if (rawData && !rawData.previewImageUrl && rawData.baseImageUrl) {
             rawData.previewImageUrl = rawData.baseImageUrl;
           }
@@ -305,19 +308,37 @@ export function ItemCustomizationModal({
 
         setFullLayoutBase(layoutData as LayoutBase);
 
+        const apiType = (layoutData as unknown as { type?: string }).type;
+        const normalizedType = apiType?.toLowerCase();
         const modelUrl =
-          layoutData.item_type?.toLowerCase() === "caneca"
+          normalizedType === "mug" || normalizedType === "caneca"
             ? "/3DModels/caneca.glb"
-            : layoutData.item_type?.toLowerCase() === "quadro"
+            : normalizedType === "frame" || normalizedType === "quadro"
               ? "/3DModels/quadro.glb"
               : undefined;
+
+        // Normalizar para os novos tipos
+        const standardType =
+          normalizedType === "caneca"
+            ? "mug"
+            : normalizedType === "quadro"
+              ? "frame"
+              : normalizedType;
+
+        console.log("🔍 [Layout Selected]", {
+          original: apiType,
+          normalized: normalizedType,
+          standard: standardType,
+          modelUrl,
+          layoutId,
+        });
 
         setCustomizationData((prev) => ({
           ...prev,
           [baseLayoutCustom.id]: {
             ...((prev[baseLayoutCustom.id] as Record<string, unknown>) || {}),
             model_url: modelUrl,
-            item_type: layoutData?.item_type,
+            item_type: standardType,
           },
         }));
 
@@ -395,7 +416,7 @@ export function ItemCustomizationModal({
         const layoutId = layoutData?.layout_id as string | undefined;
 
         if (layoutId) {
-          console.log("🎨 Restoring layout selection:", layoutId);
+          console.log("Restoring layout selection:", layoutId);
           handleLayoutSelect(layoutId);
         }
       }
@@ -423,6 +444,9 @@ export function ItemCustomizationModal({
         (customizationData[baseLayoutCustom.id] as Record<string, unknown>) ||
         {};
 
+      const apiProductionTime = (
+        fullLayoutBase as unknown as { productionTime?: number }
+      )?.productionTime;
       const updatedData = {
         ...customizationData,
         [baseLayoutCustom.id]: {
@@ -431,6 +455,13 @@ export function ItemCustomizationModal({
           previewUrl,
           fabricState,
           highQualityUrl,
+          // ✅ CRITICAL: Manter dados do layout selecionado
+          item_type: existingData.item_type,
+          model_url: existingData.model_url,
+          layout_id: existingData.layout_id,
+          layout_name: existingData.layout_name,
+          additional_time:
+            apiProductionTime || existingData.additional_time || 0,
         },
       };
 
@@ -455,9 +486,16 @@ export function ItemCustomizationModal({
             previewUrl?: string;
             fabricState?: string;
             highQualityUrl?: string;
+            additional_time?: number;
           };
           if (layoutData.layout_id) {
             const cachedLayout = layoutCacheRef.current[layoutData.layout_id];
+            // ✅ CORREÇÃO: API retorna 'productionTime' (não 'additional_time')
+            const apiProductionTime =
+              (cachedLayout as unknown as { productionTime?: number })
+                ?.productionTime ||
+              (fullLayoutBase as unknown as { productionTime?: number })
+                ?.productionTime;
             result.push({
               ruleId: custom.id,
               customizationRuleId: custom.id,
@@ -471,18 +509,13 @@ export function ItemCustomizationModal({
                 item_type: layoutData.item_type,
                 images: layoutData.images || [],
                 fabricState: layoutData.fabricState,
-                highQualityUrl: layoutData.highQualityUrl,
-                image: {
-                  preview_url: layoutData.previewUrl,
-                },
                 previewUrl: layoutData.previewUrl,
-                _customizationName: custom.name,
-                _priceAdjustment: custom.price || 0,
+                highQualityUrl: layoutData.highQualityUrl,
                 additional_time:
-                  cachedLayout?.additional_time ||
-                  fullLayoutBase?.additional_time ||
-                  0,
-              } as unknown as Record<string, unknown>,
+                  layoutData.additional_time || apiProductionTime || 0,
+                _customizationName: custom.name,
+                _priceAdjustment: custom.price,
+              },
             });
           }
         }
@@ -576,7 +609,7 @@ export function ItemCustomizationModal({
 
   const handleCropComplete = useCallback(
     (croppedImageUrl: string) => {
-      console.log("✅ [Crop] Complete triggered");
+      console.log("[Crop] Complete triggered");
       if (!currentCustomizationId) {
         console.warn("⚠️ [Crop] No current customization ID");
         return;
@@ -689,19 +722,12 @@ export function ItemCustomizationModal({
       const newFiles = currentFiles.filter((_, i) => i !== index);
 
       setUploadingFiles((prev) => ({ ...prev, [customizationId]: newFiles }));
-
-      // Notificar pai sobre o novo número de imagens
       const customization = customizations.find(
         (c) => c.id === customizationId,
       );
       if (customization && customization.type === "IMAGES" && onImagesUpdate) {
         const maxImages =
           customization.customization_data.dynamic_layout?.max_images || 10;
-        console.log("📸 [handleRemoveFile] Atualizando contador:", {
-          itemId: itemId,
-          newCount: newFiles.length,
-          max: maxImages,
-        });
         onImagesUpdate(itemId, newFiles.length, maxImages);
       }
 
@@ -747,26 +773,19 @@ export function ItemCustomizationModal({
     const layouts = customization.customization_data.layouts || [];
 
     return (
-      <div className="space-y-6">
-        <div className="flex items-center gap-3">
-          <div className="p-3 rounded-xl bg-gradient-to-br from-purple-100 to-purple-200">
-            <Sparkles className="h-6 w-6 text-purple-700" />
-          </div>
-          <div>
-            <Label className="text-xl font-bold text-gray-900">
-              {customization.name}
-              {customization.isRequired && (
-                <span className="ml-2 text-sm text-red-500 font-medium">
-                  * Obrigatório
-                </span>
-              )}
-            </Label>
-            {customization.description && (
-              <p className="text-sm text-gray-600 mt-1">
-                {customization.description}
-              </p>
+      <div className="space-y-4">
+        <div>
+          <Label className="text-lg font-semibold text-gray-900">
+            {customization.name}
+            {customization.isRequired && (
+              <span className="ml-2 text-sm text-red-500">*</span>
             )}
-          </div>
+          </Label>
+          {customization.description && (
+            <p className="text-sm text-gray-600 mt-1">
+              {customization.description}
+            </p>
+          )}
         </div>
 
         {layouts.length === 0 ? (
@@ -776,11 +795,11 @@ export function ItemCustomizationModal({
           </Card>
         ) : loadingLayouts ? (
           <Card className="p-8 text-center bg-gray-50">
-            <Loader2 className="h-16 w-16 mx-auto text-purple-600 animate-spin mb-3" />
+            <Loader2 className="h-16 w-16 mx-auto text-rose-600 animate-spin mb-3" />
             <p className="text-sm text-gray-500">Carregando layouts...</p>
           </Card>
         ) : (
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
             {layouts.map((layoutFromCustomization) => {
               const fullLayout =
                 layoutsWithImages[layoutFromCustomization.id] ||
@@ -798,7 +817,6 @@ export function ItemCustomizationModal({
                   url.includes("drive.usercontent.google.com")
                 ) {
                   let normalizedUrl = getDirectImageUrl(url);
-                  // Optimize Drive images with thumbnail parameter
                   if (normalizedUrl.includes("drive.google.com")) {
                     normalizedUrl += "&sz=w500";
                   }
@@ -821,38 +839,21 @@ export function ItemCustomizationModal({
                   ).image_url ||
                   "",
               );
-              const hasSlots =
-                (fullLayout as { slots?: SlotDef[] }).slots &&
-                (fullLayout as { slots?: SlotDef[] }).slots!.length > 0;
               const isQuadro =
                 (
                   fullLayout as { item_type?: string }
-                ).item_type?.toLowerCase() === "quadro";
+                ).item_type?.toLowerCase() === "frame";
 
               return (
                 <div
                   key={fullLayout.id}
-                  className={`group cursor-pointer transition-all duration-300 overflow-hidden hover:shadow-2xl hover:scale-105 border-2 border-gray-200 hover:border-purple-300 ${
-                    isQuadro ? "rounded-lg shadow-lg" : ""
-                  }`}
+                  className="group cursor-pointer transition-all max-h-fit overflow-hidden hover:shadow-lg border-2 border-gray-200 hover:border-gray-900 rounded-xl"
                   onClick={() => handleLayoutSelect(fullLayout.id)}
                 >
-                  {/* Para quadros: aspect-square para parecer um quadro real. Para outros: aspect-video */}
-                  <div
-                    className={`relative bg-gradient-to-br from-gray-50 to-gray-100 ${
-                      isQuadro
-                        ? "aspect-square p-3"
-                        : "aspect-video max-h-[200px]"
-                    }`}
-                  >
-                    {/* Moldura visual para quadros */}
-                    {isQuadro && (
-                      <div className="absolute inset-2 border-4 border-amber-800/30 rounded-sm pointer-events-none z-10 shadow-inner" />
-                    )}
-
+                  <div className="relative bg-gray-50">
                     {imageLoaded && !imageUrl && (
                       <div className="absolute inset-0 flex items-center justify-center bg-white/80 backdrop-blur-sm">
-                        <Loader2 className="h-10 w-10 animate-spin text-purple-600" />
+                        <Loader2 className="h-10 w-10 animate-spin text-rose-600" />
                       </div>
                     )}
 
@@ -862,15 +863,14 @@ export function ItemCustomizationModal({
                           isQuadro ? "p-1" : ""
                         }`}
                       >
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
+                        <Image
                           src={imageUrl}
                           alt={fullLayout.name}
-                          className={`w-full h-full transition-all duration-300 ${
+                          className={`w-full h-full transition-all duration-300 object-contain ${
                             imageLoaded ? "opacity-100" : "opacity-0"
-                          } ${
-                            isQuadro ? "object-contain rounded" : "object-cover"
-                          }`}
+                          } ${isQuadro ? "" : ""}`}
+                          width={400}
+                          height={200}
                           onLoad={() => {
                             setImageLoadStates((prev) => ({
                               ...prev,
@@ -879,7 +879,7 @@ export function ItemCustomizationModal({
                           }}
                           onError={(e) => {
                             console.error(
-                              `❌ [Layout ${fullLayout.name}] Erro ao carregar imagem:`,
+                              `[Layout ${fullLayout.name}] Erro ao carregar imagem:`,
                               e,
                             );
                             setImageLoadStates((prev) => ({
@@ -895,38 +895,13 @@ export function ItemCustomizationModal({
                       </div>
                     )}
 
-                    {hasSlots && (
-                      <div className="absolute top-3 left-3 flex items-center gap-2">
-                        <div className="bg-purple-600 text-white rounded-full px-3 py-1 text-xs font-semibold shadow-lg flex items-center gap-1">
-                          <ImageIcon className="h-3 w-3" />
-                          Permite fotos
-                        </div>
-                        {fullLayout.additional_time ? (
-                          <div>
-                            <div className="bg-purple-600 text-white rounded-full px-3 py-1 text-xs font-semibold shadow-lg flex items-center gap-1">
-                              <Clock className="h-3 w-3" />+
-                              {fullLayout.additional_time} min
-                            </div>
-                          </div>
-                        ) : null}
-                      </div>
-                    )}
-
-                    {/* Hover Overlay */}
-                    <div className="absolute inset-0 bg-gradient-to-t from-purple-900/80 via-purple-600/20 to-transparent opacity-0 group-hover:opacity-100 transition-all duration-300 flex items-end justify-center pb-4">
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        className="bg-white/95 hover:bg-white font-semibold shadow-xl"
-                      >
-                        <CheckCircle2 className="h-4 w-4 mr-2" />
-                        Selecionar
-                      </Button>
+                    <div className="absolute inset-0 bg-gray-900/80 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                      <CheckCircle2 className="h-8 w-8 text-white" />
                     </div>
                   </div>
 
-                  <div className="p-4 bg-white border-t-2 border-gray-100">
-                    <h4 className="font-bold text-gray-900 text-center truncate">
+                  <div className="p-3 bg-white">
+                    <h4 className="font-medium text-sm text-gray-900 text-center truncate">
                       {fullLayout.name}
                     </h4>
                   </div>
@@ -937,9 +912,9 @@ export function ItemCustomizationModal({
         )}
 
         {loadingLayout && selectedLayoutId && (
-          <Card className="p-12 bg-gradient-to-br from-purple-50 to-pink-50">
+          <Card className="p-12 bg-gradient-to-br from-rose-50 to-pink-50">
             <div className="flex flex-col items-center justify-center gap-4">
-              <Loader2 className="h-14 w-14 animate-spin text-purple-600" />
+              <Loader2 className="h-14 w-14 animate-spin text-rose-600" />
               <p className="text-base font-semibold text-gray-800">
                 Carregando editor de personalização...
               </p>
@@ -956,29 +931,14 @@ export function ItemCustomizationModal({
 
     return (
       <div className="space-y-4">
-        {/* Cabeçalho com vibe papel antigo */}
-        <div className="p-4 rounded-lg bg-gradient-to-br from-amber-50 via-yellow-50 to-orange-50 border-2 border-amber-200 shadow-sm relative overflow-hidden">
-          {/* Texture papel antigo */}
-          <div
-            className="absolute inset-0 opacity-5 pointer-events-none"
-            style={{
-              backgroundImage:
-                'url(\'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><filter id="noise"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="4"/></filter><rect width="100" height="100" filter="url(%23noise)" opacity="0.8"/></svg>\')',
-            }}
-          />
-
+        {/* Cabeçalho Minimalista */}
+        <div className="p-4 rounded-lg bg-neutral-50 border border-neutral-200 shadow-sm relative overflow-hidden">
           <div className="flex items-center gap-3 relative z-10">
-            <div className="p-2 rounded-lg bg-amber-100 shadow-sm">
-              <Type className="h-5 w-5 text-amber-700" />
+            <div className="p-2 rounded-lg bg-neutral-100 shadow-sm">
+              <Type className="h-5 w-5 text-neutral-700" />
             </div>
             <div>
-              <Label
-                className="text-lg font-bold text-amber-900"
-                style={{
-                  textShadow: "1px 1px 2px rgba(0,0,0,0.05)",
-                  fontFamily: '"Georgia", serif',
-                }}
-              >
+              <Label className="text-lg font-bold text-neutral-900">
                 {customization.name}
                 {customization.isRequired && (
                   <Badge variant="destructive" className="ml-2 text-xs">
@@ -987,14 +947,7 @@ export function ItemCustomizationModal({
                 )}
               </Label>
               {customization.description && (
-                <p
-                  className="text-sm text-amber-800 mt-1"
-                  style={{
-                    fontStyle: "italic",
-                    fontFamily: '"Georgia", serif',
-                    opacity: 0.8,
-                  }}
-                >
+                <p className="text-sm text-neutral-600 mt-1">
                   {customization.description}
                 </p>
               )}
@@ -1003,12 +956,10 @@ export function ItemCustomizationModal({
         </div>
 
         {fields.map((field) => {
-          // ✅ Tentar restaurar de customizationData OU initialValues
           let data = customizationData[customization.id] as
             | Record<string, string>
             | undefined;
 
-          // Se não temos dados em customizationData, tentar de initialValues
           if (!data && initialValues && initialValues[customization.id]) {
             const initialValue = initialValues[customization.id] as unknown;
             if (typeof initialValue === "object" && initialValue !== null) {
@@ -1073,7 +1024,6 @@ export function ItemCustomizationModal({
           );
         })}
 
-        {/* Botão de Confirmar para Texto */}
         <motion.div
           className="fixed bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-white via-white to-transparent border-t-2 border-amber-200 shadow-2xl"
           initial={{ opacity: 0, y: 100 }}
@@ -1175,13 +1125,13 @@ export function ItemCustomizationModal({
 
     return (
       <div className="space-y-4 pb-5">
-        <div className="p-4 rounded-lg bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-300 shadow-sm">
+        <div className="p-4 rounded-lg bg-neutral-50 border border-neutral-200 shadow-sm">
           <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-green-200">
-              <Upload className="h-5 w-5 text-green-700" />
+            <div className="p-2 rounded-lg bg-neutral-100">
+              <Upload className="h-5 w-5 text-neutral-700" />
             </div>
             <div>
-              <Label className="text-lg font-bold text-green-900">
+              <Label className="text-lg font-bold text-neutral-900">
                 {customization.name}
                 {customization.isRequired && (
                   <Badge variant="destructive" className="ml-2 text-xs">
@@ -1190,25 +1140,25 @@ export function ItemCustomizationModal({
                 )}
               </Label>
               {customization.description && (
-                <p className="text-sm text-green-800 mt-1">
+                <p className="text-sm text-neutral-600 mt-1">
                   {customization.description}
                 </p>
               )}
             </div>
           </div>
-          <p className="text-xs text-green-700 mt-2 ml-11">
+          <p className="text-xs text-neutral-500 mt-2 ml-11">
             {currentFiles.length}/{maxImages} imagens
           </p>
         </div>
 
         {currentFiles.length > 0 && (
-          <div className="grid grid-cols-4 gap-3 bg-white p-3 rounded-lg border border-green-200">
+          <div className="grid grid-cols-4 gap-3 bg-white p-3 rounded-lg border border-neutral-200">
             {currentFiles.map((file, index) => (
               <motion.div
                 key={index}
                 initial={{ opacity: 0, scale: 0.8 }}
                 animate={{ opacity: 1, scale: 1 }}
-                className="relative group aspect-square rounded-lg overflow-hidden border-2 border-green-300 shadow-md hover:shadow-lg transition-shadow"
+                className="relative group aspect-square rounded-lg overflow-hidden border border-neutral-200 shadow-sm hover:shadow-md transition-shadow"
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
@@ -1241,17 +1191,17 @@ export function ItemCustomizationModal({
               <div key={`empty-slot-${globalIndex}`}>
                 <label
                   htmlFor={`file-${customization.id}-${globalIndex}`}
-                  className="flex flex-row items-center justify-between border-2 border-dashed border-green-300 rounded-xl p-4 cursor-pointer hover:border-green-600 hover:bg-green-50/80 transition-all bg-green-50/30 group"
+                  className="flex flex-row items-center justify-between border-2 border-dashed border-neutral-200 rounded-xl p-4 cursor-pointer hover:border-neutral-400 hover:bg-neutral-50 transition-all bg-neutral-50/30 group"
                 >
                   <div className="flex items-center gap-3">
-                    <div className="bg-green-100 p-2 rounded-full group-hover:bg-green-200 transition-colors">
-                      <Upload className="h-5 w-5 text-green-700" />
+                    <div className="bg-neutral-100 p-2 rounded-full group-hover:bg-neutral-200 transition-colors">
+                      <Upload className="h-5 w-5 text-neutral-600" />
                     </div>
                     <div>
-                      <p className="text-sm font-semibold text-green-900 group-hover:text-green-700">
+                      <p className="text-sm font-semibold text-neutral-900 group-hover:text-neutral-700">
                         Adicionar Foto {globalIndex + 1}
                       </p>
-                      <p className="text-xs text-green-600">
+                      <p className="text-xs text-neutral-500">
                         Clique para selecionar
                       </p>
                     </div>
@@ -1268,7 +1218,7 @@ export function ItemCustomizationModal({
                     }}
                   />
 
-                  <div className="bg-white border border-green-200 px-3 py-1 rounded text-xs font-medium text-green-700">
+                  <div className="bg-white border border-neutral-200 px-3 py-1 rounded text-xs font-medium text-neutral-600">
                     Selecionar
                   </div>
                 </label>
@@ -1398,25 +1348,22 @@ export function ItemCustomizationModal({
 
     return (
       <div className="space-y-4 pb-5">
-        <div className="p-4 rounded-lg bg-gradient-to-r from-rose-50 to-pink-50 border-2 border-rose-300 shadow-sm">
+        <div className="p-4 rounded-lg bg-neutral-50 border border-neutral-200 shadow-sm">
           <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-rose-200">
-              <CheckCircle2 className="h-5 w-5 text-rose-700" />
+            <div className="p-2 rounded-lg bg-neutral-100">
+              <CheckCircle2 className="h-5 w-5 text-neutral-700" />
             </div>
             <div>
-              <Label className="text-lg font-bold text-rose-900">
+              <Label className="text-lg font-bold text-neutral-900">
                 {customization.name}
                 {customization.isRequired && (
-                  <Badge
-                    variant="destructive"
-                    className="ml-2 text-xs text-white"
-                  >
+                  <Badge variant="destructive" className="ml-2 text-xs">
                     Obrigatório
                   </Badge>
                 )}
               </Label>
               {customization.description && (
-                <p className="text-sm text-rose-800 mt-1">
+                <p className="text-sm text-neutral-600 mt-1">
                   {customization.description}
                 </p>
               )}
@@ -1430,14 +1377,14 @@ export function ItemCustomizationModal({
             return (
               <motion.div
                 key={option.id}
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
+                whileHover={{ scale: 1.01 }}
+                whileTap={{ scale: 0.99 }}
               >
                 <Card
                   className={`p-4 cursor-pointer transition-all ${
                     isSelected
-                      ? "border-2 border-rose-500 bg-gradient-to-r from-rose-50 to-pink-50 shadow-md"
-                      : "border-2 border-rose-200 hover:border-rose-400 hover:bg-rose-50/30"
+                      ? "border-2 border-neutral-900 bg-neutral-50 shadow-sm"
+                      : "border border-neutral-200 hover:border-neutral-400 hover:bg-neutral-50/50"
                   }`}
                   onClick={() =>
                     handleOptionSelect(
@@ -1451,44 +1398,45 @@ export function ItemCustomizationModal({
                     <motion.div
                       initial={false}
                       animate={{
-                        scale: isSelected ? 1.2 : 1,
+                        scale: isSelected ? 1.1 : 1,
                         backgroundColor: isSelected
-                          ? "rgb(244 63 94)"
-                          : "rgb(254 226 226)",
+                          ? "rgb(23 23 23)"
+                          : "transparent",
                       }}
-                      className="flex-shrink-0 w-6 h-6 rounded-full border-2 border-rose-300 flex items-center justify-center"
+                      className="flex-shrink-0 w-5 h-5 rounded-full border border-neutral-300 flex items-center justify-center"
                     >
-                      {isSelected && <Check className="h-4 w-4 text-white" />}
+                      {isSelected && <Check className="h-3 w-3 text-white" />}
                     </motion.div>
-                    <Image
-                      src={
-                        getInternalImageUrl(option.image_url) ||
-                        "/placeholder.png"
-                      }
-                      alt={option.label}
-                      width={64}
-                      height={64}
-                      quality={90}
-                      className="w-16 h-16 object-cover rounded-md border-2 border-rose-200"
-                    />
+                    <div className="relative w-16 h-16 flex-shrink-0 rounded-md overflow-hidden border border-neutral-100">
+                      <Image
+                        src={
+                          getInternalImageUrl(option.image_url) ||
+                          "/placeholder.png"
+                        }
+                        alt={option.label}
+                        fill
+                        quality={90}
+                        className="object-cover bg-neutral-50"
+                      />
+                    </div>
                     <div className="flex-1">
                       <p
                         className={`font-semibold ${
-                          isSelected ? "text-rose-900" : "text-rose-800"
+                          isSelected ? "text-neutral-900" : "text-neutral-700"
                         }`}
                       >
                         {option.label}
                       </p>
                       {option.description && (
-                        <p className="text-xs text-rose-700 mt-1">
+                        <p className="text-xs text-neutral-500 mt-1 line-clamp-2">
                           {option.description}
                         </p>
                       )}
                     </div>
                     {option.price_adjustment && option.price_adjustment > 0 && (
                       <Badge
-                        variant="outline"
-                        className="text-rose-700 border-rose-300 bg-rose-50"
+                        variant="secondary"
+                        className="bg-neutral-100 text-neutral-900 font-bold"
                       >
                         +R$ {option.price_adjustment.toFixed(2)}
                       </Badge>
@@ -1502,7 +1450,7 @@ export function ItemCustomizationModal({
 
         {selectedId && selectedLabel && (
           <motion.div
-            className="fixed bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-white via-white to-transparent border-t-2 border-rose-200 shadow-2xl"
+            className="fixed bottom-0 left-0 right-0 p-4 bg-white/80 backdrop-blur-md border-t border-neutral-200 shadow-2xl"
             initial={{ opacity: 0, y: 100 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ type: "spring", stiffness: 300, damping: 30 }}
@@ -1579,7 +1527,7 @@ export function ItemCustomizationModal({
           (cropDialogOpen || pendingFiles.length > 0 || isCropping)
         ) {
           console.log(
-            "⛔ [Dialog] Tentativa bloqueada - cropDialogOpen:",
+            "[Dialog] Tentativa bloqueada - cropDialogOpen:",
             cropDialogOpen,
             "pendingFiles:",
             pendingFiles.length,
@@ -1596,23 +1544,17 @@ export function ItemCustomizationModal({
       <DialogContent
         className="max-w-6xl max-h-[95vh] overflow-y-auto"
         onPointerDownOutside={(e) => {
-          // Prevenir fechamento quando clica fora durante crop ou processamento
           if (cropDialogOpen || pendingFiles.length > 0 || isCropping) {
-            console.log("🛡️ [DialogContent] onPointerDownOutside bloqueado");
             e.preventDefault();
           }
         }}
         onInteractOutside={(e) => {
-          // Prevenir interação externa durante crop ou processamento
           if (cropDialogOpen || pendingFiles.length > 0 || isCropping) {
-            console.log("🛡️ [DialogContent] onInteractOutside bloqueado");
             e.preventDefault();
           }
         }}
         onEscapeKeyDown={(e) => {
-          // Prevenir fechamento por ESC durante crop ou processamento
           if (cropDialogOpen || pendingFiles.length > 0 || isCropping) {
-            console.log("🛡️ [DialogContent] onEscapeKeyDown bloqueado");
             e.preventDefault();
           }
         }}

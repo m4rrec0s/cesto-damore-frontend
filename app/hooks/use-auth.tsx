@@ -64,52 +64,50 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     // Carregar dados do localStorage na inicialização
     if (typeof window !== "undefined") {
-      const storedUser = localStorage.getItem("user");
+      const storedUserId = localStorage.getItem("userId");
       const storedAppToken = localStorage.getItem("appToken");
 
-      if (storedUser && storedAppToken && storedAppToken !== "undefined") {
-        try {
-          const userData = JSON.parse(storedUser);
-          const tokenData = decodeToken(storedAppToken);
+      if (storedUserId && storedAppToken && storedAppToken !== "undefined") {
+        const tokenData = decodeToken(storedAppToken);
 
-          // ✅ SEGURANÇA: Verificar se token expirou
-          if (tokenData && isTokenExpired(tokenData)) {
-            console.warn("⏰ Token expirado ao carregar do localStorage");
-            localStorage.removeItem("user");
-            localStorage.removeItem("appToken");
-            localStorage.removeItem("tokenTimestamp");
-            // Limpar cookies também
-            document.cookie =
-              "appToken=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT";
-            document.cookie =
-              "user=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT";
-            return;
-          }
-
-          setUser(userData);
-          setAppToken(storedAppToken);
-
-          // ✅ SEGURANÇA: Max 12 horas de expiração
-          document.cookie = `appToken=${storedAppToken}; path=/; max-age=${
-            12 * 60 * 60
-          }; Secure; SameSite=Strict`;
-          document.cookie = `user=${encodeURIComponent(
-            storedUser
-          )}; path=/; max-age=${12 * 60 * 60}; Secure; SameSite=Strict`;
-        } catch (error) {
-          console.error("Erro ao carregar dados do usuário:", error);
-          localStorage.removeItem("user");
+        // ✅ SEGURANÇA: Verificar se token expirou
+        if (tokenData && isTokenExpired(tokenData)) {
+          console.warn("⏰ Token expirado ao carregar do localStorage");
+          localStorage.removeItem("userId");
           localStorage.removeItem("appToken");
-          // Limpar cookies também
+          localStorage.removeItem("tokenTimestamp");
           document.cookie =
             "appToken=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT";
-          document.cookie =
-            "user=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT";
+          setIsLoading(false);
+          return;
         }
+
+        // ✅ SEGURANÇA: Buscar dados completos do usuário via API
+        api
+          .getUser(storedUserId)
+          .then((userData) => {
+            setUser(userData);
+            setAppToken(storedAppToken);
+            document.cookie = `appToken=${storedAppToken}; path=/; max-age=${
+              12 * 60 * 60
+            }; Secure; SameSite=Strict`;
+          })
+          .catch((error) => {
+            console.error("Erro ao carregar dados do usuário:", error);
+            localStorage.removeItem("userId");
+            localStorage.removeItem("appToken");
+            localStorage.removeItem("tokenTimestamp");
+            document.cookie =
+              "appToken=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT";
+          })
+          .finally(() => {
+            setIsLoading(false);
+          });
+      } else {
+        setIsLoading(false);
       }
-      setIsLoading(false);
     }
-  }, []);
+  }, [api]);
 
   const login = (userData: User, token: string) => {
     // ✅ SEGURANÇA: Validar token antes de salvar
@@ -122,7 +120,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(userData);
     setAppToken(token);
     if (typeof window !== "undefined") {
-      localStorage.setItem("user", JSON.stringify(userData));
+      // ✅ SEGURANÇA: Salvar apenas userId e appToken
+      localStorage.setItem("userId", userData.id);
       localStorage.setItem("appToken", token);
       localStorage.setItem("tokenTimestamp", Date.now().toString());
 
@@ -130,9 +129,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       document.cookie = `appToken=${token}; path=/; max-age=${
         12 * 60 * 60
       }; Secure; SameSite=Strict`;
-      document.cookie = `user=${encodeURIComponent(
-        JSON.stringify(userData)
-      )}; path=/; max-age=${12 * 60 * 60}; Secure; SameSite=Strict`;
     }
   };
 
@@ -140,13 +136,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
     setAppToken(null);
     if (typeof window !== "undefined") {
-      localStorage.removeItem("user");
+      localStorage.removeItem("userId");
       localStorage.removeItem("appToken");
+      localStorage.removeItem("tokenTimestamp");
 
       // Limpar cookies também
       document.cookie =
         "appToken=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT";
-      document.cookie = "user=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT";
     }
   };
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useCallback, useRef, useState } from "react";
+import { useApi } from "./use-api";
 
 interface PaymentUpdateData {
   type: "payment_update" | "payment_error" | "connected";
@@ -20,6 +21,8 @@ interface PaymentUpdateData {
 interface UseWebhookNotificationOptions {
   orderId: string | null;
   enabled?: boolean;
+  enablePollingFallback?: boolean; // 🔥 NOVO: Habilita polling quando SSE falhar
+  pollingInterval?: number; // 🔥 NOVO: Intervalo de polling em ms (padrão: 5000)
   onPaymentUpdate?: (data: PaymentUpdateData) => void;
   onPaymentApproved?: (data: PaymentUpdateData) => void;
   onPaymentRejected?: (data: PaymentUpdateData) => void;
@@ -28,6 +31,9 @@ interface UseWebhookNotificationOptions {
   onConnected?: () => void;
   onDisconnected?: () => void;
 }
+
+const MAX_RECONNECT_ATTEMPTS = 3; // 🔥 NOVO: Limite de tentativas SSE antes de fallback
+const DEFAULT_POLLING_INTERVAL = 5000; // 🔥 NOVO: 5 segundos
 
 /**
  * Hook para receber notificações em tempo real via Server-Sent Events (SSE)
@@ -53,6 +59,8 @@ interface UseWebhookNotificationOptions {
 export function useWebhookNotification({
   orderId,
   enabled = true,
+  enablePollingFallback = true, // 🔥 NOVO: Polling habilitado por padrão
+  pollingInterval = DEFAULT_POLLING_INTERVAL,
   onPaymentUpdate,
   onPaymentApproved,
   onPaymentRejected,
@@ -61,12 +69,16 @@ export function useWebhookNotification({
   onConnected,
   onDisconnected,
 }: UseWebhookNotificationOptions) {
+  const api = useApi();
   const eventSourceRef = useRef<EventSource | null>(null);
+  const pollingIntervalRef = useRef<number | null>(null); // 🔥 NOVO: Timer de polling
   const [isConnected, setIsConnected] = useState(false);
+  const [isPolling, setIsPolling] = useState(false); // 🔥 NOVO: Estado de polling
   const reconnectAttemptsRef = useRef(0);
   const reconnectTimeoutRef = useRef<number | null>(null);
   const connectRef = useRef<(() => void) | null>(null);
   const lastConnectTimeRef = useRef<number | null>(null);
+  const lastPaymentStatusRef = useRef<string | null>(null); // 🔥 NOVO: Evita notificações duplicadas
 
   const handleMessage = useCallback(
     (event: MessageEvent) => {
@@ -121,7 +133,7 @@ export function useWebhookNotification({
       onPaymentPending,
       onError,
       onConnected,
-    ]
+    ],
   );
 
   const handleError = useCallback(
@@ -130,6 +142,17 @@ export function useWebhookNotification({
       if (eventSourceRef.current?.readyState === EventSource.CLOSED) {
         setIsConnected(false);
         onDisconnected?.();
+
+        // 🔥 NOVO: Iniciar polling fallback após MAX_RECONNECT_ATTEMPTS
+        if (
+          enablePollingFallback &&
+          reconnectAttemptsRef.current >= MAX_RECONNECT_ATTEMPTS
+        ) {
+          console.warn(
+            `⚠️ SSE failed after ${MAX_RECONNECT_ATTEMPTS} attempts. Switching to polling fallback.`,
+          );
+          startPolling();
+        }
         return;
       }
 
@@ -147,17 +170,26 @@ export function useWebhookNotification({
         eventSourceRef.current = null;
       } catch {}
 
-      reconnectTimeoutRef.current = window.setTimeout(() => {
-        try {
-          if (orderId && enabled) {
-            connectRef.current?.();
+      // 🔥 MELHORADO: Verificar limite de tentativas antes de reconectar
+      if (attempt < MAX_RECONNECT_ATTEMPTS) {
+        reconnectTimeoutRef.current = window.setTimeout(() => {
+          try {
+            if (orderId && enabled) {
+              connectRef.current?.();
+            }
+          } catch (err) {
+            console.error("Erro na tentativa de reconexão SSE:", err);
           }
-        } catch (err) {
-          console.error("Erro na tentativa de reconexão SSE:", err);
-        }
-      }, backoffMs);
+        }, backoffMs);
+      } else if (enablePollingFallback) {
+        // 🔥 NOVO: Após esgotar tentativas SSE, iniciar polling
+        console.warn(
+          `⚠️ SSE reconnection limit reached. Switching to polling fallback.`,
+        );
+        startPolling();
+      }
     },
-    [onDisconnected, orderId, enabled]
+    [onDisconnected, orderId, enabled, enablePollingFallback],
   );
 
   const connect = useCallback(() => {
@@ -226,7 +258,100 @@ export function useWebhookNotification({
       }
       reconnectAttemptsRef.current = 0;
     }
+
+    // 🔥 NOVO: Limpar polling também
+    stopPolling();
   }, [onDisconnected]);
+
+  // 🔥 NOVO: Função de polling como fallback
+  const pollOrderStatus = useCallback(async () => {
+    if (!orderId) return;
+
+    try {
+      const order = await api.getOrder(orderId);
+
+      if (!order || !order.payment) return;
+
+      const currentStatus = order.payment.status;
+
+      // Evitar notificações duplicadas
+      if (lastPaymentStatusRef.current === currentStatus) {
+        return;
+      }
+
+      lastPaymentStatusRef.current = currentStatus;
+
+      const paymentData: PaymentUpdateData = {
+        type: "payment_update",
+        orderId: order.id,
+        status: currentStatus,
+        paymentId: order.payment.id,
+        mercadoPagoId: order.payment.mercado_pago_id || undefined,
+        approvedAt: order.payment.approved_at
+          ? new Date(order.payment.approved_at).toLocaleString("pt-BR")
+          : undefined,
+        paymentMethod: order.payment.payment_method || undefined,
+        timestamp: new Date().toLocaleString("pt-BR"),
+      };
+
+      onPaymentUpdate?.(paymentData);
+
+      // Disparar callbacks específicos
+      if (currentStatus === "APPROVED") {
+        onPaymentApproved?.(paymentData);
+        stopPolling(); // 🔥 Parar polling após aprovação
+      } else if (
+        currentStatus === "REJECTED" ||
+        currentStatus === "CANCELLED"
+      ) {
+        onPaymentRejected?.(paymentData);
+        stopPolling(); // 🔥 Parar polling após rejeição
+      } else if (
+        currentStatus === "PENDING" ||
+        currentStatus === "IN_PROCESS"
+      ) {
+        onPaymentPending?.(paymentData);
+      }
+    } catch (error) {
+      console.error("❌ Erro ao fazer polling de status:", error);
+      // Não parar polling em caso de erro - pode ser temporário
+    }
+  }, [
+    orderId,
+    api,
+    onPaymentUpdate,
+    onPaymentApproved,
+    onPaymentRejected,
+    onPaymentPending,
+  ]);
+
+  // 🔥 NOVO: Iniciar polling
+  const startPolling = useCallback(() => {
+    if (pollingIntervalRef.current) return; // Já está fazendo polling
+
+    console.log(
+      `🔄 Iniciando polling fallback (intervalo: ${pollingInterval}ms)`,
+    );
+    setIsPolling(true);
+
+    // Poll imediatamente
+    pollOrderStatus();
+
+    // Configurar intervalo
+    pollingIntervalRef.current = window.setInterval(() => {
+      pollOrderStatus();
+    }, pollingInterval);
+  }, [pollOrderStatus, pollingInterval]);
+
+  // 🔥 NOVO: Parar polling
+  const stopPolling = useCallback(() => {
+    if (pollingIntervalRef.current) {
+      clearInterval(pollingIntervalRef.current);
+      pollingIntervalRef.current = null;
+      setIsPolling(false);
+      console.log("⏹️ Polling fallback parado");
+    }
+  }, []);
 
   useEffect(() => {
     if (enabled && orderId) {
@@ -242,6 +367,7 @@ export function useWebhookNotification({
 
   return {
     isConnected,
+    isPolling, // 🔥 NOVO: Expor estado de polling
     disconnect,
     reconnect: () => {
       disconnect();

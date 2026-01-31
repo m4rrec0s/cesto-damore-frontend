@@ -42,7 +42,7 @@ export function useLayoutApi() {
     setError(null);
 
     try {
-      const response = await fetch(`${API_URL}/admin/layouts`, {
+      const response = await fetch(`${API_URL}/layouts/dynamic`, {
         headers: {
           ...getAuthHeaders(),
           "ngrok-skip-browser-warning": "true",
@@ -72,7 +72,7 @@ export function useLayoutApi() {
       setError(null);
 
       try {
-        const url = new URL(`${API_URL}/layouts`);
+        const url = new URL(`${API_URL}/layouts/dynamic`);
         if (itemType) url.searchParams.append("item_type", itemType);
 
         const response = await fetch(url.toString(), {
@@ -106,7 +106,7 @@ export function useLayoutApi() {
       setError(null);
 
       try {
-        const response = await fetch(`${API_URL}/admin/layouts/${id}`, {
+        const response = await fetch(`${API_URL}/layouts/dynamic/${id}`, {
           headers: {
             ...getAuthHeaders(),
             "ngrok-skip-browser-warning": "true",
@@ -153,7 +153,7 @@ export function useLayoutApi() {
         );
         formData.append("image", imageFile);
 
-        const response = await fetch(`${API_URL}/admin/layouts`, {
+        const response = await fetch(`${API_URL}/layouts/dynamic`, {
           method: "POST",
           headers: {
             ...getAuthHeadersForFormData(),
@@ -217,7 +217,7 @@ export function useLayoutApi() {
           );
         if (imageFile) formData.append("image", imageFile);
 
-        const response = await fetch(`${API_URL}/admin/layouts/${id}`, {
+        const response = await fetch(`${API_URL}/layouts/dynamic/${id}`, {
           method: "PUT",
           headers: {
             ...getAuthHeadersForFormData(),
@@ -259,7 +259,7 @@ export function useLayoutApi() {
       setError(null);
 
       try {
-        const response = await fetch(`${API_URL}/admin/layouts/${id}`, {
+        const response = await fetch(`${API_URL}/layouts/dynamic/${id}`, {
           method: "DELETE",
           headers: {
             ...getAuthHeaders(),

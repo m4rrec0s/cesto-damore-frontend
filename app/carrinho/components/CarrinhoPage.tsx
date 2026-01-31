@@ -71,7 +71,7 @@ type PaymentStatusType = "" | "pending" | "success" | "failure";
 const getAdditionalFinalPrice = (
   additionalId: string,
   basePrice: number,
-  customizations?: CartCustomization[]
+  customizations?: CartCustomization[],
 ): number => {
   if (!customizations || customizations.length === 0) {
     return basePrice;
@@ -80,7 +80,7 @@ const getAdditionalFinalPrice = (
   const additionalCustomizations = customizations.filter(
     (c) =>
       c.customization_id?.includes(additionalId) ||
-      c.customization_id?.endsWith(`_${additionalId}`)
+      c.customization_id?.endsWith(`_${additionalId}`),
   );
 
   if (additionalCustomizations.length === 0) {
@@ -89,7 +89,7 @@ const getAdditionalFinalPrice = (
 
   const adjustmentTotal = additionalCustomizations.reduce(
     (sum, c) => sum + (c.price_adjustment || 0),
-    0
+    0,
   );
 
   return basePrice + adjustmentTotal;
@@ -163,7 +163,7 @@ export default function CarrinhoPageContent() {
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [isGeneratingPix, setIsGeneratingPix] = useState(false);
   const [optionSelected, setOptionSelected] = useState<"delivery" | "pickup">(
-    "delivery"
+    "delivery",
   );
 
   // Sincronizar currentStep com query params
@@ -183,7 +183,7 @@ export default function CarrinhoPageContent() {
       router.push(`/carrinho?${params.toString()}`, { scroll: false });
       setCurrentStep(step);
     },
-    [router]
+    [router],
   );
 
   // Helper para formatar CPF/CNPJ visualmente
@@ -224,7 +224,7 @@ export default function CarrinhoPageContent() {
       // ✅ Usar função memoizada do hook (mais otimizada)
       return isDateDisabledInCalendar(date);
     },
-    [getDeliveryDateBounds, isDateDisabledInCalendar]
+    [getDeliveryDateBounds, isDateDisabledInCalendar],
   );
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
   const [selectedTime, setSelectedTime] = useState("");
@@ -250,7 +250,7 @@ export default function CarrinhoPageContent() {
   useEffect(() => {
     if (confirmationState === "animating") {
       console.log(
-        "🎬 ANIMATING STATE DETECTED - Starting 2.6s timer to CONFIRMED"
+        "🎬 ANIMATING STATE DETECTED - Starting 2.6s timer to CONFIRMED",
       );
       const t = setTimeout(() => {
         console.log("⏰ Timer fired - Transitioning to CONFIRMED");
@@ -306,7 +306,7 @@ export default function CarrinhoPageContent() {
           return "";
       }
     },
-    []
+    [],
   );
 
   const handlePaymentSuccess = useCallback(
@@ -325,7 +325,7 @@ export default function CarrinhoPageContent() {
 
       toast.success("Pagamento confirmado! Pedido realizado com sucesso.");
     },
-    [clearPendingOrder, clearCart]
+    [clearPendingOrder, clearCart],
   );
 
   const { startPolling } = usePaymentPolling({
@@ -337,7 +337,7 @@ export default function CarrinhoPageContent() {
     onFailure: () => {
       setPaymentStatus("failure");
       setPaymentError(
-        "Pagamento recusado. Por favor, verifique os dados e tente novamente."
+        "Pagamento recusado. Por favor, verifique os dados e tente novamente.",
       );
       toast.error("Pagamento recusado. Verifique os dados do pagamento.");
     },
@@ -346,15 +346,15 @@ export default function CarrinhoPageContent() {
       setPaymentStatus(""); // Resetar status para parar o polling
       setCurrentOrderId(null); // Limpar order ID para evitar restart do polling
       setPaymentError(
-        "O tempo de espera expirou. Verifique o status do seu pedido na página 'Meus Pedidos'."
+        "O tempo de espera expirou. Verifique o status do seu pedido na página 'Meus Pedidos'.",
       );
       toast.warning(
         "Ainda não recebemos a confirmação do pagamento. Você pode acompanhar o status na página de pedidos.",
-        { duration: 8000 }
+        { duration: 8000 },
       );
       setTimeout(() => {
         const shouldRedirect = confirm(
-          "Deseja verificar o status do seu pedido agora?"
+          "Deseja verificar o status do seu pedido agora?",
         );
         if (shouldRedirect) {
           router.push("/pedidos");
@@ -391,7 +391,7 @@ export default function CarrinhoPageContent() {
       sseDisconnectCountRef.current += 1;
       console.error(
         `❌ SSE Error (${sseDisconnectCountRef.current}/3):`,
-        error
+        error,
       );
       // Só iniciar polling fallback se ainda temos um pedido em progresso
       if (
@@ -404,7 +404,7 @@ export default function CarrinhoPageContent() {
         startPolling();
       }
     },
-    [startPolling, currentOrderId, paymentStatus]
+    [startPolling, currentOrderId, paymentStatus],
   );
 
   const sseOnPaymentApproved = useCallback(
@@ -446,7 +446,7 @@ export default function CarrinhoPageContent() {
             setPaymentStatus("success");
 
             toast.success(
-              "Pagamento confirmado! Pedido realizado com sucesso."
+              "Pagamento confirmado! Pedido realizado com sucesso.",
             );
             console.log("✅ Toast shown and animation triggered");
             return;
@@ -454,7 +454,7 @@ export default function CarrinhoPageContent() {
         } catch (err) {
           console.warn(
             "Não foi possível buscar pedido para exibir ticket, abrindo conceito padrão.",
-            err
+            err,
           );
         }
       }
@@ -462,7 +462,7 @@ export default function CarrinhoPageContent() {
       // Fallback: if we couldn't fetch the order, show a simple confirmation UI with the orderId
       console.log(
         "📌 Using fallback confirmation with orderId:",
-        orderIdFromData
+        orderIdFromData,
       );
 
       setConfirmedOrder({
@@ -481,7 +481,7 @@ export default function CarrinhoPageContent() {
         duration: 5000,
       });
     },
-    [clearCart, clearPendingOrder, getOrder]
+    [clearCart, clearPendingOrder, getOrder],
   );
 
   const sseOnPaymentRejected = useCallback((data: unknown) => {
@@ -524,7 +524,7 @@ export default function CarrinhoPageContent() {
         if (freshUserData) {
           const storedToken = localStorage.getItem("appToken");
           if (storedToken) {
-            localStorage.setItem("user", JSON.stringify(freshUserData));
+            // ✅ SEGURANÇA: Não salvar dados completos, apenas atualizar estado
             login(freshUserData, storedToken);
           }
         }
@@ -534,7 +534,7 @@ export default function CarrinhoPageContent() {
           "Erro ao recarregar dados do usuário. Faça login novamente.",
           {
             action: { label: "Login", onClick: () => router.push("/login") },
-          }
+          },
         );
       }
     }
@@ -637,15 +637,15 @@ export default function CarrinhoPageContent() {
       try {
         if (hasPendingOrder && pendingOrder) {
           setCurrentOrderId(pendingOrder.id);
-          localStorage.setItem("pendingOrderId", pendingOrder.id);
+          // ✅ Não salvar pendingOrderId no localStorage - carregar via API
 
           const orderPaymentMethod = pendingOrder.payment?.payment_method;
           setPaymentMethod(
             orderPaymentMethod === "pix"
               ? "pix"
               : orderPaymentMethod === "card"
-              ? "card"
-              : undefined
+                ? "card"
+                : undefined,
           );
           // Preencher campos do pedido (se houver)
           if (pendingOrder.delivery_address) {
@@ -704,7 +704,7 @@ export default function CarrinhoPageContent() {
               const dt = new Date(pendingOrder.delivery_date);
               if (!isNaN(Number(dt))) {
                 setSelectedDate(
-                  new Date(dt.getFullYear(), dt.getMonth(), dt.getDate())
+                  new Date(dt.getFullYear(), dt.getMonth(), dt.getDate()),
                 );
                 const hh = String(dt.getHours()).padStart(2, "0");
                 const mm = String(dt.getMinutes()).padStart(2, "0");
@@ -760,7 +760,7 @@ export default function CarrinhoPageContent() {
 
   const cartItems = useMemo(
     () => (Array.isArray(cart?.items) ? cart.items : []),
-    [cart?.items]
+    [cart?.items],
   );
 
   const cartTotal = cart?.total || 0;
@@ -770,11 +770,11 @@ export default function CarrinhoPageContent() {
   const normalizedState = useMemo(() => normalizeString(state), [state]);
   const shippingRule = useMemo(
     () => (normalizedCity ? SHIPPING_RULES[normalizedCity] : undefined),
-    [normalizedCity]
+    [normalizedCity],
   );
   const isAddressServed = useMemo(
     () => Boolean(shippingRule) && normalizedState === "pb",
-    [shippingRule, normalizedState]
+    [shippingRule, normalizedState],
   );
   const shippingCost = useMemo(() => {
     if (!paymentMethod) return null;
@@ -814,7 +814,7 @@ export default function CarrinhoPageContent() {
 
   const grandTotal = useMemo(
     () => Math.max(0, cartTotal + (shippingCost ?? 0) - pickupDiscount),
-    [cartTotal, shippingCost, pickupDiscount]
+    [cartTotal, shippingCost, pickupDiscount],
   );
 
   const discountAmount = useMemo(() => {
@@ -825,7 +825,7 @@ export default function CarrinhoPageContent() {
           (a, add) =>
             getAdditionalFinalPrice(add.id, add.price, item.customizations) *
             item.quantity,
-          0
+          0,
         ) || 0;
       return sum + baseTotal + additionalsTotal;
     }, 0);
@@ -866,7 +866,7 @@ export default function CarrinhoPageContent() {
 
         if (!paymentResponse?.success) {
           throw new Error(
-            paymentResponse?.message || "Erro ao gerar pagamento PIX"
+            paymentResponse?.message || "Erro ao gerar pagamento PIX",
           );
         }
 
@@ -876,7 +876,7 @@ export default function CarrinhoPageContent() {
         if (!responseData?.qr_code) {
           console.error(
             "[v0] ❌ Resposta inesperada do pagamento PIX:",
-            paymentResponse
+            paymentResponse,
           );
           throw new Error("Resposta inválida do servidor");
         }
@@ -893,7 +893,7 @@ export default function CarrinhoPageContent() {
             Number(
               responseData.amount ??
                 responseData.transaction_amount ??
-                cartTotal + (shippingCost ?? 0)
+                cartTotal + (shippingCost ?? 0),
             ) || cartTotal + (shippingCost ?? 0),
           expires_at:
             responseData.expires_at ||
@@ -963,7 +963,7 @@ export default function CarrinhoPageContent() {
     }
     if (!shippingRule) {
       return `Ainda não entregamos em ${city.trim()}. Cidades atendidas: ${acceptedCities.join(
-        ", "
+        ", ",
       )} - PB.`;
     }
     return null;
@@ -980,7 +980,7 @@ export default function CarrinhoPageContent() {
     (item: CartItem) => {
       router.push(`/produto/${item.product_id}`);
     },
-    [router]
+    [router],
   );
 
   // Handler para CustomizationsReview
@@ -988,17 +988,17 @@ export default function CarrinhoPageContent() {
     (
       productId: string,
       customizations: CustomizationInput[],
-      componentId?: string
+      componentId?: string,
     ) => {
       // Implementar lógica de atualização de customizações se necessário
       console.log(
         "Customizações atualizadas:",
         productId,
         customizations,
-        componentId
+        componentId,
       );
     },
-    []
+    [],
   );
 
   const handleCepSearch = async (cep: string) => {
@@ -1020,7 +1020,7 @@ export default function CarrinhoPageContent() {
       setCity("");
       setState("");
       toast.error(
-        "Erro ao buscar informações do CEP. Verifique se o CEP está correto."
+        "Erro ao buscar informações do CEP. Verifique se o CEP está correto.",
       );
     } finally {
       setIsLoadingCep(false);
@@ -1184,7 +1184,7 @@ export default function CarrinhoPageContent() {
         } catch (error) {
           console.error("Erro ao salvar dados do usuário:", error);
           toast.warning(
-            "Não foi possível salvar seus dados, mas você pode continuar."
+            "Não foi possível salvar seus dados, mas você pode continuar.",
           );
         }
       }
@@ -1196,7 +1196,7 @@ export default function CarrinhoPageContent() {
         }
         if (optionSelected === "delivery" && !isValidPhone(recipientPhone)) {
           toast.error(
-            "Por favor, informe um número de telefone válido para o destinatário"
+            "Por favor, informe um número de telefone válido para o destinatário",
           );
           return;
         }
@@ -1229,7 +1229,7 @@ export default function CarrinhoPageContent() {
               complement: complemento,
               deliveryMethod: optionSelected as "delivery" | "pickup",
               discount: pickupDiscount,
-            }
+            },
           );
 
           const createdOrderId = (() => {
@@ -1242,7 +1242,7 @@ export default function CarrinhoPageContent() {
                 (createdOrder as { order?: { id?: string } }).order?.id
               ) {
                 return String(
-                  (createdOrder as { order?: { id?: string } }).order?.id
+                  (createdOrder as { order?: { id?: string } }).order?.id,
                 );
               }
             }
@@ -1253,7 +1253,7 @@ export default function CarrinhoPageContent() {
             throw new Error("Não foi possível identificar o pedido gerado.");
           }
 
-          localStorage.setItem("pendingOrderId", createdOrderId);
+          // ✅ Não salvar pendingOrderId no localStorage - carregar via API
           setCurrentOrderId(createdOrderId);
 
           toast.success("Pedido criado! Selecione a forma de pagamento.");
@@ -1273,7 +1273,7 @@ export default function CarrinhoPageContent() {
         // Evitar múltiplas chamadas simultâneas a updateOrderMetadata
         if (updatingOrderMetadataRef.current) {
           console.warn(
-            "Já há uma atualização em progresso, ignorando requisição duplicada"
+            "Já há uma atualização em progresso, ignorando requisição duplicada",
           );
           return;
         }
@@ -1352,8 +1352,8 @@ export default function CarrinhoPageContent() {
                 {shippingCost === 0
                   ? "Grátis"
                   : shippingCost === null
-                  ? "--"
-                  : `R$ ${shippingCost.toFixed(2)}`}
+                    ? "--"
+                    : `R$ ${shippingCost.toFixed(2)}`}
               </span>
             </div>
 

@@ -718,8 +718,8 @@ class ApiService {
     if (typeof window !== "undefined" && res.data?.appToken) {
       localStorage.setItem("appToken", res.data.appToken);
     }
-    if (typeof window !== "undefined" && res.data?.user) {
-      localStorage.setItem("user", JSON.stringify(res.data.user));
+    if (typeof window !== "undefined" && res.data?.user?.id) {
+      localStorage.setItem("userId", res.data.user.id);
     }
     return res.data;
   };
@@ -751,8 +751,8 @@ class ApiService {
     if (typeof window !== "undefined" && res.data?.appToken) {
       localStorage.setItem("appToken", res.data.appToken);
     }
-    if (typeof window !== "undefined" && res.data?.user) {
-      localStorage.setItem("user", JSON.stringify(res.data.user));
+    if (typeof window !== "undefined" && res.data?.user?.id) {
+      localStorage.setItem("userId", res.data.user.id);
     }
     return res.data;
   };
@@ -760,7 +760,8 @@ class ApiService {
     if (typeof window !== "undefined") {
       localStorage.removeItem("token");
       localStorage.removeItem("appToken");
-      localStorage.removeItem("user");
+      localStorage.removeItem("userId");
+      localStorage.removeItem("tokenTimestamp");
     }
   };
 
