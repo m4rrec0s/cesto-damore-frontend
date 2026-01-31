@@ -2,17 +2,9 @@
 
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
-import { ImageIcon, Type, Loader2, Check } from "lucide-react";
+import { Loader2, Check } from "lucide-react";
 import { Input } from "@/app/components/ui/input";
-import { Label } from "@/app/components/ui/label";
 import { Textarea } from "@/app/components/ui/textarea";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/app/components/ui/card";
-import { Badge } from "@/app/components/ui/badge";
 import { useApi } from "@/app/hooks/use-api";
 import AdvancedPersonalizationEditor from "../advanced-personalization-editor";
 import type {
@@ -47,10 +39,10 @@ export function UnifiedCustomizationForm({
   const api = useApi();
   const [loading, setLoading] = useState(true);
   const [config, setConfig] = useState<CustomizationConfigResponse | null>(
-    null
+    null,
   );
   const [customizationData, setCustomizationData] = useState<CustomizationData>(
-    {}
+    {},
   );
   const [layoutBase, setLayoutBase] = useState<LayoutBase | null>(null);
   const [constraints, setConstraints] = useState<
@@ -89,7 +81,7 @@ export function UnifiedCustomizationForm({
         try {
           const constraintsData = await api.getItemConstraints(
             itemId,
-            "ADDITIONAL"
+            "ADDITIONAL",
           );
           setConstraints(constraintsData);
         } catch (err) {
@@ -100,7 +92,7 @@ export function UnifiedCustomizationForm({
 
         // Se houver LAYOUT_BASE, carregar o layout
         const layoutCustomization = data.customizations.find(
-          (c) => c.type === "LAYOUT_BASE"
+          (c) => c.type === "LAYOUT_BASE",
         );
         const itemLayoutId = (data.item as { layout_base_id?: string })
           .layout_base_id;
@@ -113,7 +105,7 @@ export function UnifiedCustomizationForm({
                 headers: {
                   Authorization: `Bearer ${localStorage.getItem("token")}`,
                 },
-              }
+              },
             );
             if (response.ok) {
               const layout = await response.json();
@@ -143,12 +135,12 @@ export function UnifiedCustomizationForm({
   const handleOptionSelect = async (
     customizationId: string,
     optionId: string,
-    optionLabel: string
+    optionLabel: string,
   ) => {
     // Verificar se optionId é um UUID válido (item real no banco)
     const isValidUUID =
       /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-        optionId
+        optionId,
       );
 
     // Buscar restrições específicas desta opção APENAS se for um item real (UUID válido)
@@ -159,7 +151,7 @@ export function UnifiedCustomizationForm({
         // Buscar restrições desta opção (que é um ADDITIONAL real)
         const optionConstraints = await api.getItemConstraints(
           optionId,
-          "ADDITIONAL"
+          "ADDITIONAL",
         );
         allConstraints = [...constraints, ...optionConstraints];
       } catch (err) {
@@ -172,7 +164,7 @@ export function UnifiedCustomizationForm({
     const mutuallyExclusiveConstraints = allConstraints.filter(
       (c) =>
         c.constraint_type === "MUTUALLY_EXCLUSIVE" &&
-        (c.target_item_id === optionId || c.related_item_id === optionId)
+        (c.target_item_id === optionId || c.related_item_id === optionId),
     );
 
     // Se houver restrições, verificar se há conflito com seleções globais ou locais
@@ -186,21 +178,21 @@ export function UnifiedCustomizationForm({
 
         // Verificar se a opção conflitante está selecionada em outros items
         for (const [otherItemId, selections] of Object.entries(
-          globalSelections
+          globalSelections,
         )) {
           if (otherItemId !== itemId) {
             // Não verificar contra si mesmo
             const hasConflict = selections.some(
-              (sel) => sel.itemId === conflictingOptionId
+              (sel) => sel.itemId === conflictingOptionId,
             );
 
             if (hasConflict) {
               const conflictingSelection = selections.find(
-                (sel) => sel.itemId === conflictingOptionId
+                (sel) => sel.itemId === conflictingOptionId,
               );
               toast.error(
                 constraint.message ||
-                `Não é possível selecionar "${optionLabel}" pois "${conflictingSelection?.label}" já está selecionado em outro componente.`
+                  `Não é possível selecionar "${optionLabel}" pois "${conflictingSelection?.label}" já está selecionado em outro componente.`,
               );
               return; // Bloquear a seleção
             }
@@ -233,7 +225,7 @@ export function UnifiedCustomizationForm({
                 // Mostrar mensagem ao usuário
                 toast.info(
                   constraint.message ||
-                  `"${value.label}" foi desmarcado pois não é compatível com "${optionLabel}"`
+                    `"${value.label}" foi desmarcado pois não é compatível com "${optionLabel}"`,
                 );
               }
             }
@@ -266,7 +258,7 @@ export function UnifiedCustomizationForm({
     customizationId: string,
     type: string,
     value: unknown,
-    completed: boolean = true
+    completed: boolean = true,
   ) => {
     setCustomizationData((prev) => ({
       ...prev,
@@ -284,7 +276,7 @@ export function UnifiedCustomizationForm({
     // Pegar dados atualizados (usar um timeout para garantir que o estado foi atualizado)
     setTimeout(() => {
       const inputs: CustomizationInput[] = Object.entries(
-        customizationData
+        customizationData,
       ).map(([id, data]) => {
         const customization = config.customizations.find((c) => c.id === id);
         const customizationName = customization?.name || "Personalização";
@@ -320,7 +312,7 @@ export function UnifiedCustomizationForm({
 
   const handleFileUpload = async (
     customizationId: string,
-    files: FileList | null
+    files: FileList | null,
   ) => {
     if (!files || files.length === 0) return;
 
@@ -350,19 +342,19 @@ export function UnifiedCustomizationForm({
 
   const handleLayoutBaseComplete = (
     images: ImageData[],
-    previewUrl: string
+    previewUrl: string,
   ) => {
     onPreviewChange?.(previewUrl);
 
     const layoutCustomization = config?.customizations.find(
-      (c) => c.type === "LAYOUT_BASE"
+      (c) => c.type === "LAYOUT_BASE",
     );
     if (layoutCustomization) {
       handleCustomizationChange(
         layoutCustomization.id,
         "LAYOUT_BASE",
         { images, previewUrl },
-        true
+        true,
       );
     }
 
@@ -398,10 +390,10 @@ export function UnifiedCustomizationForm({
   }
 
   const layoutBaseCustomization = config.customizations.find(
-    (c) => c.type === "LAYOUT_BASE"
+    (c) => c.type === "LAYOUT_BASE",
   );
   const otherCustomizations = config.customizations.filter(
-    (c) => c.type !== "LAYOUT_BASE"
+    (c) => c.type !== "LAYOUT_BASE",
   );
 
   return (
@@ -452,137 +444,134 @@ export function UnifiedCustomizationForm({
               )}
             </div>
             <div className="w-full">
-                {/* TEXT */}
-                {customization.type === "TEXT" && (
-                  <div className="space-y-2">
-                    <Textarea
-                      id={`text-${customization.id}`}
-                      placeholder="Digite sua mensagem..."
-                      value={
-                        (customizationData[customization.id]
-                          ?.value as string) || ""
-                      }
-                      onChange={(e) =>
-                        handleCustomizationChange(
-                          customization.id,
-                          "TEXT",
-                          e.target.value,
-                          e.target.value.trim().length > 0
-                        )
-                      }
-                      rows={3}
-                      className="w-full"
-                    />
-                  </div>
-                )}
+              {/* TEXT */}
+              {customization.type === "TEXT" && (
+                <div className="space-y-2">
+                  <Textarea
+                    id={`text-${customization.id}`}
+                    placeholder="Digite sua mensagem..."
+                    value={
+                      (customizationData[customization.id]?.value as string) ||
+                      ""
+                    }
+                    onChange={(e) =>
+                      handleCustomizationChange(
+                        customization.id,
+                        "TEXT",
+                        e.target.value,
+                        e.target.value.trim().length > 0,
+                      )
+                    }
+                    rows={3}
+                    className="w-full"
+                  />
+                </div>
+              )}
 
-                {/* IMAGES */}
-                {customization.type === "IMAGES" && (
-                  <div className="space-y-3">
-                    <Input
-                      id={`photo-${customization.id}`}
-                      type="file"
-                      accept="image/*"
-                      multiple
-                      onChange={(e) =>
-                        handleFileUpload(customization.id, e.target.files)
-                      }
-                      className="w-full"
-                    />
-                      className="cursor-pointer"
-                    />
-                    {customizationData[customization.id]?.value != null &&
-                      Array.isArray(customizationData[customization.id].value) ? (
-                      <PhotoPreviewGrid
-                        photos={
-                          customizationData[customization.id].value as Array<{
-                            preview: string;
-                          }>
-                        }
-                      />
-                    ) : null}
-                  </div>
-                )}
-
-                {/* MULTIPLE_CHOICE */}
-                {customization.type === "MULTIPLE_CHOICE" && (
-                  <div className="space-y-2 w-full">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      {(
-                        customization.customization_data.options as Array<{
-                          id: string;
-                          label: string;
-                          image_url?: string;
-                          price_modifier?: number;
+              {/* IMAGES */}
+              {customization.type === "IMAGES" && (
+                <div className="space-y-3">
+                  <Input
+                    id={`photo-${customization.id}`}
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    onChange={(e) =>
+                      handleFileUpload(customization.id, e.target.files)
+                    }
+                    className="w-full cursor-pointer"
+                  />
+                  {customizationData[customization.id]?.value != null &&
+                  Array.isArray(customizationData[customization.id].value) ? (
+                    <PhotoPreviewGrid
+                      photos={
+                        customizationData[customization.id].value as Array<{
+                          preview: string;
                         }>
-                      )?.map((option) => {
-                        const API_URL = process.env.NEXT_PUBLIC_API_URL;
-                        const imageUrl = option.image_url
-                          ? option.image_url.startsWith("http")
-                            ? option.image_url
-                            : `${API_URL}${option.image_url}`
-                          : null;
+                      }
+                    />
+                  ) : null}
+                </div>
+              )}
 
-                        const isSelected =
-                          (
-                            customizationData[customization.id]?.value as
-                              | { id: string }
-                              | undefined
-                          )?.id === option.id;
+              {/* MULTIPLE_CHOICE */}
+              {customization.type === "MULTIPLE_CHOICE" && (
+                <div className="space-y-2 w-full">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {(
+                      customization.customization_data.options as Array<{
+                        id: string;
+                        label: string;
+                        image_url?: string;
+                        price_modifier?: number;
+                      }>
+                    )?.map((option) => {
+                      const API_URL = process.env.NEXT_PUBLIC_API_URL;
+                      const imageUrl = option.image_url
+                        ? option.image_url.startsWith("http")
+                          ? option.image_url
+                          : `${API_URL}${option.image_url}`
+                        : null;
 
-                        return (
-                          <div
-                            key={option.id}
-                            className={`p-3 cursor-pointer transition-all rounded-lg border-2 ${
-                              isSelected
-                                ? "border-gray-900 bg-gray-50"
-                                : "border-gray-200 hover:border-gray-400"
-                            }`}
-                            onClick={() =>
-                              handleOptionSelect(
-                                customization.id,
-                                option.id,
-                                option.label
-                              )
-                            }
-                          >
-                            <div className="flex items-center gap-3">
-                              {imageUrl && (
-                                <div className="w-12 h-12 relative rounded-lg overflow-hidden flex-shrink-0 bg-gray-100">
-                                  <Image
-                                    src={getInternalImageUrl(imageUrl)}
-                                    alt={option.label}
-                                    fill
-                                    className="object-cover"
-                                    priority
-                                  />
-                                </div>
-                              )}
-                              <div className="flex-1 min-w-0">
-                                <p className="text-sm font-medium text-gray-900 truncate">
-                                  {option.label}
-                                </p>
-                                {option.price_modifier &&
-                                  option.price_modifier > 0 && (
-                                    <p className="text-xs text-green-600 mt-0.5">
-                                      +R$ {option.price_modifier.toFixed(2)}
-                                    </p>
-                                  )}
+                      const isSelected =
+                        (
+                          customizationData[customization.id]?.value as
+                            | { id: string }
+                            | undefined
+                        )?.id === option.id;
+
+                      return (
+                        <div
+                          key={option.id}
+                          className={`p-3 cursor-pointer transition-all rounded-lg border-2 ${
+                            isSelected
+                              ? "border-gray-900 bg-gray-50"
+                              : "border-gray-200 hover:border-gray-400"
+                          }`}
+                          onClick={() =>
+                            handleOptionSelect(
+                              customization.id,
+                              option.id,
+                              option.label,
+                            )
+                          }
+                        >
+                          <div className="flex items-center gap-3">
+                            {imageUrl && (
+                              <div className="w-12 h-12 relative rounded-lg overflow-hidden flex-shrink-0 bg-gray-100">
+                                <Image
+                                  src={getInternalImageUrl(imageUrl)}
+                                  alt={option.label}
+                                  fill
+                                  className="object-cover"
+                                  priority
+                                />
                               </div>
-                              {isSelected && (
-                                <Check className="h-5 w-5 text-gray-900 flex-shrink-0" />
-                              )}
+                            )}
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium text-gray-900 truncate">
+                                {option.label}
+                              </p>
+                              {option.price_modifier &&
+                                option.price_modifier > 0 && (
+                                  <p className="text-xs text-green-600 mt-0.5">
+                                    +R$ {option.price_modifier.toFixed(2)}
+                                  </p>
+                                )}
                             </div>
+                            {isSelected && (
+                              <Check className="h-5 w-5 text-gray-900 flex-shrink-0" />
+                            )}
                           </div>
-                        );
-                      })}
-                    </div>
+                        </div>
+                      );
+                    })}
                   </div>
-                )}
-              </div>
+                </div>
+              )}
             </div>
-          ))}
-        </div>
+          </div>
+        ))}
       </div>
     </div>
   );
