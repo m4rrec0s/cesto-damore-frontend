@@ -76,6 +76,9 @@ const ClientProductPage = ({ id }: { id: string }) => {
   const [itemImagesCount, setItemImagesCount] = useState<
     Record<string, { current: number; max: number }>
   >({});
+  const [selectedAdditionalIds, setSelectedAdditionalIds] = useState<string[]>(
+    [],
+  ); // ✅ Track selected additionals
   const { fetchPublicLayouts } = useLayoutApi();
   const [availableLayoutsByComponent, setAvailableLayoutsByComponent] =
     useState<Record<string, any[]>>({});
@@ -156,6 +159,11 @@ const ClientProductPage = ({ id }: { id: string }) => {
           return updated;
         });
 
+        // ✅ Add to selectedAdditionals if not already there
+        setSelectedAdditionalIds((prev) =>
+          prev.includes(additionalId) ? prev : [...prev, additionalId],
+        );
+
         toast.success("Personalização do adicional salva!");
       } else {
         setAdditionalCustomizations((prev) => {
@@ -169,485 +177,28 @@ const ClientProductPage = ({ id }: { id: string }) => {
 
       setActiveAdditionalModal(null);
 
-      if (!product.id) return;
-
-      try {
-        const cartCustomizations: CartCustomization[] = [];
-
-        const convertToCartCustomization = async (
-          input: CustomizationInput,
-          itemId: string,
-        ): Promise<CartCustomization | null> => {
-          const data = input.data as Record<string, unknown>;
-          const customizationName =
-            (data._customizationName as string) || "Personalização";
-          const priceAdjustment = (data._priceAdjustment as number) || 0;
-
-          if (input.customizationType === "TEXT") {
-            const textFields = Object.entries(data)
-              .filter(
-                ([key]) =>
-                  key !== "_customizationName" && key !== "_priceAdjustment",
-              )
-              .map(([key, value]) => `${key}: ${value}`)
-              .join(", ");
-
-            return {
-              customization_id: input.ruleId || `item_${itemId}`,
-              title: customizationName,
-              customization_type: "TEXT",
-              is_required: false,
-              price_adjustment: priceAdjustment,
-              text: textFields || String(data || ""),
-            };
-          } else if (input.customizationType === "MULTIPLE_CHOICE") {
-            const choice = data as { id?: string; label?: string } | string;
-            const optionId =
-              typeof choice === "string" ? choice : choice.id || "";
-            const optionLabel =
-              typeof choice === "string" ? choice : choice.label || "";
-
-            return {
-              customization_id: input.ruleId || `item_${itemId}`,
-              title: customizationName,
-              customization_type: "MULTIPLE_CHOICE",
-              is_required: false,
-              price_adjustment: priceAdjustment,
-              selected_option: optionId,
-              selected_option_label: optionLabel,
-            };
-          } else if (input.customizationType === "IMAGES") {
-            // IMAGES agora tem a estrutura: { files: File[], previews: string[], count: number }
-            const imagesData = data as {
-              files?: File[];
-              previews?: string[];
-              count?: number;
-            };
-
-            const photos =
-              imagesData.previews && imagesData.previews.length > 0
-                ? await Promise.all(
-                    imagesData.previews.map(async (preview, index) => {
-                      // Tentar obter nome do arquivo se disponível
-                      const file = imagesData.files?.[index];
-                      const fileName = file?.name || `photo-${index + 1}.jpg`;
-
-                      // 🔄 NOVO: Upload automático para /temp/upload ao adicionar a foto
-                      let tempFileUrl = preview; // fallback para base64 se upload falhar
-                      let uploadedFileName = "";
-                      try {
-                        if (file) {
-                          const uploadResult =
-                            await uploadCustomizationImage(file);
-                          if (uploadResult.success) {
-                            tempFileUrl = uploadResult.imageUrl;
-                            uploadedFileName = uploadResult.filename;
-                          } else {
-                          }
-                        }
-                      } catch (err) {
-                        console.error(
-                          `❌ [IMAGES-1] Erro ao fazer upload de ${fileName}:`,
-                          err,
-                        );
-                      }
-
-                      return {
-                        preview_url: tempFileUrl,
-                        original_name: fileName,
-                        temp_file_id:
-                          uploadedFileName || `temp-${Date.now()}-${index}`,
-                        position: index,
-                        base64: preview,
-                        mime_type: file?.type || "image/jpeg",
-                        size: file?.size || 0,
-                      };
-                    }),
-                  )
-                : [];
-
-            return {
-              customization_id: input.ruleId || `item_${itemId}`,
-              title: customizationName,
-              customization_type: "IMAGES",
-              is_required: false,
-              price_adjustment: priceAdjustment,
-              photos: photos,
-            };
-          } else if (input.customizationType === "DYNAMIC_LAYOUT") {
-            const layoutData = data as {
-              id?: string;
-              name?: string;
-              model_url?: string;
-              item_type?: string;
-              images?: Array<{ slot?: string; url?: string }>;
-              previewUrl?: string;
-              fabricState?: string;
-              highQualityUrl?: string;
-              additional_time?: number;
-              productionTime?: number;
-            };
-
-            const imageCount = layoutData.images?.length || 0;
-
-            const baseObj = {
-              customization_id: input.ruleId || `item_${itemId}`,
-              title: customizationName,
-              customization_type: "DYNAMIC_LAYOUT" as const,
-              is_required: false,
-              price_adjustment: priceAdjustment,
-              selected_item: {
-                original_item: "Design Dinâmico",
-                selected_item: layoutData.name || "Personalizado",
-                price_adjustment: priceAdjustment,
-              },
-              selected_item_label: `${
-                layoutData.name || "Design Personalizado"
-              }${
-                imageCount > 0
-                  ? ` (${imageCount} foto${imageCount > 1 ? "s" : ""})`
-                  : ""
-              }`,
-              text: undefined,
-            };
-
-            // ✅ Upload DYNAMIC_LAYOUT final high-quality image if it exists, otherwise use preview
-            const finalImageToUpload =
-              layoutData.highQualityUrl || layoutData.previewUrl;
-            let finalPreviewUrl = layoutData.previewUrl;
-
-            if (
-              finalImageToUpload &&
-              finalImageToUpload.startsWith("data:image")
-            ) {
-              try {
-                const fetchRes = await fetch(finalImageToUpload);
-                const blob = await fetchRes.blob();
-                const file = new File([blob], "dynamic-layout-final.png", {
-                  type: "image/png",
-                });
-
-                const uploadResult = await uploadCustomizationImage(file);
-
-                if (uploadResult.success) {
-                  finalPreviewUrl = uploadResult.imageUrl;
-                } else {
-                  console.warn(
-                    `⚠️ [DYNAMIC_LAYOUT-Add] Upload failed, falling back to base64`,
-                  );
-                }
-              } catch (err) {
-                console.error(
-                  `❌ [DYNAMIC_LAYOUT-Add] Error uploading final image:`,
-                  err,
-                );
-              }
-            }
-
-            return {
-              ...baseObj,
-              text: finalPreviewUrl,
-              fabricState: layoutData.fabricState,
-              additional_time:
-                layoutData.productionTime ?? layoutData.additional_time,
-            };
-          }
-
-          return null;
-        };
-
-        for (const component of components) {
-          const componentCustomizations =
-            itemCustomizations[component.id] || [];
-          for (const custom of componentCustomizations) {
-            const converted = await convertToCartCustomization(
-              custom,
-              component.id,
-            );
-            if (converted) {
-              cartCustomizations.push(converted);
-            }
-          }
-        }
-
-        if (hasCustomizations) {
-          for (const custom of data) {
-            const converted = await convertToCartCustomization(
-              custom,
-              additionalId,
-            );
-            if (converted) {
-              cartCustomizations.push(converted);
-            }
-          }
-        }
-
-        await addToCart(
-          product.id,
-          1,
-          [additionalId],
-          undefined,
-          cartCustomizations.length > 0 ? cartCustomizations : undefined,
-        );
-
-        toast.success("Adicional adicionado ao carrinho!");
-      } catch (error) {
-        console.error("Erro ao adicionar adicional ao carrinho:", error);
-        toast.error("Erro ao adicionar adicional ao carrinho");
-      }
+      // 🛑 REMOVIDO: Não chamar addToCart imediatamente.
+      // O usuário agora adiciona tudo junto ou via botão de adição rápida.
     },
-    [
-      product.id,
-      components,
-      itemCustomizations,
-      addToCart,
-      uploadCustomizationImage,
-    ],
+    [],
   );
 
   const handleAddAdditionalToCart = useCallback(
     async (additionalId: string) => {
+      setSelectedAdditionalIds((prev) =>
+        prev.includes(additionalId)
+          ? prev.filter((id) => id !== additionalId)
+          : [...prev, additionalId],
+      );
 
-      if (!product.id) {
-        toast.error("Produto não encontrado");
-        return;
-      }
-
-      try {
-        const savedCustomizations = additionalCustomizations[additionalId];
-        const cartCustomizations: CartCustomization[] = [];
-
-        const convertToCartCustomization = async (
-          input: CustomizationInput,
-          itemId: string,
-        ): Promise<CartCustomization | null> => {
-          const data = input.data as Record<string, unknown>;
-          const customizationName =
-            (data._customizationName as string) || "Personalização";
-          const priceAdjustment = (data._priceAdjustment as number) || 0;
-
-          if (input.customizationType === "TEXT") {
-            const textFields = Object.entries(data)
-              .filter(
-                ([key]) =>
-                  key !== "_customizationName" && key !== "_priceAdjustment",
-              )
-              .map(([key, value]) => `${key}: ${value}`)
-              .join(", ");
-
-            return {
-              customization_id: input.ruleId || `item_${itemId}`,
-              componentId: itemId, // ✅ Add componentId
-              title: customizationName,
-              customization_type: "TEXT",
-              is_required: false,
-              price_adjustment: priceAdjustment,
-              text: textFields || String(data || ""),
-            };
-          } else if (input.customizationType === "MULTIPLE_CHOICE") {
-            const choice = data as { id?: string; label?: string } | string;
-            const optionId =
-              typeof choice === "string" ? choice : choice.id || "";
-            const optionLabel =
-              typeof choice === "string" ? choice : choice.label || "";
-
-            return {
-              customization_id: input.ruleId || `item_${itemId}`,
-              componentId: itemId, // ✅ Add componentId
-              title: customizationName,
-              customization_type: "MULTIPLE_CHOICE",
-              is_required: false,
-              price_adjustment: priceAdjustment,
-              selected_option: optionId,
-              selected_option_label: optionLabel,
-            };
-          } else if (input.customizationType === "IMAGES") {
-            // IMAGES agora tem a estrutura: { files: File[], previews: string[], count: number }
-            const imagesData = data as {
-              files?: File[];
-              previews?: string[];
-              count?: number;
-            };
-
-            const photos =
-              imagesData.previews && imagesData.previews.length > 0
-                ? await Promise.all(
-                    imagesData.previews.map(async (preview, index) => {
-                      // Tentar obter nome do arquivo se disponível
-                      const file = imagesData.files?.[index];
-                      const fileName = file?.name || `photo-${index + 1}.jpg`;
-
-                      // 🔄 NOVO: Upload automático para /temp/upload ao adicionar a foto
-                      let tempFileUrl = preview; // fallback para base64 se upload falhar
-                      let uploadedFileName = "";
-                      try {
-                        if (file) {
-                          const uploadResult =
-                            await uploadCustomizationImage(file);
-                          if (uploadResult.success) {
-                            tempFileUrl = uploadResult.imageUrl;
-                            uploadedFileName = uploadResult.filename;
-
-                          } else {
-                            console.warn(
-                              `⚠️ [IMAGES-2] Upload falhou para ${fileName}, usando base64`,
-                            );
-                          }
-                        }
-                      } catch (err) {
-                        console.error(
-                          `❌ [IMAGES-2] Erro ao fazer upload de ${fileName}:`,
-                          err,
-                        );
-                        // Continuar com base64 se upload falhar
-                      }
-
-                      return {
-                        preview_url: tempFileUrl, // ✅ Será URL ou base64 como fallback
-                        original_name: fileName,
-                        temp_file_id:
-                          uploadedFileName || `temp-${Date.now()}-${index}`,
-                        position: index,
-                        base64: preview, // ✅ Manter base64 como backup para Drive
-                        mime_type: file?.type || "image/jpeg",
-                        size: file?.size || 0,
-                      };
-                    }),
-                  )
-                : [];
-
-            return {
-              customization_id: input.ruleId || `item_${itemId}`,
-              componentId: itemId, // ✅ Add componentId
-              title: customizationName,
-              customization_type: "IMAGES",
-              is_required: false,
-              price_adjustment: priceAdjustment,
-              photos: photos,
-            };
-          } else if (input.customizationType === "DYNAMIC_LAYOUT") {
-            const layoutData = data as {
-              id?: string;
-              name?: string;
-              previewUrl?: string;
-              fabricState?: string;
-              highQualityUrl?: string;
-              additional_time?: number;
-              productionTime?: number;
-            };
-
-            const baseObj = {
-              customization_id: input.ruleId || `item_${itemId}`,
-              componentId: itemId, // ✅ Add componentId
-              title: customizationName,
-              customization_type: "DYNAMIC_LAYOUT" as const,
-              is_required: false,
-              price_adjustment: priceAdjustment,
-              selected_item: {
-                original_item: "Design Dinâmico",
-                selected_item: layoutData.name || "Personalizado",
-                price_adjustment: priceAdjustment,
-              },
-              selected_item_label: layoutData.name || "Design Personalizado",
-              text: undefined,
-            };
-
-            // ✅ Upload DYNAMIC_LAYOUT final high-quality image if it exists, otherwise use preview
-            const finalImageToUpload =
-              layoutData.highQualityUrl || layoutData.previewUrl;
-            let finalPreviewUrl = layoutData.previewUrl;
-
-            if (
-              finalImageToUpload &&
-              finalImageToUpload.startsWith("data:image")
-            ) {
-              try {
-                const fetchRes = await fetch(finalImageToUpload);
-                const blob = await fetchRes.blob();
-                const file = new File([blob], "design-final.png", {
-                  type: "image/png",
-                });
-
-                const uploadResult = await uploadCustomizationImage(file);
-
-                if (uploadResult.success) {
-                  finalPreviewUrl = uploadResult.imageUrl;
-                } else {
-                  console.warn(
-                    `⚠️ [DYNAMIC_LAYOUT-Add2] Upload failed, falling back to base64`,
-                  );
-                }
-              } catch (err) {
-                console.error(
-                  `❌ [DYNAMIC_LAYOUT-Add2] Error uploading final image:`,
-                  err,
-                );
-              }
-            }
-
-            return {
-              ...baseObj,
-              text: finalPreviewUrl,
-              fabricState: layoutData.fabricState,
-              additional_time:
-                layoutData.productionTime ?? layoutData.additional_time,
-            };
-          }
-
-          return null;
-        };
-
-        // Adicionar customizações dos componentes do produto
-        for (const component of components) {
-          const componentCustomizations =
-            itemCustomizations[component.id] || [];
-          for (const custom of componentCustomizations) {
-            const converted = await convertToCartCustomization(
-              custom,
-              component.id,
-            );
-            if (converted) {
-              cartCustomizations.push(converted);
-            }
-          }
-        }
-
-        // Adicionar customizações do adicional se existirem
-        if (savedCustomizations && savedCustomizations.length > 0) {
-          for (const custom of savedCustomizations) {
-            const converted = await convertToCartCustomization(
-              custom,
-              additionalId,
-            );
-
-            if (converted) {
-              cartCustomizations.push(converted);
-            }
-          }
-        }
-
-        await addToCart(
-          product.id,
-          1,
-          [additionalId],
-          undefined,
-          cartCustomizations.length > 0 ? cartCustomizations : undefined,
-        );
-
-        toast.success("Adicional adicionado ao carrinho!");
-      } catch (error) {
-        console.error("Erro ao adicionar adicional ao carrinho:", error);
-        toast.error("Erro ao adicionar adicional ao carrinho");
+      const isAdding = !selectedAdditionalIds.includes(additionalId);
+      if (isAdding) {
+        toast.success("Adicional selecionado!");
+      } else {
+        toast.info("Adicional removido da seleção");
       }
     },
-    [
-      product.id,
-      components,
-      itemCustomizations,
-      additionalCustomizations,
-      addToCart,
-      uploadCustomizationImage,
-    ],
+    [selectedAdditionalIds],
   );
 
   const router = useRouter();
@@ -690,7 +241,6 @@ const ClientProductPage = ({ id }: { id: string }) => {
             let layouts: any[] = [];
 
             if (data?.autoSelectSameType) {
-
               const itemTypeUpper = comp.item.name
                 .toUpperCase()
                 .includes("CANECA")
@@ -733,7 +283,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
       try {
         const data = await getItemsByProduct(id);
         const mapped: ProductComponent[] = (data || []).map((item) => ({
-          id: item.id, 
+          id: item.id,
           product_id: id,
           item_id: item.id,
           quantity: 1,
@@ -1022,13 +572,16 @@ const ClientProductPage = ({ id }: { id: string }) => {
               .join(", ");
 
             cartCustomizations.push({
-              customization_id: input.ruleId || `item_${itemId}`,
+              customization_id: input.ruleId
+                ? `${input.ruleId}:${componentId}`
+                : `item_${itemId}_${componentId}`,
               componentId, // ✅ Add componentId
               title: customizationName,
               customization_type: "TEXT",
               is_required: false,
               price_adjustment: 0,
               text: textFields || String(data || ""),
+              data: data,
             });
           } else if (input.customizationType === "MULTIPLE_CHOICE") {
             const choice = data as { id?: string; label?: string } | string;
@@ -1038,7 +591,9 @@ const ClientProductPage = ({ id }: { id: string }) => {
               typeof choice === "string" ? choice : choice.label || "";
 
             cartCustomizations.push({
-              customization_id: input.ruleId || `item_${itemId}`,
+              customization_id: input.ruleId
+                ? `${input.ruleId}:${componentId}`
+                : `item_${itemId}_${componentId}`,
               componentId, // ✅ Add componentId
               title: customizationName,
               customization_type: "MULTIPLE_CHOICE",
@@ -1046,6 +601,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
               price_adjustment: 0,
               selected_option: optionId,
               selected_option_label: optionLabel,
+              data: data,
             });
           } else if (input.customizationType === "IMAGES") {
             // IMAGES agora tem a estrutura: { files: File[], previews: string[], count: number }
@@ -1102,13 +658,16 @@ const ClientProductPage = ({ id }: { id: string }) => {
                 : [];
 
             cartCustomizations.push({
-              customization_id: input.ruleId || `item_${itemId}`,
+              customization_id: input.ruleId
+                ? `${input.ruleId}:${componentId}`
+                : `item_${itemId}_${componentId}`,
               componentId,
               title: customizationName,
               customization_type: "IMAGES",
               is_required: false,
               price_adjustment: 0,
               photos: photos,
+              data: data,
             });
           } else if (input.customizationType === "DYNAMIC_LAYOUT") {
             const layoutData = data as {
@@ -1127,7 +686,9 @@ const ClientProductPage = ({ id }: { id: string }) => {
             const imageCount = layoutData.images?.length || 0;
 
             const cartCustomization: CartCustomization = {
-              customization_id: input.ruleId || `item_${itemId}`,
+              customization_id: input.ruleId
+                ? `${input.ruleId}:${componentId}`
+                : `item_${itemId}_${componentId}`,
               componentId,
               title: customizationName,
               customization_type: "DYNAMIC_LAYOUT",
@@ -1149,6 +710,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
               additional_time:
                 layoutData.productionTime ?? layoutData.additional_time ?? 0,
               fabricState: layoutData.fabricState,
+              data: layoutData,
             };
 
             const finalImageToUpload =
@@ -1189,14 +751,155 @@ const ClientProductPage = ({ id }: { id: string }) => {
         }
       }
 
+      // NOVO: Adicionar customizações dos adicionais selecionados
+      for (const additionalId of selectedAdditionalIds) {
+        const additionalCustoms = additionalCustomizations[additionalId];
+        if (!additionalCustoms) continue;
+
+        for (const input of additionalCustoms) {
+          const data = input.data as Record<string, unknown>;
+          const customizationName =
+            (data._customizationName as string) || "Personalização";
+
+          // Reutilizar lógica de conversão (podemos extrair para função depois se necessário)
+          if (input.customizationType === "TEXT") {
+            const textFields = Object.entries(data)
+              .filter(([key]) => key !== "_customizationName")
+              .map(([key, value]) => `${key}: ${value}`)
+              .join(", ");
+
+            cartCustomizations.push({
+              customization_id: input.ruleId
+                ? `${input.ruleId}:${additionalId}`
+                : `add_${additionalId}`,
+              componentId: additionalId,
+              title: customizationName,
+              customization_type: "TEXT",
+              is_required: false,
+              price_adjustment: 0,
+              text: textFields || String(data || ""),
+              data: data,
+            });
+          } else if (input.customizationType === "MULTIPLE_CHOICE") {
+            const choice = data as { id?: string; label?: string } | string;
+            const optionId =
+              typeof choice === "string" ? choice : choice.id || "";
+            const optionLabel =
+              typeof choice === "string" ? choice : choice.label || "";
+
+            cartCustomizations.push({
+              customization_id: input.ruleId
+                ? `${input.ruleId}:${additionalId}`
+                : `add_${additionalId}`,
+              componentId: additionalId,
+              title: customizationName,
+              customization_type: "MULTIPLE_CHOICE",
+              is_required: false,
+              price_adjustment: 0,
+              selected_option: optionId,
+              selected_option_label: optionLabel,
+              data: data,
+            });
+          } else if (input.customizationType === "IMAGES") {
+            const imagesData = data as {
+              files?: File[];
+              previews?: string[];
+              count?: number;
+            };
+
+            const photos =
+              imagesData.previews && imagesData.previews.length > 0
+                ? await Promise.all(
+                    imagesData.previews.map(async (preview, index) => {
+                      const file = imagesData.files?.[index];
+                      const fileName = file?.name || `photo-${index + 1}.jpg`;
+                      let tempFileUrl = preview;
+                      let uploadedFileName = "";
+                      try {
+                        if (file) {
+                          const uploadResult =
+                            await uploadCustomizationImage(file);
+                          if (uploadResult.success) {
+                            tempFileUrl = uploadResult.imageUrl;
+                            uploadedFileName = uploadResult.filename;
+                          }
+                        }
+                      } catch (err) {
+                        console.error(err);
+                      }
+
+                      return {
+                        preview_url: tempFileUrl,
+                        original_name: fileName,
+                        temp_file_id:
+                          uploadedFileName || `temp-${Date.now()}-${index}`,
+                        position: index,
+                        base64: preview,
+                        mime_type: file?.type || "image/jpeg",
+                        size: file?.size || 0,
+                      };
+                    }),
+                  )
+                : [];
+
+            cartCustomizations.push({
+              customization_id: input.ruleId
+                ? `${input.ruleId}:${additionalId}`
+                : `add_${additionalId}`,
+              componentId: additionalId,
+              title: customizationName,
+              customization_type: "IMAGES",
+              is_required: false,
+              price_adjustment: 0,
+              photos: photos,
+              data: data,
+            });
+          } else if (input.customizationType === "DYNAMIC_LAYOUT") {
+            const layoutData = data as {
+              id?: string;
+              name?: string;
+              previewUrl?: string;
+              productionTime?: number;
+              fabricState?: string;
+              highQualityUrl?: string;
+            };
+
+            const cartCustomization: CartCustomization = {
+              customization_id: input.ruleId
+                ? `${input.ruleId}:${additionalId}`
+                : `add_${additionalId}`,
+              componentId: additionalId,
+              title: customizationName,
+              customization_type: "DYNAMIC_LAYOUT",
+              is_required: false,
+              price_adjustment: 0,
+              selected_item: {
+                original_item: "Design Dinâmico",
+                selected_item: layoutData.name || "Personalizado",
+                price_adjustment: 0,
+              },
+              selected_item_label: layoutData.name || "Design Personalizado",
+              text: layoutData.previewUrl,
+              additional_time: layoutData.productionTime ?? 0,
+              fabricState: layoutData.fabricState,
+              data: layoutData,
+            };
+
+            cartCustomizations.push(cartCustomization);
+          }
+        }
+      }
+
       await addToCart(
         product.id,
         quantity,
-        undefined,
+        selectedAdditionalIds.length > 0 ? selectedAdditionalIds : undefined,
         undefined,
         cartCustomizations,
       );
       toast.success("Produto adicionado ao carrinho!");
+      // Resetar seleção de adicionais após adicionar com sucesso
+      setSelectedAdditionalIds([]);
     } catch (error) {
       console.error("Erro ao adicionar ao carrinho:", error);
       toast.error("Erro ao adicionar produto ao carrinho");
@@ -1796,6 +1499,10 @@ const ClientProductPage = ({ id }: { id: string }) => {
                         hasCustomizations={
                           !!additionalCustomizations[additional.id]
                         }
+                        // Usar selectedAdditionalIds para marcar como adicionado no card
+                        isInCartExternal={selectedAdditionalIds.includes(
+                          additional.id,
+                        )}
                         hasProductRequiredCustomizations={
                           hasProductRequiredCustomizations
                         }

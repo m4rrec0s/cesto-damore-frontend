@@ -98,29 +98,54 @@ const serializeCustomizations = (customizations?: CartCustomization[]) => {
     return "[]";
   }
 
-  const normalized = customizations.map((customization) => ({
-    customization_id: customization.customization_id,
-    price_adjustment: customization.price_adjustment || 0,
-    text: customization.text?.trim() || null,
-    selected_option: customization.selected_option || null,
-    selected_item: customization.selected_item
-      ? {
+  const normalized = customizations.map((customization) => {
+    // Definir campos a serem excluídos do 'data' (pois já estão na raiz)
+    const baseFields = [
+      "text",
+      "photos",
+      "selected_option",
+      "selected_item",
+      "customization_type",
+      "customization_id",
+      "title",
+      "price_adjustment",
+      "componentId"
+    ];
+
+    const cleanData: Record<string, unknown> = {};
+    if (customization.data) {
+      Object.entries(customization.data).forEach(([key, value]) => {
+        if (!baseFields.includes(key) && !key.startsWith("_")) {
+          cleanData[key] = value;
+        }
+      });
+    }
+
+    return {
+      customization_id: customization.customization_id,
+      price_adjustment: customization.price_adjustment || 0,
+      text: customization.text?.trim() || null,
+      selected_option: customization.selected_option || null,
+      selected_item: customization.selected_item
+        ? {
           original_item: customization.selected_item.original_item,
           selected_item: customization.selected_item.selected_item,
         }
-      : null,
-    // ✅ Include label fields for DYNAMIC_LAYOUT duplicate detection
-    label_selected: customization.label_selected || null,
-    selected_item_label: customization.selected_item_label || null,
-    selected_option_label: customization.selected_option_label || null,
-    data: customization.data || null, // ✅ Serialize raw data
-    fabricState: customization.fabricState || null, // ✅ Serialize Fabric.js state
-    photos:
-      customization.photos?.map(
-        (photo) =>
-          photo.temp_file_id || photo.preview_url || photo.original_name,
-      ) || [],
-  }));
+        : null,
+      // ✅ Incluir label fields para detecção de duplicatas
+      label_selected: customization.label_selected || null,
+      selected_item_label: customization.selected_item_label || null,
+      selected_option_label: customization.selected_option_label || null,
+      componentId: customization.componentId || null,
+      data: Object.keys(cleanData).length > 0 ? cleanData : null,
+      fabricState: customization.fabricState || null, // ✅ Serialize Fabric.js state
+      photos:
+        customization.photos?.map(
+          (photo) =>
+            photo.temp_file_id || photo.preview_url || photo.original_name,
+        ) || [],
+    };
+  });
 
   normalized.sort((a, b) =>
     a.customization_id.localeCompare(b.customization_id),
@@ -359,10 +384,10 @@ export function useCart(): CartContextType {
           const additionals =
             orderItem.additionals && orderItem.additionals.length > 0
               ? await Promise.all(
-                  orderItem.additionals.map((add: { additional_id: string }) =>
-                    api.getAdditional(add.additional_id),
-                  ),
-                )
+                orderItem.additionals.map((add: { additional_id: string }) =>
+                  api.getAdditional(add.additional_id),
+                ),
+              )
               : [];
 
           const customizations: CartCustomization[] = [];
@@ -676,13 +701,18 @@ export function useCart(): CartContextType {
           try {
             const existingPending = await api.getPendingOrder(user.id);
             if (existingPending) {
+              console.log("📂 [syncCartToBackend] Pedido pendente existente encontrado:", existingPending.id);
               setPendingOrderId(existingPending.id);
-              // ✅ Metadata será sincronizado pelo useEffect separado
-              // Carregar apenas os dados locais sem disparar sync
               _setOrderMetadata({
                 send_anonymously: !!existingPending.send_anonymously,
                 complement: existingPending.complement || undefined,
               });
+              // ✅ Não retornar. Continuar para sincronizar os itens atuais com este pedido.
+              // O fallthrough para o 'else' (pendingOrderId atualizado) acontecerá no próximo ciclo, 
+              // mas para esta execução, vamos forçar o uso deste ID.
+              const orderIdToUpdate = existingPending.id;
+              await api.updateOrderItems(orderIdToUpdate, itemsPayload);
+              console.log("✅ [syncCartToBackend] Itens sincronizados com pedido existente.");
               return;
             }
           } catch (error) {
@@ -692,6 +722,7 @@ export function useCart(): CartContextType {
             );
           }
 
+          console.log("🆕 [syncCartToBackend] Criando novo pedido...");
           const payload: {
             user_id: string;
             items: OrderItem[];
@@ -707,11 +738,12 @@ export function useCart(): CartContextType {
           };
           const order = await api.createOrder(payload);
           setPendingOrderId(order?.id || null);
-          // ✅ Não chamar transformOrderToCartItems aqui - evita loop de requisições
-          // Os itens já estão no cart local e foram sincronizados
+          console.log("✅ [syncCartToBackend] Pedido criado:", order?.id);
         } else {
           try {
+            console.log(`Update [syncCartToBackend] Atualizando itens do pedido ${pendingOrderId}`);
             await api.updateOrderItems(pendingOrderId, itemsPayload);
+            console.log("✅ [syncCartToBackend] Pedido atualizado com sucesso.");
             // ✅ Metadata já é sincronizado pelo useEffect separado, não chamar aqui
             // ✅ Não chamar transformOrderToCartItems aqui - evita loop de requisições
           } catch (updateError: unknown) {
@@ -859,23 +891,23 @@ export function useCart(): CartContextType {
 
                   const customizations = item.customizations
                     ? item.customizations.map((c) => {
-                        const parsed = (() => {
-                          try {
-                            return JSON.parse(c.value || "{}") as Record<
-                              string,
-                              unknown
-                            >;
-                          } catch {
-                            return {};
-                          }
-                        })();
+                      const parsed = (() => {
+                        try {
+                          return JSON.parse(c.value || "{}") as Record<
+                            string,
+                            unknown
+                          >;
+                        } catch {
+                          return {};
+                        }
+                      })();
 
-                        return {
-                          ...parsed,
-                          customization_id: c.customization_id,
-                          title: (parsed.title as string) || undefined,
-                        };
-                      })
+                      return {
+                        ...parsed,
+                        customization_id: c.customization_id,
+                        title: (parsed.title as string) || undefined,
+                      };
+                    })
                     : undefined;
 
                   return {
@@ -887,10 +919,10 @@ export function useCart(): CartContextType {
                       item.effectivePrice !== undefined
                         ? item.effectivePrice
                         : Number(
-                            (
-                              item.price + (item.customization_total || 0)
-                            ).toFixed(2),
-                          ),
+                          (
+                            item.price + (item.customization_total || 0)
+                          ).toFixed(2),
+                        ),
                     additionals,
                     customizations,
                     product: item.product,
@@ -941,6 +973,12 @@ export function useCart(): CartContextType {
       additionalColors?: Record<string, string>,
       customizations?: CartCustomization[],
     ) => {
+      console.log(`🛒 [addToCart] Adicionando produto ${productId}`, {
+        quantity,
+        additionals,
+        customizationsCount: customizations?.length,
+      });
+
       try {
         const product = await api.getProduct(productId);
 
@@ -985,22 +1023,36 @@ export function useCart(): CartContextType {
           const targetCustomizationsKey =
             serializeCustomizations(customizationEntries);
 
-          const existingIndex = currentItems.findIndex(
-            (item) =>
-              item.product_id === productId &&
-              serializeAdditionals(item.additional_ids) ===
-                targetAdditionalsKey &&
-              serializeAdditionalColors(item.additional_colors) ===
-                targetColorsKey &&
-              serializeCustomizations(item.customizations) ===
-                targetCustomizationsKey,
-          );
+          console.log(`🔍 [addToCart] Chaves de comparação:`, {
+            targetAdditionalsKey,
+            targetCustomizationsKey,
+          });
 
-          let newItems: CartItem[] = [...currentItems];
+          const existingIndex = currentItems.findIndex((item) => {
+            const itemAddsKey = serializeAdditionals(item.additional_ids);
+            const itemColorsKey = serializeAdditionalColors(
+              item.additional_colors,
+            );
+            const itemCustsKey = serializeCustomizations(item.customizations);
+
+            const match =
+              item.product_id === productId &&
+              itemAddsKey === targetAdditionalsKey &&
+              itemColorsKey === targetColorsKey &&
+              itemCustsKey === targetCustomizationsKey;
+
+            return match;
+          });
+
+          let newItems: CartItem[];
           if (existingIndex >= 0) {
+            console.log(`✅ [addToCart] Item existente encontrado no índice ${existingIndex}, incrementando quantidade.`);
             newItems = [...currentItems];
             const updatedItem = { ...newItems[existingIndex] };
             updatedItem.quantity += quantity;
+
+            // Recalcular preço efetivo se necessário (pode ter mudado se customizations mudaram, 
+            // embora aqui estejamos adicionando o 'mesmo' item as customizations devem ser iguais)
             const existingBaseEffective =
               updatedItem.price * (1 - (updatedItem.discount || 0) / 100);
             updatedItem.effectivePrice = Number(
@@ -1013,7 +1065,8 @@ export function useCart(): CartContextType {
                 : undefined;
             newItems[existingIndex] = updatedItem;
           } else {
-            newItems.push(newItem);
+            console.log(`➕ [addToCart] Item novo, adicionando ao carrinho.`);
+            newItems = [...currentItems, newItem];
           }
 
           const updatedCart = calculateTotals(newItems);
@@ -1023,7 +1076,7 @@ export function useCart(): CartContextType {
 
         toast.success("Produto adicionado ao carrinho!");
       } catch (error) {
-        console.error("Erro ao adicionar ao carrinho:", error);
+        console.error("❌ [addToCart] Erro:", error);
         toast.error("Erro ao adicionar produto ao carrinho");
       }
     },
@@ -1054,9 +1107,9 @@ export function useCart(): CartContextType {
               item.product_id === productId &&
               serializeAdditionals(item.additional_ids) === targetAdditionals &&
               serializeAdditionalColors(item.additional_colors) ===
-                targetColors &&
+              targetColors &&
               serializeCustomizations(item.customizations) ===
-                targetCustomizations,
+              targetCustomizations,
           ) || null;
 
         const newItems = currentItems.filter(
@@ -1065,9 +1118,9 @@ export function useCart(): CartContextType {
               item.product_id === productId &&
               serializeAdditionals(item.additional_ids) === targetAdditionals &&
               serializeAdditionalColors(item.additional_colors) ===
-                targetColors &&
+              targetColors &&
               serializeCustomizations(item.customizations) ===
-                targetCustomizations
+              targetCustomizations
             ),
         );
         const updatedCart = calculateTotals(newItems);
@@ -1160,7 +1213,7 @@ export function useCart(): CartContextType {
             item.product_id === productId &&
             serializeAdditionals(item.additional_ids) === targetAdditionals &&
             serializeCustomizations(item.customizations) ===
-              targetCustomizations &&
+            targetCustomizations &&
             serializeAdditionalColors(item.additional_colors) === targetColors
           ) {
             return { ...item, quantity };
@@ -1203,7 +1256,7 @@ export function useCart(): CartContextType {
             item.product_id === productId &&
             serializeAdditionals(item.additional_ids) === targetAdditionals &&
             serializeCustomizations(item.customizations) ===
-              targetOldCustomizations &&
+            targetOldCustomizations &&
             serializeAdditionalColors(item.additional_colors) === targetColors,
         );
 

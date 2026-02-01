@@ -10,10 +10,10 @@ const nextConfig: NextConfig = {
             key: "X-Frame-Options",
             value: "DENY",
           },
-          {
-            key: "X-Content-Type-Options",
-            value: "nosniff",
-          },
+          // {
+          //   key: "X-Content-Type-Options",
+          //   value: "nosniff",
+          // },
           {
             key: "Referrer-Policy",
             value: "strict-origin-when-cross-origin",
@@ -21,7 +21,7 @@ const nextConfig: NextConfig = {
           {
             key: "Permissions-Policy",
             value:
-              "camera=(), microphone=(), geolocations=(), interest-cohort=()",
+              "camera=(), microphone=(), geolocation=(), interest-cohort=()",
           },
           {
             key: "Strict-Transport-Security",
@@ -30,7 +30,7 @@ const nextConfig: NextConfig = {
           {
             key: "Content-Security-Policy",
             value:
-              "default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline' https://apis.google.com https://www.gstatic.com https://*.firebaseapp.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://www.gstatic.com; img-src 'self' blob: data: drive.google.com api.cestodamore.com.br *.googleusercontent.com *.firebaseapp.com; font-src 'self' https://fonts.gstatic.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; frame-src 'self' https://*.firebaseapp.com; connect-src 'self' api.cestodamore.com.br data: ws: wss: localhost:* https://fonts.googleapis.com https://securetoken.googleapis.com https://identitytoolkit.googleapis.com https://*.googleapis.com *.firebaseapp.com; upgrade-insecure-requests;",
+              "default-src 'self' localhost:* api.cestodamore.com.br; script-src 'self' 'unsafe-eval' 'unsafe-inline' blob: localhost:* https://apis.google.com https://www.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' blob: data: drive.google.com api.cestodamore.com.br *.googleusercontent.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self' blob: data: api.cestodamore.com.br *.googleapis.com *.githack.com ws: wss: localhost:*;",
           },
         ],
       },

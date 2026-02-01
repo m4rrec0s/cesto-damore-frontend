@@ -1664,18 +1664,6 @@ class ApiService {
     const payloadSanitized = payload;
 
     if (
-      payloadSanitized.customizationType === "IMAGES" &&
-      payloadSanitized.data?.photos
-    ) {
-      const photos = Array.isArray(payloadSanitized.data.photos)
-        ? payloadSanitized.data.photos
-        : [];
-      photos.forEach((photo: Record<string, unknown>, idx: number) => {
-        // Log removed
-      });
-    }
-
-    if (
       payloadSanitized.customizationType === "DYNAMIC_LAYOUT" &&
       payloadSanitized.selectedLayoutId
     ) {
@@ -2080,7 +2068,6 @@ class ApiService {
 
   // ===== Feed =====
   getFeedConfigurations = async (): Promise<FeedConfiguration[]> => {
-
     if (ApiService.cache.feedConfigurations) {
       return ApiService.cache.feedConfigurations as FeedConfiguration[];
     }

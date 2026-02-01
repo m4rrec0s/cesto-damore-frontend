@@ -14,6 +14,7 @@ interface AdditionalCardProps {
   onCustomizeClick?: (additionalId: string) => void;
   onAddToCart?: (additionalId: string) => void; // Adicionar diretamente sem modal
   hasCustomizations?: boolean;
+  isInCartExternal?: boolean; // ✅ Status de seleção controlado externamente
   hasProductRequiredCustomizations?: boolean; // Se o produto tem customizações obrigatórias
   hasCompletedProductCustomizations?: boolean; // Se as customizações do produto foram completadas
 }
@@ -24,6 +25,7 @@ const AdditionalCard = ({
   onCustomizeClick,
   onAddToCart,
   hasCustomizations = false,
+  isInCartExternal = false,
   hasProductRequiredCustomizations = false,
   hasCompletedProductCustomizations = false,
 }: AdditionalCardProps) => {
@@ -34,11 +36,13 @@ const AdditionalCard = ({
     allowsCustomization && additional.customizations?.some((c) => c.isRequired);
 
   const isInCart =
+    isInCartExternal ||
     cart?.items?.some(
       (item) =>
         item.product_id === productId &&
-        item.additional_ids?.includes(additional.id)
-    ) || false;
+        item.additional_ids?.includes(additional.id),
+    ) ||
+    false;
 
   const handleAddToCart = async () => {
     if (!productId || !additional.id) {
@@ -51,7 +55,7 @@ const AdditionalCard = ({
       !hasCompletedProductCustomizations
     ) {
       toast.warning(
-        "Complete as personalizações obrigatórias do produto antes de adicionar adicionais"
+        "Complete as personalizações obrigatórias do produto antes de adicionar adicionais",
       );
       return;
     }
@@ -87,7 +91,9 @@ const AdditionalCard = ({
 
   const handleDirectAddToCartClick = () => {
     if (!hasCompletedProductCustomizations) {
-      toast.warning("Complete as personalizações obrigatórias do produto antes de adicionar este item.");
+      toast.warning(
+        "Complete as personalizações obrigatórias do produto antes de adicionar este item.",
+      );
       return;
     }
     if (onAddToCart) {
@@ -101,8 +107,8 @@ const AdditionalCard = ({
     <div className="group flex flex-col min-w-[150px] max-w-[300px] justify-between relative bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-xs transition-all duration-300 overflow-hidden">
       <div className="absolute top-2 right-2 z-10 flex flex-col gap-1 items-end">
         {allowsCustomization && hasCustomizations && (
-          <Badge className="bg-purple-600 text-white hover:bg-purple-700">
-            ✓ Personalizado
+          <Badge className="bg-gray-600 text-white hover:bg-gray-700">
+            ✓ Ok
           </Badge>
         )}
       </div>
@@ -136,10 +142,10 @@ const AdditionalCard = ({
                   !hasCompletedProductCustomizations)
               }
               variant="outline"
-              className="w-full border-purple-500 text-purple-600 hover:bg-purple-50"
+              className="w-full border-gray-500 text-gray-600 hover:bg-gray-50"
               title={
                 hasProductRequiredCustomizations &&
-                  !hasCompletedProductCustomizations
+                !hasCompletedProductCustomizations
                   ? "Complete as personalizações do produto primeiro"
                   : hasCustomizations
                     ? "Editar e adicionar ao carrinho"
@@ -147,7 +153,7 @@ const AdditionalCard = ({
               }
             >
               <Palette className="h-4 w-4 mr-2" />
-              {hasCustomizations ? "Editar Personalização" : "Personalizar"}
+              {hasCustomizations ? "Editar" : "Personalizar"}
             </Button>
           ) : (
             // Se não tem customizações obrigatórias, botão normal de adicionar
@@ -156,14 +162,15 @@ const AdditionalCard = ({
               disabled={isInCart || isAddingToCart}
               title={
                 hasProductRequiredCustomizations &&
-                  !hasCompletedProductCustomizations
+                !hasCompletedProductCustomizations
                   ? "Complete as personalizações do produto primeiro"
                   : "Adicionar ao Carrinho"
               }
-              className={`w-full ${isInCart
+              className={`w-full ${
+                isInCart
                   ? "bg-green-500 hover:bg-green-600"
                   : "bg-rose-500 hover:bg-rose-600"
-                }`}
+              }`}
             >
               {isAddingToCart ? (
                 <>

@@ -22,7 +22,6 @@ import { OrderConfirmationTicket } from "@/app/components/OrderConfirmationTicke
 import { usePaymentPolling } from "@/app/hooks/use-payment-polling";
 import { useWebhookNotification } from "@/app/hooks/use-webhook-notification";
 import { type PixData } from "@/app/components/QRCodePIX";
-import type { CustomizationInput } from "@/app/types/customization";
 import { StepCart } from "@/app/carrinho/components/steps/StepCart";
 import { StepDelivery } from "@/app/carrinho/components/steps/StepDelivery";
 import { StepPayment } from "@/app/carrinho/components/steps/StepPayment";
@@ -955,14 +954,7 @@ export default function CarrinhoPageContent() {
     [router],
   );
 
-  const handleCustomizationUpdate = useCallback(
-    (
-      _productId: string,
-      _customizations: CustomizationInput[],
-      _componentId?: string,
-    ) => {},
-    [],
-  );
+  const handleCustomizationUpdate = useCallback(() => {}, []);
 
   const handleCepSearch = async (cep: string) => {
     if (!cep || cep.length !== 8) {

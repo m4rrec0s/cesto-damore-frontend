@@ -227,7 +227,7 @@ export function MPPaymentBrick({
   }, []);
 
   const handleOnBinChange = useCallback(
-    (bin: string) => {
+    (_bin: string) => {
       onPaymentMethodChange?.("card");
     },
     [onPaymentMethodChange],

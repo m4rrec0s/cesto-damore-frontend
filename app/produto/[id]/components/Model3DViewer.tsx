@@ -2,12 +2,7 @@
 
 import React, { Suspense, useEffect, useMemo, useRef } from "react";
 import { Canvas, useFrame, useLoader } from "@react-three/fiber";
-import {
-  OrbitControls,
-  PerspectiveCamera,
-  Html,
-  Environment,
-} from "@react-three/drei";
+import { OrbitControls, PerspectiveCamera, Html } from "@react-three/drei";
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { Loader2, AlertCircle } from "lucide-react";
@@ -259,13 +254,23 @@ function ImageTexture({
   rotation?: Vector3Config;
   dimensions: { width: number; height: number };
 }) {
-  const texture = useLoader(THREE.TextureLoader, imageUrl, (loader) => {
-    if (loader.manager) {
-      loader.manager.itemStart = () => {};
-      loader.manager.itemEnd = () => {};
-      loader.manager.itemError = () => {};
-    }
-  });
+  // Incrementar versão da URL para evitar cache de blobs antigos/revogados
+  const [url, setUrl] = React.useState(imageUrl);
+
+  useEffect(() => {
+    setUrl(imageUrl);
+  }, [imageUrl]);
+
+  const texture = useLoader(
+    THREE.TextureLoader,
+    url,
+    (loader) => {
+      loader.setCrossOrigin("anonymous");
+    },
+    (error) => {
+      console.warn("Falha ao carregar textura 3D:", error);
+    },
+  );
 
   useEffect(() => {
     // Ajustes para texturas provenientes de canvas/dataURL
@@ -311,13 +316,22 @@ function CylinderImageTexture({
   autoRotate?: boolean;
   rotateSpeed?: number;
 }) {
-  const texture = useLoader(THREE.TextureLoader, imageUrl, (loader) => {
-    if (loader.manager) {
-      loader.manager.itemStart = () => {};
-      loader.manager.itemEnd = () => {};
-      loader.manager.itemError = () => {};
-    }
-  });
+  const [url, setUrl] = React.useState(imageUrl);
+
+  useEffect(() => {
+    setUrl(imageUrl);
+  }, [imageUrl]);
+
+  const texture = useLoader(
+    THREE.TextureLoader,
+    url,
+    (loader) => {
+      loader.setCrossOrigin("anonymous");
+    },
+    (error) => {
+      console.warn("Falha ao carregar textura cilíndrica 3D:", error);
+    },
+  );
   const meshRef = useRef<THREE.Mesh>(null);
   const [roughnessTexture, setRoughnessTexture] =
     React.useState<THREE.CanvasTexture | null>(null);
@@ -353,9 +367,9 @@ function CylinderImageTexture({
         1,
         true,
         thetaStart,
-        thetaLength
+        thetaLength,
       ),
-    [radius, height, segments, thetaStart, thetaLength]
+    [radius, height, segments, thetaStart, thetaLength],
   );
 
   useEffect(() => {
@@ -381,13 +395,13 @@ function CylinderImageTexture({
           256,
           img instanceof HTMLImageElement
             ? img.naturalWidth || 512
-            : (img as HTMLCanvasElement).width || 512
+            : (img as HTMLCanvasElement).width || 512,
         );
         const h = Math.max(
           64,
           img instanceof HTMLImageElement
             ? img.naturalHeight || 256
-            : (img as HTMLCanvasElement).height || 256
+            : (img as HTMLCanvasElement).height || 256,
         );
         const c = document.createElement("canvas");
         c.width = w;
@@ -494,7 +508,7 @@ function TextTexture({
 }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [texture, setTexture] = React.useState<THREE.CanvasTexture | null>(
-    null
+    null,
   );
 
   useEffect(() => {
@@ -541,8 +555,8 @@ function TextTexture({
         textAlign === "left"
           ? padding
           : textAlign === "right"
-          ? canvas.width - padding
-          : canvas.width / 2;
+            ? canvas.width - padding
+            : canvas.width / 2;
 
       const computedLineHeight = fontSize * lineHeight;
       const totalHeight = computedLineHeight * (lines.length - 1);
@@ -681,30 +695,29 @@ export function Model3DViewer({
         className="h-full w-full"
         // Disable default shadow map rendering and use physically correct lights
         shadows={false}
-        dpr={[1, 1.7]}
-        gl={{ antialias: true }}
+        dpr={[1, 1.5]}
+        gl={{
+          antialias: true,
+          alpha: true,
+          preserveDrawingBuffer: true,
+        }}
         onCreated={(state) => {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const gl = state.gl as any;
-          gl.physicallyCorrectLights = true;
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          gl.outputColorSpace = (THREE as any).SRGBColorSpace;
+          const gl = state.gl;
+          // Use modern property name
+          (gl as unknown as { useLegacyLights: boolean }).useLegacyLights =
+            false;
+          gl.outputColorSpace = THREE.SRGBColorSpace;
           gl.toneMappingExposure = 1.0;
         }}
       >
         {/* Câmera */}
         <PerspectiveCamera makeDefault position={[0, 0.35, 3.1]} fov={40} />
 
-        {/* Iluminação ambiente muito reduzida — priorizar IBL (Environment) para reflexos */}
-        <hemisphereLight intensity={0.05} groundColor={0x333333} />
-        <ambientLight intensity={0.01} color="#ffffff" />
-
-        {/* Direcional praticamente desativado para evitar hotspots locais */}
-        <directionalLight
-          castShadow={false}
-          intensity={0.0}
-          position={[5, 8, 5]}
-        />
+        {/* Iluminação de fundo para garantir visibilidade se o Environment falhar */}
+        <hemisphereLight intensity={0.5} groundColor={0x444444} />
+        <ambientLight intensity={0.4} />
+        <directionalLight position={[5, 5, 5]} intensity={0.8} />
+        <pointLight position={[-5, 5, -5]} intensity={0.5} />
 
         {/* Controles de órbita */}
         <OrbitControls
@@ -730,10 +743,6 @@ export function Model3DViewer({
               baseScale={baseScale}
             />
           </Model3DErrorBoundary>
-
-          {/* IBL environment para reflexos sutis */}
-          {/* Ambiente IBL — mantém background=false para não alterar a cena */}
-          <Environment preset="studio" background={false} />
 
           {/* Aplicar texturas customizadas */}
           {textures.map((textureConfig, index) => {

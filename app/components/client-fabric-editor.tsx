@@ -104,7 +104,7 @@ export default function ClientFabricEditor({
     }
   });
   const [loading, setLoading] = useState(true);
-  const [workspaceZoom, setWorkspaceZoom] = useState(1);
+  const [workspaceZoom, setWorkspaceZoom] = useState(0.4);
 
   useEffect(() => {
     if (layoutBase.id && Object.keys(localImages).length > 0) {
@@ -122,35 +122,38 @@ export default function ClientFabricEditor({
   const [isProcessingImage, setIsProcessingImage] = useState(false);
 
   useEffect(() => {
-    const updateZoom = () => {
-      if (!containerRef.current || !containerRef.current.parentElement) return;
+    const parentContainer = containerRef.current?.parentElement;
+    if (!parentContainer) return;
 
-      const parent = containerRef.current.parentElement;
-      const padding = window.innerWidth < 640 ? 32 : 80;
-      const availableWidth = parent.clientWidth - padding;
-      const availableHeight = parent.clientHeight - padding;
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        // Usamos contentRect para pegar o espaço interno descontando padding do pai
+        const { width: availWidth, height: availHeight } = entry.contentRect;
 
-      const layoutWidth = layoutBase.width || 378;
-      const layoutHeight = layoutBase.height || 567;
+        // Margem de respiro interna (px)
+        const margin = 32;
+        const maxWidth = Math.max(availWidth - margin, 150);
+        const maxHeight = Math.max(availHeight - margin, 150);
 
-      const zoomW = availableWidth / layoutWidth;
-      const zoomH = availableHeight / layoutHeight;
+        const layoutWidth = Number(layoutBase.width) || 378;
+        const layoutHeight = Number(layoutBase.height) || 567;
 
-      // Usar o menor zoom para caber em ambas as dimensões, sem limitar a 1.0
-      const calculatedZoom = Math.min(zoomW, zoomH);
-      const newZoom = Math.max(0.1, calculatedZoom);
-      setWorkspaceZoom(newZoom);
-    };
+        const zoomW = maxWidth / layoutWidth;
+        const zoomH = maxHeight / layoutHeight;
 
-    updateZoom();
-    window.addEventListener("resize", updateZoom);
-    // Delay para garantir que o layout do DOM estabilizou
-    const timer = setTimeout(updateZoom, 100);
+        // O zoom deve ser o menor para caber em ambos os eixos (object-fit: contain)
+        const scaleFactor = Math.min(zoomW, zoomH);
 
-    return () => {
-      window.removeEventListener("resize", updateZoom);
-      clearTimeout(timer);
-    };
+        // Teto de zoom para não distorcer em telas ultra-wide
+        const finalZoom = Math.min(scaleFactor, 1.1);
+
+        setWorkspaceZoom(Math.max(0.1, finalZoom));
+      }
+    });
+
+    observer.observe(parentContainer);
+
+    return () => observer.disconnect();
   }, [layoutBase.width, layoutBase.height]);
 
   useEffect(() => {
@@ -745,7 +748,7 @@ export default function ClientFabricEditor({
   };
 
   return (
-    <div className="flex flex-col h-screen overflow-hidden bg-gray-50/70">
+    <div className="flex flex-col h-[82vh] min-h-[600px] overflow-hidden bg-gray-50/70">
       {/* Header fixo */}
       <header className="shrink-0 z-10 bg-white/95 backdrop-blur-sm border-b border-gray-100 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -774,10 +777,10 @@ export default function ClientFabricEditor({
       </header>
 
       {/* Conteúdo principal */}
-      <main className="flex-1 flex flex-col lg:flex-row w-full px-4 sm:px-6 lg:px-10 py-4 lg:py-6 gap-6 lg:gap-8 overflow-hidden">
+      <main className="flex-1 flex flex-col lg:flex-row w-full px-4 sm:px-6 lg:px-10 py-4 lg:py-6 gap-4 lg:gap-8 overflow-hidden min-h-0">
         {/* Área de pré-visualização */}
-        <div className="w-full lg:flex-1 flex flex-col items-center overflow-hidden">
-          <div className="w-full h-full bg-white rounded-2xl shadow-xl border border-gray-200/80 overflow-hidden relative flex flex-col">
+        <section className="flex-[1.2] lg:flex-1 w-full flex flex-col min-h-0 overflow-hidden">
+          <div className="flex-1 bg-white rounded-2xl shadow-xl border border-gray-200/80 overflow-hidden relative flex flex-col">
             {loading && (
               <div className="absolute inset-0 bg-white/75 backdrop-blur-sm z-20 flex flex-col items-center justify-center gap-3">
                 <Loader2 className="h-10 w-10 sm:h-12 sm:w-12 animate-spin text-rose-500" />
@@ -787,13 +790,15 @@ export default function ClientFabricEditor({
               </div>
             )}
 
-            <div className="flex-1 flex items-center justify-center p-4 sm:p-6 lg:p-10 bg-gray-50/30 overflow-hidden lg:min-h-0">
+            <div className="flex-1 flex items-center justify-center p-4 sm:p-6 lg:p-10 bg-gray-50/30 overflow-hidden relative min-h-0">
               <div
                 ref={containerRef}
-                className="bg-white border-4 sm:border-6 border-white shadow-2xl rounded-xl pointer-events-none overflow-hidden flex items-center justify-center transition-all duration-300"
+                className="bg-white border-4 sm:border-6 border-white shadow-2xl rounded-xl pointer-events-none overflow-hidden flex items-center justify-center shrink-0"
                 style={{
                   width: (layoutBase.width || 378) * workspaceZoom,
                   height: (layoutBase.height || 567) * workspaceZoom,
+                  maxWidth: "100%",
+                  maxHeight: "100%",
                 }}
               />
             </div>
@@ -805,10 +810,10 @@ export default function ClientFabricEditor({
               </div>
             </div>
           </div>
-        </div>
+        </section>
 
         {/* Painel de controles (scrollável) */}
-        <aside className="w-full lg:w-80 xl:w-96 flex flex-col gap-6 lg:gap-8 overflow-y-auto h-full custom-scrollbar px-1 lg:px-2 pb-6 lg:pb-0 shrink-0 border-l border-gray-100/50 bg-white/50 lg:backdrop-blur-sm">
+        <aside className="w-full flex-1 lg:flex-none lg:w-80 xl:w-96 flex flex-col gap-6 lg:gap-8 overflow-y-auto h-full custom-scrollbar px-1 lg:px-2 pb-6 lg:pb-0 shrink-0 border-l border-gray-100/50 bg-white/50 lg:backdrop-blur-sm">
           <Card className="border border-rose-100/60 shadow-md bg-white/80 backdrop-blur-sm">
             <CardContent className="p-5 sm:p-6 lg:p-7 space-y-6 lg:space-y-7">
               {/* Cabeçalho da seção */}
