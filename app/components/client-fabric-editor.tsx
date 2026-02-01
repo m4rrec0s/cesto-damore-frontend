@@ -43,7 +43,6 @@ const loadGoogleFont = (fontFamily: string) => {
       "+",
     )}:wght@400;700&display=swap`;
 
-    // Timeout de segurança de 3 segundos para evitar travamento do editor
     const timeout = setTimeout(() => {
       console.warn(`Font load timeout: ${fontFamily}`);
       resolve(null);
@@ -107,7 +106,6 @@ export default function ClientFabricEditor({
   const [loading, setLoading] = useState(true);
   const [workspaceZoom, setWorkspaceZoom] = useState(1);
 
-  // Persistir imagens locais
   useEffect(() => {
     if (layoutBase.id && Object.keys(localImages).length > 0) {
       localStorage.setItem(
@@ -117,38 +115,49 @@ export default function ClientFabricEditor({
     }
   }, [localImages, layoutBase.id]);
 
-  // Crop states
   const [cropDialogOpen, setCropDialogOpen] = useState(false);
   const [fileToCrop, setFileToCrop] = useState<File | null>(null);
   const [currentFrameId, setCurrentFrameId] = useState<string | null>(null);
   const [cropAspect, setCropAspect] = useState<number | undefined>(undefined);
   const [isProcessingImage, setIsProcessingImage] = useState(false);
 
-  // Calcular zoom ideal baseado no container
   useEffect(() => {
     const updateZoom = () => {
-      if (!containerRef.current) return;
-      const containerWidth = containerRef.current.offsetWidth - 40;
+      if (!containerRef.current || !containerRef.current.parentElement) return;
+
+      const parent = containerRef.current.parentElement;
+      const padding = window.innerWidth < 640 ? 32 : 80;
+      const availableWidth = parent.clientWidth - padding;
+      const availableHeight = parent.clientHeight - padding;
+
       const layoutWidth = layoutBase.width || 378;
-      // Garantir que o zoom não seja zero
-      const calculatedZoom =
-        containerWidth > 0 ? containerWidth / layoutWidth : 1;
-      const newZoom = Math.max(0.2, Math.min(1, calculatedZoom));
+      const layoutHeight = layoutBase.height || 567;
+
+      const zoomW = availableWidth / layoutWidth;
+      const zoomH = availableHeight / layoutHeight;
+
+      // Usar o menor zoom para caber em ambas as dimensões, sem limitar a 1.0
+      const calculatedZoom = Math.min(zoomW, zoomH);
+      const newZoom = Math.max(0.1, calculatedZoom);
       setWorkspaceZoom(newZoom);
     };
 
     updateZoom();
     window.addEventListener("resize", updateZoom);
-    return () => window.removeEventListener("resize", updateZoom);
-  }, [layoutBase.width]);
+    // Delay para garantir que o layout do DOM estabilizou
+    const timer = setTimeout(updateZoom, 100);
 
-  // Sincronizar zoom do canvas
+    return () => {
+      window.removeEventListener("resize", updateZoom);
+      clearTimeout(timer);
+    };
+  }, [layoutBase.width, layoutBase.height]);
+
   useEffect(() => {
     if (fabricRef) {
       const width = layoutBase.width || 378;
       const height = layoutBase.height || 567;
 
-      // 1. Ajustar a resolução interna (Backstore) - Constante para nitidez
       fabricRef.setDimensions(
         {
           width: width * INTERNAL_DPI_MULTIPLIER,
@@ -393,11 +402,10 @@ export default function ClientFabricEditor({
         canvasInstance = new Canvas(canvasEl, {
           backgroundColor: "#ffffff",
           selection: false,
-          interactive: false, // BLOQUEIA INTERAÇÃO DIRETA
+          interactive: false,
           preserveObjectStacking: true,
         });
 
-        // Configurar dimensões internas (backstore) - Atributos 'width' e 'height'
         canvasInstance.setDimensions(
           {
             width: width * INTERNAL_DPI_MULTIPLIER,
@@ -406,7 +414,6 @@ export default function ClientFabricEditor({
           { backstoreOnly: true },
         );
 
-        // Configurar dimensões visuais (CSS) - Isso sincroniza o container e ambos os canvas
         canvasInstance.setDimensions(
           {
             width: `${width * workspaceZoom}px`,
@@ -738,124 +745,162 @@ export default function ClientFabricEditor({
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between bg-white p-4 rounded-xl border-2 border-purple-100 shadow-sm">
-        <Button
-          variant="ghost"
-          onClick={onBack}
-          className="gap-2 hover:bg-purple-50"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Alterar Layout
-        </Button>
-        <div className="text-right">
-          <h3 className="font-bold text-gray-900">{layoutBase.name}</h3>
-          <p className="text-xs text-purple-600 font-medium uppercase tracking-wider">
-            Edição em Tempo Real
-          </p>
-        </div>
-      </div>
+    <div className="flex flex-col h-screen overflow-hidden bg-gray-50/70">
+      {/* Header fixo */}
+      <header className="shrink-0 z-10 bg-white/95 backdrop-blur-sm border-b border-gray-100 shadow-sm">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between h-14 sm:h-16">
+            <Button
+              variant="ghost"
+              onClick={onBack}
+              className="gap-1.5 sm:gap-2 text-gray-700 hover:text-rose-600 hover:bg-rose-50/70 -ml-2 sm:-ml-3"
+            >
+              <ArrowLeft className="h-4 w-4 sm:h-5 sm:w-5" />
+              <span className="font-medium text-sm sm:text-base">
+                Alterar Layout
+              </span>
+            </Button>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-        {/* Lado Esquerdo: Preview Fixo */}
-        <div className="lg:col-span-2 lg:sticky lg:top-4 bg-neutral-100 rounded-2xl p-6 flex flex-col items-center justify-center min-h-[550px] relative shadow-inner">
-          {loading && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/80 backdrop-blur-sm z-20 rounded-2xl">
-              <Loader2 className="h-12 w-12 animate-spin text-purple-600 mb-2" />
-              <p className="text-sm font-semibold text-gray-600">
-                Inicializando Estúdio...
+            <div className="text-right">
+              <h3 className="font-semibold text-gray-900 text-base sm:text-lg leading-tight">
+                {layoutBase.name}
+              </h3>
+              <p className="text-[10px] sm:text-xs font-medium text-rose-600/90 uppercase tracking-wider mt-0.5">
+                Edição em Tempo Real
               </p>
             </div>
-          )}
+          </div>
+        </div>
+      </header>
 
-          <div
-            ref={containerRef}
-            className="shadow-2xl bg-white border-8 border-white rounded-sm pointer-events-none"
-          />
+      {/* Conteúdo principal */}
+      <main className="flex-1 flex flex-col lg:flex-row w-full px-4 sm:px-6 lg:px-10 py-4 lg:py-6 gap-6 lg:gap-8 overflow-hidden">
+        {/* Área de pré-visualização */}
+        <div className="w-full lg:flex-1 flex flex-col items-center overflow-hidden">
+          <div className="w-full h-full bg-white rounded-2xl shadow-xl border border-gray-200/80 overflow-hidden relative flex flex-col">
+            {loading && (
+              <div className="absolute inset-0 bg-white/75 backdrop-blur-sm z-20 flex flex-col items-center justify-center gap-3">
+                <Loader2 className="h-10 w-10 sm:h-12 sm:w-12 animate-spin text-rose-500" />
+                <p className="text-sm font-medium text-gray-700">
+                  Inicializando estúdio...
+                </p>
+              </div>
+            )}
 
-          <div className="mt-4 flex gap-4 text-xs text-gray-400 font-medium uppercase tracking-widest">
-            <Sparkles className="h-3 w-3" /> Visualização em Tempo Real
+            <div className="flex-1 flex items-center justify-center p-4 sm:p-6 lg:p-10 bg-gray-50/30 overflow-hidden lg:min-h-0">
+              <div
+                ref={containerRef}
+                className="bg-white border-4 sm:border-6 border-white shadow-2xl rounded-xl pointer-events-none overflow-hidden flex items-center justify-center transition-all duration-300"
+                style={{
+                  width: (layoutBase.width || 378) * workspaceZoom,
+                  height: (layoutBase.height || 567) * workspaceZoom,
+                }}
+              />
+            </div>
+
+            <div className="py-3 px-4 bg-gray-50/70 border-t border-gray-100 text-center flex-shrink-0">
+              <div className="inline-flex items-center gap-1.5 text-xs sm:text-sm font-medium text-gray-500 uppercase tracking-wide">
+                <Sparkles className="h-3.5 w-3.5 text-rose-400" />
+                Visualização em Tempo Real
+              </div>
+            </div>
           </div>
         </div>
 
-        {/* Lado Direito: Menu com Scroll */}
-        <div className="lg:max-h-[calc(100vh-220px)] overflow-y-auto pr-2 custom-scrollbar space-y-6 pb-8">
-          <Card className="border-2 border-purple-50 shadow-lg">
-            <CardContent className="p-6 space-y-6">
-              <div className="flex items-center gap-2 border-b pb-4 mb-4">
-                <Palette className="h-5 w-5 text-purple-600" />
-                <h4 className="font-bold text-gray-800">
-                  Suas Personalizações
+        {/* Painel de controles (scrollável) */}
+        <aside className="w-full lg:w-80 xl:w-96 flex flex-col gap-6 lg:gap-8 overflow-y-auto h-full custom-scrollbar px-1 lg:px-2 pb-6 lg:pb-0 shrink-0 border-l border-gray-100/50 bg-white/50 lg:backdrop-blur-sm">
+          <Card className="border border-rose-100/60 shadow-md bg-white/80 backdrop-blur-sm">
+            <CardContent className="p-5 sm:p-6 lg:p-7 space-y-6 lg:space-y-7">
+              {/* Cabeçalho da seção */}
+              <div className="flex items-center gap-3 pb-4 border-b border-gray-100">
+                <div className="p-2 bg-rose-50 rounded-lg">
+                  <Palette className="h-5 w-5 text-rose-600" />
+                </div>
+                <h4 className="font-semibold text-gray-800 text-lg">
+                  Personalizações
                 </h4>
               </div>
 
+              {/* Textos editáveis */}
               {Object.keys(editableTexts).length > 0 && (
-                <div className="space-y-4">
-                  <Label className="text-xs font-bold uppercase text-gray-400 tracking-widest flex items-center gap-2">
-                    <Type className="h-3 w-3" /> Textos Editáveis
-                  </Label>
-                  {Object.entries(editableTexts).map(([id, text]) => {
-                    // Encontrar o objeto no canvas para verificar maxChars
-                    const obj = fabricRef
-                      ?.getObjects()
-                      .find((o: any) => (o.id || o.name) === id);
-                    const maxChars = (obj as any)?.maxChars || 50;
-                    const isLongText = maxChars > 20;
+                <div className="space-y-5">
+                  <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-gray-500">
+                    <Type className="h-4 w-4" />
+                    Textos editáveis
+                  </div>
 
-                    return (
-                      <div key={id} className="space-y-2">
-                        <Label className="text-sm font-semibold text-gray-700">
-                          {fieldLabels[id] || "Campo de Texto"}
-                        </Label>
-                        {isLongText ? (
-                          <Textarea
-                            value={text}
-                            onChange={(e) =>
-                              handleTextChange(id, e.target.value)
-                            }
-                            maxLength={maxChars}
-                            className="border-gray-200 focus:border-purple-400 focus:ring-purple-100 min-h-[80px] resize-none"
-                            placeholder="Escreva algo especial..."
-                          />
-                        ) : (
-                          <Input
-                            value={text}
-                            onChange={(e) =>
-                              handleTextChange(id, e.target.value)
-                            }
-                            maxLength={maxChars}
-                            className="border-gray-200 focus:border-purple-400 focus:ring-purple-100 h-11"
-                            placeholder="Escreva algo especial..."
-                          />
-                        )}
-                        <div className="flex justify-between text-xs text-gray-500">
-                          <span>Limite: {maxChars}</span>
-                          <span>
-                            {text.length}/{maxChars}
-                          </span>
+                  <div className="space-y-4">
+                    {Object.entries(editableTexts).map(([id, text]) => {
+                      const obj = fabricRef
+                        ?.getObjects()
+                        .find((o: any) => (o.id || o.name) === id);
+                      const maxChars = (obj as any)?.maxChars || 50;
+                      const isLongText = maxChars > 20;
+
+                      return (
+                        <div key={id} className="space-y-2">
+                          <Label className="text-sm font-medium text-gray-700">
+                            {fieldLabels[id] || "Campo de texto"}
+                          </Label>
+
+                          {isLongText ? (
+                            <Textarea
+                              value={text}
+                              onChange={(e) =>
+                                handleTextChange(id, e.target.value)
+                              }
+                              maxLength={maxChars}
+                              className="min-h-[70px] sm:min-h-[90px] resize-none border-gray-200 focus:border-rose-400 focus:ring-rose-100/40 text-sm"
+                              placeholder="Escreva algo especial..."
+                            />
+                          ) : (
+                            <Input
+                              value={text}
+                              onChange={(e) =>
+                                handleTextChange(id, e.target.value)
+                              }
+                              maxLength={maxChars}
+                              className="h-11 border-gray-200 focus:border-rose-400 focus:ring-rose-100/40"
+                              placeholder="Escreva algo especial..."
+                            />
+                          )}
+
+                          <div className="flex justify-between text-xs text-gray-500">
+                            <span>Limite: {maxChars} caracteres</span>
+                            <span
+                              className={
+                                text.length === maxChars
+                                  ? "text-rose-600 font-medium"
+                                  : ""
+                              }
+                            >
+                              {text.length}/{maxChars}
+                            </span>
+                          </div>
                         </div>
-                      </div>
-                    );
-                  })}
+                      );
+                    })}
+                  </div>
                 </div>
               )}
 
-              <div className="space-y-4 pt-4 border-t border-dashed">
-                <Label className="text-xs font-bold uppercase text-gray-400 tracking-widest flex items-center gap-2">
-                  <ImageIcon className="h-3 w-3" /> Molduras de Fotos
-                </Label>
-                <div className="grid grid-cols-2 gap-3">
+              {/* Molduras de fotos */}
+              <div className="space-y-5 pt-5 border-t border-dashed border-gray-200">
+                <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-gray-500">
+                  <ImageIcon className="h-4 w-4" />
+                  Molduras de fotos
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-2 gap-4">
                   {fabricRef
                     ?.getObjects()
                     .filter((o: any) => o.isFrame)
                     .map((frame: any, index: number) => {
                       const id = frame.id || frame.name;
-                      const uniqueKey = `${id}-${index}`;
-                      const label = fieldLabels[id] || "Sua Foto";
+                      const label = fieldLabels[id] || `Foto ${index + 1}`;
                       let imageUrl = localImages[id];
 
-                      // Normalizar URL para exibição no preview da sidebar
-                      if (imageUrl && imageUrl.startsWith("/")) {
+                      if (imageUrl?.startsWith("/")) {
                         const apiBase = (
                           process.env.NEXT_PUBLIC_API_URL || ""
                         ).replace(/\/api$/, "");
@@ -863,16 +908,19 @@ export default function ClientFabricEditor({
                       }
 
                       const hasImage = !!imageUrl;
+
                       return (
-                        <div key={uniqueKey} className="space-y-2">
-                          <Label className="text-[10px] font-bold text-gray-500 uppercase truncate block text-center">
+                        <div key={`${id}-${index}`} className="space-y-2">
+                          <Label className="text-xs font-medium text-gray-600 block text-center truncate">
                             {label}
                           </Label>
+
                           <div
-                            className={`relative aspect-square rounded-xl flex items-center justify-center border-2 border-dashed transition-all cursor-pointer ${
+                            className={`group relative aspect-square rounded-xl overflow-hidden border-2 transition-all duration-200 cursor-pointer
+                            ${
                               hasImage
-                                ? "border-purple-500 bg-purple-50"
-                                : "border-gray-200 bg-gray-50 hover:border-purple-300"
+                                ? "border-rose-400 shadow-sm hover:shadow-md"
+                                : "border-dashed border-gray-300 hover:border-rose-300 bg-gray-50/60 hover:bg-rose-50/30"
                             }`}
                             onClick={() =>
                               document.getElementById(`upload-${id}`)?.click()
@@ -881,25 +929,27 @@ export default function ClientFabricEditor({
                             {hasImage ? (
                               <Image
                                 src={imageUrl}
-                                className="w-full h-full object-cover rounded-lg"
-                                alt="Upload"
-                                width={100}
-                                height={100}
+                                alt={`Foto ${label}`}
+                                fill
+                                className="object-cover"
                                 unoptimized
                               />
                             ) : (
-                              <Upload className="h-6 w-6 text-gray-400" />
+                              <div className="absolute inset-0 flex items-center justify-center">
+                                <Upload className="h-7 w-7 text-gray-400 group-hover:text-rose-500 transition-colors" />
+                              </div>
                             )}
-                            <div className="absolute -bottom-2 -right-2 bg-white rounded-full p-1 shadow-md border border-gray-100">
+
+                            <div className="absolute bottom-2 right-2 bg-white/90 backdrop-blur-sm rounded-full p-1.5 shadow-sm border border-white/80">
                               {hasImage ? (
-                                <Check className="h-3 w-3 text-green-600" />
+                                <Check className="h-4 w-4 text-green-600" />
                               ) : (
-                                <Upload className="h-3 w-3 text-purple-600" />
+                                <Upload className="h-4 w-4 text-rose-600" />
                               )}
                             </div>
-                            <input
+
+                            <Input
                               id={`upload-${id}`}
-                              title={`Upload imagem para ${id}`}
                               type="file"
                               accept="image/*"
                               className="hidden"
@@ -915,23 +965,29 @@ export default function ClientFabricEditor({
           </Card>
 
           <Button
-            className="w-full h-14 text-lg font-bold bg-gradient-to-r from-rose-500 to-pink-600 hover:from-rose-600 hover:to-pink-700 shadow-xl gap-2 rounded-2xl transition-all active:scale-95"
+            size="lg"
+            className="w-full h-12 sm:h-14 text-base sm:text-lg font-semibold bg-gradient-to-r from-rose-500 to-rose-600 hover:from-rose-600 hover:to-rose-700 shadow-lg hover:shadow-xl transition-all active:scale-[0.98] rounded-xl gap-2"
             onClick={handleComplete}
             disabled={isProcessingImage}
           >
             {isProcessingImage ? (
-              <Loader2 className="animate-spin" />
+              <>
+                <Loader2 className="h-5 w-5 animate-spin" />
+                Processando...
+              </>
             ) : (
-              <Check className="h-6 w-6" />
+              <>
+                <Check className="h-5 w-5" />
+                Concluir e Salvar
+              </>
             )}
-            Concluir e Salvar
           </Button>
 
-          <p className="text-center text-[10px] text-gray-400 uppercase tracking-widest font-bold">
-            Garantia de Qualidade Cesto dAmore
+          <p className="text-center text-xs text-gray-400 font-medium tracking-wide">
+            Garantia de Qualidade • Cesto dAmore
           </p>
-        </div>
-      </div>
+        </aside>
+      </main>
 
       {fileToCrop && (
         <ImageCropDialog
