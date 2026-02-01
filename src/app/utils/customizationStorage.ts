@@ -103,7 +103,6 @@ class CustomizationStorage {
       }
 
       localStorage.setItem(key, jsonStr);
-      console.log(`✅ Customização salva: ${productId} (${newSize} bytes)`);
 
       return {
         success: true,
@@ -113,7 +112,6 @@ class CustomizationStorage {
     } catch (error) {
       console.error("❌ Erro ao salvar customização:", error);
 
-      // Se foi erro de quota, tentar limpar e retentar
       if (error instanceof DOMException && error.code === 22) {
         console.warn("⚠️ Quota excedida! Limpando rascunhos...");
         this.cleanupAllExpired();
@@ -161,7 +159,6 @@ class CustomizationStorage {
   delete(productId: string) {
     const key = `${this.PREFIX}:${productId}`;
     localStorage.removeItem(key);
-    console.log(`✅ Customização deletada: ${productId}`);
   }
 
   /**
@@ -354,31 +351,17 @@ class CustomizationStorage {
     // Deletar fora do loop para não afetar iteração
     keysToDelete.forEach((key) => localStorage.removeItem(key));
 
-    console.log(
-      `🧹 Limpeza: ${deletedCount} rascunhos deletados, ${(freedBytes / 1024).toFixed(2)}KB liberados`,
-    );
-
     return { deletedCount, freedBytes } as CleanupResult;
   }
 
-  /**
-   * Limpeza agressiva: manter apenas 5 rascunhos mais recentes
-   */
   private cleanupOldDrafts() {
     const drafts = this.listAllDrafts()
       .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
-      .slice(5); // Manter últimos 5
+      .slice(5);
 
     drafts.forEach((draft) => this.delete(draft.productId));
-
-    console.log(
-      `🧹 Limpeza agressiva: ${drafts.length} rascunhos antigos deletados`,
-    );
   }
 
-  /**
-   * Limpar TUDO (para logout)
-   */
   clear() {
     const keys: string[] = [];
 
@@ -390,7 +373,6 @@ class CustomizationStorage {
     }
 
     keys.forEach((key) => localStorage.removeItem(key));
-    console.log(`🗑️ Todos os rascunhos foram deletados`);
   }
 
   /**

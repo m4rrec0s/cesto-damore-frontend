@@ -93,11 +93,6 @@ const ClientProductPage = ({ id }: { id: string }) => {
 
   const handleImagesUpdate = useCallback(
     (itemId: string, imageCount: number, maxImages: number) => {
-      console.log("📊 [handleImagesUpdate] Atualizando state:", {
-        itemId,
-        imageCount,
-        maxImages,
-      });
       setItemImagesCount((prev) => ({
         ...prev,
         [itemId]: { current: imageCount, max: maxImages },
@@ -105,9 +100,6 @@ const ClientProductPage = ({ id }: { id: string }) => {
     },
     [],
   );
-
-  // ❌ REMOVIDO: sessionStorage causava conflitos com dados do banco de dados
-  // As customizações agora são salvas diretamente no carrinho/pedido e recuperadas de lá
 
   const handleCustomizationComplete = useCallback(
     (
@@ -245,21 +237,12 @@ const ClientProductPage = ({ id }: { id: string }) => {
                       let uploadedFileName = "";
                       try {
                         if (file) {
-                          console.log(
-                            `📤 [IMAGES-1] Uploading file ${index}: ${fileName}`,
-                          );
                           const uploadResult =
                             await uploadCustomizationImage(file);
                           if (uploadResult.success) {
                             tempFileUrl = uploadResult.imageUrl;
                             uploadedFileName = uploadResult.filename;
-                            console.log(
-                              `✅ [IMAGES-1] Upload bem-sucedido: ${uploadResult.imageUrl}`,
-                            );
                           } else {
-                            console.warn(
-                              `⚠️ [IMAGES-1] Upload falhou para ${fileName}, usando base64`,
-                            );
                           }
                         }
                       } catch (err) {
@@ -267,16 +250,15 @@ const ClientProductPage = ({ id }: { id: string }) => {
                           `❌ [IMAGES-1] Erro ao fazer upload de ${fileName}:`,
                           err,
                         );
-                        // Continuar com base64 se upload falhar
                       }
 
                       return {
-                        preview_url: tempFileUrl, // ✅ Será URL ou base64 como fallback
+                        preview_url: tempFileUrl,
                         original_name: fileName,
                         temp_file_id:
                           uploadedFileName || `temp-${Date.now()}-${index}`,
                         position: index,
-                        base64: preview, // ✅ Manter base64 como backup para Drive
+                        base64: preview,
                         mime_type: file?.type || "image/jpeg",
                         size: file?.size || 0,
                       };
@@ -345,13 +327,9 @@ const ClientProductPage = ({ id }: { id: string }) => {
                   type: "image/png",
                 });
 
-                console.log(`📤 [DYNAMIC_LAYOUT-Add] Uploading final image...`);
                 const uploadResult = await uploadCustomizationImage(file);
 
                 if (uploadResult.success) {
-                  console.log(
-                    `✅ [DYNAMIC_LAYOUT-Add] Upload OK: ${uploadResult.imageUrl}`,
-                  );
                   finalPreviewUrl = uploadResult.imageUrl;
                 } else {
                   console.warn(
@@ -429,7 +407,6 @@ const ClientProductPage = ({ id }: { id: string }) => {
 
   const handleAddAdditionalToCart = useCallback(
     async (additionalId: string) => {
-      console.log("🛒 [handleAddAdditionalToCart] Início:", { additionalId });
 
       if (!product.id) {
         toast.error("Produto não encontrado");
@@ -505,17 +482,12 @@ const ClientProductPage = ({ id }: { id: string }) => {
                       let uploadedFileName = "";
                       try {
                         if (file) {
-                          console.log(
-                            `📤 [IMAGES-2] Uploading file ${index}: ${fileName}`,
-                          );
                           const uploadResult =
                             await uploadCustomizationImage(file);
                           if (uploadResult.success) {
                             tempFileUrl = uploadResult.imageUrl;
                             uploadedFileName = uploadResult.filename;
-                            console.log(
-                              `✅ [IMAGES-2] Upload bem-sucedido: ${uploadResult.imageUrl}`,
-                            );
+
                           } else {
                             console.warn(
                               `⚠️ [IMAGES-2] Upload falhou para ${fileName}, usando base64`,
@@ -596,15 +568,9 @@ const ClientProductPage = ({ id }: { id: string }) => {
                   type: "image/png",
                 });
 
-                console.log(
-                  `📤 [DYNAMIC_LAYOUT-Add2] Uploading final image...`,
-                );
                 const uploadResult = await uploadCustomizationImage(file);
 
                 if (uploadResult.success) {
-                  console.log(
-                    `✅ [DYNAMIC_LAYOUT-Add2] Upload OK: ${uploadResult.imageUrl}`,
-                  );
                   finalPreviewUrl = uploadResult.imageUrl;
                 } else {
                   console.warn(
@@ -635,19 +601,11 @@ const ClientProductPage = ({ id }: { id: string }) => {
         for (const component of components) {
           const componentCustomizations =
             itemCustomizations[component.id] || [];
-          console.log(
-            `🔍 [handleAddAdditionalToCart] Customizações do componente ${component.item.name}:`,
-            componentCustomizations,
-          );
           for (const custom of componentCustomizations) {
             const converted = await convertToCartCustomization(
               custom,
               component.id,
             );
-            console.log(`🔄 [handleAddAdditionalToCart] Convertido:`, {
-              original: custom,
-              converted,
-            });
             if (converted) {
               cartCustomizations.push(converted);
             }
@@ -656,29 +614,17 @@ const ClientProductPage = ({ id }: { id: string }) => {
 
         // Adicionar customizações do adicional se existirem
         if (savedCustomizations && savedCustomizations.length > 0) {
-          console.log(
-            `🔍 [handleAddAdditionalToCart] Customizações salvas do adicional:`,
-            savedCustomizations,
-          );
           for (const custom of savedCustomizations) {
             const converted = await convertToCartCustomization(
               custom,
               additionalId,
             );
-            console.log(
-              `🔄 [handleAddAdditionalToCart] Convertido (adicional):`,
-              { original: custom, converted },
-            );
+
             if (converted) {
               cartCustomizations.push(converted);
             }
           }
         }
-
-        console.log(
-          `📦 [handleAddAdditionalToCart] Total de customizações para carrinho:`,
-          cartCustomizations,
-        );
 
         await addToCart(
           product.id,
@@ -717,7 +663,6 @@ const ClientProductPage = ({ id }: { id: string }) => {
           data.components.length > 0
         ) {
           setComponents(data.components);
-          // Fetch designs for components with DYNAMIC_LAYOUT
           fetchDesignsForComponents(data.components);
         } else {
           await fetchComponents();
@@ -745,9 +690,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
             let layouts: any[] = [];
 
             if (data?.autoSelectSameType) {
-              // Buscar layouts pelo tipo do item
-              // O tipo no design (LayoutBase) é em maiúsculo (CANECA, QUADRO...)
-              // O tipo no item pode vir de diferentes formas, vamos normalizar
+
               const itemTypeUpper = comp.item.name
                 .toUpperCase()
                 .includes("CANECA")
@@ -758,7 +701,6 @@ const ClientProductPage = ({ id }: { id: string }) => {
 
               layouts = await fetchPublicLayouts(itemTypeUpper);
             } else if (data?.layoutIds && Array.isArray(data.layoutIds)) {
-              // Buscar layouts específicos configurados
               const allLayouts = await fetchPublicLayouts();
               layouts = allLayouts.filter((l) => data.layoutIds.includes(l.id));
             }
@@ -791,7 +733,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
       try {
         const data = await getItemsByProduct(id);
         const mapped: ProductComponent[] = (data || []).map((item) => ({
-          id: item.id, // Fallback: use item.id as component.id
+          id: item.id, 
           product_id: id,
           item_id: item.id,
           quantity: 1,
@@ -823,14 +765,12 @@ const ClientProductPage = ({ id }: { id: string }) => {
   const currentProductionTime = useMemo(() => {
     let time = product.production_time || 0;
 
-    // Check components for DYNAMIC_LAYOUT additional_time
     components.forEach((comp) => {
       const customizations = itemCustomizations[comp.id] || [];
       const baseLayout = customizations.find(
         (c) => c.customizationType === CustomizationType.DYNAMIC_LAYOUT,
       );
       if (baseLayout) {
-        // Check if data has additional_time
         const data = baseLayout.data as { additional_time?: number };
         if (data && typeof data.additional_time === "number") {
           time = Math.max(time, data.additional_time);
@@ -838,7 +778,6 @@ const ClientProductPage = ({ id }: { id: string }) => {
       }
     });
 
-    // Check additional customizations
     Object.values(additionalCustomizations)
       .flat()
       .forEach((cust) => {
@@ -908,19 +847,6 @@ const ClientProductPage = ({ id }: { id: string }) => {
           const detectedItemType = layoutData.item_type?.toLowerCase();
           const isMug =
             detectedItemType === "mug" || detectedItemType === "caneca";
-          const isFrame =
-            detectedItemType === "frame" || detectedItemType === "quadro";
-
-          console.log("🎨 [Preview Detection]", {
-            componentId: component.id,
-            itemType: detectedItemType,
-            isMug,
-            isFrame,
-            hasModelUrl: !!layoutData.model_url,
-            hasPreviewUrl: !!layoutData.previewUrl,
-            modelUrl: layoutData.model_url,
-            previewUrl: layoutData.previewUrl,
-          });
 
           return {
             shouldShow3D: isMug,
@@ -1007,13 +933,6 @@ const ClientProductPage = ({ id }: { id: string }) => {
                 previews?: string[];
                 count?: number;
               };
-
-              console.log(`🔍 [Validação IMAGES] ${reqCustom.name}:`, {
-                data,
-                imagesData,
-                hasFiles: imagesData?.files && Array.isArray(imagesData.files),
-                filesLength: imagesData?.files?.length || 0,
-              });
 
               const hasPhotos =
                 imagesData?.files &&
@@ -1149,17 +1068,11 @@ const ClientProductPage = ({ id }: { id: string }) => {
                       let uploadedFileName = "";
                       try {
                         if (file) {
-                          console.log(
-                            `📤 [IMAGES-3] Uploading file ${index}: ${fileName}`,
-                          );
                           const uploadResult =
                             await uploadCustomizationImage(file);
                           if (uploadResult.success) {
                             tempFileUrl = uploadResult.imageUrl;
                             uploadedFileName = uploadResult.filename;
-                            console.log(
-                              `✅ [IMAGES-3] Upload bem-sucedido: ${uploadResult.imageUrl}`,
-                            );
                           } else {
                             console.warn(
                               `⚠️ [IMAGES-3] Upload falhou para ${fileName}, usando base64`,
@@ -1175,12 +1088,12 @@ const ClientProductPage = ({ id }: { id: string }) => {
                       }
 
                       return {
-                        preview_url: tempFileUrl, // ✅ Será URL ou base64 como fallback
+                        preview_url: tempFileUrl,
                         original_name: fileName,
                         temp_file_id:
                           uploadedFileName || `temp-${Date.now()}-${index}`,
                         position: index,
-                        base64: preview, // ✅ Manter base64 como backup para Drive
+                        base64: preview,
                         mime_type: file?.type || "image/jpeg",
                         size: file?.size || 0,
                       };
@@ -1190,7 +1103,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
 
             cartCustomizations.push({
               customization_id: input.ruleId || `item_${itemId}`,
-              componentId, // ✅ Add componentId
+              componentId,
               title: customizationName,
               customization_type: "IMAGES",
               is_required: false,
@@ -1215,7 +1128,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
 
             const cartCustomization: CartCustomization = {
               customization_id: input.ruleId || `item_${itemId}`,
-              componentId, // ✅ Add componentId
+              componentId,
               title: customizationName,
               customization_type: "DYNAMIC_LAYOUT",
               is_required: false,
@@ -1238,7 +1151,6 @@ const ClientProductPage = ({ id }: { id: string }) => {
               fabricState: layoutData.fabricState,
             };
 
-            // ✅ Upload DYNAMIC_LAYOUT final high-quality image if it exists, otherwise use preview
             const finalImageToUpload =
               layoutData.highQualityUrl || layoutData.previewUrl;
             let finalPreviewUrl = layoutData.previewUrl;
@@ -1254,15 +1166,9 @@ const ClientProductPage = ({ id }: { id: string }) => {
                   type: "image/png",
                 });
 
-                console.log(
-                  `📤 [DYNAMIC_LAYOUT-AddToCart] Uploading final image...`,
-                );
                 const uploadResult = await uploadCustomizationImage(file);
 
                 if (uploadResult.success) {
-                  console.log(
-                    `✅ [DYNAMIC_LAYOUT-AddToCart] Upload OK: ${uploadResult.imageUrl}`,
-                  );
                   finalPreviewUrl = uploadResult.imageUrl;
                 } else {
                   console.warn(
@@ -1282,11 +1188,6 @@ const ClientProductPage = ({ id }: { id: string }) => {
           }
         }
       }
-
-      console.log(
-        "🛒 Customizações convertidas para carrinho:",
-        cartCustomizations,
-      );
 
       await addToCart(
         product.id,

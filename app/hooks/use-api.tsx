@@ -631,7 +631,6 @@ class ApiService {
           typeof window !== "undefined" &&
           (token === "undefined" || token === "null")
         ) {
-          console.log("🧹 Limpando appToken inválido do localStorage:", token);
           localStorage.removeItem("appToken");
         }
         token = null;
@@ -645,33 +644,13 @@ class ApiService {
           token = oldToken;
           // Migrar token antigo para appToken se for válido
           if (typeof window !== "undefined") {
-            console.log("🔄 Migrando token antigo para appToken");
             localStorage.setItem("appToken", oldToken);
             localStorage.removeItem("token");
           }
         }
       }
 
-      // Debug logging
       if (config.url?.includes("/admin/feed")) {
-        console.log("🔍 Interceptor Debug:", {
-          url: config.url,
-          method: config.method,
-          hasWindow: typeof window !== "undefined",
-          appTokenFromStorage:
-            typeof window !== "undefined"
-              ? localStorage.getItem("appToken")
-              : "SSR",
-          tokenFromStorage:
-            typeof window !== "undefined"
-              ? localStorage.getItem("token")
-              : "SSR",
-          finalToken: token,
-          tokenLength: token ? token.length : 0,
-          tokenPrefix: token ? token.substring(0, 20) + "..." : "NO_TOKEN",
-          allLocalStorageKeys:
-            typeof window !== "undefined" ? Object.keys(localStorage) : "SSR",
-        });
       }
 
       if (token) {
@@ -1188,9 +1167,7 @@ class ApiService {
       const sanitized = this.stripBase64FromOrderPayload(
         payload as Record<string, unknown>,
       );
-      console.log("📡 Enviando pedido para o backend (sanitized):", sanitized);
       const res = await this.client.post("/orders", sanitized);
-      console.log("✅ Resposta do backend:", res.data);
       this.clearCache("orders");
       return res.data;
     } catch (error: unknown) {
@@ -1684,17 +1661,8 @@ class ApiService {
     created_at: string;
     updated_at: string;
   }> => {
-    // ✅ CORRIGIDO: Não sanitizar payload aqui, pois o backend precisa do base64 em finalArtwork e data.photos
-    // A sanitização de imageBuffer já é feita no componente CustomizationsReview.tsx
     const payloadSanitized = payload;
 
-    // 🔍 DEBUG: Log do payload sendo enviado
-    console.log(
-      "🔍 [saveOrderItemCustomization] Payload sendo enviado:",
-      JSON.stringify(payloadSanitized, null, 2).substring(0, 1000),
-    );
-
-    // 🔍 DEBUG: Verificar se tem base64 em photos
     if (
       payloadSanitized.customizationType === "IMAGES" &&
       payloadSanitized.data?.photos
@@ -1702,19 +1670,8 @@ class ApiService {
       const photos = Array.isArray(payloadSanitized.data.photos)
         ? payloadSanitized.data.photos
         : [];
-      const photoCount = photos.length;
-      const photosWithBase64 = photos.filter(
-        (p: Record<string, unknown>) => p.base64,
-      ).length;
-      console.log(
-        `🖼️  [saveOrderItemCustomization] Fotos: ${photoCount} total, ${photosWithBase64} com base64`,
-      );
       photos.forEach((photo: Record<string, unknown>, idx: number) => {
-        console.log(
-          `   [${idx}] ${
-            photo.original_name
-          }: base64=${!!photo.base64}, preview_url=${photo.preview_url}`,
-        );
+        // Log removed
       });
     }
 
@@ -1741,7 +1698,6 @@ class ApiService {
       `/orders/${orderId}/items/${itemId}/customizations`,
       payloadSanitized,
     );
-    console.log(`✅ [saveOrderItemCustomization] Response:`, res.data);
     return res.data;
   };
 
@@ -2026,16 +1982,7 @@ class ApiService {
 
   getOrderForCheckout = async (orderId: string) => {
     try {
-      console.log("🌐 Fazendo requisição para:", `/orders/${orderId}`);
       const res = await this.client.get(`/orders/${orderId}`);
-      console.log("📦 Resposta recebida (resumida):", {
-        id: res.data?.id,
-        status: res.data?.status,
-        paymentStatus: res.data?.payment?.status,
-        paymentId: res.data?.payment?.id
-          ? `[REDACTED] len:${String(res.data.payment.id).length}`
-          : undefined,
-      });
       return res.data;
     } catch (error: unknown) {
       console.error("❌ Erro na requisição getOrderForCheckout:", error);
@@ -2133,17 +2080,12 @@ class ApiService {
 
   // ===== Feed =====
   getFeedConfigurations = async (): Promise<FeedConfiguration[]> => {
-    console.log("🔍 getFeedConfigurations chamado");
-    console.log("🔍 Cache atual:", ApiService.cache.feedConfigurations);
 
     if (ApiService.cache.feedConfigurations) {
-      console.log("✅ Usando cache para Feed configurations");
       return ApiService.cache.feedConfigurations as FeedConfiguration[];
     }
 
-    console.log("📡 Fazendo requisição para /admin/feed/configurations");
     const res = await this.client.get("/admin/feed/configurations");
-    console.log("📦 Resposta recebida:", res.data);
 
     ApiService.cache.feedConfigurations = res.data;
     return res.data;

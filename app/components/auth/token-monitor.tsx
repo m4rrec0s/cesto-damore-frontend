@@ -55,7 +55,6 @@ export default function TokenMonitor({ children }: TokenMonitorProps) {
 
     // Verificar imediatamente se o token está expirado
     if (isTokenExpired(appToken)) {
-      console.log("🔐 Token expirado detectado, fazendo logout automático");
       logout();
       router.push("/login?reason=token_expired");
       return;
@@ -69,12 +68,10 @@ export default function TokenMonitor({ children }: TokenMonitorProps) {
       }
 
       if (isTokenExpired(appToken)) {
-        console.log("🔐 Token expirou, fazendo logout automático");
         clearInterval(checkTokenInterval);
         logout();
         router.push("/login?reason=token_expired");
       } else if (isTokenNearExpiry(appToken)) {
-        console.log("⚠️ Token próximo ao vencimento");
         // Aqui você pode implementar renovação automática do token
         // ou mostrar um aviso para o usuário
       }

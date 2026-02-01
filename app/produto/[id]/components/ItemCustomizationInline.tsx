@@ -131,7 +131,6 @@ export function ItemCustomizationInline({
 
   const handleFileUpload = useCallback(
     (customizationId: string, files: FileList | null) => {
-      console.log("🔵 handleFileUpload chamado", { customizationId, files });
       if (!files || files.length === 0) return;
 
       const customization = customizations.find(
@@ -139,25 +138,16 @@ export function ItemCustomizationInline({
       );
       if (!customization) return;
 
-      const file = files[0]; // Pegar apenas o primeiro arquivo por vez
-      console.log("🔵 Arquivo selecionado:", file);
+      const file = files[0];
 
-      // Determinar o aspect ratio baseado no tipo de customização
       let aspect: number | undefined;
 
       if (customization.type === "IMAGES") {
-        // IMAGES sempre quadrado (1:1)
         aspect = 1;
-        console.log("🔵 Tipo IMAGES - aspect 1:1");
       } else if (customization.type === "DYNAMIC_LAYOUT") {
-        // DYNAMIC_LAYOUT usa proporção dos slots se houver
-        // Por enquanto, deixar livre (undefined) ou calcular baseado nos slots
         aspect = undefined;
-        console.log("🔵 Tipo DYNAMIC_LAYOUT - aspect undefined");
       }
 
-      // Abrir dialog de crop
-      console.log("🔵 Abrindo dialog de crop...", { file, aspect });
       setFileToCrop(file);
       setCropAspect(aspect);
       setCurrentCustomizationId(customizationId);
@@ -176,7 +166,6 @@ export function ItemCustomizationInline({
       if (!customization) return;
 
       try {
-        // 1. Converter DataURL para Blob para upload (Sem usar fetch para evitar problemas de CSP/DataURL)
         const blob = dataURLtoBlob(croppedImageUrl);
         const file = new File([blob], "cropped-image.png", {
           type: "image/png",
@@ -534,7 +523,6 @@ export function ItemCustomizationInline({
               className="hidden"
               accept="image/*"
               onChange={(e) => {
-                console.log("🔴 INPUT onChange disparado!", e.target.files);
                 handleFileUpload(customization.id, e.target.files);
               }}
             />

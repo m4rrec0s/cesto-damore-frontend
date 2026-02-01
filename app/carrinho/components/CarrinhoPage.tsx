@@ -248,11 +248,7 @@ export default function CarrinhoPageContent() {
 
   useEffect(() => {
     if (confirmationState === "animating") {
-      console.log(
-        "🎬 ANIMATING STATE DETECTED - Starting 2.6s timer to CONFIRMED",
-      );
       const t = setTimeout(() => {
-        console.log("⏰ Timer fired - Transitioning to CONFIRMED");
         setConfirmationState("confirmed");
       }, 2600);
       return () => clearTimeout(t);
@@ -408,8 +404,6 @@ export default function CarrinhoPageContent() {
 
   const sseOnPaymentApproved = useCallback(
     async (data: unknown) => {
-      console.log("✅ SSE PAYMENT APPROVED CALLBACK TRIGGERED", data);
-
       if (paymentApprovedRef.current) {
         console.warn("⚠️ Payment already approved, returning");
         return;
@@ -419,25 +413,15 @@ export default function CarrinhoPageContent() {
       disconnectSSERef.current?.(); // Desconectar SSE após aprovação
 
       const orderIdFromData = (data as { orderId?: string })?.orderId;
-      console.log("📦 Order ID from SSE data:", orderIdFromData);
 
       if (orderIdFromData) {
         try {
-          console.log("🔄 Fetching full order from backend:", orderIdFromData);
-          // Fetch the full order from the backend so we can show the confirmation ticket
           const freshOrder = await getOrder(orderIdFromData);
 
           if (freshOrder) {
-            console.log("✅ Fresh order fetched:", freshOrder);
-            console.log("🎬 Setting confirmation state to animating FIRST...");
-
-            // Set confirmation state FIRST before clearing cart
-            // This ensures the animation state is set before any context changes
             setConfirmedOrder(freshOrder);
             setConfirmationState("animating");
 
-            console.log("🧹 Clearing cart and pending order...");
-            // Then clear the cart and pending order
             localStorage.removeItem("pendingOrderId");
             clearPendingOrder();
             clearCart();
@@ -447,7 +431,6 @@ export default function CarrinhoPageContent() {
             toast.success(
               "Pagamento confirmado! Pedido realizado com sucesso.",
             );
-            console.log("✅ Toast shown and animation triggered");
             return;
           }
         } catch (err) {
@@ -457,12 +440,6 @@ export default function CarrinhoPageContent() {
           );
         }
       }
-
-      // Fallback: if we couldn't fetch the order, show a simple confirmation UI with the orderId
-      console.log(
-        "📌 Using fallback confirmation with orderId:",
-        orderIdFromData,
-      );
 
       setConfirmedOrder({
         id: orderIdFromData || null,
@@ -498,8 +475,6 @@ export default function CarrinhoPageContent() {
 
   const { disconnect: disconnectSSE } = useWebhookNotification({
     orderId: currentOrderId,
-    // SSE DESABILITADO TEMPORARIAMENTE - causando loop de requisições
-    // Usar apenas polling como fallback
     enabled: false,
     onPaymentUpdate: sseOnPaymentUpdate,
     onPaymentApproved: sseOnPaymentApproved,
@@ -510,7 +485,6 @@ export default function CarrinhoPageContent() {
     onDisconnected: sseOnDisconnected,
   });
 
-  // Set the ref after the hook is called
   useEffect(() => {
     disconnectSSERef.current = disconnectSSE;
   }, [disconnectSSE]);
@@ -523,7 +497,6 @@ export default function CarrinhoPageContent() {
         if (freshUserData) {
           const storedToken = localStorage.getItem("appToken");
           if (storedToken) {
-            // ✅ SEGURANÇA: Não salvar dados completos, apenas atualizar estado
             login(freshUserData, storedToken);
           }
         }
@@ -982,21 +955,12 @@ export default function CarrinhoPageContent() {
     [router],
   );
 
-  // Handler para CustomizationsReview
   const handleCustomizationUpdate = useCallback(
     (
-      productId: string,
-      customizations: CustomizationInput[],
-      componentId?: string,
-    ) => {
-      // Implementar lógica de atualização de customizações se necessário
-      console.log(
-        "Customizações atualizadas:",
-        productId,
-        customizations,
-        componentId,
-      );
-    },
+      _productId: string,
+      _customizations: CustomizationInput[],
+      _componentId?: string,
+    ) => {},
     [],
   );
 

@@ -106,7 +106,6 @@ export function MPStatusScreen({
   }, []);
 
   const handleOnReady = useCallback(() => {
-    console.log("✅ StatusScreen Brick pronto");
     if (mountedRef.current) {
       setIsReady(true);
     }
@@ -117,7 +116,7 @@ export function MPStatusScreen({
       console.error("❌ Erro no StatusScreen:", error);
       onError?.(error);
     },
-    [onError]
+    [onError],
   );
 
   if (!MP_PUBLIC_KEY || !mpInitialized) {

@@ -86,7 +86,6 @@ export function useWebhookNotification({
       clearInterval(pollingIntervalRef.current);
       pollingIntervalRef.current = null;
       setIsPolling(false);
-      console.log("⏹️ Polling fallback parado");
     }
   }, []);
 
@@ -153,19 +152,12 @@ export function useWebhookNotification({
     stopPolling,
   ]);
 
-  // 🔥 NOVO: Iniciar polling
   const startPolling = useCallback(() => {
-    if (pollingIntervalRef.current) return; // Já está fazendo polling
+    if (pollingIntervalRef.current) return;
 
-    console.log(
-      `🔄 Iniciando polling fallback (intervalo: ${pollingInterval}ms)`,
-    );
     setIsPolling(true);
-
-    // Poll imediatamente
     pollOrderStatus();
 
-    // Configurar intervalo
     pollingIntervalRef.current = window.setInterval(() => {
       pollOrderStatus();
     }, pollingInterval);

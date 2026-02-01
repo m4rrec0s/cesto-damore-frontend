@@ -32,17 +32,6 @@ export default function CustomizationPreviewCard({
 
   const finalModelUrl = modelUrl || defaultModelUrl;
 
-  // Debug: verificar se previewUrl está chegando
-  console.log("🎨 [CustomizationPreviewCard] Dados recebidos:", {
-    previewUrl,
-    layoutName,
-    modelUrl,
-    itemType,
-    layoutWidth,
-    layoutHeight,
-    finalModelUrl,
-  });
-
   return (
     <Card className="mt-4 border-2 border-purple-200 bg-gradient-to-br from-purple-50 to-pink-50 overflow-hidden shadow-lg">
       <CardContent className="p-0">

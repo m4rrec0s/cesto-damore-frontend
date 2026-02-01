@@ -209,9 +209,6 @@ export default function ClientPersonalizationEditor({
           drawHeight,
         );
       } else if (!imageData) {
-        console.log(
-          `🖼️ [updateCanvasPreview] Slot ${slot.id}: SEM imagem - desenhando placeholder`,
-        );
         ctx.fillStyle = "#e5e7eb";
         ctx.fillRect(slotX, slotY, slotWidth, slotHeight);
         ctx.strokeStyle = "#9ca3af";
@@ -231,9 +228,6 @@ export default function ClientPersonalizationEditor({
           slotY + slotHeight / 2 + 15,
         );
       } else {
-        console.log(
-          `🖼️ [updateCanvasPreview] Slot ${slot.id}: Imagem carregando...`,
-        );
       }
 
       ctx.restore();

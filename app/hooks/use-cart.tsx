@@ -1083,9 +1083,6 @@ export function useCart(): CartContextType {
                 if (status && (status === "PENDING" || status === "pending")) {
                   try {
                     await api.deleteOrder(pendingOrderId);
-                    console.log(
-                      `✅ [removeFromCart] Pedido rascunho ${pendingOrderId} deletado`,
-                    );
                   } catch (deleteErr) {
                     console.error(
                       `❌ [removeFromCart] Erro ao deletar pedido rascunho ${pendingOrderId}:`,
@@ -1392,11 +1389,6 @@ export function useCart(): CartContextType {
         })),
       }));
 
-      const totalPrice =
-        typeof options?.grandTotal === "number"
-          ? options.grandTotal
-          : cart.total + (options?.shippingCost ?? 0);
-
       const payload = {
         user_id: userId,
         payment_method: options.paymentMethod,
@@ -1406,23 +1398,14 @@ export function useCart(): CartContextType {
         delivery_state: deliveryState,
         delivery_date: deliveryDate,
         recipient_phone: options.recipientPhone,
-        discount: options.discount || 0, // ✅ Pode ser ajustado se houver desconto
+        discount: options.discount || 0,
         send_anonymously: options?.sendAnonymously,
         complement: options?.complement,
         delivery_method: options?.deliveryMethod || "delivery",
       };
 
-      // Log sucinto do payload para evitar impressão de base64/imagens
-      console.log("📦 [useCart] Payload do pedido - resumo:", {
-        user_id: payload.user_id,
-        itemsCount: payload.items?.length || 0,
-        grandTotal: totalPrice || null,
-        delivery_city: payload.delivery_city || null,
-      });
-
       const order = await api.createOrder(payload);
 
-      // Pedido final criado com sucesso: remover rascunho do backend
       setPendingOrderId(null);
 
       return order;
@@ -2082,7 +2065,6 @@ export function useCart(): CartContextType {
       }
 
       // Criar o pedido primeiro
-      console.log("🛒 Criando pedido para checkout transparente...");
       const order = await createOrder(
         userId,
         deliveryAddress,
@@ -2092,15 +2074,12 @@ export function useCart(): CartContextType {
 
       // Retornar URL para checkout transparente
       const checkoutUrl = `/checkout-transparente?orderId=${order.id}`;
-      console.log("🔗 URL do checkout criada:", checkoutUrl);
 
       return {
         order,
         checkoutUrl,
         redirectToCheckout: () => {
           if (typeof window !== "undefined") {
-            console.log("🚀 Redirecionando para:", checkoutUrl);
-            // Pequeno delay para garantir que o pedido foi salvo
             setTimeout(() => {
               window.location.href = checkoutUrl;
             }, 100);

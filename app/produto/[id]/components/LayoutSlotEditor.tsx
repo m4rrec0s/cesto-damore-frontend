@@ -189,10 +189,8 @@ export function LayoutSlotEditor({
     }
   }, [layoutBase, slotImages, onPreviewChange]);
 
-  // Atualizar preview quando slots mudarem ou ao trocar de modo de visualização
   useEffect(() => {
     if (baseImageLoaded) {
-      console.log("🎨 Atualizando preview do canvas...");
       updateCanvasPreview();
     }
   }, [slotImages, baseImageLoaded, updateCanvasPreview, viewMode]);

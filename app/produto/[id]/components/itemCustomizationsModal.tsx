@@ -335,14 +335,6 @@ export function ItemCustomizationModal({
               ? "frame"
               : normalizedType;
 
-        console.log("🔍 [Layout Selected]", {
-          original: apiType,
-          normalized: normalizedType,
-          standard: standardType,
-          modelUrl,
-          layoutId,
-        });
-
         setCustomizationData((prev) => ({
           ...prev,
           [baseLayoutCustom.id]: {
@@ -369,16 +361,11 @@ export function ItemCustomizationModal({
     if (!isOpen) return;
 
     if (initialValues && Object.keys(initialValues).length > 0) {
-      console.log(
-        "🔄 [ItemCustomizationModal] Initializing with:",
-        initialValues,
-      );
       const newData: Record<string, unknown> = {};
 
       customizations.forEach((c) => {
         const val = initialValues[c.id];
         if (val) {
-          // Normalizar dados do MULTIPLE_CHOICE: aceitar 'id' (velho) ou 'selected_option' (novo)
           if (c.type === "MULTIPLE_CHOICE") {
             if (typeof val === "object" && val !== null) {
               const obj = val as Record<string, unknown>;
@@ -426,7 +413,6 @@ export function ItemCustomizationModal({
         const layoutId = layoutData?.layout_id as string | undefined;
 
         if (layoutId) {
-          console.log("Restoring layout selection:", layoutId);
           handleLayoutSelect(layoutId);
         }
       }
@@ -619,7 +605,6 @@ export function ItemCustomizationModal({
 
   const handleCropComplete = useCallback(
     async (croppedImageUrl: string) => {
-      console.log("[Crop] Complete triggered");
       if (!currentCustomizationId) {
         console.warn("⚠️ [Crop] No current customization ID");
         return;
@@ -1110,15 +1095,9 @@ export function ItemCustomizationModal({
         initialValues &&
         Array.isArray(initialValues[customization.id])
       ) {
-        const initialPhotos = initialValues[customization.id] as unknown[];
-        // Se são strings ou objetos com preview_url, manter para referência
-        console.log(
-          `✅ [renderImageCustomization] Restaurou ${initialPhotos.length} imagens de initialValues`,
-        );
       }
     }
 
-    // const canAddMore = currentFiles.length < maxImages;
     const hasImages = currentFiles.length > 0;
 
     return (
@@ -1512,19 +1491,10 @@ export function ItemCustomizationModal({
     <Dialog
       open={isOpen}
       onOpenChange={(newOpen) => {
-        // Evitar fechar o dialog se está em andamento operação de crop de imagem ou processando arquivos
         if (
           !newOpen &&
           (cropDialogOpen || pendingFiles.length > 0 || isCropping)
         ) {
-          console.log(
-            "[Dialog] Tentativa bloqueada - cropDialogOpen:",
-            cropDialogOpen,
-            "pendingFiles:",
-            pendingFiles.length,
-            "isCropping:",
-            isCropping,
-          );
           return;
         }
         if (!newOpen) {

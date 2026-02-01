@@ -85,10 +85,8 @@ export function MockupGallery({
 
   const normalizedType = itemType?.toLowerCase();
 
-  console.log("🖼️ [MockupGallery]", { itemType, normalizedType, designUrl });
 
   if (normalizedType !== "frame" && normalizedType !== "quadro") {
-    console.log("❌ [MockupGallery] Tipo não suportado:", normalizedType);
     return null;
   }
 

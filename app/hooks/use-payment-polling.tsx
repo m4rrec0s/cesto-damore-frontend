@@ -82,12 +82,6 @@ export function usePaymentPolling({
     try {
       attemptsRef.current += 1;
       setAttempts(attemptsRef.current);
-
-      console.log(
-        `[Payment Polling] Tentativa ${attemptsRef.current}/${maxAttempts} - Verificando pedido ${orderId}`
-      );
-
-      // Buscar pedido atualizado
       const order = await api.getOrder(orderId);
 
       if (!order) {
@@ -96,42 +90,25 @@ export function usePaymentPolling({
 
       setCurrentOrder(order);
 
-      // Verificar status do pagamento através do payment vinculado ao pedido
       const paymentStatus = order.payment?.status;
       const orderStatus = order.status;
 
-      const safePaymentId = order.payment?.id
-        ? `${order.payment?.id.slice(0, 4)}...${order.payment?.id.slice(-4)}`
-        : undefined;
-      const safeMercadoId = order.payment?.mercado_pago_id
-        ? `***${order.payment?.mercado_pago_id.slice(-4)}`
-        : undefined;
+      // const safePaymentId = order.payment?.id
+      //   ? `${order.payment?.id.slice(0, 4)}...${order.payment?.id.slice(-4)}`
+      //   : undefined;
+      // const safeMercadoId = order.payment?.mercado_pago_id
+      //   ? `***${order.payment?.mercado_pago_id.slice(-4)}`
+      //   : undefined;
 
-      console.log(
-        `[Payment Polling] 📊 Status: order=${order.id}, orderStatus=${orderStatus}, paymentStatus=${paymentStatus}, paymentId=${safePaymentId}, mercadoPagoId=${safeMercadoId}, webhookAttempts=${order.payment?.webhook_attempts}`
-      );
-
-      // ⚠️ FALLBACK: Se payment não existe mas order está PAID
       if (!order.payment && orderStatus === "PAID") {
-        console.log(
-          "[Payment Polling] ✅ Pedido marcado como PAGO (sem objeto payment)"
-        );
         setStatus("success");
         stopPolling();
         onSuccess?.(order);
         return;
       }
 
-      // ⚠️ FALLBACK: Se não tem payment ainda, continuar tentando
       if (!order.payment) {
-        console.log("[Payment Polling] ⏳ Aguardando criação do pagamento...", {
-          orderStatus,
-        });
-        // Continua polling
         if (attemptsRef.current >= maxAttempts) {
-          console.log(
-            "[Payment Polling] ⏱️ Timeout - pagamento não foi criado"
-          );
           setStatus("timeout");
           stopPolling();
           onTimeout?.();
@@ -139,33 +116,23 @@ export function usePaymentPolling({
         return;
       }
 
-      // Pagamento aprovado
       if (
         paymentStatus === "APPROVED" ||
         paymentStatus === "AUTHORIZED" ||
         orderStatus === "PAID"
       ) {
-        console.log("[Payment Polling] ✅ PAGAMENTO APROVADO!", {
-          paymentStatus,
-          orderStatus,
-          orderId: order.id,
-          paymentId: safePaymentId,
-          mercadoPagoId: safeMercadoId,
-        });
         setStatus("success");
         stopPolling();
         onSuccess?.(order);
         return;
       }
 
-      // Pagamento rejeitado/cancelado
       if (
         paymentStatus === "REJECTED" ||
         paymentStatus === "CANCELLED" ||
         paymentStatus === "REFUNDED" ||
         orderStatus === "CANCELED"
       ) {
-        console.log("[Payment Polling] ❌ Pagamento rejeitado ou cancelado");
         setStatus("failure");
         stopPolling();
         onFailure?.(order);
@@ -179,7 +146,6 @@ export function usePaymentPolling({
         paymentStatus === "IN_MEDIATION" ||
         orderStatus === "PROCESSING"
       ) {
-        console.log("[Payment Polling] ⏳ Pagamento em validação...");
         setStatus("pending");
         onPending?.(order);
         // Continua polling
@@ -187,31 +153,21 @@ export function usePaymentPolling({
 
       // Ainda pendente, continua verificando
       if (attemptsRef.current >= maxAttempts) {
-        console.log(
-          "[Payment Polling] ⏱️ Timeout - máximo de tentativas atingido"
-        );
         setStatus("timeout");
         hasTimeoutRef.current = true; // Marca como com timeout para evitar restart
         stopPolling();
         onTimeout?.();
         return;
       }
-
-      console.log(
-        `[Payment Polling] ⏳ Pagamento ainda pendente (${paymentStatus}), verificando novamente em ${
-          intervalMs / 1000
-        }s...`
-      );
     } catch (err) {
       console.error("[Payment Polling] Erro ao verificar status:", err);
       const errorMessage =
         err instanceof Error ? err.message : "Erro ao verificar status";
       setError(errorMessage);
 
-      // Em caso de erro, continua tentando até o timeout
       if (attemptsRef.current >= maxAttempts) {
         setStatus("timeout");
-        hasTimeoutRef.current = true; // Marca como com timeout para evitar restart
+        hasTimeoutRef.current = true;
         stopPolling();
         onTimeout?.();
       }
@@ -219,7 +175,6 @@ export function usePaymentPolling({
   }, [
     orderId,
     maxAttempts,
-    intervalMs,
     api,
     onSuccess,
     onFailure,
@@ -232,9 +187,6 @@ export function usePaymentPolling({
   const startPolling = useCallback(() => {
     if (isPolling || !orderId) return;
 
-    console.log(
-      `[Payment Polling] 🚀 Iniciando polling para pedido ${orderId}`
-    );
     setStatus("polling");
     setIsPolling(true);
     setError(null);

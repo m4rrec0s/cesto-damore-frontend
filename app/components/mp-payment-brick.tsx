@@ -13,14 +13,12 @@ import {
 
 const MP_PUBLIC_KEY = process.env.NEXT_PUBLIC_MERCADO_PAGO_PUBLIC_KEY;
 
-// ✅ Inicializar MercadoPago globalmente FORA do componente
 let mpInitialized = false;
 const initializeMP = () => {
   if (MP_PUBLIC_KEY && !mpInitialized && typeof window !== "undefined") {
     try {
       initMercadoPago(MP_PUBLIC_KEY, { locale: "pt-BR" });
       mpInitialized = true;
-      console.log("✅ MercadoPago SDK inicializado");
     } catch (err) {
       console.error("❌ Erro ao inicializar MercadoPago SDK:", err);
     }
@@ -116,7 +114,7 @@ export function MPPaymentBrick({
 
   const stableKey = useMemo(
     () => `payment-${initialOrderIdRef.current || orderId}-${brickKey}`,
-    [orderId, brickKey]
+    [orderId, brickKey],
   );
 
   useEffect(() => {
@@ -131,7 +129,6 @@ export function MPPaymentBrick({
         ).paymentBrickController;
         if (controller?.unmount) {
           controller.unmount();
-          console.log("🧹 Payment Brick desmontado");
         }
       } catch {
         // Ignorar erros de cleanup
@@ -196,7 +193,7 @@ export function MPPaymentBrick({
         }
       }
     },
-    [amount, orderId, payerEmail, payerName, onSubmit]
+    [amount, orderId, payerEmail, payerName, onSubmit],
   );
 
   const handleOnError = useCallback((error: PaymentBrickError) => {
@@ -223,7 +220,6 @@ export function MPPaymentBrick({
   }, []);
 
   const handleOnReady = useCallback(() => {
-    console.log("✅ Payment Brick montado com sucesso");
     if (mountedRef.current) {
       setPaymentReady(true);
       setLocalError(null);
@@ -232,10 +228,9 @@ export function MPPaymentBrick({
 
   const handleOnBinChange = useCallback(
     (bin: string) => {
-      console.log("💳 BIN detectado:", bin);
       onPaymentMethodChange?.("card");
     },
-    [onPaymentMethodChange]
+    [onPaymentMethodChange],
   );
 
   if (!MP_PUBLIC_KEY) {

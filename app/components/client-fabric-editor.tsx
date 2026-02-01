@@ -485,12 +485,6 @@ export default function ClientFabricEditor({
               });
             }
 
-            console.log(
-              "🎨 Carregando estado no editor:",
-              state.objects?.length,
-              "objetos",
-            );
-
             await canvasInstance.loadFromJSON(state);
           } catch (jsonErr) {
             console.error(

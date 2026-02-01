@@ -48,16 +48,11 @@ export function useCustomizationUpload(): UseCustomizationUploadReturn {
           throw new Error("Por favor, selecione uma imagem válida");
         }
 
-        const maxSize = 10 * 1024 * 1024; // 10MB
+        const maxSize = 10 * 1024 * 1024;
         if (file.size > maxSize) {
           throw new Error("Arquivo muito grande (máximo 10MB)");
         }
 
-        console.log(
-          `📤 Iniciando upload de imagem: ${file.name} (${file.size} bytes)`
-        );
-
-        // ✅ NOVO: Usar /temp/upload em vez de /customization/upload-image
         const result = await api.uploadTempImage(file);
 
         if (!result.success || !result.url) {
@@ -73,10 +68,6 @@ export function useCustomizationUpload(): UseCustomizationUploadReturn {
         };
 
         setUploadedImages((prev) => [...prev, uploadedImage]);
-
-        console.log(
-          `✅ Imagem enviada com sucesso: ${result.filename} -> ${result.url}`
-        );
 
         return uploadedImage;
       } catch (err: unknown) {
@@ -95,15 +86,12 @@ export function useCustomizationUpload(): UseCustomizationUploadReturn {
   const deleteImage = useCallback(
     async (filename: string): Promise<boolean> => {
       try {
-        console.log(`🗑️ Deletando imagem: ${filename}`);
-
         await api.deleteTempFile(filename);
 
         setUploadedImages((prev) =>
           prev.filter((img) => img.filename !== filename)
         );
 
-        console.log(`✅ Imagem deletada: ${filename}`);
         return true;
       } catch (err: unknown) {
         const errorMsg = (err as Error).message || "Erro ao deletar imagem";
@@ -127,7 +115,6 @@ export function useCustomizationUpload(): UseCustomizationUploadReturn {
       }
 
       if (failed === 0) {
-        console.log(`✅ Todas as imagens foram deletadas`);
         return true;
       } else {
         console.warn(`⚠️ ${failed} imagem(ns) não puderam ser deletadas`);
