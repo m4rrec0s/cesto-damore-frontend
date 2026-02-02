@@ -217,12 +217,9 @@ export function MPPaymentBrick({
     }
   }, []);
 
-  const handleOnBinChange = useCallback(
-    (_bin: string) => {
-      onPaymentMethodChange?.("card");
-    },
-    [onPaymentMethodChange],
-  );
+  const handleOnBinChange = useCallback(() => {
+    onPaymentMethodChange?.("card");
+  }, [onPaymentMethodChange]);
 
   if (!MP_PUBLIC_KEY) {
     return (
@@ -233,18 +230,6 @@ export function MPPaymentBrick({
             Chave pública do Mercado Pago não configurada
           </p>
         </div>
-      </div>
-    );
-  }
-
-  if (!mpInitialized) {
-    initializeMP();
-    return (
-      <div className="p-8 flex items-center justify-center gap-3 bg-white rounded-2xl shadow-sm border border-gray-100">
-        <Loader2 className="h-6 w-6 animate-spin text-rose-500" />
-        <span className="text-gray-600 font-medium">
-          Carregando opções de pagamento...
-        </span>
       </div>
     );
   }

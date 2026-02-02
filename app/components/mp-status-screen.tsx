@@ -16,6 +16,7 @@ const MP_PUBLIC_KEY = process.env.NEXT_PUBLIC_MERCADO_PAGO_PUBLIC_KEY;
 interface MPStatusScreenProps {
   paymentId: string;
   onContinue?: () => void;
+  status?: StatusType;
   onError?: (error: unknown) => void;
 }
 
@@ -64,9 +65,9 @@ const statusConfig: Record<
 export function MPStatusScreen({
   paymentId,
   onContinue,
+  status = "unknown",
   onError,
 }: MPStatusScreenProps) {
-  const [isReady, setIsReady] = useState(false);
   const [isReady, setIsReady] = useState(false);
   const mountedRef = useRef(true);
 
@@ -99,7 +100,7 @@ export function MPStatusScreen({
     if (mountedRef.current) {
       setIsReady(true);
     }
-  }, []);
+  }, [setIsReady]);
 
   const handleOnError = useCallback(
     (error: unknown) => {

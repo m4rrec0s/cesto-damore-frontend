@@ -928,6 +928,7 @@ export default function CarrinhoPageContent() {
   }, [paymentMethod, currentStep]);
 
   const handleCardSubmit = useCallback(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     async (formData: any) => {
       if (!currentOrderId) {
         toast.error("Pedido não encontrado. Tente recarregar a página.");

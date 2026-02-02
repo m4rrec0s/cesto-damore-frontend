@@ -6,7 +6,6 @@ import { AuthProvider } from "./hooks/use-auth";
 import ClientLayout from "./components/layout/client-layout";
 import { Toaster } from "./components/ui/sonner";
 import AppWrapper from "./components/layout/app-wrapper";
-import Script from "next/script";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",

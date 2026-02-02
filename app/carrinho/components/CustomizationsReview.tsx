@@ -101,6 +101,7 @@ const isCustomizationFilled = (
 ): boolean => {
   if (!custom) return false;
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const data = (custom.data as any) || {};
 
   switch (custom.customization_type) {
@@ -129,6 +130,7 @@ const isCustomizationFilled = (
       if (!Array.isArray(photos) || photos.length === 0) return false;
 
       // Verificar que não são ranhuras de blob/base64 (significa que foram salvas)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       return photos.every((p: any) => {
         const url = p.preview_url || p.url || p.preview;
         return url && !url.startsWith("blob:") && !url.startsWith("data:");
@@ -627,6 +629,7 @@ export function CustomizationsReview({
           for (const customization of data) {
             const customData = customization.data as PersonalizationData;
             // 🔥 NOVO: Tentar usar highQualityUrl se disponível para melhor qualidade
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const highQualityUrl = (customData as any).highQualityUrl as
               | string
               | undefined;
