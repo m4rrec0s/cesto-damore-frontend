@@ -8,7 +8,11 @@ const nextConfig: NextConfig = {
         headers: [
           {
             key: "X-Frame-Options",
-            value: "DENY",
+            value: "SAMEORIGIN",
+          },
+          {
+            key: "Cross-Origin-Opener-Policy",
+            value: "same-origin-allow-popups",
           },
           // {
           //   key: "X-Content-Type-Options",
@@ -30,7 +34,7 @@ const nextConfig: NextConfig = {
           {
             key: "Content-Security-Policy",
             value:
-              "default-src 'self' localhost:* api.cestodamore.com.br; script-src 'self' 'unsafe-eval' 'unsafe-inline' blob: localhost:* https://apis.google.com https://www.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' blob: data: drive.google.com api.cestodamore.com.br *.googleusercontent.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self' blob: data: api.cestodamore.com.br *.googleapis.com *.githack.com ws: wss: localhost:*;",
+              "default-src 'self' localhost:* api.cestodamore.com.br; script-src 'self' 'unsafe-eval' 'unsafe-inline' blob: localhost:* https://apis.google.com https://www.gstatic.com https://sdk.mercadopago.com https://*.mercadopago.com https://*.mercadolivre.com.br https://*.mercadopago.com.br https://*.mercadolivre.com https://*.mercadolibre.com https://*.mlstatic.com https://*.firebaseapp.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' blob: data: drive.google.com api.cestodamore.com.br *.googleusercontent.com https://*.mercadopago.com https://*.mercadolivre.com.br https://*.mlstatic.com http://*.mlstatic.com https://*.mercadolivre.com https://*.mercadolibre.com https://*.google.com https://*.googleusercontent.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self' blob: data: api.cestodamore.com.br *.googleapis.com *.google.com *.githack.com *.mercadopago.com *.mercadolivre.com.br *.mercadopago.com.br *.mercadolivre.com *.mercadolibre.com *.mlstatic.com *.firebaseio.com *.firebaseapp.com ws: wss: localhost:*; frame-src 'self' https://sdk.mercadopago.com https://*.mercadopago.com https://*.mercadolivre.com.br https://*.mercadolivre.com https://*.mercadolibre.com https://*.mercadopago.com.br https://*.firebaseapp.com https://*.google.com https://*.google.com.br;",
           },
         ],
       },

@@ -35,27 +35,6 @@ interface UseWebhookNotificationOptions {
 const MAX_RECONNECT_ATTEMPTS = 3; // 🔥 NOVO: Limite de tentativas SSE antes de fallback
 const DEFAULT_POLLING_INTERVAL = 5000; // 🔥 NOVO: 5 segundos
 
-/**
- * Hook para receber notificações em tempo real via Server-Sent Events (SSE)
- * Conecta ao backend e recebe atualizações automáticas sobre o status do pagamento
- *
- * @example
- * ```tsx
- * const { isConnected } = useWebhookNotification({
- *   orderId: currentOrderId,
- *   enabled: Boolean(currentOrderId),
- *   onPaymentApproved: (data) => {
- *     console.log("✅ Pagamento aprovado!", data);
- *     // Ao invés de redirecionar, podemos mostrar um ticket de confirmação
- *     // (OrderConfirmationTicket) ou abrir um modal com o resumo do pedido.
- *   },
- *   onPaymentRejected: (data) => {
- *     console.log("❌ Pagamento rejeitado", data);
- *     setPaymentStatus("failure");
- *   }
- * });
- * ```
- */
 export function useWebhookNotification({
   orderId,
   enabled = true,

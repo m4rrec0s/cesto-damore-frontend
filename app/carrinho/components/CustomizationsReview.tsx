@@ -47,6 +47,7 @@ interface AvailableCustomization {
 }
 
 interface ProductValidation {
+  orderItemId?: string;
   productId: string;
   productName: string;
   availableCustomizations: AvailableCustomization[];
@@ -100,69 +101,62 @@ const isCustomizationFilled = (
 ): boolean => {
   if (!custom) return false;
 
+  const data = (custom.data as any) || {};
+
   switch (custom.customization_type) {
     case "TEXT": {
       const text = custom.text?.trim() || "";
-      // 🔥 NOVO: Validar comprimento mínimo (3 caracteres)
-      return text.length >= 3;
+      return text.length >= 2;
     }
-    case "MULTIPLE_CHOICE":
-      return Boolean(custom.label_selected || custom.selected_option);
-    case "DYNAMIC_LAYOUT": {
-      // Verificar se tem label selecionado
-      const hasSelection = Boolean(
-        custom.selected_item_label ||
+    case "MULTIPLE_CHOICE": {
+      // Verificar opção e nome (label)
+      const hasOption = !!(
+        custom.selected_option ||
+        data.id ||
+        data.selected_option ||
+        data.selected_option_id
+      );
+      const hasLabel = !!(
         custom.label_selected ||
-        custom.selected_item,
+        custom.selected_option_label ||
+        data.selected_option_label ||
+        data.label
       );
-
-      if (!hasSelection) return false;
-
-      // 🔥 NOVO: Verificar se o design foi finalizado
-      // Pode estar em custom.text (URL da imagem final) ou em custom.data
-      const textUrl = custom.text?.trim() || "";
-      const hasTextUrl =
-        textUrl &&
-        (textUrl.startsWith("http://") || textUrl.startsWith("https://")) &&
-        !textUrl.startsWith("blob:") &&
-        !textUrl.startsWith("data:");
-
-      const data = (custom.data as PersonalizationData) || {};
-      const hasPreview = Boolean(
-        data.final_artwork?.preview_url ||
-        data.image?.preview_url ||
-        (Array.isArray(data.final_artworks) &&
-          data.final_artworks.some((a: CustomizationPreview) => a.preview_url)),
-      );
-
-      // 🔥 NOVO: Verificar que preview não é blob ou base64
-      if (hasPreview) {
-        const previewUrl =
-          data.final_artwork?.preview_url ||
-          data.image?.preview_url ||
-          data.final_artworks?.[0]?.preview_url;
-
-        if (
-          previewUrl?.startsWith("blob:") ||
-          previewUrl?.startsWith("data:")
-        ) {
-          return false; // Preview não foi enviado ao servidor
-        }
-      }
-
-      // Aceitar se tem seleção E (URL em text OU preview válido)
-      return hasSelection && (hasTextUrl || hasPreview);
+      return hasOption && hasLabel;
     }
     case "IMAGES": {
-      if (!custom.photos || custom.photos.length === 0) return false;
+      const photos = custom.photos || data.photos || data.files || [];
+      if (!Array.isArray(photos) || photos.length === 0) return false;
 
-      // 🔥 NOVO: Verificar se todas as fotos têm preview_url válido
-      return custom.photos.every(
-        (p: PhotoUploadData) =>
-          p.preview_url &&
-          !p.preview_url.startsWith("blob:") &&
-          !p.preview_url.startsWith("data:"),
+      // Verificar que não são ranhuras de blob/base64 (significa que foram salvas)
+      return photos.every((p: any) => {
+        const url = p.preview_url || p.url || p.preview;
+        return url && !url.startsWith("blob:") && !url.startsWith("data:");
+      });
+    }
+    case "DYNAMIC_LAYOUT": {
+      // Verificar se arte final + configuração do fabric está disponível
+      const fabricState = data.fabricState;
+      const artworkUrl =
+        custom.text ||
+        data.image?.preview_url ||
+        data.previewUrl ||
+        data.finalArtwork?.preview_url;
+
+      const hasArtwork =
+        !!artworkUrl &&
+        !artworkUrl.startsWith("blob:") &&
+        !artworkUrl.startsWith("data:");
+      const hasFabric =
+        !!fabricState &&
+        (typeof fabricState === "string" ? fabricState.length > 20 : true);
+      const hasLabel = !!(
+        custom.label_selected ||
+        custom.selected_item_label ||
+        data.selected_item_label
       );
+
+      return hasLabel && hasFabric && hasArtwork;
     }
     default:
       return true;
@@ -319,16 +313,28 @@ export function CustomizationsReview({
             (f) => {
               const val = (f.value || {}) as PersonalizationData;
 
+              // Tentar encontrar a regra correspondente para pegar o tipo correto
+              const rule = data.availableCustomizations.find(
+                (avail) =>
+                  avail.id === f.customization_id ||
+                  f.customization_id?.split(":")[0] === avail.id,
+              );
+
+              const inferredType =
+                (rule?.type as CustomizationTypeValue) || "TEXT";
+
               return {
                 id: f.id,
                 customization_id: f.customization_id,
                 customization_type:
-                  (val.customization_type as CustomizationTypeValue) || "TEXT",
+                  (val.customization_type as CustomizationTypeValue) ||
+                  inferredType,
                 title:
                   (val.title as string) ||
+                  rule?.name ||
                   (val._customizationName as string) ||
                   "Personalização",
-                is_required: Boolean(val.is_required),
+                is_required: Boolean(val.is_required || rule?.isRequired),
                 text: val.text as string | undefined,
                 photos: val.photos as PhotoUploadData[] | undefined,
                 selected_option: val.selected_option as string | undefined,
@@ -340,7 +346,7 @@ export function CustomizationsReview({
                   (val.selected_item_label as string) ||
                   (val.selected_option_label as string) ||
                   undefined,
-                componentId: val.componentId as string | undefined,
+                componentId: (val.componentId as string) || rule?.componentId,
                 data: val,
               };
             },
@@ -351,8 +357,10 @@ export function CustomizationsReview({
               const filledCustom = filled.find(
                 (f) =>
                   (f.customization_id === avail.id ||
-                    f.customization_id?.includes(avail.id)) &&
-                  (f.componentId === avail.componentId ||
+                    f.customization_id?.split(":")[0] === avail.id) &&
+                  // ✅ Match by componentId if present, else fallback to any match for this rule
+                  (!f.componentId ||
+                    f.componentId === avail.componentId ||
                     f.componentId === avail.itemId),
               );
 
@@ -362,6 +370,7 @@ export function CustomizationsReview({
           );
 
           return {
+            orderItemId: data.orderItemId,
             productId: data.productId,
             productName: data.productName,
             availableCustomizations: data.availableCustomizations,
@@ -433,8 +442,10 @@ export function CustomizationsReview({
             (f) =>
               (f.customization_id === avail.id ||
                 f.customization_id?.includes(avail.id)) &&
-              (f.componentId === avail.componentId ||
-                f.componentId === avail.itemId), // ✅ Match by both rule and component
+              // ✅ Match by componentId if present, else fallback
+              (!f.componentId ||
+                f.componentId === avail.componentId ||
+                f.componentId === avail.itemId),
           );
           // Se é obrigatória E não está preenchida, adicionar na lista
           if (avail.isRequired && !isCustomizationFilled(filledCustom)) {
@@ -615,7 +626,12 @@ export function CustomizationsReview({
 
           for (const customization of data) {
             const customData = customization.data as PersonalizationData;
-            const previewUrl = customData?.previewUrl as string | undefined;
+            // 🔥 NOVO: Tentar usar highQualityUrl se disponível para melhor qualidade
+            const highQualityUrl = (customData as any).highQualityUrl as
+              | string
+              | undefined;
+            const previewUrl =
+              highQualityUrl || (customData?.previewUrl as string | undefined);
 
             const sanitizedData = { ...customData };
 
@@ -729,26 +745,28 @@ export function CustomizationsReview({
 
   return (
     <>
-      <Card className="bg-white p-4 sm:p-6 rounded-lg border border-gray-200 shadow-none">
-        <div className="flex items-center justify-between mb-6">
+      <Card className="bg-gray-50/50 p-4 sm:p-5 rounded-xl border border-gray-100 shadow-none">
+        <div className="flex items-center justify-between mb-4">
           <div>
-            <h3 className="text-lg font-bold text-gray-900">Personalizações</h3>
-            <p className="text-sm text-gray-600">
-              Revise as personalizações dos seus itens
+            <h3 className="text-base font-bold text-gray-800">
+              Personalizações
+            </h3>
+            <p className="text-xs text-gray-500">
+              Revise as informações antes do pagamento
             </p>
           </div>
           <div className="flex flex-col items-end">
             {allComplete ? (
-              <div className="flex items-center gap-2 px-3 py-1.5 bg-green-50 rounded-full border border-green-200">
-                <CheckCircle2 className="h-4 w-4 text-green-600" />
-                <span className="text-sm font-medium text-green-700">
-                  Completo
+              <div className="flex items-center gap-1.5 px-2.5 py-1 bg-green-50/50 rounded-full border border-green-100">
+                <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />
+                <span className="text-xs font-semibold text-green-600">
+                  Tudo OK
                 </span>
               </div>
             ) : (
-              <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-50 rounded-full border border-amber-200">
-                <AlertCircle className="h-4 w-4 text-amber-600" />
-                <span className="text-sm font-medium text-amber-700">
+              <div className="flex items-center gap-1.5 px-2.5 py-1 bg-amber-50/50 rounded-full border border-amber-100">
+                <AlertCircle className="h-3.5 w-3.5 text-amber-500" />
+                <span className="text-xs font-semibold text-amber-600">
                   {totalMissing} pendente{totalMissing > 1 ? "s" : ""}
                 </span>
               </div>
@@ -756,8 +774,8 @@ export function CustomizationsReview({
           </div>
         </div>
 
-        <div className="space-y-4">
-          {validations.map((validation) => {
+        <div className="space-y-3">
+          {validations.map((validation, vIdx) => {
             const itemsMap = new Map<
               string,
               {
@@ -801,8 +819,9 @@ export function CustomizationsReview({
               const filledCustom = validation.filledCustomizations.find(
                 (f) =>
                   (f.customization_id === avail.id ||
-                    f.customization_id?.includes(avail.id)) &&
-                  (f.componentId === avail.componentId ||
+                    f.customization_id?.split(":")[0] === avail.id) &&
+                  (!f.componentId ||
+                    f.componentId === avail.componentId ||
                     f.componentId === avail.itemId),
               );
 
@@ -832,54 +851,47 @@ export function CustomizationsReview({
             }
 
             return (
-              <div key={validation.productId} className="space-y-3">
+              <div
+                key={
+                  validation.orderItemId || `${validation.productId}-${vIdx}`
+                }
+                className="space-y-3"
+              >
                 {Array.from(itemsMap.entries()).map(
-                  ([componentId, { itemName, missing, filled, itemId }]) => {
+                  (
+                    [componentId, { itemName, missing, filled, itemId }],
+                    cIdx,
+                  ) => {
                     const isIncomplete = missing.length > 0;
                     // const totalCustomizations = allCustomizations.length;
 
                     return (
                       <div
-                        key={componentId}
-                        className={`border rounded-sm p-4 transition-all ${
-                          isIncomplete ? "border-amber-200" : "border-green-200"
+                        key={`${componentId}-${cIdx}`}
+                        className={`border rounded-sm p-3 transition-all ${
+                          isIncomplete
+                            ? "border-amber-200 bg-white"
+                            : "border-gray-200 bg-white/50"
                         }`}
                       >
                         {/* Header do item */}
-                        <div className="flex items-start justify-between mb-3">
+                        <div className="flex items-start justify-between mb-2">
                           <div className="flex items-start gap-3 flex-1">
                             <div className="flex-1">
                               <div className="">
-                                <h2 className="font-medium text-sm text-gray-900">
+                                <h3 className="font-semibold text-xs text-gray-900">
                                   {validation.productName}
-                                </h2>
-                                {/* <p
-                                  className={`text-xs font-medium mt-1 ${
-                                    isIncomplete
-                                      ? "text-amber-700"
-                                      : "text-green-700"
-                                  }`}
-                                >
-                                  {isIncomplete
-                                    ? `${
-                                        missing.length
-                                      } de ${totalCustomizations} pendente${
-                                        missing.length > 1 ? "s" : ""
-                                      }`
-                                    : `${totalCustomizations} personalizado${
-                                        totalCustomizations > 1 ? "s" : ""
-                                      }`}
-                                </p> */}
+                                </h3>
                               </div>
                               {itemName && (
-                                <p className="text-sm text-gray-600 mt-0.5">
+                                <p className="text-[11px] text-gray-500 mt-0.5 leading-tight">
                                   {itemName}
                                 </p>
                               )}
                             </div>
                             {filled.length > 0 && (
                               <div className="max-w-[60%]">
-                                <div className="flex flex-wrap gap-2">
+                                <div className="flex flex-wrap gap-1.5">
                                   {filled.map((f, idx) => {
                                     const summary = getCustomizationSummary(f);
                                     if (!summary) return null;
@@ -887,9 +899,9 @@ export function CustomizationsReview({
                                       <Badge
                                         key={`${f.customization_id}-${idx}`}
                                         variant="outline"
-                                        className="bg-white border-gray-300 text-gray-700 font-medium text-xs py-1 px-2.5"
+                                        className="bg-white border-gray-200 text-gray-600 font-medium text-[10px] py-0.5 px-2"
                                       >
-                                        <span className="inline-block w-2 h-2 rounded-full bg-green-500 mr-1.5" />
+                                        <span className="inline-block w-1.5 h-1.5 rounded-full bg-green-500 mr-1" />
                                         <p>
                                           {f.title}: {summary}
                                         </p>
@@ -911,43 +923,40 @@ export function CustomizationsReview({
                                 componentId,
                               )
                             }
-                            className={`h-9 px-3 font-medium text-sm ${
+                            className={`h-8 px-2 font-medium text-xs ${
                               isIncomplete
                                 ? "text-amber-700 hover:bg-amber-100"
-                                : "text-green-700 hover:bg-green-100"
+                                : "text-gray-500 hover:bg-gray-100"
                             }`}
                           >
-                            <Edit2 className="h-4 w-4 mr-2" />
+                            <Edit2 className="h-3.5 w-3.5 mr-1.5" />
                             Editar
                           </Button>
                         </div>
 
                         {/* Itens pendentes */}
                         {missing.length > 0 && (
-                          <div className="space-y-2 mt-3 pt-3 border-t border-amber-200">
-                            <p className="text-xs font-semibold text-amber-900 uppercase tracking-wide">
+                          <div className="space-y-1.5 mt-2 pt-2 border-t border-amber-100">
+                            <p className="text-[10px] font-bold text-amber-800 uppercase tracking-tight">
                               Pendentes ({missing.length})
                             </p>
-                            <div className="space-y-2">
+                            <div className="grid grid-cols-1 gap-1">
                               {missing.map((m) => (
                                 <div
-                                  key={m.id}
-                                  className="bg-amber-50 p-2 rounded-md border border-amber-200"
+                                  key={`${m.id}-${m.componentId}`}
+                                  className="bg-amber-50/50 p-1.5 rounded border border-amber-100"
                                 >
-                                  <Badge className="bg-amber-100 text-amber-900 font-medium text-xs py-1 px-2.5 border-0 mb-1">
-                                    <span className="inline-block w-2 h-2 rounded-full bg-amber-500 mr-1.5" />
-                                    {m.name}
-                                  </Badge>
-                                  <p className="text-xs text-amber-700 mt-1 ml-1">
-                                    💡 {getCustomizationHint(m.type, m.name)}
-                                  </p>
+                                  <div className="flex items-center gap-2">
+                                    <Badge className="bg-amber-100/50 text-amber-900 font-semibold text-[10px] py-0 px-1 border-0">
+                                      {m.name}
+                                    </Badge>
+                                    <span className="text-[10px] text-amber-700 italic">
+                                      {getCustomizationHint(m.type, m.name)}
+                                    </span>
+                                  </div>
                                 </div>
                               ))}
                             </div>
-                            <p className="text-xs text-amber-800 mt-2 font-medium">
-                              ⚠️ Clique em &quot;Editar&quot; acima para
-                              preencher as personalizações
-                            </p>
                           </div>
                         )}
                       </div>

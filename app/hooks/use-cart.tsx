@@ -3,6 +3,8 @@ import { toast } from "sonner";
 import {
   useApi,
   Product,
+  ProductComponent,
+  Customization,
   Additional,
   CustomizationTypeValue,
   Order,
@@ -109,7 +111,7 @@ const serializeCustomizations = (customizations?: CartCustomization[]) => {
       "customization_id",
       "title",
       "price_adjustment",
-      "componentId"
+      "componentId",
     ];
 
     const cleanData: Record<string, unknown> = {};
@@ -128,9 +130,9 @@ const serializeCustomizations = (customizations?: CartCustomization[]) => {
       selected_option: customization.selected_option || null,
       selected_item: customization.selected_item
         ? {
-          original_item: customization.selected_item.original_item,
-          selected_item: customization.selected_item.selected_item,
-        }
+            original_item: customization.selected_item.original_item,
+            selected_item: customization.selected_item.selected_item,
+          }
         : null,
       // ✅ Incluir label fields para detecção de duplicatas
       label_selected: customization.label_selected || null,
@@ -384,10 +386,10 @@ export function useCart(): CartContextType {
           const additionals =
             orderItem.additionals && orderItem.additionals.length > 0
               ? await Promise.all(
-                orderItem.additionals.map((add: { additional_id: string }) =>
-                  api.getAdditional(add.additional_id),
-                ),
-              )
+                  orderItem.additionals.map((add: { additional_id: string }) =>
+                    api.getAdditional(add.additional_id),
+                  ),
+                )
               : [];
 
           const customizations: CartCustomization[] = [];
@@ -406,15 +408,49 @@ export function useCart(): CartContextType {
                   data = customization.value as Record<string, unknown>;
                 }
 
-                const customizationType = (data.customization_type ||
-                  customization.customization_type ||
-                  "TEXT") as string;
-
                 const componentId = (data.componentId as string) || undefined; // ✅ Extract componentId
                 const customizationId = (customization.customization_id ||
                   data.customization_id ||
                   data.customizationRuleId ||
                   "") as string;
+
+                // ✅ NOVO: Extrair ID base se for composto (ruleId:componentId)
+                const baseRuleId = customizationId.includes(":")
+                  ? customizationId.split(":")[0]
+                  : customizationId;
+
+                // ✅ NOVO: Verificar se a customização é obrigatória e o tipo a partir das regras do produto
+                let isRequired = false;
+                let inferredType: string | undefined;
+
+                // 1. Procurar nas customizações diretas do item (se houver)
+                if (product.customizations) {
+                  const rule = product.customizations.find(
+                    (c: Customization) => c.id === baseRuleId,
+                  );
+                  if (rule) {
+                    isRequired = rule.isRequired || false;
+                    inferredType = rule.type;
+                  }
+                }
+
+                // 2. Procurar nos componentes do produto
+                if (!isRequired && product.components) {
+                  product.components.forEach((comp: ProductComponent) => {
+                    const rule = comp.item?.customizations?.find(
+                      (c: Customization) => c.id === baseRuleId,
+                    );
+                    if (rule) {
+                      isRequired = rule.isRequired || false;
+                      inferredType = rule.type;
+                    }
+                  });
+                }
+
+                const customizationType = (data.customization_type ||
+                  customization.customization_type ||
+                  inferredType ||
+                  "TEXT") as string;
 
                 if (customizationType === "TEXT") {
                   customizations.push({
@@ -423,7 +459,7 @@ export function useCart(): CartContextType {
                     customization_id: customizationId,
                     title: (data.title as string) || "Personalização",
                     customization_type: "TEXT",
-                    is_required: false,
+                    is_required: isRequired,
                     price_adjustment: (data.price_adjustment as number) || 0,
                     text: (data.text as string) || "",
                     value:
@@ -438,7 +474,7 @@ export function useCart(): CartContextType {
                     customization_id: customizationId,
                     title: (data.title as string) || "Personalização",
                     customization_type: "MULTIPLE_CHOICE",
-                    is_required: false,
+                    is_required: isRequired,
                     price_adjustment: (data.price_adjustment as number) || 0,
                     selected_option: data.selected_option as string | undefined,
                     selected_option_label: data.selected_option_label as
@@ -459,7 +495,7 @@ export function useCart(): CartContextType {
                     customization_id: customizationId,
                     title: (data.title as string) || "Personalização",
                     customization_type: "IMAGES",
-                    is_required: false,
+                    is_required: isRequired,
                     price_adjustment: (data.price_adjustment as number) || 0,
                     photos: (data.photos as PhotoUploadData[]) || [],
                     value:
@@ -474,7 +510,7 @@ export function useCart(): CartContextType {
                     customization_id: customizationId,
                     title: (data.title as string) || "Design",
                     customization_type: "DYNAMIC_LAYOUT",
-                    is_required: false,
+                    is_required: isRequired,
                     price_adjustment: (data.price_adjustment as number) || 0,
                     text: (data.text as string) || "",
                     selected_option: data.selected_option as string | undefined,
@@ -501,7 +537,7 @@ export function useCart(): CartContextType {
                     title: (data.title as string) || "Personalização",
                     customization_type:
                       (customizationType as CustomizationTypeValue) || "TEXT",
-                    is_required: false,
+                    is_required: isRequired,
                     price_adjustment: (data.price_adjustment as number) || 0,
                     data: data,
                     value:
@@ -701,18 +737,13 @@ export function useCart(): CartContextType {
           try {
             const existingPending = await api.getPendingOrder(user.id);
             if (existingPending) {
-              console.log("📂 [syncCartToBackend] Pedido pendente existente encontrado:", existingPending.id);
               setPendingOrderId(existingPending.id);
               _setOrderMetadata({
                 send_anonymously: !!existingPending.send_anonymously,
                 complement: existingPending.complement || undefined,
               });
-              // ✅ Não retornar. Continuar para sincronizar os itens atuais com este pedido.
-              // O fallthrough para o 'else' (pendingOrderId atualizado) acontecerá no próximo ciclo, 
-              // mas para esta execução, vamos forçar o uso deste ID.
               const orderIdToUpdate = existingPending.id;
               await api.updateOrderItems(orderIdToUpdate, itemsPayload);
-              console.log("✅ [syncCartToBackend] Itens sincronizados com pedido existente.");
               return;
             }
           } catch (error) {
@@ -722,7 +753,6 @@ export function useCart(): CartContextType {
             );
           }
 
-          console.log("🆕 [syncCartToBackend] Criando novo pedido...");
           const payload: {
             user_id: string;
             items: OrderItem[];
@@ -738,25 +768,18 @@ export function useCart(): CartContextType {
           };
           const order = await api.createOrder(payload);
           setPendingOrderId(order?.id || null);
-          console.log("✅ [syncCartToBackend] Pedido criado:", order?.id);
         } else {
           try {
-            console.log(`Update [syncCartToBackend] Atualizando itens do pedido ${pendingOrderId}`);
             await api.updateOrderItems(pendingOrderId, itemsPayload);
-            console.log("✅ [syncCartToBackend] Pedido atualizado com sucesso.");
-            // ✅ Metadata já é sincronizado pelo useEffect separado, não chamar aqui
-            // ✅ Não chamar transformOrderToCartItems aqui - evita loop de requisições
           } catch (updateError: unknown) {
             console.error("Erro ao atualizar pedido:", updateError);
             const maybe = updateError as { response?: { status: number } };
             const status = maybe?.response?.status;
 
-            // Se 403/404, o pedido não existe mais ou não temos permissão
             if (status === 403 || status === 404) {
               console.warn("⚠️ Pedido inválido, criando novo...");
               setPendingOrderId(null);
 
-              // Recriar pedido
               const payload: {
                 user_id: string;
                 items: OrderItem[];
@@ -891,23 +914,23 @@ export function useCart(): CartContextType {
 
                   const customizations = item.customizations
                     ? item.customizations.map((c) => {
-                      const parsed = (() => {
-                        try {
-                          return JSON.parse(c.value || "{}") as Record<
-                            string,
-                            unknown
-                          >;
-                        } catch {
-                          return {};
-                        }
-                      })();
+                        const parsed = (() => {
+                          try {
+                            return JSON.parse(c.value || "{}") as Record<
+                              string,
+                              unknown
+                            >;
+                          } catch {
+                            return {};
+                          }
+                        })();
 
-                      return {
-                        ...parsed,
-                        customization_id: c.customization_id,
-                        title: (parsed.title as string) || undefined,
-                      };
-                    })
+                        return {
+                          ...parsed,
+                          customization_id: c.customization_id,
+                          title: (parsed.title as string) || undefined,
+                        };
+                      })
                     : undefined;
 
                   return {
@@ -919,10 +942,10 @@ export function useCart(): CartContextType {
                       item.effectivePrice !== undefined
                         ? item.effectivePrice
                         : Number(
-                          (
-                            item.price + (item.customization_total || 0)
-                          ).toFixed(2),
-                        ),
+                            (
+                              item.price + (item.customization_total || 0)
+                            ).toFixed(2),
+                          ),
                     additionals,
                     customizations,
                     product: item.product,
@@ -973,12 +996,6 @@ export function useCart(): CartContextType {
       additionalColors?: Record<string, string>,
       customizations?: CartCustomization[],
     ) => {
-      console.log(`🛒 [addToCart] Adicionando produto ${productId}`, {
-        quantity,
-        additionals,
-        customizationsCount: customizations?.length,
-      });
-
       try {
         const product = await api.getProduct(productId);
 
@@ -1023,11 +1040,6 @@ export function useCart(): CartContextType {
           const targetCustomizationsKey =
             serializeCustomizations(customizationEntries);
 
-          console.log(`🔍 [addToCart] Chaves de comparação:`, {
-            targetAdditionalsKey,
-            targetCustomizationsKey,
-          });
-
           const existingIndex = currentItems.findIndex((item) => {
             const itemAddsKey = serializeAdditionals(item.additional_ids);
             const itemColorsKey = serializeAdditionalColors(
@@ -1046,13 +1058,9 @@ export function useCart(): CartContextType {
 
           let newItems: CartItem[];
           if (existingIndex >= 0) {
-            console.log(`✅ [addToCart] Item existente encontrado no índice ${existingIndex}, incrementando quantidade.`);
             newItems = [...currentItems];
             const updatedItem = { ...newItems[existingIndex] };
             updatedItem.quantity += quantity;
-
-            // Recalcular preço efetivo se necessário (pode ter mudado se customizations mudaram, 
-            // embora aqui estejamos adicionando o 'mesmo' item as customizations devem ser iguais)
             const existingBaseEffective =
               updatedItem.price * (1 - (updatedItem.discount || 0) / 100);
             updatedItem.effectivePrice = Number(
@@ -1065,7 +1073,6 @@ export function useCart(): CartContextType {
                 : undefined;
             newItems[existingIndex] = updatedItem;
           } else {
-            console.log(`➕ [addToCart] Item novo, adicionando ao carrinho.`);
             newItems = [...currentItems, newItem];
           }
 
@@ -1107,9 +1114,9 @@ export function useCart(): CartContextType {
               item.product_id === productId &&
               serializeAdditionals(item.additional_ids) === targetAdditionals &&
               serializeAdditionalColors(item.additional_colors) ===
-              targetColors &&
+                targetColors &&
               serializeCustomizations(item.customizations) ===
-              targetCustomizations,
+                targetCustomizations,
           ) || null;
 
         const newItems = currentItems.filter(
@@ -1118,9 +1125,9 @@ export function useCart(): CartContextType {
               item.product_id === productId &&
               serializeAdditionals(item.additional_ids) === targetAdditionals &&
               serializeAdditionalColors(item.additional_colors) ===
-              targetColors &&
+                targetColors &&
               serializeCustomizations(item.customizations) ===
-              targetCustomizations
+                targetCustomizations
             ),
         );
         const updatedCart = calculateTotals(newItems);
@@ -1213,7 +1220,7 @@ export function useCart(): CartContextType {
             item.product_id === productId &&
             serializeAdditionals(item.additional_ids) === targetAdditionals &&
             serializeCustomizations(item.customizations) ===
-            targetCustomizations &&
+              targetCustomizations &&
             serializeAdditionalColors(item.additional_colors) === targetColors
           ) {
             return { ...item, quantity };
@@ -1256,7 +1263,7 @@ export function useCart(): CartContextType {
             item.product_id === productId &&
             serializeAdditionals(item.additional_ids) === targetAdditionals &&
             serializeCustomizations(item.customizations) ===
-            targetOldCustomizations &&
+              targetOldCustomizations &&
             serializeAdditionalColors(item.additional_colors) === targetColors,
         );
 

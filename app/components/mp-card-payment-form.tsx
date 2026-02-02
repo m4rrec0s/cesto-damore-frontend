@@ -1,6 +1,6 @@
 "use client";
 
-import { CardPayment, initMercadoPago } from "@mercadopago/sdk-react";
+import { CardPayment } from "@mercadopago/sdk-react";
 import { useEffect, useState, useCallback, useRef } from "react";
 import {
   Loader2,
@@ -9,21 +9,9 @@ import {
   RefreshCw,
   CreditCard,
 } from "lucide-react";
+import { initializeMercadoPago } from "../lib/mercadopago";
 
 const MP_PUBLIC_KEY = process.env.NEXT_PUBLIC_MERCADO_PAGO_PUBLIC_KEY;
-
-// ✅ Inicializar MercadoPago globalmente FORA do componente
-let mpInitialized = false;
-const initializeMP = () => {
-  if (MP_PUBLIC_KEY && !mpInitialized && typeof window !== "undefined") {
-    try {
-      initMercadoPago(MP_PUBLIC_KEY, { locale: "pt-BR" });
-      mpInitialized = true;
-    } catch (err) {
-      console.error("❌ Erro ao inicializar MercadoPago SDK:", err);
-    }
-  }
-};
 
 interface MPCardPaymentFormProps {
   amount: number;
@@ -89,9 +77,9 @@ export function MPCardPaymentForm({
   useEffect(() => {
     mountedRef.current = true;
 
-    // Inicializar MP se ainda não foi
-    if (!mpInitialized) {
-      initializeMP();
+    // Inicializar MP se ainda não foi (usando lib centralizada)
+    if (MP_PUBLIC_KEY) {
+      initializeMercadoPago(MP_PUBLIC_KEY);
     }
 
     // Delay maior para garantir estabilidade do DOM
@@ -166,7 +154,7 @@ export function MPCardPaymentForm({
         }
       }
     },
-    [amount, orderId, payerEmail, payerName, onSubmit]
+    [amount, orderId, payerEmail, payerName, onSubmit],
   );
 
   const handleOnError = useCallback((error: CardPaymentError) => {
@@ -208,19 +196,6 @@ export function MPCardPaymentForm({
             Chave pública do Mercado Pago não configurada
           </p>
         </div>
-      </div>
-    );
-  }
-
-  if (!mpInitialized) {
-    // Tentar inicializar novamente
-    initializeMP();
-    return (
-      <div className="p-6 flex items-center justify-center gap-3">
-        <Loader2 className="h-5 w-5 animate-spin text-blue-600" />
-        <span className="text-gray-600">
-          Carregando formulário de pagamento...
-        </span>
       </div>
     );
   }

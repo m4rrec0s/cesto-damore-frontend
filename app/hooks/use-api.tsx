@@ -202,6 +202,7 @@ export interface Product {
   type_id: string;
   production_time?: number;
   components?: ProductComponent[];
+  customizations?: Customization[];
   related_products?: Omit<Product, "components" | "related_products">[];
   created_at: string;
   updated_at: string;
@@ -1030,8 +1031,10 @@ class ApiService {
 
     return res.data;
   };
-  getProduct = async (id: string) =>
+
+  getProduct = async (id: string): Promise<Product> =>
     (await this.client.get(`/products/${id}`)).data;
+
   createProduct = async (
     payload: Partial<ProductInput>,
     imageFile?: File,

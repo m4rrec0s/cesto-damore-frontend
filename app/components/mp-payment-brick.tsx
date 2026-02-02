@@ -1,6 +1,6 @@
 "use client";
 
-import { Payment, initMercadoPago } from "@mercadopago/sdk-react";
+import { Payment } from "@mercadopago/sdk-react";
 import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import {
   Loader2,
@@ -10,24 +10,9 @@ import {
   CreditCard,
   QrCode,
 } from "lucide-react";
+import { initializeMercadoPago } from "../lib/mercadopago";
 
 const MP_PUBLIC_KEY = process.env.NEXT_PUBLIC_MERCADO_PAGO_PUBLIC_KEY;
-
-let mpInitialized = false;
-const initializeMP = () => {
-  if (MP_PUBLIC_KEY && !mpInitialized && typeof window !== "undefined") {
-    try {
-      initMercadoPago(MP_PUBLIC_KEY, { locale: "pt-BR" });
-      mpInitialized = true;
-    } catch (err) {
-      console.error("❌ Erro ao inicializar MercadoPago SDK:", err);
-    }
-  }
-};
-
-if (typeof window !== "undefined") {
-  initializeMP();
-}
 
 interface MPPaymentBrickProps {
   amount: number;
@@ -119,6 +104,12 @@ export function MPPaymentBrick({
 
   useEffect(() => {
     mountedRef.current = true;
+
+    // Inicializar MP se necessário
+    if (MP_PUBLIC_KEY) {
+      initializeMercadoPago(MP_PUBLIC_KEY);
+    }
+
     return () => {
       mountedRef.current = false;
       try {

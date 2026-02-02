@@ -129,7 +129,7 @@ export const StepDelivery = ({
             "bg-white p-6 rounded-lg border cursor-pointer transition-all",
             optionSelected === "delivery"
               ? "border-gray-200"
-              : "border-gray-100 opacity-70"
+              : "border-gray-100 opacity-70",
           )}
         >
           <div className="flex items-start gap-4">
@@ -138,7 +138,7 @@ export const StepDelivery = ({
                 "w-5 h-5 rounded-full border-2 mt-1 flex items-center justify-center transition-all",
                 optionSelected === "delivery"
                   ? "border-[#3483fa]"
-                  : "border-gray-300"
+                  : "border-gray-300",
               )}
             >
               {optionSelected === "delivery" && (
@@ -151,8 +151,8 @@ export const StepDelivery = ({
                 <span className="font-bold text-gray-900">
                   Enviar no meu endereço
                 </span>
-                <span className="text-[#00a650] font-medium text-sm">
-                  Grátis
+                <span className="text-gray-500 font-medium text-sm">
+                  Cálculo na próxima etapa
                 </span>
               </div>
 
@@ -270,7 +270,7 @@ export const StepDelivery = ({
             "bg-white p-6 rounded-lg border cursor-pointer transition-all",
             optionSelected === "pickup"
               ? "border-gray-200"
-              : "border-gray-100 opacity-70"
+              : "border-gray-100 opacity-70",
           )}
         >
           <div className="flex items-start gap-4">
@@ -279,7 +279,7 @@ export const StepDelivery = ({
                 "w-5 h-5 rounded-full border-2 mt-1 flex items-center justify-center transition-all",
                 optionSelected === "pickup"
                   ? "border-[#3483fa]"
-                  : "border-gray-300"
+                  : "border-gray-300",
               )}
             >
               {optionSelected === "pickup" && (
@@ -378,7 +378,7 @@ export const StepDelivery = ({
                     variant="outline"
                     className={cn(
                       "w-full justify-start text-left font-normal h-10 rounded border-gray-300",
-                      !selectedDate && "text-muted-foreground"
+                      !selectedDate && "text-muted-foreground",
                     )}
                   >
                     <CalendarIcon className="mr-2 h-4 w-4 text-gray-400" />

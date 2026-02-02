@@ -1,6 +1,6 @@
 "use client";
 
-import { StatusScreen, initMercadoPago } from "@mercadopago/sdk-react";
+import { StatusScreen } from "@mercadopago/sdk-react";
 import { useEffect, useState, useCallback, useRef } from "react";
 import {
   Loader2,
@@ -9,25 +9,9 @@ import {
   Clock,
   AlertCircle,
 } from "lucide-react";
+import { initializeMercadoPago } from "../lib/mercadopago";
 
 const MP_PUBLIC_KEY = process.env.NEXT_PUBLIC_MERCADO_PAGO_PUBLIC_KEY;
-
-// Inicialização global
-let mpInitialized = false;
-const initializeMP = () => {
-  if (MP_PUBLIC_KEY && !mpInitialized && typeof window !== "undefined") {
-    try {
-      initMercadoPago(MP_PUBLIC_KEY, { locale: "pt-BR" });
-      mpInitialized = true;
-    } catch (err) {
-      console.error("Erro ao inicializar MercadoPago:", err);
-    }
-  }
-};
-
-if (typeof window !== "undefined") {
-  initializeMP();
-}
 
 interface MPStatusScreenProps {
   paymentId: string;
@@ -83,11 +67,17 @@ export function MPStatusScreen({
   onError,
 }: MPStatusScreenProps) {
   const [isReady, setIsReady] = useState(false);
-  const [status] = useState<StatusType>("unknown");
+  const [isReady, setIsReady] = useState(false);
   const mountedRef = useRef(true);
 
   useEffect(() => {
     mountedRef.current = true;
+
+    // Inicializar MP se necessário (usando lib centralizada)
+    if (MP_PUBLIC_KEY) {
+      initializeMercadoPago(MP_PUBLIC_KEY);
+    }
+
     return () => {
       mountedRef.current = false;
       try {
@@ -119,12 +109,11 @@ export function MPStatusScreen({
     [onError],
   );
 
-  if (!MP_PUBLIC_KEY || !mpInitialized) {
-    initializeMP();
+  if (!MP_PUBLIC_KEY) {
     return (
       <div className="p-8 flex items-center justify-center gap-3 bg-white rounded-2xl shadow-sm border border-gray-100">
-        <Loader2 className="h-6 w-6 animate-spin text-rose-500" />
-        <span className="text-gray-600">Carregando status...</span>
+        <AlertCircle className="h-6 w-6 text-red-500" />
+        <span className="text-red-500">Chave pública não configurada</span>
       </div>
     );
   }

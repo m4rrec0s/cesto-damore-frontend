@@ -927,6 +927,83 @@ export default function CarrinhoPageContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [paymentMethod, currentStep]);
 
+  const handleCardSubmit = useCallback(
+    async (formData: any) => {
+      if (!currentOrderId) {
+        toast.error("Pedido não encontrado. Tente recarregar a página.");
+        return;
+      }
+
+      setIsProcessing(true);
+      setPaymentError(null);
+
+      try {
+        if (!user) {
+          router.push("/login");
+          return;
+        }
+
+        const payload = {
+          orderId: currentOrderId,
+          payerEmail: user.email || "",
+          payerName: user.name || "",
+          payerDocument:
+            formData.payer?.identification?.number ||
+            userDocument ||
+            "00000000000",
+          payerDocumentType:
+            (formData.payer?.identification?.type as "CPF" | "CNPJ") || "CPF",
+          paymentMethodId: "credit_card" as const,
+          cardToken: formData.token,
+          installments: formData.installments,
+          issuer_id: String(formData.issuer_id || ""),
+          payment_method_id: formData.payment_method_id,
+          cardholderName: user.name || "",
+        };
+
+        const paymentResponse = await createTransparentPayment(payload);
+
+        if (!paymentResponse?.success) {
+          throw new Error(
+            paymentResponse?.message ||
+              "Erro ao processar pagamento com cartão",
+          );
+        }
+
+        const rawStatus = paymentResponse.status || "pending";
+        const normalizedStatus = mapPaymentStatus(rawStatus) || "pending";
+
+        if (normalizedStatus === "success") {
+          setPaymentStatus("success");
+          clearCart();
+          toast.success("Pagamento aprovado!");
+        } else if (normalizedStatus === "failure") {
+          throw new Error(paymentResponse.message || "Pagamento recusado");
+        } else {
+          setPaymentStatus("pending");
+          toast.info("Pagamento em análise ou aguardando confirmação.");
+        }
+      } catch (error) {
+        console.error("Erro no pagamento com cartão:", error);
+        const errorMessage =
+          error instanceof Error ? error.message : "Erro desconhecido";
+        setPaymentError(errorMessage);
+        toast.error(`Pagamento recusado: ${errorMessage}`);
+      } finally {
+        setIsProcessing(false);
+      }
+    },
+    [
+      currentOrderId,
+      user,
+      userDocument,
+      createTransparentPayment,
+      clearCart,
+      router,
+      mapPaymentStatus,
+    ],
+  );
+
   const addressWarning = useMemo(() => {
     if (!city.trim()) return null;
     if (state.trim() && normalizedState !== "pb") {
@@ -1308,7 +1385,7 @@ export default function CarrinhoPageContent() {
                 {shippingCost === 0
                   ? "Grátis"
                   : shippingCost === null
-                    ? "--"
+                    ? "-"
                     : `R$ ${shippingCost.toFixed(2)}`}
               </span>
             </div>
@@ -1453,7 +1530,7 @@ export default function CarrinhoPageContent() {
                 <AnimatePresence mode="wait">
                   {/* Etapa 1: Revisão do Carrinho com Customizações */}
                   {currentStep === 1 && (
-                    <div className="space-y-6">
+                    <div key="step1" className="space-y-6">
                       <StepCart
                         cartItems={cartItems}
                         updateQuantity={updateQuantity}
@@ -1477,6 +1554,7 @@ export default function CarrinhoPageContent() {
 
                   {currentStep === 2 && (
                     <StepDelivery
+                      key="step2"
                       optionSelected={optionSelected}
                       setOptionSelected={setOptionSelected}
                       zipCode={zipCode}
@@ -1523,6 +1601,7 @@ export default function CarrinhoPageContent() {
 
                   {currentStep === 3 && (
                     <StepPayment
+                      key="step3"
                       paymentMethod={paymentMethod ?? null}
                       setPaymentMethod={setPaymentMethod}
                       grandTotal={grandTotal}
@@ -1532,7 +1611,7 @@ export default function CarrinhoPageContent() {
                       isProcessing={isProcessing}
                       paymentError={paymentError}
                       handlePlaceOrder={handleNextStep}
-                      handleCardSubmit={generatePixPayment}
+                      handleCardSubmit={handleCardSubmit}
                       payerEmail={user?.email || ""}
                       payerName={user?.name || ""}
                     />
@@ -1559,6 +1638,7 @@ export default function CarrinhoPageContent() {
       <AnimatePresence>
         {confirmationState === "animating" && (
           <motion.div
+            key="confirmation-overlay"
             className="fixed inset-0 bg-white z-[100] flex items-center justify-center"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
