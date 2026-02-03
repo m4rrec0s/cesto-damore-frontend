@@ -839,7 +839,8 @@ export function CustomizationsReview({
     (acc, v) => acc + v.missingRequired.length,
     0,
   );
-  const allComplete = validations.every((v) => v.isComplete);
+  const allComplete =
+    validations.length > 0 && validations.every((v) => v.isComplete);
 
   if (isLoading || isSaving) {
     return (
