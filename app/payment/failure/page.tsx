@@ -18,7 +18,7 @@ export default function PaymentFailure() {
           tente novamente.
         </p>
         <div className="space-y-3">
-          <Link href="/carrinho">
+          <Link href="/carrinho?step=pagamento">
             <Button className="w-full bg-red-600 hover:bg-red-700 text-white">
               <ShoppingCart className="h-4 w-4 mr-2" />
               Tentar Novamente
