@@ -260,6 +260,7 @@ export default function CarrinhoPageContent() {
   const sseDisconnectCountRef = useRef(0);
   const pixGeneratedForOrderRef = useRef<string | null>(null);
   const updatingOrderMetadataRef = useRef(false);
+  const creatingOrderRef = useRef(false); // ✅ Proteção contra duplicação de pedidos
 
   useEffect(() => {
     pollingStartedRef.current = false;
@@ -1224,6 +1225,14 @@ export default function CarrinhoPageContent() {
       }
 
       if (!currentOrderId && !hasPendingOrder) {
+        // ✅ PROTEÇÃO: Verificar se já está criando pedido
+        if (creatingOrderRef.current) {
+          console.warn(
+            "⚠️ Criação de pedido já em progresso, ignorando requisição duplicada",
+          );
+          return;
+        }
+
         if (optionSelected === "delivery" && !recipientPhone.trim()) {
           toast.error("Por favor, informe o número do destinatário");
           return;
@@ -1236,6 +1245,7 @@ export default function CarrinhoPageContent() {
         }
 
         setIsProcessing(true);
+        creatingOrderRef.current = true; // ✅ Marcar que está criando
         try {
           // Se "A combinar" for selecionado (23:59), enviar null para backend
           let finalDateForBackend = finalDeliveryDate;
@@ -1300,6 +1310,7 @@ export default function CarrinhoPageContent() {
           return;
         } finally {
           setIsProcessing(false);
+          creatingOrderRef.current = false; // ✅ Liberar proteção
         }
       }
 

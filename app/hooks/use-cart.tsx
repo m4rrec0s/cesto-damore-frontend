@@ -1082,10 +1082,12 @@ export function useCart(): CartContextType {
           return updatedCart;
         });
 
-        toast.success("Produto adicionado ao carrinho!");
+        // ✅ NÃO mostrar toast aqui - deixar para o componente chamador
+        // O toast deve ser mostrado onde addToCart é chamado
       } catch (error) {
         console.error("❌ [addToCart] Erro:", error);
-        toast.error("Erro ao adicionar produto ao carrinho");
+        // ✅ Propagar erro para quem chamou tratar
+        throw error;
       }
     },
     [api, calculateTotals, debouncedSync],
