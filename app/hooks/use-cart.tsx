@@ -520,7 +520,8 @@ export function useCart(): CartContextType {
                     label_selected:
                       (data.label_selected as string) ||
                       (data.selected_item_label as string) ||
-                      (data.selected_option_label as string),
+                      (data.selected_option_label as string) ||
+                      (data.text as string),
                     additional_time: (data.additional_time as number) || 0,
                     data: data,
                     fabricState: (data.fabricState as string) || undefined,

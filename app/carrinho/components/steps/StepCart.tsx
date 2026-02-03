@@ -58,6 +58,8 @@ const formatCustomizationValue = (custom: CartCustomization) => {
     case "DYNAMIC_LAYOUT":
       if (custom.label_selected) return custom.label_selected;
       if (custom.selected_item_label) return custom.selected_item_label;
+      if (custom.selected_option_label) return custom.selected_option_label;
+      if (custom.text) return custom.text;
       if (typeof custom.selected_item === "string") return custom.selected_item;
       if (
         custom.selected_item &&

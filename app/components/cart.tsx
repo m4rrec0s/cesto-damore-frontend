@@ -114,9 +114,9 @@ export function Cart({ onClose }: { onClose?: () => void }) {
 
                 {item.customizations && item.customizations.length > 0 && (
                   <div className="mt-2 space-y-1">
-                    {item.customizations.map((customization) => (
+                    {item.customizations.map((customization, cIdx) => (
                       <div
-                        key={customization.customization_id}
+                        key={`${customization.id || customization.customization_id}-${cIdx}`}
                         className="flex items-start gap-2 rounded-md border border-dashed border-rose-200 bg-rose-50/70 px-2 py-1 text-xs"
                       >
                         <span className="font-semibold text-rose-700">

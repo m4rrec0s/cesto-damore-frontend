@@ -47,6 +47,8 @@ export function CartSheet({ isOpen, onClose, onCheckout }: CartSheetProps) {
         if (custom.label_selected) return custom.label_selected;
         // Fallback se não houver label_selected
         if (custom.selected_item_label) return custom.selected_item_label;
+        if (custom.selected_option_label) return custom.selected_option_label;
+        if (custom.text) return custom.text;
         if (typeof custom.selected_item === "string") {
           return custom.selected_item;
         }
@@ -163,9 +165,9 @@ export function CartSheet({ isOpen, onClose, onCheckout }: CartSheetProps) {
                       {item.customizations &&
                         item.customizations.length > 0 && (
                           <div className="mt-2 space-y-1">
-                            {item.customizations.map((customization) => (
+                            {item.customizations.map((customization, cIdx) => (
                               <div
-                                key={customization.customization_id}
+                                key={`${customization.id || customization.customization_id}-${cIdx}`}
                                 className="flex items-start gap-2 rounded-md border border-dashed border-rose-200 bg-rose-50/70 px-2 py-1 text-[11px]"
                               >
                                 <span className="font-semibold text-rose-700">
