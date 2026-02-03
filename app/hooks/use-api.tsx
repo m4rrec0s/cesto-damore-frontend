@@ -355,19 +355,19 @@ export type CustomizationTypeValue =
 
 export type CustomizationAvailableOptions =
   | Array<{
-      label: string;
-      value: string;
-      price_adjustment?: number;
-    }>
+    label: string;
+    value: string;
+    price_adjustment?: number;
+  }>
   | {
-      items: Array<{
-        original_item: string;
-        available_substitutes: Array<{
-          item: string;
-          price_adjustment: number;
-        }>;
+    items: Array<{
+      original_item: string;
+      available_substitutes: Array<{
+        item: string;
+        price_adjustment: number;
       }>;
-    };
+    }>;
+  };
 
 export interface OrderItemAdditional {
   id: string;
@@ -1423,7 +1423,7 @@ class ApiService {
     onUpdate: (customizations: unknown[]) => void,
     interval = 10000,
   ) {
-    if (typeof window === "undefined") return () => {};
+    if (typeof window === "undefined") return () => { };
     if (this.activePollers[orderId]) clearInterval(this.activePollers[orderId]);
     const id = window.setInterval(async () => {
       try {
@@ -1988,8 +1988,8 @@ class ApiService {
         console.error("📄 Data:", axiosError.response.data);
         throw new Error(
           axiosError.response.data?.error ||
-            axiosError.response.data?.message ||
-            "Erro na requisição",
+          axiosError.response.data?.message ||
+          "Erro na requisição",
         );
       }
       throw error;
@@ -2219,9 +2219,8 @@ class ApiService {
     page?: number,
     perPage?: number,
   ): Promise<PublicFeedResponse> => {
-    const cacheKey = `publicFeed_${configId || "default"}_page_${
-      page ?? "all"
-    }_per_${perPage ?? "all"}`;
+    const cacheKey = `publicFeed_${configId || "default"}_page_${page ?? "all"
+      }_per_${perPage ?? "all"}`;
 
     // Retornar do cache se disponível
     if (ApiService.cache[cacheKey]) {
@@ -2373,6 +2372,18 @@ class ApiService {
     const res = await this.client.get(
       `/constraints/item/${itemType}/${itemId}`,
     );
+    return res.data;
+  };
+
+  // ✅ NOVO: Customization Review & Validation
+  getOrderReviewData = async (orderId: string) => {
+    const res = await this.client.get(`/customization/review/${orderId}`);
+    return res.data;
+  };
+
+  validateOrderCustomizationsFiles = async (orderId: string) => {
+    // Nota: Rota precisa ser registrada no backend
+    const res = await this.client.get(`/orders/${orderId}/customizations/validate`);
     return res.data;
   };
 }
