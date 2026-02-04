@@ -963,6 +963,19 @@ export default function CarrinhoPageContent() {
           cardholderName: user.name || "",
         };
 
+        // 🔍 DEBUG: Log do payload antes de enviar
+        console.log("💾 Payload de pagamento:", {
+          orderId: payload.orderId,
+          paymentMethodId: payload.paymentMethodId,
+          hasCardToken: !!payload.cardToken,
+          cardToken: payload.cardToken
+            ? payload.cardToken.substring(0, 30) + "..."
+            : "⚠️ AUSENTE",
+          payment_method_id: payload.payment_method_id,
+          issuer_id: payload.issuer_id,
+          installments: payload.installments,
+        });
+
         const paymentResponse = await createTransparentPayment(payload);
 
         if (!paymentResponse?.success) {
@@ -986,11 +999,32 @@ export default function CarrinhoPageContent() {
           toast.info("Pagamento em análise ou aguardando confirmação.");
         }
       } catch (error) {
-        console.error("Erro no pagamento com cartão:", error);
+        console.error("❌ Erro no pagamento com cartão:", error);
         const errorMessage =
           error instanceof Error ? error.message : "Erro desconhecido";
-        setPaymentError(errorMessage);
-        toast.error(`Pagamento recusado: ${errorMessage}`);
+
+        // 🔍 Detectar erro específico de token/chave pública
+        let friendlyError = `Pagamento recusado: ${errorMessage}`;
+        if (
+          errorMessage.includes("Token") ||
+          errorMessage.includes("token") ||
+          errorMessage.includes("2006") ||
+          errorMessage.includes("Card Token")
+        ) {
+          friendlyError =
+            "⚠️ Erro ao processar cartão. Verifique seus dados ou tente novamente. " +
+            "Se o problema persistir, use PIX para pagar.";
+        } else if (
+          errorMessage.includes("Chave") ||
+          errorMessage.includes("chave") ||
+          errorMessage.includes("key")
+        ) {
+          friendlyError =
+            "⚠️ Erro na configuração do pagamento. Contate o suporte.";
+        }
+
+        setPaymentError(friendlyError);
+        toast.error(friendlyError);
       } finally {
         setIsProcessing(false);
       }

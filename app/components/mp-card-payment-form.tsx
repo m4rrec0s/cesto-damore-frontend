@@ -107,6 +107,18 @@ export function MPCardPaymentForm({
   const handleOnSubmit = useCallback(
     async (formData: CardPaymentFormData) => {
       try {
+        // 🔍 DEBUG: Log detalhado do submit
+        console.log("🔍 DEBUG - CardPayment Submit:", {
+          timestamp: new Date().toISOString(),
+          hasToken: !!formData?.token,
+          tokenPreview: formData?.token
+            ? formData.token.substring(0, 30) + "..."
+            : "⚠️ TOKEN AUSENTE",
+          payment_method_id: formData?.payment_method_id,
+          issuer_id: formData?.issuer_id,
+          installments: formData?.installments,
+        });
+
         setLocalError(null);
         setIsSubmitting(true);
 
@@ -120,7 +132,12 @@ export function MPCardPaymentForm({
           throw new Error("Nome do pagador é obrigatório");
         }
         if (!formData?.token) {
-          throw new Error("Token do cartão não foi gerado");
+          console.error(
+            "❌ FALHA CRÍTICA: Token não foi gerado pelo CardPayment Brick",
+          );
+          throw new Error(
+            "Token do cartão não foi gerado. Verifique sua chave pública do Mercado Pago.",
+          );
         }
 
         const paymentData: MPCardFormData = {
