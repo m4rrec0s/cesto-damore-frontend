@@ -879,11 +879,45 @@ const ClientProductPage = ({ id }: { id: string }) => {
                 price_adjustment: 0,
               },
               selected_item_label: layoutData.name || "Design Personalizado",
-              text: layoutData.previewUrl,
+              text: undefined,
               additional_time: layoutData.productionTime ?? 0,
               fabricState: layoutData.fabricState,
               data: layoutData,
             };
+
+            const finalImageToUpload =
+              layoutData.highQualityUrl || layoutData.previewUrl;
+            let finalPreviewUrl = layoutData.previewUrl;
+
+            if (
+              finalImageToUpload &&
+              finalImageToUpload.startsWith("data:image")
+            ) {
+              try {
+                const fetchRes = await fetch(finalImageToUpload);
+                const blob = await fetchRes.blob();
+                const file = new File([blob], "design-final.png", {
+                  type: "image/png",
+                });
+
+                const uploadResult = await uploadCustomizationImage(file);
+
+                if (uploadResult.success) {
+                  finalPreviewUrl = uploadResult.imageUrl;
+                } else {
+                  console.warn(
+                    "⚠️ [DYNAMIC_LAYOUT-AddToCart] Upload failed for additional, falling back to base64",
+                  );
+                }
+              } catch (err) {
+                console.error(
+                  "❌ [DYNAMIC_LAYOUT-AddToCart] Error uploading final image for additional:",
+                  err,
+                );
+              }
+            }
+
+            cartCustomization.text = finalPreviewUrl;
 
             cartCustomizations.push(cartCustomization);
           }

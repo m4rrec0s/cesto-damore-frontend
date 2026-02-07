@@ -182,6 +182,31 @@ const calculateCustomizationTotal = (
   );
 };
 
+const getAdditionalFinalPrice = (
+  additionalId: string,
+  basePrice: number,
+  customizations?: CartCustomization[],
+): number => {
+  if (!customizations || customizations.length === 0) return basePrice;
+
+  const additionalCustomizations = customizations.filter(
+    (c) =>
+      (c.componentId && c.componentId === additionalId) ||
+      (!c.componentId &&
+        (c.customization_id?.includes(additionalId) ||
+          c.customization_id?.endsWith(`_${additionalId}`))),
+  );
+
+  if (additionalCustomizations.length === 0) return basePrice;
+
+  const adjustmentTotal = additionalCustomizations.reduce(
+    (sum, c) => sum + (c.price_adjustment || 0),
+    0,
+  );
+
+  return basePrice + adjustmentTotal;
+};
+
 interface CartContextType {
   cart: CartState;
   addToCart: (
@@ -314,7 +339,10 @@ export function useCart(): CartContextType {
       const itemTotal = item.effectivePrice * item.quantity;
       const additionalsTotal =
         item.additionals?.reduce(
-          (addSum, add) => addSum + add.price * item.quantity,
+          (addSum, add) =>
+            addSum +
+            getAdditionalFinalPrice(add.id, add.price, item.customizations) *
+              item.quantity,
           0,
         ) || 0;
       return sum + itemTotal + additionalsTotal;
@@ -383,6 +411,15 @@ export function useCart(): CartContextType {
         try {
           const product = await api.getProduct(orderItem.product_id);
 
+          const additionalPriceMap = new Map<string, number>();
+          if (orderItem.additionals && orderItem.additionals.length > 0) {
+            orderItem.additionals.forEach((add: { additional_id: string; price?: number }) => {
+              if (typeof add.price === "number") {
+                additionalPriceMap.set(add.additional_id, add.price);
+              }
+            });
+          }
+
           const additionals =
             orderItem.additionals && orderItem.additionals.length > 0
               ? await Promise.all(
@@ -391,6 +428,17 @@ export function useCart(): CartContextType {
                   ),
                 )
               : [];
+
+          const additionalsWithPrice = additionals.map((additional) => {
+            const resolvedPrice = additionalPriceMap.get(additional.id);
+            return {
+              ...additional,
+              price:
+                typeof resolvedPrice === "number"
+                  ? resolvedPrice
+                  : additional.price,
+            };
+          });
 
           const customizations: CartCustomization[] = [];
           if (orderItem.customizations && orderItem.customizations.length > 0) {
@@ -574,7 +622,7 @@ export function useCart(): CartContextType {
               orderItem.additionals?.map(
                 (add: { additional_id: string }) => add.additional_id,
               ) || [],
-            additionals,
+            additionals: additionalsWithPrice,
             customizations:
               customizations.length > 0 ? customizations : undefined,
             customization_total:
@@ -1005,6 +1053,18 @@ export function useCart(): CartContextType {
             ? await Promise.all(additionals.map((id) => api.getAdditional(id)))
             : [];
 
+        const additionalsWithPrice = additionalDetails.map((additional) => {
+          const customPrice = additional.compatible_products?.find(
+            (entry: { product_id: string; is_active: boolean; }) => entry.product_id === productId && entry.is_active,
+          )?.custom_price;
+
+          return {
+            ...additional,
+            price:
+              typeof customPrice === "number" ? customPrice : additional.price,
+          };
+        });
+
         const discount = product.discount || 0;
         const customizationEntries = cloneCustomizations(customizations);
         const customizationTotal =
@@ -1022,7 +1082,7 @@ export function useCart(): CartContextType {
           effectivePrice,
           discount,
           additional_ids: additionals,
-          additionals: additionalDetails,
+          additionals: additionalsWithPrice,
           additional_colors: additionalColors,
           customizations:
             customizationEntries.length > 0 ? customizationEntries : undefined,
@@ -1429,28 +1489,7 @@ export function useCart(): CartContextType {
         throw new Error("Telefone do destinatário é obrigatório");
       }
 
-      const orderItems: OrderItem[] = cart.items.map((item) => ({
-        product_id: item.product_id,
-        quantity: item.quantity,
-        price: item.effectivePrice,
-        additionals: item.additionals?.map((add) => ({
-          additional_id: add.id,
-          quantity: item.quantity,
-          price: add.price,
-        })),
-        // ✅ NOVO: Incluir customizações
-        customizations: item.customizations?.map((custom) => ({
-          customization_id: custom.customization_id || "default",
-          customization_type: custom.customization_type,
-          title: custom.title || "Personalização",
-          customization_data: {
-            text: custom.text,
-            photos: custom.photos, // ✅ Array de PhotoUploadData com base64
-            selected_option: custom.selected_option,
-            selected_item: custom.selected_item,
-          },
-        })),
-      }));
+      const orderItems: OrderItem[] = cartItemsToOrderItems(cart.items);
 
       const payload = {
         user_id: userId,
@@ -1473,7 +1512,7 @@ export function useCart(): CartContextType {
 
       return order;
     },
-    [cart, api],
+    [cart, api, cartItemsToOrderItems],
   );
 
   const createPaymentPreference = useCallback(

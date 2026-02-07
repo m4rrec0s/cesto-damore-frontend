@@ -87,8 +87,10 @@ const getAdditionalFinalPrice = (
   if (!customizations || customizations.length === 0) return basePrice;
   const additionalCustomizations = customizations.filter(
     (c) =>
-      c.customization_id?.includes(additionalId) ||
-      c.customization_id?.endsWith(`_${additionalId}`),
+      (c.componentId && c.componentId === additionalId) ||
+      (!c.componentId &&
+        (c.customization_id?.includes(additionalId) ||
+          c.customization_id?.endsWith(`_${additionalId}`))),
   );
   if (additionalCustomizations.length === 0) return basePrice;
   const adjustmentTotal = additionalCustomizations.reduce(

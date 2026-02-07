@@ -81,8 +81,10 @@ const getAdditionalFinalPrice = (
 
   const additionalCustomizations = customizations.filter(
     (c) =>
-      c.customization_id?.includes(additionalId) ||
-      c.customization_id?.endsWith(`_${additionalId}`),
+      (c.componentId && c.componentId === additionalId) ||
+      (!c.componentId &&
+        (c.customization_id?.includes(additionalId) ||
+          c.customization_id?.endsWith(`_${additionalId}`))),
   );
 
   if (additionalCustomizations.length === 0) {
@@ -804,6 +806,37 @@ export default function CarrinhoPageContent() {
     return originalTotal - cartTotal;
   }, [cartItems, cartTotal]);
 
+  const productSubtotal = useMemo(
+    () =>
+      cartItems.reduce(
+        (sum, item) =>
+          sum + (item.effectivePrice ?? item.price) * item.quantity,
+        0,
+      ),
+    [cartItems],
+  );
+
+  const additionalsSubtotal = useMemo(
+    () =>
+      cartItems.reduce(
+        (sum, item) =>
+          sum +
+            (item.additionals?.reduce(
+              (a, add) =>
+                a +
+                getAdditionalFinalPrice(
+                  add.id,
+                  add.price,
+                  item.customizations,
+                ) *
+                  item.quantity,
+              0,
+            ) || 0),
+        0,
+      ),
+    [cartItems],
+  );
+
   const generatePixPayment = useCallback(async () => {
     if (
       paymentMethod === "pix" &&
@@ -823,6 +856,15 @@ export default function CarrinhoPageContent() {
         if (!user) {
           router.push("/login");
           return;
+        }
+
+        if (typeof shippingCost === "number") {
+          await updateOrderMetadata(currentOrderId, {
+            payment_method: "pix",
+            shipping_price: shippingCost,
+            discount: pickupDiscount,
+            delivery_method: optionSelected as "delivery" | "pickup",
+          });
         }
 
         const payload = {
@@ -913,12 +955,15 @@ export default function CarrinhoPageContent() {
     isGeneratingPix,
     currentStep,
     createTransparentPayment,
+    updateOrderMetadata,
     user,
     userDocument,
     cartTotal,
     shippingCost,
+    pickupDiscount,
     mapPaymentStatus,
     router,
+    optionSelected,
   ]);
 
   useEffect(() => {
@@ -943,6 +988,15 @@ export default function CarrinhoPageContent() {
         if (!user) {
           router.push("/login");
           return;
+        }
+
+        if (typeof shippingCost === "number") {
+          await updateOrderMetadata(currentOrderId, {
+            payment_method: "card",
+            shipping_price: shippingCost,
+            discount: 0,
+            delivery_method: optionSelected as "delivery" | "pickup",
+          });
         }
 
         const payload = {
@@ -1034,6 +1088,9 @@ export default function CarrinhoPageContent() {
       user,
       userDocument,
       createTransparentPayment,
+      updateOrderMetadata,
+      shippingCost,
+      optionSelected,
       clearCart,
       router,
       mapPaymentStatus,
@@ -1412,9 +1469,20 @@ export default function CarrinhoPageContent() {
         <div className="p-6 space-y-4">
           <div className="space-y-3">
             <div className="flex justify-between text-sm">
-              <span className="text-gray-600">Produto</span>
-              <span className="text-gray-900">R$ {cartTotal.toFixed(2)}</span>
+              <span className="text-gray-600">Produtos</span>
+              <span className="text-gray-900">
+                R$ {productSubtotal.toFixed(2)}
+              </span>
             </div>
+
+            {additionalsSubtotal > 0 && (
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600">Adicionais</span>
+                <span className="text-gray-900">
+                  R$ {additionalsSubtotal.toFixed(2)}
+                </span>
+              </div>
+            )}
 
             {discountAmount > 0 && (
               <div className="flex justify-between text-sm">

@@ -1225,6 +1225,8 @@ class ApiService {
       delivery_date?: string | Date | null;
       shipping_price?: number;
       delivery_method?: "delivery" | "pickup";
+      payment_method?: "pix" | "card";
+      discount?: number;
     },
   ) => {
     const payload = { ...metadata } as {

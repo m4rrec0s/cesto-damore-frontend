@@ -68,6 +68,7 @@ interface ProductValidation {
 // Interfaces para evitar erros de tipo e uso de 'any'
 interface CustomizationPreview {
   preview_url?: string;
+  url?: string;
 }
 
 interface PersonalizationData {
@@ -259,6 +260,16 @@ const getCustomizationSummary = (custom: CartCustomization): string => {
   }
 };
 
+const isSameComponent = (
+  filled: CartCustomization | undefined,
+  available: AvailableCustomization,
+): boolean => {
+  const expectedComponentId = available.componentId || available.itemId;
+  if (!expectedComponentId) return true;
+  if (!filled?.componentId) return true;
+  return filled.componentId === expectedComponentId;
+};
+
 const mapCustomizationType = (backendType: string): string => {
   const typeMap: Record<string, string> = {
     IMAGES: "IMAGES",
@@ -416,11 +427,12 @@ export function CustomizationsReview({
             (avail: any) => {
               const filledCustom = filled.find(
                 (f) =>
-                  f.customization_id === avail.id ||
-                  f.customization_id?.split(":")[0] === avail.id ||
-                  f.title?.toLowerCase() === avail.name?.toLowerCase() ||
-                  (f.data?.title as string)?.toLowerCase() ===
-                    avail.name?.toLowerCase(),
+                  (f.customization_id === avail.id ||
+                    f.customization_id?.split(":")[0] === avail.id ||
+                    f.title?.toLowerCase() === avail.name?.toLowerCase() ||
+                    (f.data?.title as string)?.toLowerCase() ===
+                      avail.name?.toLowerCase()) &&
+                  isSameComponent(f, avail),
               );
 
               const isFilled = isCustomizationFilled(filledCustom);
@@ -772,16 +784,35 @@ export function CustomizationsReview({
               data: sanitizedData || {},
             };
 
-            if (
-              customization.customizationType === "DYNAMIC_LAYOUT" &&
-              previewUrl
-            ) {
-              if (previewUrl.startsWith("data:")) {
+            if (customization.customizationType === "DYNAMIC_LAYOUT") {
+              const fallbackPreviewUrl =
+                (customData?.final_artwork as CustomizationPreview)
+                  ?.preview_url ||
+                (customData as any)?.finalArtwork?.preview_url ||
+                (customData?.image as CustomizationPreview)?.preview_url ||
+                (customData?.previewUrl as string | undefined) ||
+                previewUrl;
+
+              if (fallbackPreviewUrl && fallbackPreviewUrl.startsWith("data:")) {
                 payload.finalArtwork = {
-                  base64: previewUrl,
+                  base64: fallbackPreviewUrl,
                   mimeType: "image/png",
                   fileName: "design-final.png",
                 };
+              } else if (fallbackPreviewUrl) {
+                if (!sanitizedData.final_artwork) {
+                  sanitizedData.final_artwork = {
+                    preview_url: fallbackPreviewUrl,
+                  };
+                }
+                if (!sanitizedData.image) {
+                  sanitizedData.image = {
+                    preview_url: fallbackPreviewUrl,
+                  };
+                }
+                if (!sanitizedData.text) {
+                  sanitizedData.text = fallbackPreviewUrl;
+                }
               }
             }
 
@@ -919,12 +950,13 @@ export function CustomizationsReview({
               // Tentar encontrar o preenchimento correspondente
               const filledCustom = validation.filledCustomizations.find(
                 (f) =>
-                  // Match por ID ou Título
-                  f.customization_id === avail.id ||
-                  f.customization_id?.split(":")[0] === avail.id ||
-                  f.title?.toLowerCase() === avail.name?.toLowerCase() ||
-                  (f.data?.title as string)?.toLowerCase() ===
-                    avail.name?.toLowerCase(),
+                  // Match por ID ou Titulo
+                  (f.customization_id === avail.id ||
+                    f.customization_id?.split(":")[0] === avail.id ||
+                    f.title?.toLowerCase() === avail.name?.toLowerCase() ||
+                    (f.data?.title as string)?.toLowerCase() ===
+                      avail.name?.toLowerCase()) &&
+                  isSameComponent(f, avail),
               );
 
               const isFilled = isCustomizationFilled(filledCustom);
