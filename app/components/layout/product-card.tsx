@@ -48,7 +48,7 @@ export function ProductCard({ props, className }: ProductCardProps) {
 
   return (
     <Link
-      href={`/products/${props.id}`}
+      href={`/produto/${props.id}`}
       className={cn(
         "group flex flex-col gap-3 h-full rounded-2xl border border-gray-100 bg-white p-3 shadow-sm transition-all hover:-translate-y-1 hover:shadow-md",
         className

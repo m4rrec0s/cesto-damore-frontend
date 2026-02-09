@@ -46,28 +46,12 @@ export function SiteHeader() {
   const [isClient, setIsClient] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [isDialogUserOpen, setIsDialogUserOpen] = useState(false);
-  const [userLocation, setUserLocation] = useState<string>("Campina Grande, PB");
   const { cart } = useCartContext();
   const { user, logout } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
     setIsClient(true);
-
-    // Buscar localização baseada no IP
-    const fetchLocation = async () => {
-      try {
-        const response = await fetch("https://ipapi.co/json/");
-        const data = await response.json();
-        if (data.city && data.region_code) {
-          setUserLocation(`${data.city}, ${data.region_code}`);
-        }
-      } catch (error) {
-        console.error("Erro ao buscar localização:", error);
-      }
-    };
-
-    fetchLocation();
   }, []);
 
   const handleOpenCart = () => {
@@ -90,14 +74,6 @@ export function SiteHeader() {
     setIsMobileMenuOpen(false);
     logout();
   };
-
-  useEffect(() => {
-    if (isMobileSearchOpen) {
-      setTimeout(() => {
-        mobileSearchInputRef.current?.focus();
-      }, 50);
-    }
-  }, [isMobileSearchOpen]);
 
   const menuItems = [
     { href: "/", label: "Início", icon: Home },
@@ -161,6 +137,7 @@ export function SiteHeader() {
             <form onSubmit={handleSearch} className="relative">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
               <Input
+                ref={mobileSearchInputRef}
                 type="text"
                 placeholder="O que você procura hoje?"
                 value={searchTerm}
@@ -171,7 +148,7 @@ export function SiteHeader() {
 
             <div className="flex items-center gap-2 text-[11px] text-gray-500 font-medium px-1">
               <MapPin className="h-3.5 w-3.5 text-rose-500" />
-              <span>Entregar em: <span className="text-gray-900">{userLocation}</span></span>
+              <span>Entregar em: <span className="text-gray-900">Campina Grande, PB</span></span>
             </div>
           </div>
 
@@ -260,6 +237,26 @@ export function SiteHeader() {
         </nav>
       </div>
 
+      {/* Mobile Floating Bottom Nav */}
+      <div className="md:hidden fixed bottom-6 left-1/2 -translate-x-1/2 z-[60] w-[90%] max-w-[400px]">
+        <nav className="bg-gray-900/95 backdrop-blur-lg border border-white/10 p-2 rounded-[28px] shadow-2xl flex items-center justify-between px-3">
+          <Link href="/" className="p-3 bg-white/10 rounded-full text-white">
+            <Home className="h-5 w-5" />
+          </Link>
+          <button className="p-3 text-gray-400 hover:text-white transition-colors" onClick={() => setIsMobileSearchOpen(true)}>
+            <Search className="h-5 w-5" />
+          </button>
+          <Link href="/pedidos" className="p-3 text-gray-400 hover:text-white transition-colors">
+            <Package className="h-5 w-5" />
+          </Link>
+          <button 
+            className="p-3 text-gray-400 hover:text-white transition-colors" 
+            onClick={() => user ? setIsDialogUserOpen(true) : router.push("/login")}
+          >
+            <User className="h-5 w-5" />
+          </button>
+        </nav>
+      </div>
 
       <CartSheet isOpen={isCartOpen} onClose={() => setIsCartOpen(false)} />
 
