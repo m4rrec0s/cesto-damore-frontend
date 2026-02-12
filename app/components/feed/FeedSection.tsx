@@ -149,6 +149,72 @@ function FeedItemCard({ item }: FeedItemCardProps) {
 export default function FeedSection({ section }: FeedSectionProps) {
   if (!section.items.length) return null;
 
+  const renderBestSellerCard = (item: PublicFeedItem, rank: number) => {
+    if (!item.item_data) return null;
+    const product = item.item_data as unknown as Product;
+
+    return (
+      <Link
+        href={`/produto/${product.id}`}
+        className="group relative flex h-60 min-w-[240px] flex-col justify-end overflow-hidden rounded-2xl bg-neutral-900 text-white shadow-lg transition-transform duration-300 hover:-translate-y-1"
+      >
+        <div className="absolute inset-0">
+          <Image
+            src={getInternalImageUrl(product.image_url) || "/placeholder.png"}
+            alt={product.name}
+            fill
+            className="object-cover opacity-90 transition-transform duration-500 group-hover:scale-105"
+            sizes="(max-width: 640px) 80vw, (max-width: 1024px) 35vw, 25vw"
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
+        </div>
+
+        <div className="relative z-10 flex items-end gap-3 p-4">
+          <span className="text-5xl font-black text-white/70">{rank}</span>
+          <div className="space-y-1">
+            <p className="text-sm font-semibold leading-tight">{product.name}</p>
+            <p className="text-xs text-white/70">
+              {new Intl.NumberFormat("pt-BR", {
+                style: "currency",
+                currency: "BRL",
+              }).format(product.price)}
+            </p>
+          </div>
+        </div>
+      </Link>
+    );
+  };
+
+  if (section.section_type === "BEST_SELLERS") {
+    return (
+      <section className="w-full py-6">
+        <div className="mx-auto max-w-none sm:max-w-[90%] px-4">
+          <header className="mb-4 flex items-center justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-rose-500">
+                Destaque da semana
+              </p>
+              <h2 className="text-2xl lg:text-3xl font-bold text-gray-900">
+                {section.title || "Mais vendidos"}
+              </h2>
+            </div>
+          </header>
+
+          <div className="flex gap-4 overflow-x-auto pb-2 pr-4 snap-x snap-mandatory">
+            {section.items.slice(0, 4).map((item: PublicFeedItem, index: number) => (
+              <div
+                key={item.id}
+                className="snap-start"
+              >
+                {renderBestSellerCard(item, index + 1)}
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+    );
+  }
+
   const displayItems = section.items.slice(0, 6);
   const hasMoreItems = section.items.length > 6;
   const viewAllUrl = `/section/${section.id}`;
