@@ -15,9 +15,7 @@ import {
   Zap,
   Package,
   LogOut,
-  X,
   MapPin,
-  Bell,
 } from "lucide-react";
 import { Button } from "@/app/components/ui/button";
 import Image from "next/image";
@@ -42,7 +40,6 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "../ui/sheet";
 export function SiteHeader() {
   const { isOpen: isCartOpen, setIsOpen: setIsCartOpen } = useCartSheet();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
   const [isClient, setIsClient] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [isDialogUserOpen, setIsDialogUserOpen] = useState(false);
@@ -65,7 +62,6 @@ export function SiteHeader() {
     if (searchTerm.trim()) {
       router.push(`/busca?q=${encodeURIComponent(searchTerm.trim())}`);
       setIsMobileMenuOpen(false);
-      setIsMobileSearchOpen(false);
     }
   };
 
@@ -90,7 +86,6 @@ export function SiteHeader() {
 
   return (
     <div className="flex flex-col items-center w-full">
-      {/* Top Info Bar - Hidden on Mobile */}
       <div className="hidden md:flex w-full bg-gradient-to-r from-rose-500 to-rose-600 text-white shadow-lg overflow-hidden">
         <div className="flex w-full max-w-[90%] mx-auto text-sm py-2 justify-between items-center px-4">
           <span className="text-xs flex items-center gap-2 font-medium">
@@ -101,10 +96,8 @@ export function SiteHeader() {
         </div>
       </div>
 
-      {/* Main Header */}
       <header className="sticky top-0 z-50 w-full bg-white/95 backdrop-blur-md border-b border-gray-100">
         <div className="mx-auto max-w-none sm:max-w-[90%] px-4">
-          {/* Mobile Header Layout (Image Style) */}
           <div className="flex flex-col md:hidden py-4 gap-4">
             <div className="flex items-center justify-between relative">
               <Button
@@ -152,7 +145,6 @@ export function SiteHeader() {
             </div>
           </div>
 
-          {/* Desktop Header Layout */}
           <div className="hidden md:flex h-20 items-center justify-between gap-8">
             <Link href="/" className="flex items-center flex-shrink-0 relative w-[140px] h-12">
               <Image src="/logo.png" alt="Logo" fill priority className="object-contain" />
@@ -234,27 +226,6 @@ export function SiteHeader() {
               </Link>
             );
           })}
-        </nav>
-      </div>
-
-      {/* Mobile Floating Bottom Nav */}
-      <div className="md:hidden fixed bottom-6 left-1/2 -translate-x-1/2 z-[60] w-[90%] max-w-[400px]">
-        <nav className="bg-gray-900/95 backdrop-blur-lg border border-white/10 p-2 rounded-[28px] shadow-2xl flex items-center justify-between px-3">
-          <Link href="/" className="p-3 bg-white/10 rounded-full text-white">
-            <Home className="h-5 w-5" />
-          </Link>
-          <button className="p-3 text-gray-400 hover:text-white transition-colors" onClick={() => setIsMobileSearchOpen(true)}>
-            <Search className="h-5 w-5" />
-          </button>
-          <Link href="/pedidos" className="p-3 text-gray-400 hover:text-white transition-colors">
-            <Package className="h-5 w-5" />
-          </Link>
-          <button 
-            className="p-3 text-gray-400 hover:text-white transition-colors" 
-            onClick={() => user ? setIsDialogUserOpen(true) : router.push("/login")}
-          >
-            <User className="h-5 w-5" />
-          </button>
         </nav>
       </div>
 
