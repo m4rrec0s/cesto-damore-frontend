@@ -7,7 +7,6 @@ import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { Loader2, AlertCircle } from "lucide-react";
 
-// Error Boundary para capturar erros de carregamento
 class Model3DErrorBoundary extends React.Component<
   { children: React.ReactNode },
   { hasError: boolean; error?: Error }
@@ -61,11 +60,8 @@ export type ModelTextureTextStyle = {
 type CylinderTextureConfig = {
   radius: number;
   height: number;
-  /** Número de segmentos laterais da geometria (quanto maior, mais suave). */
   segments?: number;
-  /** Ângulo inicial em radianos para posicionar a arte ao redor do cilindro. */
   thetaStart?: number;
-  /** Comprimento angular da arte aplicada no cilindro em radianos. */
   thetaLength?: number;
 };
 
@@ -99,7 +95,6 @@ type ModelProps = {
   baseScale: number;
 };
 
-// Componente interno que carrega o modelo 3D
 function Model({
   modelUrl,
   materialColor,
@@ -107,7 +102,7 @@ function Model({
   rotateSpeed = 0.3,
   baseScale,
 }: ModelProps) {
-  // Aumentar timeout do loader para 60 segundos
+
   const gltf = useLoader(GLTFLoader, modelUrl, (loader) => {
     if (loader.manager) {
       loader.manager.itemStart = () => {};
@@ -142,7 +137,6 @@ function Model({
   useEffect(() => {
     if (!meshRef.current) return;
 
-    // Restaurar materiais originais quando nenhuma cor customizada é fornecida
     if (!materialColor) {
       meshRef.current.traverse((child) => {
         if ((child as THREE.Mesh).isMesh) {
@@ -151,7 +145,7 @@ function Model({
 
           if (original) {
             mesh.material = original;
-            // Disable shadows to keep the product surface uniformly lit
+
             mesh.castShadow = false;
             mesh.receiveShadow = false;
           }
@@ -163,7 +157,7 @@ function Model({
     const color = new THREE.Color(materialColor);
 
     const tintMaterial = (material: THREE.Material) => {
-      // Use MeshPhysicalMaterial (PBR) for more advanced parameters like clearcoat
+
       const standard = new THREE.MeshPhysicalMaterial({
         color: color.clone(),
         roughness: 0.28,
@@ -173,7 +167,6 @@ function Model({
         clearcoatRoughness: 0.15,
       });
 
-      // Tentar preservar propriedades quando disponíveis (sem usar any)
       const matProps = material as unknown as {
         transparent?: boolean;
         opacity?: number;
@@ -187,7 +180,7 @@ function Model({
         standard.opacity = matProps.opacity;
       }
       if (typeof matProps.side === "number") {
-        // Assign only known side constants to satisfy TS
+
         if (
           matProps.side === THREE.FrontSide ||
           matProps.side === THREE.BackSide ||
@@ -197,12 +190,10 @@ function Model({
         }
       }
 
-      // Preservar textura se existir
       if ("map" in material && (material as THREE.MeshStandardMaterial).map) {
         const map = (material as THREE.MeshStandardMaterial).map;
         if (map) {
-          // Não forçar encoding por causa de diferenças nas defs do projeto
-          // Ajustar flipY para true para imagens vindas de canvas/dataURL
+
           map.flipY = true;
           standard.map = map;
           standard.needsUpdate = true;
@@ -225,8 +216,6 @@ function Model({
           mesh.material = tintMaterial(original);
         }
 
-        // Disable shadows on cloned meshes so the result is cleaner and more
-        // reflective; rely on IBL/environment for realism
         mesh.castShadow = false;
         mesh.receiveShadow = false;
       }
@@ -242,7 +231,6 @@ function Model({
   return <primitive ref={meshRef} object={scene} />;
 }
 
-// Componente para aplicar textura de imagem
 function ImageTexture({
   imageUrl,
   position,
@@ -254,7 +242,7 @@ function ImageTexture({
   rotation?: Vector3Config;
   dimensions: { width: number; height: number };
 }) {
-  // Incrementar versão da URL para evitar cache de blobs antigos/revogados
+
   const [url, setUrl] = React.useState(imageUrl);
 
   useEffect(() => {
@@ -273,7 +261,7 @@ function ImageTexture({
   );
 
   useEffect(() => {
-    // Ajustes para texturas provenientes de canvas/dataURL
+
     texture.flipY = true;
     texture.needsUpdate = true;
   }, [texture]);
@@ -282,7 +270,7 @@ function ImageTexture({
     <mesh
       position={[position.x, position.y, position.z]}
       rotation={rotation ? [rotation.x, rotation.y, rotation.z] : undefined}
-      // No shadows for decals/textures to keep them bright and even
+
       castShadow={false}
       receiveShadow={false}
     >
@@ -344,7 +332,6 @@ function CylinderImageTexture({
     thetaLength: rawThetaLength,
   } = cylinder;
 
-  // Defaults em radianos (110deg e 313deg)
   const DEFAULT_THETA_START = (116 * Math.PI) / 180;
   const DEFAULT_THETA_LENGTH = (310 * Math.PI) / 180;
 
@@ -381,10 +368,10 @@ function CylinderImageTexture({
   useEffect(() => {
     texture.wrapS = THREE.ClampToEdgeWrapping;
     texture.wrapT = THREE.ClampToEdgeWrapping;
-    // Não forçar encoding por compatibilidade com tipos
+
     texture.flipY = true;
     texture.needsUpdate = true;
-    // Generate roughness map to attenuate bright highlights
+
     try {
       const img = texture.image as
         | HTMLImageElement
@@ -408,12 +395,12 @@ function CylinderImageTexture({
         c.height = h;
         const ctx = c.getContext("2d");
         if (ctx) {
-          // Dispose previous roughness texture if present
+
           if (roughnessRef.current) {
             roughnessRef.current.dispose();
             roughnessRef.current = null;
           }
-          // drawImage can accept both HTMLImageElement and HTMLCanvasElement
+
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           ctx.drawImage(img as any, 0, 0, w, h);
           const data = ctx.getImageData(0, 0, w, h).data;
@@ -423,11 +410,10 @@ function CylinderImageTexture({
             const g = data[i + 1];
             const b = data[i + 2];
             const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
-            // Normalize luminance to [0,1]
+
             const norm = Math.min(1, Math.max(0, lum / 255));
-            // Map brightness to roughness aggressively: dark areas slightly rough, bright areas fully rough
-            // So highlights are removed in the bright segments
-            const roughnessFactor = 0.65 + 0.35 * norm; // 0.65..1.0
+
+            const roughnessFactor = 0.65 + 0.35 * norm;
             const roughVal = Math.round(255 * roughnessFactor);
             out.data[i] = roughVal;
             out.data[i + 1] = roughVal;
@@ -443,7 +429,7 @@ function CylinderImageTexture({
         }
       }
     } catch (err) {
-      // Ignore cross-origin or other errors
+
       void err;
     }
     return () => {
@@ -451,7 +437,7 @@ function CylinderImageTexture({
         roughnessRef.current.dispose();
         roughnessRef.current = null;
       }
-      // Ensure state cleared to avoid holding disposed texture
+
       setRoughnessTexture(null);
     };
   }, [texture]);
@@ -471,7 +457,7 @@ function CylinderImageTexture({
     >
       <primitive object={geometry} attach="geometry" />
       <meshPhysicalMaterial
-        // Show artwork as emissive so scene lighting does not brighten hotspots
+
         emissiveMap={texture}
         emissive={new THREE.Color(0xffffff)}
         emissiveIntensity={1.0}
@@ -480,7 +466,7 @@ function CylinderImageTexture({
         side={THREE.DoubleSide}
         toneMapped={false}
         color="#000000"
-        // Use very high base roughness, modulated by roughnessMap
+
         roughness={1.0}
         metalness={1.0}
         envMapIntensity={0.4}
@@ -492,7 +478,6 @@ function CylinderImageTexture({
   );
 }
 
-// Componente para renderizar texto 3D
 function TextTexture({
   text,
   position,
@@ -563,7 +548,7 @@ function TextTexture({
       const startY = canvas.height / 2 - totalHeight / 2;
 
       lines.forEach((line, index) => {
-        // Quebra de linha simples para caber na largura disponível
+
         const words = line.split(" ");
         let currentLine = "";
         const flushedLines: string[] = [];
@@ -637,7 +622,6 @@ function TextTexture({
   );
 }
 
-// Componente de Loading
 function LoadingFallback() {
   return (
     <Html center>
@@ -658,7 +642,7 @@ export function Model3DViewer({
   rotateSpeed = 0.3,
   baseScale = 6,
 }: Model3DViewerProps) {
-  // Se não há modelo, mostrar placeholder
+
   if (!modelUrl) {
     return (
       <div
@@ -693,7 +677,7 @@ export function Model3DViewer({
     >
       <Canvas
         className="h-full w-full"
-        // Disable default shadow map rendering and use physically correct lights
+
         shadows={false}
         dpr={[1, 1.5]}
         gl={{
@@ -703,23 +687,23 @@ export function Model3DViewer({
         }}
         onCreated={(state) => {
           const gl = state.gl;
-          // Use modern property name
+
           (gl as unknown as { useLegacyLights: boolean }).useLegacyLights =
             false;
           gl.outputColorSpace = THREE.SRGBColorSpace;
           gl.toneMappingExposure = 1.0;
         }}
       >
-        {/* Câmera */}
+        
         <PerspectiveCamera makeDefault position={[0, 0.35, 3.1]} fov={40} />
 
-        {/* Iluminação de fundo para garantir visibilidade se o Environment falhar */}
+        
         <hemisphereLight intensity={0.5} groundColor={0x444444} />
         <ambientLight intensity={0.4} />
         <directionalLight position={[5, 5, 5]} intensity={0.8} />
         <pointLight position={[-5, 5, -5]} intensity={0.5} />
 
-        {/* Controles de órbita */}
+        
         <OrbitControls
           enableZoom
           enablePan={false}
@@ -732,7 +716,7 @@ export function Model3DViewer({
           maxPolarAngle={Math.PI / 2}
         />
 
-        {/* Modelo 3D */}
+        
         <Suspense fallback={<LoadingFallback />}>
           <Model3DErrorBoundary>
             <Model
@@ -744,7 +728,7 @@ export function Model3DViewer({
             />
           </Model3DErrorBoundary>
 
-          {/* Aplicar texturas customizadas */}
+          
           {textures.map((textureConfig, index) => {
             if (!textureConfig.position || !textureConfig.dimensions) {
               return null;
@@ -795,7 +779,7 @@ export function Model3DViewer({
             return null;
           })}
 
-          {/* Ground plane removed to eliminate shadow contact and darkening */}
+          
         </Suspense>
       </Canvas>
     </div>

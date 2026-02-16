@@ -12,11 +12,11 @@ interface AdditionalCardProps {
   additional: Additional;
   productId: string;
   onCustomizeClick?: (additionalId: string) => void;
-  onAddToCart?: (additionalId: string) => void; // Adicionar diretamente sem modal
+  onAddToCart?: (additionalId: string) => void;
   hasCustomizations?: boolean;
-  isInCartExternal?: boolean; // ✅ Status de seleção controlado externamente
-  hasProductRequiredCustomizations?: boolean; // Se o produto tem customizações obrigatórias
-  hasCompletedProductCustomizations?: boolean; // Se as customizações do produto foram completadas
+  isInCartExternal?: boolean;
+  hasProductRequiredCustomizations?: boolean;
+  hasCompletedProductCustomizations?: boolean;
 }
 
 const AdditionalCard = ({
@@ -156,7 +156,7 @@ const AdditionalCard = ({
               {hasCustomizations ? "Editar" : "Personalizar"}
             </Button>
           ) : (
-            // Se não tem customizações obrigatórias, botão normal de adicionar
+
             <Button
               onClick={handleDirectAddToCartClick}
               disabled={isInCart || isAddingToCart}

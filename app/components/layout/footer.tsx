@@ -16,42 +16,28 @@ export function SiteFooter() {
   const currentYear = new Date().getFullYear();
 
   return (
-    <footer className="bg-gray-900 text-gray-300 border-t border-gray-800">
-      <div className="max-w-none sm:max-w-[90%] mx-auto px-4 py-12">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 mb-8">
-          <div className="space-y-4">
-            <div className="h-16 w-[180px] relative mb-4">
-              <Image
-                src="/logo.png"
-                alt="Cesto d'Amore Logo"
-                fill
-                className="object-contain brightness-0 invert"
-                priority
-              />
+    <footer className="bg-gray-900 text-gray-300 pt-12 pb-8">
+      <div className="mx-auto max-w-7xl px-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-10">
+          <div>
+            <div className="flex items-center gap-3">
+              <div className="relative w-12 h-12">
+                <Image
+                  src="/logo.png"
+                  alt="Cesto dAmore"
+                  fill
+                  className="object-contain"
+                />
+              </div>
+              <div>
+                <p className="text-white text-lg font-bold">Cesto dAmore</p>
+                <p className="text-xs text-gray-400">Presentes e flores</p>
+              </div>
             </div>
-            <p className="text-sm text-gray-400 leading-relaxed">
-              Presentes especiais para momentos inesquecíveis. Cestas, flores e
-              mimos que expressam amor e carinho.
+            <p className="text-sm text-gray-400 mt-3">
+              Surpreenda com cestas, flores e presentes personalizados.
             </p>
-            <div className="flex gap-3 pt-2">
-              <a
-                href="https://instagram.com/cestodamorecg"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="bg-gray-800 p-2 rounded-full hover:bg-rose-500 transition-colors"
-                aria-label="Instagram"
-              >
-                <Instagram className="h-5 w-5" />
-              </a>
-              {/* <a
-                href="https://facebook.com"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="bg-gray-800 p-2 rounded-full hover:bg-rose-500 transition-colors"
-                aria-label="Facebook"
-              >
-                <Facebook className="h-5 w-5" />
-              </a> */}
+            <div className="flex items-center gap-3 mt-4">
               <a
                 href="https://wa.me/5583982163104"
                 target="_blank"
@@ -61,10 +47,19 @@ export function SiteFooter() {
               >
                 <Phone className="h-5 w-5" />
               </a>
+              <a
+                href="https://www.instagram.com/cestodamore/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="bg-gray-800 p-2 rounded-full hover:bg-rose-500 transition-colors"
+                aria-label="Instagram"
+              >
+                <Instagram className="h-5 w-5" />
+              </a>
             </div>
           </div>
 
-          {/* Quick Links */}
+          
           <div>
             <h3 className="text-white font-semibold text-lg mb-4 flex items-center gap-2">
               <Heart className="h-5 w-5 text-rose-500" />
@@ -114,7 +109,7 @@ export function SiteFooter() {
             </ul>
           </div>
 
-          {/* Customer Service */}
+          
           <div>
             <h3 className="text-white font-semibold text-lg mb-4 flex items-center gap-2">
               <Shield className="h-5 w-5 text-rose-500" />
@@ -164,7 +159,7 @@ export function SiteFooter() {
             </ul>
           </div>
 
-          {/* Contact Info */}
+          
           <div>
             <h3 className="text-white font-semibold text-lg mb-4 flex items-center gap-2">
               <Truck className="h-5 w-5 text-rose-500" />
@@ -214,7 +209,7 @@ export function SiteFooter() {
           </div>
         </div>
 
-        {/* Payment Methods */}
+        
         <div className="border-t border-gray-800 pt-8 mb-8">
           <div className="flex flex-col items-center gap-4">
             <div className="flex items-center gap-2 text-sm font-semibold text-white">
@@ -222,14 +217,14 @@ export function SiteFooter() {
               Formas de Pagamento
             </div>
 
-            {/* Payment Badges */}
+            
             <div className="flex flex-wrap items-center justify-center gap-3">
-              {/* PIX */}
+              
               <div className="bg-gray-800 px-4 py-2 rounded-lg border border-gray-700 hover:border-rose-500 transition-colors">
                 <span className="text-sm font-bold text-emerald-400">PIX</span>
               </div>
 
-              {/* Mercado Pago */}
+              
               <div className="bg-gray-800 px-4 py-2 rounded-lg border border-gray-700 hover:border-rose-500 transition-colors flex items-center gap-2">
                 <div className="w-6 h-6 bg-blue-500 rounded flex items-center justify-center">
                   <span className="text-white text-xs font-bold">MP</span>
@@ -237,12 +232,12 @@ export function SiteFooter() {
                 <span className="text-sm font-medium">Mercado Pago</span>
               </div>
 
-              {/* Visa */}
+              
               <div className="bg-gray-800 px-3 py-2 rounded-lg border border-gray-700 hover:border-rose-500 transition-colors">
                 <span className="text-sm font-bold text-blue-600">VISA</span>
               </div>
 
-              {/* Mastercard */}
+              
               <div className="bg-gray-800 px-3 py-2 rounded-lg border border-gray-700 hover:border-rose-500 transition-colors flex items-center gap-1">
                 <div className="flex gap-0.5">
                   <div className="w-4 h-4 rounded-full bg-red-500 opacity-80"></div>
@@ -251,17 +246,17 @@ export function SiteFooter() {
                 <span className="text-sm font-bold">Mastercard</span>
               </div>
 
-              {/* Elo */}
+              
               <div className="bg-gray-800 px-3 py-2 rounded-lg border border-gray-700 hover:border-rose-500 transition-colors">
                 <span className="text-sm font-bold text-yellow-500">ELO</span>
               </div>
 
-              {/* American Express */}
+              
               <div className="bg-gray-800 px-3 py-2 rounded-lg border border-gray-700 hover:border-rose-500 transition-colors">
                 <span className="text-sm font-bold text-blue-400">AMEX</span>
               </div>
 
-              {/* Hipercard */}
+              
               <div className="bg-gray-800 px-3 py-2 rounded-lg border border-gray-700 hover:border-rose-500 transition-colors">
                 <span className="text-sm font-bold text-red-600">
                   Hipercard
@@ -276,7 +271,7 @@ export function SiteFooter() {
           </div>
         </div>
 
-        {/* Bottom Bar */}
+        
         <div className="border-t border-gray-800 pt-6">
           <div className="flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-gray-500">
             <p className="text-center md:text-left">

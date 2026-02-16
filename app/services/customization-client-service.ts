@@ -34,6 +34,10 @@ export interface CustomizationSessionState {
 class CustomizationClientService {
   private sessionState: CustomizationSessionState | null = null;
 
+  constructor() {
+    this.sessionState = null;
+  }
+
   /**
    * Inicializa uma nova sessão de customização
    */
@@ -56,7 +60,7 @@ class CustomizationClientService {
    * Limpa a sessão de customização
    */
   clearSession(): void {
-    // Limpar URLs de preview (revokeObjectURL)
+
     if (this.sessionState) {
       this.sessionState.customizations.forEach((data) => {
         if (data.photos) {
@@ -104,7 +108,7 @@ class CustomizationClientService {
 
     const data = this.sessionState.customizations.get(ruleId);
     if (data?.photos) {
-      // Limpar URLs de preview
+
       data.photos.forEach((photo) => {
         if (photo.preview.startsWith("blob:")) {
           URL.revokeObjectURL(photo.preview);
@@ -174,7 +178,6 @@ class CustomizationClientService {
 
     const inputs: CustomizationInput[] = [];
 
-    // Processar customizations
     if (this.sessionState.config.customizations) {
       this.sessionState.config.customizations.forEach((customization) => {
         const data = this.sessionState!.customizations.get(customization.id);
@@ -202,7 +205,6 @@ class CustomizationClientService {
 
     const missingRules: string[] = [];
 
-    // Validar customizations obrigatórias
     if (this.sessionState.config.customizations) {
       this.sessionState.config.customizations.forEach((customization) => {
         if (customization.isRequired) {
@@ -245,12 +247,10 @@ class CustomizationClientService {
       data: {},
     };
 
-    // Consolidar dados de todas as customizações
     for (const input of inputs) {
       Object.assign(payload.data, input.data);
     }
 
-    // Adicionar arte final se existir
     if (this.sessionState.finalArtwork) {
       payload.finalArtwork = this.sessionState.finalArtwork;
     }
@@ -273,16 +273,15 @@ class CustomizationClientService {
       return;
     }
 
-    // Converter Map para objeto simples para serialização
     const customizationsObj: Record<string, CustomizationStateData> = {};
     this.sessionState.customizations.forEach((value, key) => {
-      // Não salvar arquivos File, apenas metadados
+
       const sanitizedData = { ...value };
       if (sanitizedData.photos) {
         sanitizedData.photos = sanitizedData.photos.map((photo) => ({
           preview: photo.preview,
           slot: photo.slot,
-          // File não pode ser serializado, será recriado do preview
+
         })) as typeof sanitizedData.photos;
       }
       customizationsObj[key] = sanitizedData;
@@ -334,7 +333,6 @@ class CustomizationClientService {
   }
 }
 
-// Singleton
 const customizationClientService = new CustomizationClientService();
 
 export default customizationClientService;

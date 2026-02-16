@@ -85,7 +85,6 @@ export function ItemCustomizationInline({
   const [selectedLayoutId, setSelectedLayoutId] = useState<string | null>(null);
   const [hasChanges, setHasChanges] = useState(false);
 
-  // Estados para crop de imagem
   const [cropDialogOpen, setCropDialogOpen] = useState(false);
   const [fileToCrop, setFileToCrop] = useState<File | null>(null);
   const [cropAspect, setCropAspect] = useState<number | undefined>(undefined);
@@ -93,13 +92,11 @@ export function ItemCustomizationInline({
     string | null
   >(null);
 
-  // Verificar mudanças
   useEffect(() => {
     const hasData = Object.keys(customizationData).length > 0;
     setHasChanges(hasData);
   }, [customizationData]);
 
-  // Atualizar preview quando layout mudar
   useEffect(() => {
     if (onPreviewChange && selectedLayoutId) {
       const baseLayoutCustom = customizations.find(
@@ -181,7 +178,6 @@ export function ItemCustomizationInline({
           [currentCustomizationId]: totalFiles,
         }));
 
-        // Converter cada arquivo para base64
         const filesDataPromises = totalFiles.map(async (f, index) => {
           const reader = new FileReader();
           const base64Promise = new Promise<string>((resolve) => {
@@ -194,7 +190,7 @@ export function ItemCustomizationInline({
             file: f,
             preview: URL.createObjectURL(f),
             position: index,
-            base64, // ✅ Dados base64 para upload ao Drive
+            base64,
             mime_type: f.type,
             size: f.size,
           };
@@ -223,7 +219,6 @@ export function ItemCustomizationInline({
         [customizationId]: newFiles,
       }));
 
-      // Converter cada arquivo para base64
       const filesDataPromises = newFiles.map(async (file, idx) => {
         const reader = new FileReader();
         const base64Promise = new Promise<string>((resolve) => {
@@ -320,7 +315,6 @@ export function ItemCustomizationInline({
         unknown
       >;
 
-      // Ensure selectedLayoutId is present for DYNAMIC_LAYOUT
       const selectedLayoutIdField =
         ((baseData as Record<string, unknown>).layout_id as string) ||
         ((baseData as Record<string, unknown>).id as string);
@@ -336,7 +330,6 @@ export function ItemCustomizationInline({
     onComplete(result.length > 0, result);
   }, [customizations, customizationData, onComplete]);
 
-  // Auto-save quando há mudanças
   useEffect(() => {
     if (hasChanges) {
       handleAutoSave();
@@ -682,7 +675,7 @@ export function ItemCustomizationInline({
         </Card>
       )}
 
-      {/* Dialog de Crop de Imagem */}
+      
       {fileToCrop && (
         <ImageCropDialog
           file={fileToCrop}

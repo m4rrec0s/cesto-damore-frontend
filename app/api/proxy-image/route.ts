@@ -4,16 +4,15 @@ import { NextRequest, NextResponse } from "next/server";
  * Proxy para carregar imagens do Google Drive contornando CORS
  * Otimizado para usar thumbnails do Drive para carregamento mais rápido
  *
- * Uso: /api/proxy-image?url=https://drive.google.com/uc?id=FILE_ID&size=w400
+ * Uso: /api/proxy-image?url=https:
  */
 
-// Cache em memória simples para reduzir requisições repetidas
 const imageCache = new Map<
   string,
   { buffer: Buffer; contentType: string; timestamp: number }
 >();
-const CACHE_TTL = 1000 * 60 * 60; // 1 hora em memória
-const MAX_CACHE_SIZE = 50; // Máximo de imagens em cache
+const CACHE_TTL = 1000 * 60 * 60;
+const MAX_CACHE_SIZE = 50;
 
 function cleanOldCache() {
   const now = Date.now();
@@ -22,7 +21,7 @@ function cleanOldCache() {
       imageCache.delete(key);
     }
   }
-  // Se ainda tiver muitas, remove as mais antigas
+
   if (imageCache.size > MAX_CACHE_SIZE) {
     const entries = Array.from(imageCache.entries());
     entries.sort((a, b) => a[1].timestamp - b[1].timestamp);
@@ -34,11 +33,11 @@ function cleanOldCache() {
 }
 
 function extractDriveFileId(url: string): string | null {
-  // Padrões comuns de URL do Google Drive
+
   const patterns = [
-    /\/d\/([a-zA-Z0-9_-]+)/, // /d/FILE_ID/
-    /id=([a-zA-Z0-9_-]+)/, // id=FILE_ID
-    /\/file\/d\/([a-zA-Z0-9_-]+)/, // /file/d/FILE_ID
+    /\/d\/([a-zA-Z0-9_-]+)/,
+    /id=([a-zA-Z0-9_-]+)/,
+    /\/file\/d\/([a-zA-Z0-9_-]+)/,
   ];
 
   for (const pattern of patterns) {
@@ -52,7 +51,7 @@ export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
     const imageUrl = searchParams.get("url");
-    const size = searchParams.get("size") || "w500"; // Tamanho padrão otimizado
+    const size = searchParams.get("size") || "w500";
 
     if (!imageUrl) {
       return NextResponse.json(
@@ -61,7 +60,6 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Validar que é uma URL do Google Drive
     if (
       !imageUrl.includes("drive.google.com") &&
       !imageUrl.includes("drive.usercontent.google.com")
@@ -72,10 +70,8 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Chave de cache baseada na URL e tamanho
     const cacheKey = `${imageUrl}:${size}`;
 
-    // Verificar cache em memória
     cleanOldCache();
     const cached = imageCache.get(cacheKey);
     if (cached) {
@@ -91,18 +87,15 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Extrair o ID do arquivo para usar a API de thumbnail (mais rápida)
     const fileId = extractDriveFileId(imageUrl);
 
     let finalUrl = imageUrl;
 
     if (fileId) {
-      // Tentar usar download direto com a query string que força download
-      // Isso é mais confiável que thumbnail para layouts
+
       finalUrl = `https://drive.google.com/uc?id=${fileId}&export=download`;
     }
 
-    // Fazer requisição para o Google Drive
     const response = await fetch(finalUrl, {
       headers: {
         "User-Agent":
@@ -111,7 +104,7 @@ export async function GET(request: NextRequest) {
         "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8",
       },
       redirect: "follow",
-      // Timeout de 15 segundos
+
       signal: AbortSignal.timeout(15000),
     });
 
@@ -125,21 +118,17 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Obter o buffer da imagem
     const arrayBuffer = await response.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
-    // Detectar tipo de conteúdo
     const contentType = response.headers.get("content-type") || "image/png";
 
-    // Salvar no cache em memória
     imageCache.set(cacheKey, {
       buffer,
       contentType,
       timestamp: Date.now(),
     });
 
-    // Retornar imagem com headers corretos
     return new NextResponse(buffer, {
       status: 200,
       headers: {

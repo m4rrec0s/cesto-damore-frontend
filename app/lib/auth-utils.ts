@@ -9,7 +9,6 @@ export const getAuthToken = (): string | null => {
     return null;
   }
 
-  // Tenta buscar o appToken (token da aplicação) primeiro, depois o token antigo para retrocompatibilidade
   const token =
     localStorage.getItem("appToken") || localStorage.getItem("token");
 
@@ -62,7 +61,7 @@ export const isAuthenticated = (): boolean => {
 export const clearAuthToken = (): void => {
   if (typeof window !== "undefined") {
     localStorage.removeItem("appToken");
-    localStorage.removeItem("token"); // Remove o token antigo também
+    localStorage.removeItem("token");
   }
 };
 
@@ -73,7 +72,7 @@ export const clearAuthToken = (): void => {
 export const setAuthToken = (token: string): void => {
   if (typeof window !== "undefined") {
     localStorage.setItem("appToken", token);
-    // Remove o token antigo se existir
+
     localStorage.removeItem("token");
   }
 };

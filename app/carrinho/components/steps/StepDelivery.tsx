@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import {
   MapPin,
@@ -82,6 +83,10 @@ export const StepDelivery = ({
   setHouseNumber,
   neighborhood,
   setNeighborhood,
+  city,
+  setCity: _setCity,
+  state,
+  setState: _setState,
   complemento,
   setComplemento,
   customerPhone,
@@ -108,7 +113,27 @@ export const StepDelivery = ({
   isValidPhone,
   formatPhoneNumber,
 }: StepDeliveryProps) => {
-  const isAddressComplete = address && houseNumber && neighborhood && zipCode;
+  const isAddressComplete = !!(
+    address?.trim() &&
+    houseNumber?.trim() &&
+    neighborhood?.trim() &&
+    zipCode?.trim() &&
+    city?.trim() &&
+    state?.trim()
+  );
+
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const unusedSetCity = _setCity;
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const unusedSetState = _setState;
+
+  const [isEditing, setIsEditing] = useState(!isAddressComplete);
+
+  useEffect(() => {
+    if (!isAddressComplete) {
+      setIsEditing(true);
+    }
+  }, [isAddressComplete]);
 
   return (
     <motion.div
@@ -122,7 +147,6 @@ export const StepDelivery = ({
           Escolha a forma de entrega
         </h2>
 
-        {/* Opção de Entrega */}
         <div
           onClick={() => setOptionSelected("delivery")}
           className={cn(
@@ -156,7 +180,7 @@ export const StepDelivery = ({
                 </span>
               </div>
 
-              {optionSelected === "delivery" && isAddressComplete ? (
+              {optionSelected === "delivery" && isAddressComplete && !isEditing ? (
                 <div className="text-sm text-gray-500 space-y-1">
                   <p>
                     {address}, {houseNumber}
@@ -168,8 +192,7 @@ export const StepDelivery = ({
                     className="text-[#3483fa] text-xs font-medium mt-3"
                     onClick={(e) => {
                       e.stopPropagation();
-                      // Reset logic to trigger form
-                      setAddress("");
+                      setIsEditing(true);
                     }}
                   >
                     Alterar ou escolher outro endereço
@@ -257,13 +280,26 @@ export const StepDelivery = ({
                       </AlertDescription>
                     </Alert>
                   )}
+
+                  {isAddressComplete && !addressWarning && (
+                    <Button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setIsEditing(false);
+                      }}
+                      className="w-full bg-[#3483fa] hover:bg-[#2968c8] text-white py-2 mt-4 font-bold"
+                    >
+                      Confirmar endereço
+                    </Button>
+                  )}
                 </div>
               ) : null}
             </div>
           </div>
         </div>
 
-        {/* Opção de Retirada */}
+        
         <div
           onClick={() => setOptionSelected("pickup")}
           className={cn(
@@ -298,7 +334,7 @@ export const StepDelivery = ({
               {optionSelected === "pickup" && (
                 <div className="text-sm text-gray-500 mt-2 space-y-1">
                   <p className="font-medium text-gray-700">
-                    Cesto d&aposAmore - Campina Grande
+                    Cesto d&apos;Amore - Campina Grande
                   </p>
                   <p>R. Dr. Raif Ramalho, 350 - Jardim Tavares</p>
                   <p>Campina Grande - PB, 58402-025</p>
@@ -313,7 +349,7 @@ export const StepDelivery = ({
         </div>
       </div>
 
-      {/* Dados Pessoais & Agendamento */}
+      
       <Card className="bg-white p-6 rounded-lg border border-gray-200 shadow-none space-y-8">
         <div className="space-y-6">
           <div className="flex items-center gap-2 border-b border-gray-100 pb-4">

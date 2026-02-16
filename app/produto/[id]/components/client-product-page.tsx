@@ -78,7 +78,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
   >({});
   const [selectedAdditionalIds, setSelectedAdditionalIds] = useState<string[]>(
     [],
-  ); // ✅ Track selected additionals
+  );
   const { fetchPublicLayouts } = useLayoutApi();
   const [availableLayoutsByComponent, setAvailableLayoutsByComponent] =
     useState<Record<string, any[]>>({});
@@ -159,7 +159,6 @@ const ClientProductPage = ({ id }: { id: string }) => {
           return updated;
         });
 
-        // ✅ Add to selectedAdditionals if not already there
         setSelectedAdditionalIds((prev) =>
           prev.includes(additionalId) ? prev : [...prev, additionalId],
         );
@@ -177,8 +176,6 @@ const ClientProductPage = ({ id }: { id: string }) => {
 
       setActiveAdditionalModal(null);
 
-      // 🛑 REMOVIDO: Não chamar addToCart imediatamente.
-      // O usuário agora adiciona tudo junto ou via botão de adição rápida.
     },
     [],
   );
@@ -366,17 +363,11 @@ const ClientProductPage = ({ id }: { id: string }) => {
   const isItemInCart = useMemo(() => {
     if (!product.id) return false;
 
-    // Verificar se existe algum item no carrinho com o mesmo product_id
     return cart.items.some((item) => item.product_id === product.id);
   }, [cart.items, product.id]);
 
-  // const currentConfigSignature = useMemo(
-  //   () => serializeCustomizationsSignature(cartCustomizations),
-  //   [cartCustomizations]
-  // );
-
   const { shouldShow3D, modelUrl, textureUrl, itemType } = useMemo(() => {
-    // Prioridade: previewComponentId > selectedComponent > any customizable component
+
     const componentsToSearch = [
       ...(previewComponentId
         ? [components.find((c) => c.id === previewComponentId)]
@@ -441,14 +432,13 @@ const ClientProductPage = ({ id }: { id: string }) => {
             `${component.item.name} - ${reqCustom.name}`,
           );
         } else {
-          // Verificar se os dados estão preenchidos
+
           const customData = componentData.find(
             (c) => c.ruleId === reqCustom.id,
           );
           if (customData) {
             const data = customData.data as Record<string, unknown>;
 
-            // Validar TEXT
             if (reqCustom.type === "TEXT") {
               const fields =
                 (
@@ -457,7 +447,6 @@ const ClientProductPage = ({ id }: { id: string }) => {
                   }
                 )?.fields || [];
 
-              // ✅ Aceitar tanto data[field.id] quanto data.fields[field.id]
               const fieldsData =
                 (data.fields as Record<string, string> | undefined) || data;
 
@@ -475,9 +464,8 @@ const ClientProductPage = ({ id }: { id: string }) => {
               }
             }
 
-            // Validar IMAGES
             if (reqCustom.type === "IMAGES") {
-              // IMAGES agora tem a estrutura: { files: File[], previews: string[], count: number }
+
               const imagesData = data as {
                 files?: File[];
                 previews?: string[];
@@ -496,12 +484,11 @@ const ClientProductPage = ({ id }: { id: string }) => {
               }
             }
 
-            // Validar MULTIPLE_CHOICE
             if (reqCustom.type === "MULTIPLE_CHOICE") {
               const choice = data as
                 | { id?: string; selected_option?: string }
                 | undefined;
-              // ✅ Aceitar tanto id quanto selected_option para compatibilidade
+
               const hasOptionSelected =
                 choice && (choice.id || choice.selected_option);
               if (!hasOptionSelected) {
@@ -511,12 +498,11 @@ const ClientProductPage = ({ id }: { id: string }) => {
               }
             }
 
-            // Validar DYNAMIC_LAYOUT
             if (reqCustom.type === "DYNAMIC_LAYOUT") {
               const layout = data as
                 | { id?: string; layout_id?: string }
                 | undefined;
-              // Aceitar tanto id quanto layout_id para compatibilidade
+
               const hasLayoutSelected =
                 layout && (layout.id || layout.layout_id);
               if (!hasLayoutSelected) {
@@ -550,13 +536,13 @@ const ClientProductPage = ({ id }: { id: string }) => {
     setAddingToCart(true);
 
     try {
-      // Converter customizações dos itens para o formato do carrinho
+
       const cartCustomizations: CartCustomization[] = [];
 
       for (const [itemId, customizationInputs] of Object.entries(
         itemCustomizations,
       )) {
-        // ✅ itemId é na verdade o component.id (ProductComponent.id)
+
         const componentId = itemId;
 
         for (const input of customizationInputs) {
@@ -564,7 +550,6 @@ const ClientProductPage = ({ id }: { id: string }) => {
           const customizationName =
             (data._customizationName as string) || "Personalização";
 
-          // Converter baseado no tipo de customização
           if (input.customizationType === "TEXT") {
             const textFields = Object.entries(data)
               .filter(([key]) => key !== "_customizationName")
@@ -575,7 +560,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
               customization_id: input.ruleId
                 ? `${input.ruleId}:${componentId}`
                 : `item_${itemId}_${componentId}`,
-              componentId, // ✅ Add componentId
+              componentId,
               title: customizationName,
               customization_type: "TEXT",
               is_required: false,
@@ -594,7 +579,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
               customization_id: input.ruleId
                 ? `${input.ruleId}:${componentId}`
                 : `item_${itemId}_${componentId}`,
-              componentId, // ✅ Add componentId
+              componentId,
               title: customizationName,
               customization_type: "MULTIPLE_CHOICE",
               is_required: false,
@@ -604,7 +589,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
               data: data,
             });
           } else if (input.customizationType === "IMAGES") {
-            // IMAGES agora tem a estrutura: { files: File[], previews: string[], count: number }
+
             const imagesData = data as {
               files?: File[];
               previews?: string[];
@@ -615,12 +600,11 @@ const ClientProductPage = ({ id }: { id: string }) => {
               imagesData.previews && imagesData.previews.length > 0
                 ? await Promise.all(
                     imagesData.previews.map(async (preview, index) => {
-                      // Tentar obter nome do arquivo se disponível
+
                       const file = imagesData.files?.[index];
                       const fileName = file?.name || `photo-${index + 1}.jpg`;
 
-                      // 🔄 NOVO: Upload automático para /temp/upload ao adicionar a foto
-                      let tempFileUrl = preview; // fallback para base64 se upload falhar
+                      let tempFileUrl = preview;
                       let uploadedFileName = "";
                       try {
                         if (file) {
@@ -640,7 +624,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
                           `❌ [IMAGES-3] Erro ao fazer upload de ${fileName}:`,
                           err,
                         );
-                        // Continuar com base64 se upload falhar
+
                       }
 
                       return {
@@ -751,7 +735,6 @@ const ClientProductPage = ({ id }: { id: string }) => {
         }
       }
 
-      // NOVO: Adicionar customizações dos adicionais selecionados
       for (const additionalId of selectedAdditionalIds) {
         const additionalCustoms = additionalCustomizations[additionalId];
         if (!additionalCustoms) continue;
@@ -761,7 +744,6 @@ const ClientProductPage = ({ id }: { id: string }) => {
           const customizationName =
             (data._customizationName as string) || "Personalização";
 
-          // Reutilizar lógica de conversão (podemos extrair para função depois se necessário)
           if (input.customizationType === "TEXT") {
             const textFields = Object.entries(data)
               .filter(([key]) => key !== "_customizationName")
@@ -932,7 +914,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
         cartCustomizations,
       );
       toast.success("Produto adicionado ao carrinho!");
-      // Resetar seleção de adicionais após adicionar com sucesso
+
       setSelectedAdditionalIds([]);
     } catch (error) {
       console.error("Erro ao adicionar ao carrinho:", error);
@@ -978,7 +960,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
   return (
     <div className="min-h-screen bg-white">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8">
-        {/* Breadcrumb */}
+        
         <nav className="text-xs sm:text-sm text-gray-500 mb-6">
           <Link href="/" className="hover:text-gray-900 transition-colors">
             Início
@@ -999,9 +981,9 @@ const ClientProductPage = ({ id }: { id: string }) => {
         </nav>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12">
-          {/* Coluna Esquerda: Imagem Principal */}
+          
           <div className="space-y-6">
-            {/* Imagem Principal do Produto */}
+            
             <div className="relative aspect-square w-full bg-gray-50 rounded-2xl overflow-hidden">
               <Button
                 variant="ghost"
@@ -1034,7 +1016,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
               )}
             </div>
 
-            {/* Preview da Personalização (se existir) */}
+            
             {textureUrl && (
               <div className="bg-gray-50 rounded-2xl p-6 space-y-4">
                 <div className="flex items-center justify-between">
@@ -1101,7 +1083,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
               </div>
             )}
 
-            {/* Componentes do Produto */}
+            
             {components && components.length > 0 && (
               <div className="space-y-3">
                 <h3 className="text-sm font-medium text-gray-700">
@@ -1156,7 +1138,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
               </div>
             )}
 
-            {/* Descrição do Produto (Mobile/Desktop) */}
+            
             <div className="bg-gray-50 rounded-2xl p-6">
               <h3 className="text-sm font-medium text-gray-900 mb-3">
                 Descrição
@@ -1175,9 +1157,9 @@ const ClientProductPage = ({ id }: { id: string }) => {
             </div>
           </div>
 
-          {/* Coluna Direita: Informações e Ações */}
+          
           <div className="space-y-6">
-            {/* Título e Preço */}
+            
             <div className="space-y-3">
               <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight">
                 {product.name}
@@ -1211,7 +1193,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
                 )}
               </div>
 
-              {/* Tempo de Produção */}
+              
               <div
                 className={cn(
                   "inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-sm",
@@ -1234,15 +1216,8 @@ const ClientProductPage = ({ id }: { id: string }) => {
               </div>
             </div>
 
-            {/* Personalizações */}
-            {components.filter((c) => c.item.allows_customization).length >
-              0 && (
+            {components && components.length > 0 && (
               <div className="space-y-4">
-                <h3 className="text-base font-semibold text-gray-900">
-                  Personalizações
-                </h3>
-
-                {/* Galeria de Layouts (se houver) */}
                 {components.map((component) => {
                   const layouts = availableLayoutsByComponent[component.id];
                   if (!layouts || layouts.length === 0) return null;
@@ -1331,7 +1306,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
                   );
                 })}
 
-                {/* Botões de Personalização */}
+                
                 <div className="space-y-2">
                   {components
                     .filter((c) => c.item.allows_customization)
@@ -1398,7 +1373,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
               </div>
             )}
 
-            {/* Quantidade */}
+            
             <div className="space-y-3">
               <label className="text-sm font-medium text-gray-700">
                 Quantidade
@@ -1427,7 +1402,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
               </div>
             </div>
 
-            {/* Botão Adicionar ao Carrinho */}
+            
             <Button
               onClick={handleAddToCart}
               disabled={addingToCart || isUploading}
@@ -1449,7 +1424,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
               )}
             </Button>
 
-            {/* Adicionais */}
+            
             {additionals.length > 0 && (
               <div className="space-y-4 pt-6 border-t">
                 <div>
@@ -1533,7 +1508,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
                         hasCustomizations={
                           !!additionalCustomizations[additional.id]
                         }
-                        // Usar selectedAdditionalIds para marcar como adicionado no card
+
                         isInCartExternal={selectedAdditionalIds.includes(
                           additional.id,
                         )}
@@ -1552,7 +1527,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
           </div>
         </div>
 
-        {/* Produtos Relacionados */}
+        
         {product.related_products && product.related_products.length > 0 && (
           <div className="mt-16 pt-8 border-t">
             <h2 className="text-xl font-bold text-gray-900 mb-6">
@@ -1637,7 +1612,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
           />
         ))}
 
-      {/* Modais de customização de adicionais */}
+      
       {additionals
         .filter((a) => a.allows_customization)
         .map((additional) => (

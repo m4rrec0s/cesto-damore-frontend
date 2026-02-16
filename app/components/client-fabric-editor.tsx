@@ -24,7 +24,6 @@ import { ImageCropDialog } from "./ui/image-crop-dialog";
 import Image from "next/image";
 import { dataURLtoBlob } from "@/app/lib/utils";
 
-// Multiplicador para renderização interna de alta qualidade
 const INTERNAL_DPI_MULTIPLIER = 2;
 
 const loadGoogleFont = (fontFamily: string) => {
@@ -127,10 +126,9 @@ export default function ClientFabricEditor({
 
     const observer = new ResizeObserver((entries) => {
       for (const entry of entries) {
-        // Usamos contentRect para pegar o espaço interno descontando padding do pai
+
         const { width: availWidth, height: availHeight } = entry.contentRect;
 
-        // Margem de respiro interna (px)
         const margin = 32;
         const maxWidth = Math.max(availWidth - margin, 150);
         const maxHeight = Math.max(availHeight - margin, 150);
@@ -141,10 +139,8 @@ export default function ClientFabricEditor({
         const zoomW = maxWidth / layoutWidth;
         const zoomH = maxHeight / layoutHeight;
 
-        // O zoom deve ser o menor para caber em ambos os eixos (object-fit: contain)
         const scaleFactor = Math.min(zoomW, zoomH);
 
-        // Teto de zoom para não distorcer em telas ultra-wide
         const finalZoom = Math.min(scaleFactor, 1.1);
 
         setWorkspaceZoom(Math.max(0.1, finalZoom));
@@ -169,7 +165,6 @@ export default function ClientFabricEditor({
         { backstoreOnly: true },
       );
 
-      // 2. Ajustar o tamanho visual (CSS) - O zoom é via CSS
       fabricRef.setDimensions(
         {
           width: `${width * workspaceZoom}px`,
@@ -178,7 +173,6 @@ export default function ClientFabricEditor({
         { cssOnly: true },
       );
 
-      // 3. Zoom interno fixo para nitidez (Resetando transform para evitar desalinhamento)
       fabricRef.setViewportTransform([
         INTERNAL_DPI_MULTIPLIER,
         0,
@@ -193,11 +187,9 @@ export default function ClientFabricEditor({
     }
   }, [workspaceZoom, fabricRef, layoutBase.width, layoutBase.height]);
 
-  // Funções Auxiliares de Placeholders
   const addFramePlaceholder = async (canvas: any, frame: any) => {
     const { FabricImage, Rect, Circle } = await import("fabric");
 
-    // Fundo cinza suave
     frame.set("fill", "#f3f4f6");
 
     const center = frame.getCenterPoint();
@@ -210,7 +202,6 @@ export default function ClientFabricEditor({
         { crossOrigin: "anonymous" },
       );
 
-      // Calcular escala para cobrir toda a moldura (object-cover)
       const scale = Math.max(
         frameWidth / placeholderImg.width!,
         frameHeight / placeholderImg.height!,
@@ -230,7 +221,6 @@ export default function ClientFabricEditor({
         angle: frame.angle || 0,
       });
 
-      // Clip Path para garantir que o placeholder não vaze da moldura
       let mask: any;
       if (frame.type === "circle") {
         mask = new Circle({
@@ -277,7 +267,6 @@ export default function ClientFabricEditor({
   ) => {
     const { FabricImage, Rect, Circle } = await import("fabric");
 
-    // Remover placeholders se existirem
     const frameId = frame.id || frame.name;
     const placeholders = canvas
       .getObjects()
@@ -307,7 +296,6 @@ export default function ClientFabricEditor({
       const frameHeight = frame.height * frame.scaleY;
       const center = frame.getCenterPoint();
 
-      // Ajustar frame para transparente
       frame.set({ fill: "transparent", stroke: "transparent", opacity: 0 });
 
       const scale = Math.max(
@@ -322,14 +310,13 @@ export default function ClientFabricEditor({
         top: center.y,
         originX: "center",
         originY: "center",
-        angle: frame.angle || 0, // Sincronizar rotação da moldura
+        angle: frame.angle || 0,
         selectable: true,
         hasControls: true,
         name: `uploaded-img-${frameId}`,
         objectCaching: false,
       });
 
-      // Clip Path
       let mask: any;
       if (frame.type === "circle") {
         mask = new Circle({
@@ -362,7 +349,6 @@ export default function ClientFabricEditor({
 
       img.set("clipPath", mask);
 
-      // Remover imagem anterior se existir
       const oldImg = canvas
         .getObjects()
         .find((o: any) => o.name === `uploaded-img-${frameId}`);
@@ -377,7 +363,6 @@ export default function ClientFabricEditor({
     }
   };
 
-  // Initialize Fabric Canvas
   useEffect(() => {
     let canvasInstance: FabricCanvas | null = null;
     let isMounted = true;
@@ -388,13 +373,11 @@ export default function ClientFabricEditor({
 
         if (!containerRef.current || !isMounted) return;
 
-        // Configurações globais - CLIENTE NÃO EDITA NO CANVAS DIRETAMENTE
         FabricObject.ownDefaults.objectCaching = false;
         FabricObject.ownDefaults.minScaleLimit = 0.05;
         FabricObject.ownDefaults.selectable = false;
         FabricObject.ownDefaults.evented = false;
 
-        // Limpar container
         containerRef.current.innerHTML = "";
         const canvasEl = document.createElement("canvas");
         containerRef.current.appendChild(canvasEl);
@@ -426,14 +409,13 @@ export default function ClientFabricEditor({
         );
 
         if (!canvasInstance.contextTop && !canvasInstance.contextContainer) {
-          // Fallback se algo deu errado na inicialização
+
           canvasInstance.setDimensions({
             width: width * INTERNAL_DPI_MULTIPLIER,
             height: height * INTERNAL_DPI_MULTIPLIER,
           });
         }
 
-        // Load State - Suportar tanto camelCase quando snake_case do backend
         const stateToLoad =
           initialState ||
           layoutBase.fabricJsonState ||
@@ -446,7 +428,6 @@ export default function ClientFabricEditor({
                 ? JSON.parse(stateToLoad)
                 : stateToLoad;
 
-            // 1. ANTES DE CARREGAR: Encontrar e carregar fontes específicas do layout
             if (state.objects) {
               const fontsToLoad = new Set<string>();
               state.objects.forEach((obj: any) => {
@@ -458,11 +439,10 @@ export default function ClientFabricEditor({
                 await Promise.all(
                   Array.from(fontsToLoad).map((f) => loadGoogleFont(f)),
                 );
-                // Pequena pausa para o browser processar o registro das fontes
+
                 await new Promise((r) => setTimeout(r, 250));
               }
 
-              // 2. Normalizar e Preparar Objetos
               const apiBase = (process.env.NEXT_PUBLIC_API_URL || "").replace(
                 /\/api$/,
                 "",
@@ -489,8 +469,8 @@ export default function ClientFabricEditor({
                 return {
                   ...obj,
                   objectCaching: false,
-                  selectable: false, // Cliente não seleciona
-                  evented: false, // Cliente não interage
+                  selectable: false,
+                  evented: false,
                 };
               });
             }
@@ -504,7 +484,6 @@ export default function ClientFabricEditor({
           }
         }
 
-        // Garantir o zoom interno fixo (DPI) APÓS o carregamento do JSON
         canvasInstance.setViewportTransform([
           INTERNAL_DPI_MULTIPLIER,
           0,
@@ -519,13 +498,12 @@ export default function ClientFabricEditor({
           return;
         }
 
-        // Configurar objetos
         const objects = canvasInstance.getObjects();
         const texts: Record<string, string> = {};
         const labels: Record<string, string> = {};
 
         for (const obj of objects as any[]) {
-          // Bloquear tudo novamente para garantir
+
           obj.set({
             selectable: false,
             evented: false,
@@ -538,7 +516,6 @@ export default function ClientFabricEditor({
             hoverCursor: "default",
           });
 
-          // Identificar frames de fotos
           const isFrame =
             obj.isFrame === true ||
             obj.name === "photo-frame" ||
@@ -551,7 +528,6 @@ export default function ClientFabricEditor({
             const id = obj.id || obj.name;
             labels[id] = obj.name || "Moldura de Foto";
 
-            // Se não tem imagem (nem no canvas nem local), add placeholder
             const hasImg = objects.some(
               (o: any) => o.name === `uploaded-img-${id}`,
             );
@@ -559,7 +535,7 @@ export default function ClientFabricEditor({
             if (!hasImg && !localImages[id]) {
               await addFramePlaceholder(canvasInstance, obj);
             } else if (localImages[id]) {
-              // Recarregar imagem local se existir
+
               await loadLocalImageToFrame(canvasInstance, obj, localImages[id]);
             }
           } else if (obj.isCustomizable) {
@@ -581,7 +557,7 @@ export default function ClientFabricEditor({
       } catch (err) {
         console.error("❌ Erro ao inicializar Fabric.js:", err);
         if (isMounted) {
-          setLoading(false); // Liberar a tela mesmo com erro parcial
+          setLoading(false);
           toast.error("Erro ao carregar editor");
         }
       }
@@ -614,7 +590,7 @@ export default function ClientFabricEditor({
   ) => {
     const file = e.target.files?.[0];
     if (file && fabricRef) {
-      // Calcular o aspect ratio da moldura para o crop
+
       const frame = fabricRef
         .getObjects()
         .find((o: any) => o.id === frameId || o.name === frameId);
@@ -639,13 +615,12 @@ export default function ClientFabricEditor({
     const tid = toast.loading("Processando imagem...");
 
     try {
-      // 1. Converter DataURL para Blob para upload (Sem usar fetch para evitar problemas de CSP/DataURL)
+
       const blob = dataURLtoBlob(croppedImageUrl);
       const file = new File([blob], `crop_${currentFrameId}.png`, {
         type: "image/png",
       });
 
-      // 2. Upload para o Servidor (Logic de Imagem Temporária)
       const formData = new FormData();
       formData.append("file", file);
 
@@ -669,15 +644,12 @@ export default function ClientFabricEditor({
 
       if (!finalUrl) throw new Error("URL não retornada");
 
-      // Garantir que a URL seja absoluta
       if (finalUrl.startsWith("/")) {
         finalUrl = `${API_URL.replace(/\/api$/, "")}${finalUrl}`;
       }
 
-      // 3. Atualizar Estado Local
       setLocalImages((prev) => ({ ...prev, [currentFrameId]: finalUrl }));
 
-      // 4. Carregar no Canvas
       const frame = fabricRef
         .getObjects()
         .find((o: any) => o.id === currentFrameId || o.name === currentFrameId);
@@ -699,7 +671,7 @@ export default function ClientFabricEditor({
 
     const tid = toast.loading("Gerando arquivos finais...");
     try {
-      // Garantir captura total do canvas resetando viewport
+
       const originalTransform = [...(fabricRef as any).viewportTransform];
       (fabricRef as any).setViewportTransform([
         INTERNAL_DPI_MULTIPLIER,
@@ -710,27 +682,22 @@ export default function ClientFabricEditor({
         0,
       ]);
 
-      // High Quality Export (3x base)
       const highQualityUrl = fabricRef.toDataURL({
         format: "png",
         multiplier: 3 / INTERNAL_DPI_MULTIPLIER,
         enableRetinaScaling: false,
       });
 
-      // Preview for Cart (0.8x base)
       const previewUrl = fabricRef.toDataURL({
         format: "png",
         multiplier: 0.8 / INTERNAL_DPI_MULTIPLIER,
         enableRetinaScaling: false,
       });
 
-      // Restaurar viewport para o usuário
       (fabricRef as any).setViewportTransform(originalTransform);
 
-      // State with IDs
       const state = JSON.stringify(fabricRef.toJSON());
 
-      // Mapear imagens para o formato esperado
       const images: any[] = Object.entries(localImages).map(
         ([frameId, url]) => ({
           id: frameId,
@@ -749,7 +716,7 @@ export default function ClientFabricEditor({
 
   return (
     <div className="flex flex-col h-[82vh] min-h-[600px] overflow-hidden bg-gray-50/70">
-      {/* Header fixo */}
+      
       <header className="shrink-0 z-10 bg-white/95 backdrop-blur-sm border-b border-gray-100 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-14 sm:h-16">
@@ -776,9 +743,9 @@ export default function ClientFabricEditor({
         </div>
       </header>
 
-      {/* Conteúdo principal */}
+      
       <main className="flex-1 flex flex-col lg:flex-row w-full px-4 sm:px-6 lg:px-10 py-4 lg:py-6 gap-4 lg:gap-8 overflow-hidden min-h-0">
-        {/* Área de pré-visualização */}
+        
         <section className="flex-[1.2] lg:flex-1 w-full flex flex-col min-h-0 overflow-hidden">
           <div className="flex-1 bg-white rounded-2xl shadow-xl border border-gray-200/80 overflow-hidden relative flex flex-col">
             {loading && (
@@ -812,11 +779,11 @@ export default function ClientFabricEditor({
           </div>
         </section>
 
-        {/* Painel de controles (scrollável) */}
+        
         <aside className="w-full flex-1 lg:flex-none lg:w-80 xl:w-96 flex flex-col gap-6 lg:gap-8 overflow-y-auto h-full custom-scrollbar px-1 lg:px-2 pb-6 lg:pb-0 shrink-0 border-l border-gray-100/50 bg-white/50 lg:backdrop-blur-sm">
           <Card className="border border-rose-100/60 shadow-md bg-white/80 backdrop-blur-sm">
             <CardContent className="p-5 sm:p-6 lg:p-7 space-y-6 lg:space-y-7">
-              {/* Cabeçalho da seção */}
+              
               <div className="flex items-center gap-3 pb-4 border-b border-gray-100">
                 <div className="p-2 bg-rose-50 rounded-lg">
                   <Palette className="h-5 w-5 text-rose-600" />
@@ -826,7 +793,7 @@ export default function ClientFabricEditor({
                 </h4>
               </div>
 
-              {/* Textos editáveis */}
+              
               {Object.keys(editableTexts).length > 0 && (
                 <div className="space-y-5">
                   <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-gray-500">
@@ -889,7 +856,7 @@ export default function ClientFabricEditor({
                 </div>
               )}
 
-              {/* Molduras de fotos */}
+              
               <div className="space-y-5 pt-5 border-t border-dashed border-gray-200">
                 <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-gray-500">
                   <ImageIcon className="h-4 w-4" />

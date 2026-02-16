@@ -10,7 +10,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 interface NamedCategoryPageProps {
-    categoryName: string; // Exact or partial name to match
+    categoryName: string;
 }
 
 const NamedCategoryPage = ({ categoryName }: NamedCategoryPageProps) => {
@@ -28,10 +28,8 @@ const NamedCategoryPage = ({ categoryName }: NamedCategoryPageProps) => {
                 setLoading(true);
                 setError(null);
 
-                // 1. Fetch categories to find the ID
                 const categories = await api.getCategories();
 
-                // Find category by name (case insensitive, ignoring accents)
                 const normalize = (str: string) => str.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
                 const target = normalize(categoryName);
 
@@ -45,7 +43,6 @@ const NamedCategoryPage = ({ categoryName }: NamedCategoryPageProps) => {
 
                 setFoundCategory(category);
 
-                // 2. Fetch products for this category
                 const productsData = await api.getProducts({ category_id: category.id });
                 setProducts(productsData.products);
 

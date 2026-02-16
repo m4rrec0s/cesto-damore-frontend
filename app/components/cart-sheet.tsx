@@ -43,9 +43,9 @@ export function CartSheet({ isOpen, onClose, onCheckout }: CartSheetProps) {
           "Opção não selecionada"
         );
       case "DYNAMIC_LAYOUT":
-        // DYNAMIC_LAYOUT sempre deve retornar o label_selected
+
         if (custom.label_selected) return custom.label_selected;
-        // Fallback se não houver label_selected
+
         if (custom.selected_item_label) return custom.selected_item_label;
         if (custom.selected_option_label) return custom.selected_option_label;
         if (custom.text) return custom.text;
@@ -88,7 +88,7 @@ export function CartSheet({ isOpen, onClose, onCheckout }: CartSheetProps) {
 
   return (
     <div className="fixed inset-0 z-50 overflow-hidden">
-      {/* Overlay */}
+      
       <div
         className="absolute inset-0 bg-black/50 transition-opacity"
         onClick={onClose}
@@ -188,7 +188,7 @@ export function CartSheet({ isOpen, onClose, onCheckout }: CartSheetProps) {
                         )}
 
                       <div className="flex items-center justify-between mt-3">
-                        {/* Quantidade */}
+                        
                         <div className="flex items-center gap-1">
                           <Button
                             variant="outline"
@@ -306,7 +306,7 @@ export function CartSheet({ isOpen, onClose, onCheckout }: CartSheetProps) {
             )}
           </div>
 
-          {/* Footer - apenas se houver itens */}
+          
           {cartItems.length > 0 && (
             <div className="border-t p-6 space-y-4">
               <div className="flex justify-between items-center">

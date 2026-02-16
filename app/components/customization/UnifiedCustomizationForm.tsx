@@ -19,7 +19,7 @@ interface UnifiedCustomizationFormProps {
   itemId: string;
   onPreviewChange?: (previewUrl: string | null) => void;
   onComplete?: (hasCustomizations: boolean, data: CustomizationInput[]) => void;
-  globalSelections?: Record<string, { itemId: string; label: string }[]>; // Seleções de outros items
+  globalSelections?: Record<string, { itemId: string; label: string }[]>;
 }
 
 interface CustomizationData {
@@ -64,20 +64,18 @@ export function UnifiedCustomizationForm({
         const data = await api.getItemCustomizations(itemId);
         setConfig(data);
 
-        // Se temos customizations no array, o item permite customização
         const hasCustomizations =
           data.customizations && data.customizations.length > 0;
         const allowsCustomization =
           data.item?.allowsCustomization ??
           data.item?.allows_customization ??
-          hasCustomizations; // Se tem customizations, então permite!
+          hasCustomizations;
 
         if (!allowsCustomization || !data.customizations) {
           onComplete?.(false, []);
           return;
         }
 
-        // Buscar restrições do item (ADDITIONAL é o tipo usado para items customizáveis)
         try {
           const constraintsData = await api.getItemConstraints(
             itemId,
@@ -86,11 +84,10 @@ export function UnifiedCustomizationForm({
           setConstraints(constraintsData);
         } catch (err) {
           console.error("Erro ao carregar restrições:", err);
-          // Não bloqueia se não conseguir carregar restrições
+
           setConstraints([]);
         }
 
-        // Se houver LAYOUT_BASE, carregar o layout
         const layoutCustomization = data.customizations.find(
           (c) => c.type === "LAYOUT_BASE",
         );
@@ -98,7 +95,7 @@ export function UnifiedCustomizationForm({
           .layout_base_id;
         if (layoutCustomization && itemLayoutId) {
           try {
-            // Buscar layout base da API
+
             const response = await fetch(
               `${process.env.NEXT_PUBLIC_API_URL}/layouts/dynamic/${itemLayoutId}`,
               {
@@ -137,18 +134,17 @@ export function UnifiedCustomizationForm({
     optionId: string,
     optionLabel: string,
   ) => {
-    // Verificar se optionId é um UUID válido (item real no banco)
+
     const isValidUUID =
       /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
         optionId,
       );
 
-    // Buscar restrições específicas desta opção APENAS se for um item real (UUID válido)
     let allConstraints = [...constraints];
 
     if (isValidUUID) {
       try {
-        // Buscar restrições desta opção (que é um ADDITIONAL real)
+
         const optionConstraints = await api.getItemConstraints(
           optionId,
           "ADDITIONAL",
@@ -156,32 +152,29 @@ export function UnifiedCustomizationForm({
         allConstraints = [...constraints, ...optionConstraints];
       } catch (err) {
         console.error("Erro ao buscar restrições da opção:", err);
-        // Continuar apenas com restrições do item principal
+
       }
     }
 
-    // Buscar restrições MUTUALLY_EXCLUSIVE que envolvem esta opção
     const mutuallyExclusiveConstraints = allConstraints.filter(
       (c) =>
         c.constraint_type === "MUTUALLY_EXCLUSIVE" &&
         (c.target_item_id === optionId || c.related_item_id === optionId),
     );
 
-    // Se houver restrições, verificar se há conflito com seleções globais ou locais
     if (mutuallyExclusiveConstraints.length > 0) {
-      // Verificar conflitos em seleções de OUTROS itens (globalSelections)
+
       for (const constraint of mutuallyExclusiveConstraints) {
         const conflictingOptionId =
           constraint.target_item_id === optionId
             ? constraint.related_item_id
             : constraint.target_item_id;
 
-        // Verificar se a opção conflitante está selecionada em outros items
         for (const [otherItemId, selections] of Object.entries(
           globalSelections,
         )) {
           if (otherItemId !== itemId) {
-            // Não verificar contra si mesmo
+
             const hasConflict = selections.some(
               (sel) => sel.itemId === conflictingOptionId,
             );
@@ -194,24 +187,21 @@ export function UnifiedCustomizationForm({
                 constraint.message ||
                   `Não é possível selecionar "${optionLabel}" pois "${conflictingSelection?.label}" já está selecionado em outro componente.`,
               );
-              return; // Bloquear a seleção
+              return;
             }
           }
         }
       }
 
-      // Verificar conflitos LOCAIS (dentro do mesmo item)
       setCustomizationData((prev) => {
         const newData = { ...prev };
 
-        // Para cada restrição, verificar se a opção conflitante está selecionada
         mutuallyExclusiveConstraints.forEach((constraint) => {
           const conflictingOptionId =
             constraint.target_item_id === optionId
               ? constraint.related_item_id
               : constraint.target_item_id;
 
-          // Procurar em todas as customizações se a opção conflitante está selecionada
           Object.keys(newData).forEach((customizationKey) => {
             const data = newData[customizationKey];
             if (data.type === "MULTIPLE_CHOICE") {
@@ -219,10 +209,9 @@ export function UnifiedCustomizationForm({
                 | { id: string; label: string }
                 | undefined;
               if (value?.id === conflictingOptionId) {
-                // Desmarcar a opção conflitante
+
                 delete newData[customizationKey];
 
-                // Mostrar mensagem ao usuário
                 toast.info(
                   constraint.message ||
                     `"${value.label}" foi desmarcado pois não é compatível com "${optionLabel}"`,
@@ -232,7 +221,6 @@ export function UnifiedCustomizationForm({
           });
         });
 
-        // Adicionar a nova seleção
         newData[customizationId] = {
           type: "MULTIPLE_CHOICE",
           value: { id: optionId, label: optionLabel },
@@ -242,7 +230,7 @@ export function UnifiedCustomizationForm({
         return newData;
       });
     } else {
-      // Sem restrições, apenas atualizar normalmente
+
       handleCustomizationChange(customizationId, "MULTIPLE_CHOICE", {
         id: optionId,
         label: optionLabel,
@@ -250,7 +238,6 @@ export function UnifiedCustomizationForm({
       return;
     }
 
-    // Auto-save após aplicar restrições
     setTimeout(() => autoSaveCustomizations(), 150);
   };
 
@@ -265,15 +252,12 @@ export function UnifiedCustomizationForm({
       [customizationId]: { type, value, completed },
     }));
 
-    // Auto-save: Notificar o parent imediatamente sobre a mudança
     autoSaveCustomizations();
   };
 
-  // Função para auto-salvar customizações
   const autoSaveCustomizations = () => {
     if (!config) return;
 
-    // Pegar dados atualizados (usar um timeout para garantir que o estado foi atualizado)
     setTimeout(() => {
       const inputs: CustomizationInput[] = Object.entries(
         customizationData,
@@ -281,7 +265,6 @@ export function UnifiedCustomizationForm({
         const customization = config.customizations.find((c) => c.id === id);
         const customizationName = customization?.name || "Personalização";
 
-        // Para TEXT, o valor é uma string simples, precisamos envolver em um objeto
         let dataValue: Record<string, unknown>;
         if (data.type === "TEXT") {
           dataValue = {
@@ -305,7 +288,6 @@ export function UnifiedCustomizationForm({
         };
       });
 
-      // Notificar o parent com os dados atualizados
       onComplete?.(inputs.length > 0, inputs);
     }, 100);
   };
@@ -316,7 +298,6 @@ export function UnifiedCustomizationForm({
   ) => {
     if (!files || files.length === 0) return;
 
-    // Converter cada arquivo para base64
     const photoPromises = Array.from(files).map(async (file) => {
       const reader = new FileReader();
       const base64Promise = new Promise<string>((resolve) => {
@@ -328,7 +309,7 @@ export function UnifiedCustomizationForm({
       return {
         file,
         preview: URL.createObjectURL(file),
-        base64, // ✅ Dados base64 para upload ao Drive
+        base64,
         mime_type: file.type,
         size: file.size,
       };
@@ -373,13 +354,12 @@ export function UnifiedCustomizationForm({
     return null;
   }
 
-  // Se temos customizations no array, o item permite customização
   const hasCustomizations =
     config.customizations && config.customizations.length > 0;
   const allowsCustomization =
     config.item?.allowsCustomization ??
     config.item?.allows_customization ??
-    hasCustomizations; // Se tem customizations, então permite!
+    hasCustomizations;
 
   if (!allowsCustomization || !config.customizations) {
     return null;
@@ -421,7 +401,7 @@ export function UnifiedCustomizationForm({
         </div>
       )}
 
-      {/* Outras Customizações */}
+      
       <div className="w-full space-y-4">
         {otherCustomizations.map((customization) => (
           <div key={customization.id} className="space-y-2 w-full">
@@ -444,7 +424,7 @@ export function UnifiedCustomizationForm({
               )}
             </div>
             <div className="w-full">
-              {/* TEXT */}
+              
               {customization.type === "TEXT" && (
                 <div className="space-y-2">
                   <Textarea
@@ -468,7 +448,7 @@ export function UnifiedCustomizationForm({
                 </div>
               )}
 
-              {/* IMAGES */}
+              
               {customization.type === "IMAGES" && (
                 <div className="space-y-3">
                   <Input
@@ -494,7 +474,7 @@ export function UnifiedCustomizationForm({
                 </div>
               )}
 
-              {/* MULTIPLE_CHOICE */}
+              
               {customization.type === "MULTIPLE_CHOICE" && (
                 <div className="space-y-2 w-full">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -577,7 +557,6 @@ export function UnifiedCustomizationForm({
   );
 }
 
-// Helper component para renderizar previews de fotos
 function PhotoPreviewGrid({ photos }: { photos: Array<{ preview: string }> }) {
   return (
     <div className="grid grid-cols-3 gap-2">

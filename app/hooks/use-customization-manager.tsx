@@ -75,17 +75,11 @@ export function useCustomizationManager({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  /**
-   * Headers de autenticação
-   */
   const getAuthHeaders = useCallback(() => {
     const token =
-      localStorage.getItem("token") || localStorage.getItem("appToken");
-
-    if (!token) {
-      throw new Error("Usuário não autenticado. Faça login novamente.");
-    }
-
+      typeof window !== "undefined"
+        ? localStorage.getItem("token") || localStorage.getItem("appToken")
+        : null;
     return {
       "Content-Type": "application/json",
       Authorization: `Bearer ${token}`,
@@ -119,7 +113,6 @@ export function useCustomizationManager({
 
       const data = await response.json();
 
-      // A API pode retornar { customizations: [...] } ou diretamente [...]
       const customizationsArray = Array.isArray(data)
         ? data
         : data.customizations || [];
@@ -173,7 +166,6 @@ export function useCustomizationManager({
         const created = await response.json();
         toast.success("Customização criada com sucesso!");
 
-        // Recarregar lista
         await fetchCustomizations();
 
         return created;
@@ -227,7 +219,6 @@ export function useCustomizationManager({
         const updated = await response.json();
         toast.success("Customização atualizada com sucesso!");
 
-        // Recarregar lista
         await fetchCustomizations();
 
         return updated;
@@ -274,7 +265,6 @@ export function useCustomizationManager({
 
         toast.success("Customização deletada com sucesso!");
 
-        // Recarregar lista
         await fetchCustomizations();
 
         return true;
@@ -302,12 +292,11 @@ export function useCustomizationManager({
   }, [itemId, fetchCustomizations]);
 
   return {
-    // Estado
+
     customizations,
     loading,
     error,
 
-    // Métodos
     fetchCustomizations,
     createCustomization,
     updateCustomization,

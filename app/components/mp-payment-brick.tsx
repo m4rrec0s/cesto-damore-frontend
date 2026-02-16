@@ -39,7 +39,7 @@ export interface MPPaymentFormData {
     first_name?: string;
     last_name?: string;
   };
-  // PIX specific
+
   payment_type?: string;
 }
 
@@ -49,7 +49,6 @@ interface PaymentBrickError {
   cause?: string;
 }
 
-// Mapeamento de erros do MercadoPago para mensagens amigáveis
 const errorMessages: Record<string, string> = {
   cc_rejected_bad_filled_card_number:
     "Número do cartão incorreto. Verifique e tente novamente.",
@@ -87,11 +86,9 @@ export function MPPaymentBrick({
   const [brickKey, setBrickKey] = useState(() => Date.now());
   const mountedRef = useRef(true);
 
-  // Usar refs para valores estáveis e evitar remounts desnecessários
   const initialAmountRef = useRef(amount);
   const initialOrderIdRef = useRef(orderId);
 
-  // Apenas atualizar se for a primeira montagem ou se brickKey mudar (retry manual)
   useEffect(() => {
     if (!initialAmountRef.current) initialAmountRef.current = amount;
     if (!initialOrderIdRef.current) initialOrderIdRef.current = orderId;
@@ -105,7 +102,6 @@ export function MPPaymentBrick({
   useEffect(() => {
     mountedRef.current = true;
 
-    // Inicializar MP se necessário
     if (MP_PUBLIC_KEY) {
       initializeMercadoPago(MP_PUBLIC_KEY);
     }
@@ -122,7 +118,7 @@ export function MPPaymentBrick({
           controller.unmount();
         }
       } catch {
-        // Ignorar erros de cleanup
+
       }
     };
   }, []);
@@ -236,7 +232,7 @@ export function MPPaymentBrick({
 
   return (
     <div className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden">
-      {/* Header */}
+      
       <div className="bg-gradient-to-r from-rose-500 to-rose-600 p-5 text-white">
         <div className="flex items-center gap-3">
           <Lock className="h-5 w-5" />
@@ -246,7 +242,7 @@ export function MPPaymentBrick({
           Seus dados são protegidos pelo Mercado Pago
         </p>
 
-        {/* Payment method badges */}
+        
         <div className="flex gap-3 mt-4">
           <div className="flex items-center gap-2 bg-white/20 px-3 py-1.5 rounded-full text-sm">
             <CreditCard className="h-4 w-4" />
@@ -259,7 +255,7 @@ export function MPPaymentBrick({
         </div>
       </div>
 
-      {/* Error State */}
+      
       {localError && (
         <div className="p-4 bg-red-50 border-b border-red-200">
           <div className="flex gap-3">
@@ -281,7 +277,7 @@ export function MPPaymentBrick({
         </div>
       )}
 
-      {/* Payment Brick */}
+      
       {!localError && (
         <div className="p-4 sm:p-6 relative min-h-[450px]">
           <Payment
@@ -313,7 +309,7 @@ export function MPPaymentBrick({
             onBinChange={handleOnBinChange}
           />
 
-          {/* Loading Overlay */}
+          
           {(isProcessing || isSubmitting) && (
             <div className="absolute inset-0 bg-white/90 flex flex-col items-center justify-center rounded-xl z-10">
               <Loader2 className="h-8 w-8 animate-spin text-rose-500 mb-3" />
@@ -326,7 +322,7 @@ export function MPPaymentBrick({
             </div>
           )}
 
-          {/* Initial Loading */}
+          
           {!paymentReady && !localError && (
             <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/80 rounded-xl">
               <Loader2 className="h-8 w-8 animate-spin text-rose-500 mb-3" />
@@ -338,7 +334,7 @@ export function MPPaymentBrick({
         </div>
       )}
 
-      {/* Footer info */}
+      
       <div className="px-4 sm:px-6 py-4 bg-gray-50 border-t border-gray-100">
         <div className="flex items-center justify-center gap-2 text-sm text-gray-500">
           <Lock className="h-4 w-4" />

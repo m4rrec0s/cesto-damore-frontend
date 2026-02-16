@@ -85,7 +85,6 @@ export function MockupGallery({
 
   const normalizedType = itemType?.toLowerCase();
 
-
   if (normalizedType !== "frame" && normalizedType !== "quadro") {
     return null;
   }
@@ -97,7 +96,6 @@ export function MockupGallery({
   const prev = () =>
     setCurrentIndex((prev) => (prev - 1 + mockups.length) % mockups.length);
 
-  // Fallback: se mockups não existem, mostrar apenas o design
   if (imageError) {
     return (
       <div
@@ -134,7 +132,7 @@ export function MockupGallery({
       )}
     >
       <div className="relative aspect-square w-full">
-        {/* Mockup Base */}
+        
         <Image
           src={currentMockup.src}
           alt={currentMockup.name}
@@ -150,7 +148,7 @@ export function MockupGallery({
           }}
         />
 
-        {/* Art Overlay */}
+        
         <div
           className="absolute overflow-hidden flex items-center justify-center"
           style={{
@@ -169,7 +167,7 @@ export function MockupGallery({
           />
         </div>
 
-        {/* Navigation Controls */}
+        
         <div className="absolute inset-0 flex items-center justify-between p-3 opacity-0 group-hover:opacity-100 transition-opacity">
           <Button
             variant="secondary"
@@ -189,7 +187,7 @@ export function MockupGallery({
           </Button>
         </div>
 
-        {/* Indicators */}
+        
         <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5">
           {mockups.map((_, i) => (
             <button
@@ -204,7 +202,7 @@ export function MockupGallery({
         </div>
       </div>
 
-      {/* Label */}
+      
       <div className="p-3 bg-white border-t text-center">
         <span className="text-sm font-medium text-gray-700">
           {currentMockup.name}

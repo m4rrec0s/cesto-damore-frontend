@@ -48,7 +48,7 @@ export function Checkout({ user, onClose, isOpen = true }: CheckoutProps) {
   const [showPayment, setShowPayment] = useState(false);
 
   useEffect(() => {
-    // Inicializar Mercado Pago
+
     if (typeof window !== "undefined" && window.MercadoPago && !mp) {
       try {
         const mpInstance = new window.MercadoPago(
@@ -69,20 +69,18 @@ export function Checkout({ user, onClose, isOpen = true }: CheckoutProps) {
 
     setIsProcessing(true);
     try {
-      // Criar pedido
+
       const order = (await createOrder(
         user.id,
         deliveryAddress,
         deliveryDate ? new Date(deliveryDate) : undefined
       )) as { id: string };
 
-      // Criar preferência de pagamento
       const preference = await createPaymentPreference(user.email, order.id);
 
-      // Renderizar checkout do Mercado Pago
       if (mp && preference.id) {
         setShowPayment(true);
-        // O checkout será renderizado no container
+
       }
 
       if (onClose) onClose();
@@ -112,7 +110,7 @@ export function Checkout({ user, onClose, isOpen = true }: CheckoutProps) {
           </div>
 
           <div className="space-y-6">
-            {/* Resumo do pedido */}
+            
             <Card className="p-4">
               <h3 className="font-semibold mb-3">Resumo do Pedido</h3>
               <div className="space-y-2">
@@ -148,7 +146,7 @@ export function Checkout({ user, onClose, isOpen = true }: CheckoutProps) {
               </div>
             </Card>
 
-            {/* Informações de entrega */}
+            
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -177,12 +175,12 @@ export function Checkout({ user, onClose, isOpen = true }: CheckoutProps) {
               </div>
             </div>
 
-            {/* Container do Mercado Pago */}
+            
             {showPayment && (
               <div className="cho-container border p-4 rounded-md bg-gray-50"></div>
             )}
 
-            {/* Botão de finalizar */}
+            
             <Button
               onClick={handleCheckout}
               disabled={isProcessing || !deliveryAddress.trim()}

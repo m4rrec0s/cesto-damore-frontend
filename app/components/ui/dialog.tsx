@@ -27,7 +27,7 @@ const DialogOverlay = React.forwardRef<
     {...props}
   />
 ));
-// Avoid referencing primitive displayName (can be undefined in some runtimes)
+
 DialogOverlay.displayName = "DialogOverlay";
 
 const DialogContent = React.forwardRef<

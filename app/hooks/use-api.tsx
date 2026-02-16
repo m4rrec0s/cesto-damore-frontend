@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import axios from "axios";
 
-// ===== Enums =====
 export enum FeedSectionType {
   RECOMMENDED_PRODUCTS = "RECOMMENDED_PRODUCTS",
   DISCOUNTED_PRODUCTS = "DISCOUNTED_PRODUCTS",
@@ -12,7 +11,6 @@ export enum FeedSectionType {
   BEST_SELLERS = "BEST_SELLERS",
 }
 
-// ===== Tipos do Feed =====
 export interface FeedConfiguration {
   id: string;
   name: string;
@@ -128,7 +126,6 @@ export interface UpdateFeedSectionItemInput {
   custom_subtitle?: string;
 }
 
-// Labels para exibição
 export const FEED_SECTION_TYPE_LABELS: Record<FeedSectionType, string> = {
   [FeedSectionType.RECOMMENDED_PRODUCTS]: "Produtos Recomendados",
   [FeedSectionType.DISCOUNTED_PRODUCTS]: "Produtos com Desconto",
@@ -139,7 +136,6 @@ export const FEED_SECTION_TYPE_LABELS: Record<FeedSectionType, string> = {
   [FeedSectionType.BEST_SELLERS]: "Mais Vendidos",
 };
 
-// ===== Tipagens básicas =====
 export interface LoginCredentials {
   email: string;
   password: string;
@@ -274,13 +270,12 @@ export interface Customization {
   item_id: string;
   price: number;
   isRequired: boolean;
-  type: CustomizationTypeValue; // reutiliza o tipo já existente
+  type: CustomizationTypeValue;
   customization_data: CustomizationDataMultipleChoice | Record<string, unknown>;
   created_at: string;
   updated_at: string;
 }
 
-// Unified Item type (backend now exposes a single Item model)
 export interface Item {
   id: string;
   name: string;
@@ -383,7 +378,7 @@ export interface OrderItemCustomizationSummary {
   title: string;
   customization_type: CustomizationTypeValue;
   google_drive_url?: string | null;
-  value?: string | null; // JSON com os dados da customização
+  value?: string | null;
 }
 
 export interface OrderItemDetailed {
@@ -418,12 +413,12 @@ export interface Order {
   send_anonymously?: boolean | null;
   delivery_city?: string | null;
   delivery_state?: string | null;
-  delivery_method?: string | null; // Added delivery_method
+  delivery_method?: string | null;
   delivery_date?: string | null;
   shipping_price?: number | null;
   payment_method?: string | null;
   grand_total?: number | null;
-  recipient_phone?: string | null; // Número do destinatário
+  recipient_phone?: string | null;
   payment?: {
     id: string;
     status: string;
@@ -460,7 +455,6 @@ export interface CustomizationRuleInput {
   display_order?: number;
 }
 
-// Resposta da API para feed público
 export interface PublicFeedResponse {
   id: string;
   name: string;
@@ -518,9 +512,8 @@ export interface PublicFeedItem {
   item_data?: Record<string, unknown>;
 }
 
-// ===== Customer Management Types =====
 export interface N8NCustomer {
-  number: string; // telefone (PK)
+  number: string;
   name?: string | null;
   last_message_sent?: string | null;
   service_status?: string | null;
@@ -599,7 +592,7 @@ class ApiService {
   private client = axios.create({
     baseURL: process.env.NEXT_PUBLIC_API_URL,
   });
-  // ===== Utilidades de Cache =====
+
   static getCache() {
     return ApiService.cache;
   }
@@ -612,22 +605,18 @@ class ApiService {
     if (key in ApiService.cache) ApiService.cache[key] = null;
   }
 
-  // ===== Interceptors (auth token) =====
   constructor() {
     this.client.interceptors.request.use((config) => {
-      // Inicializar headers se não existir
+
       config.headers = config.headers || {};
 
-      // Adicionar header para ngrok (evita página de aviso)
       config.headers["ngrok-skip-browser-warning"] = "true";
 
-      // Tentar pegar token do localStorage (compatibilidade)
       let token =
         typeof window !== "undefined" ? localStorage.getItem("appToken") : null;
 
-      // Verificar se o token não é "undefined" como string e limpar se necessário
       if (token === "undefined" || token === "null" || !token) {
-        // Limpar valor inválido do localStorage
+
         if (
           typeof window !== "undefined" &&
           (token === "undefined" || token === "null")
@@ -637,13 +626,12 @@ class ApiService {
         token = null;
       }
 
-      // Se não encontrou appToken válido, tentar do localStorage antigo
       if (!token) {
         const oldToken =
           typeof window !== "undefined" ? localStorage.getItem("token") : null;
         if (oldToken && oldToken !== "undefined" && oldToken !== "null") {
           token = oldToken;
-          // Migrar token antigo para appToken se for válido
+
           if (typeof window !== "undefined") {
             localStorage.setItem("appToken", oldToken);
             localStorage.removeItem("token");
@@ -688,7 +676,6 @@ class ApiService {
     return res.data;
   };
 
-  // ===== Auth =====
   register = async (data: RegisterCredentials) => {
     const res = await this.client.post("/auth/register", data);
     return res.data;
@@ -720,7 +707,6 @@ class ApiService {
       idToken: googleToken,
     };
 
-    // Adicionar informações do usuário se fornecidas
     if (userInfo) {
       if (userInfo.email) payload.email = userInfo.email;
       if (userInfo.name) payload.name = userInfo.name;
@@ -745,7 +731,6 @@ class ApiService {
     }
   };
 
-  // ===== Users =====
   getUsers = async () => {
     if (ApiService.cache.users) return ApiService.cache.users;
     const res = await this.client.get("/users");
@@ -773,7 +758,6 @@ class ApiService {
     return res.data;
   };
 
-  // ===== Categories =====
   getCategories = async () => {
     if (ApiService.cache.categories) return ApiService.cache.categories;
     const res = await this.client.get("/categories");
@@ -798,7 +782,6 @@ class ApiService {
     return res.data;
   };
 
-  // ===== Types =====
   getTypes = async () => {
     if (ApiService.cache.types) return ApiService.cache.types;
     const res = await this.client.get("/types");
@@ -822,7 +805,6 @@ class ApiService {
     return res.data;
   };
 
-  // ===== Additionals =====
   getAdditionals = async () => {
     if (ApiService.cache.additionals) return ApiService.cache.additionals;
     const res = await this.client.get("/additional");
@@ -865,7 +847,7 @@ class ApiService {
     imageFile?: File,
   ): Promise<Additional> => {
     if (imageFile) {
-      // Enviar como FormData com imagem
+
       const formData = new FormData();
       formData.append("name", payload.name || "");
       formData.append("description", payload.description || "");
@@ -886,7 +868,7 @@ class ApiService {
       this.clearCache("additionals");
       return res.data;
     } else {
-      // Enviar como JSON normal
+
       const res = await this.client.post("/additional", payload);
       this.clearCache("additionals");
       return res.data;
@@ -898,7 +880,7 @@ class ApiService {
     imageFile?: File,
   ): Promise<Additional> => {
     if (imageFile) {
-      // Enviar como FormData com imagem
+
       const formData = new FormData();
       if (payload.name) formData.append("name", payload.name);
       if (payload.description !== undefined)
@@ -919,7 +901,7 @@ class ApiService {
       this.clearCache("additionals");
       return res.data;
     } else {
-      // Enviar como JSON normal
+
       const res = await this.client.put(`/additional/${id}`, payload);
       this.clearCache("additionals");
       return res.data;
@@ -959,7 +941,6 @@ class ApiService {
     return res.data;
   };
 
-  // ===== Product Components =====
   addProductComponent = async (
     productId: string,
     component: { item_id: string; quantity: number },
@@ -989,7 +970,6 @@ class ApiService {
     return res.data;
   };
 
-  // ===== Products =====
   getProducts = async (params?: {
     page?: number;
     perPage?: number;
@@ -1007,7 +987,6 @@ class ApiService {
       queryParams.append("category_id", params.category_id);
     if (params?.type_id) queryParams.append("type_id", params.type_id);
 
-    // No frontend do cliente, sempre buscar apenas produtos ativos por padrão
     const onlyActive =
       params?.only_active !== undefined ? params.only_active : true;
     if (onlyActive) {
@@ -1017,14 +996,12 @@ class ApiService {
     const queryString = queryParams.toString();
     const url = `/products${queryString ? `?${queryString}` : ""}`;
 
-    // Se não tem parâmetros e tem cache, retornar do cache
     if (!queryString && ApiService.cache.products) {
       return ApiService.cache.products as ProductsResponse;
     }
 
     const res = await this.client.get(url);
 
-    // Salvar no cache apenas se não tem parâmetros (página inicial)
     if (!queryString) {
       ApiService.cache.products = res.data;
     }
@@ -1040,7 +1017,7 @@ class ApiService {
     imageFile?: File,
   ): Promise<Product> => {
     if (imageFile) {
-      // Enviar como FormData com imagem
+
       const formData = new FormData();
       if (payload.name) formData.append("name", payload.name);
       if (payload.description !== undefined)
@@ -1075,7 +1052,7 @@ class ApiService {
     imageFile?: File,
   ): Promise<Product> => {
     if (imageFile) {
-      // Enviar como FormData com imagem
+
       const formData = new FormData();
       if (payload.name) formData.append("name", payload.name);
       if (payload.description !== undefined)
@@ -1099,7 +1076,7 @@ class ApiService {
       this.clearCache("products");
       return res.data;
     } else {
-      // Enviar como JSON normal
+
       const res = await this.client.put(`/products/${id}`, payload);
       this.clearCache("products");
       return res.data;
@@ -1125,7 +1102,6 @@ class ApiService {
     return res.data;
   };
 
-  // ===== Upload de Imagens =====
   uploadImage = async (file: File): Promise<{ url: string }> => {
     const formData = new FormData();
     formData.append("image", file);
@@ -1139,7 +1115,6 @@ class ApiService {
     return res.data;
   };
 
-  // ===== Orders =====
   getOrders = async (params?: {
     status?: string;
     page?: number;
@@ -1166,7 +1141,7 @@ class ApiService {
     delivery_method?: "delivery" | "pickup";
   }) => {
     try {
-      // Defensive: strip base64 content from customizations before sending order
+
       const sanitized = this.stripBase64FromOrderPayload(
         payload as Record<string, unknown>,
       );
@@ -1201,7 +1176,7 @@ class ApiService {
       this.clearCache("orders");
       return res.data;
     } catch (error: unknown) {
-      // Log payload and richer error data for debugging
+
       console.error("API.updateOrderItems failed", {
         id,
         items,
@@ -1253,8 +1228,6 @@ class ApiService {
     this.clearCache("orders");
     return res.data;
   };
-
-  // ===== Customization Rules =====
 
   /**
    * Busca customizações de um produto (legado - retrocompatibilidade)
@@ -1417,7 +1390,6 @@ class ApiService {
     return res.data;
   };
 
-  // Simple poller state
   private activePollers: Record<string, number> = {};
 
   pollOrderCustomizations(
@@ -1432,7 +1404,7 @@ class ApiService {
         const res = await this.client.get(`/orders/${orderId}/customizations`);
         onUpdate(res.data);
       } catch {
-        // swallow polling errors
+
       }
     }, interval);
     this.activePollers[orderId] = id;
@@ -1507,11 +1479,10 @@ class ApiService {
     return res.data;
   };
 
-  // Helper: recursively remove base64 fields and data URIs from an object
   private stripBase64FromCustomizationPayload(
     payload: import("../types/customization").SaveOrderItemCustomizationPayload,
   ) {
-    // deep clone
+
     const clone = JSON.parse(JSON.stringify(payload));
 
     function removeBase64(obj: unknown) {
@@ -1520,7 +1491,7 @@ class ApiService {
       for (const key of Object.keys(record)) {
         const val = record[key];
         if (typeof val === "string") {
-          // remove data URIs (data:*;base64,)
+
           if (val.startsWith("data:") || val.startsWith("blob:")) {
             delete record[key];
             continue;
@@ -1538,36 +1509,13 @@ class ApiService {
       }
     }
 
-    // ✅ MANTER base64 em finalArtwork/finalArtworks para o backend processar
-    // O backend irá converter para arquivo e depois remover o base64 antes de salvar no banco
-    // if (clone.finalArtwork) {
-    //   delete clone.finalArtwork.base64;
-    //   delete clone.finalArtwork.base64Data;
-    // }
-    // if (clone.finalArtworks && Array.isArray(clone.finalArtworks)) {
-    //   clone.finalArtworks.forEach((a: unknown) => {
-    //     if (typeof a === "object" && a !== null) {
-    //       delete (a as Record<string, unknown>).base64;
-    //       delete (a as Record<string, unknown>).base64Data;
-    //     }
-    //   });
-    // }
-
     if (clone.data) removeBase64(clone.data);
 
     return clone as import("../types/customization").SaveOrderItemCustomizationPayload;
   }
 
-  // Sanitize entire order payload before sending to backend
   private stripBase64FromOrderPayload(payload: Record<string, unknown>) {
     const clone = JSON.parse(JSON.stringify(payload));
-
-    // ✅ For IMAGES and DYNAMIC_LAYOUT customizations, we now REMOVE base64 data
-    // We only store file paths (URLs) in the database.
-    // This function will:
-    // 1. Remove base64 fields
-    // 2. Remove strings starting with data: or blob:
-    // 3. Remove preview_url if it's a blob: URL
 
     function removeBase64(obj: unknown) {
       if (!obj || typeof obj !== "object") return;
@@ -1575,29 +1523,24 @@ class ApiService {
       for (const key of Object.keys(record)) {
         const val = record[key];
 
-        // Recursively handle photos array in IMAGES or other arrays
         if (Array.isArray(val)) {
           val.forEach((item) => removeBase64(item));
           continue;
         }
 
-        // Recursively handle nested objects
         if (val && typeof val === "object") {
           removeBase64(val);
           continue;
         }
 
-        // Remove base64/base64Data keys
         if (key === "base64" || key === "base64Data") {
           delete record[key];
           continue;
         }
 
-        // Remove strings starting with data: or blob:
         if (typeof val === "string") {
           if (val.startsWith("data:") || val.startsWith("blob:")) {
-            // For 'text' field in 'DYNAMIC_LAYOUT', if it's base64, we delete it.
-            // Ideally it should have been replaced by a URL by the caller.
+
             delete record[key];
             continue;
           }
@@ -1605,7 +1548,6 @@ class ApiService {
       }
     }
 
-    // Process top-level data fields
     if (clone.data && typeof clone.data === "object") {
       removeBase64(clone.data);
     }
@@ -1626,7 +1568,7 @@ class ApiService {
         (item.customizations as unknown[]).forEach((c: unknown) => {
           const customization = c as Record<string, unknown>;
           try {
-            // Handle 'value' field
+
             if (typeof customization.value === "string") {
               const parsed = JSON.parse(customization.value as string);
               removeBase64(parsed);
@@ -1635,7 +1577,6 @@ class ApiService {
               removeBase64(customization.value);
             }
 
-            // Handle 'customization_data' field
             if (
               customization.customization_data &&
               typeof customization.customization_data === "object"
@@ -1683,7 +1624,7 @@ class ApiService {
           ] = layout.title;
         }
       } catch {
-        // ignore - backend will compute label when possible
+
       }
     }
 
@@ -1743,7 +1684,7 @@ class ApiService {
   validateTempImageExists = async (imageUrl: string): Promise<boolean> => {
     if (!imageUrl) return false;
     try {
-      // Fazer request simples com timeout curto
+
       await Promise.race([
         this.client.head(imageUrl),
         new Promise((_, reject) =>
@@ -1896,7 +1837,6 @@ class ApiService {
     await this.client.delete(`/admin/constraints/${constraintId}`);
   };
 
-  // ===== Payments =====
   createPaymentPreference = async (payload: {
     items: Array<{
       title: string;
@@ -1934,7 +1874,6 @@ class ApiService {
     return res.data;
   };
 
-  // ===== Checkout Transparente =====
   createTransparentPayment = async (payload: {
     orderId: string;
     payerEmail: string;
@@ -1943,12 +1882,12 @@ class ApiService {
     payerDocumentType: "CPF" | "CNPJ";
     paymentMethodId: "pix" | "credit_card" | "debit_card";
     cardToken?: string;
-    cardholderName?: string; // Nome do titular do cartão
+    cardholderName?: string;
     installments?: number;
     issuer_id?: string;
-    payment_method_id?: string; // payment_method_id específico do MP (master, visa, etc)
+    payment_method_id?: string;
   }) => {
-    // Validação defensiva do orderId
+
     if (
       !payload.orderId ||
       payload.orderId === "null" ||
@@ -1970,7 +1909,7 @@ class ApiService {
       );
       return res.data;
     } catch (error: unknown) {
-      // Extract friendly error message from backend response
+
       if (axios.isAxiosError(error) && error.response?.data) {
         const responseData = error.response.data as {
           error?: string;
@@ -1978,7 +1917,6 @@ class ApiService {
           status_detail?: string;
         };
 
-        // Prioritize the 'error' field which contains the friendly message
         const friendlyMessage = responseData.error || responseData.details;
         if (friendlyMessage) {
           throw new Error(friendlyMessage);
@@ -2029,7 +1967,7 @@ class ApiService {
       const res = await this.client.get(`/users/${userId}/orders/pending`);
       return res.data;
     } catch (error: unknown) {
-      // Se retornar 404, significa que não há pedido pendente
+
       if (axios.isAxiosError(error) && error?.response?.status === 404) {
         return null;
       }
@@ -2045,13 +1983,11 @@ class ApiService {
     return res.data;
   };
 
-  // ===== Payment Methods =====
   getPaymentMethods = async () => {
     const res = await this.client.get("/payment-methods");
     return res.data;
   };
 
-  // ===== MercadoPago Token =====
   createCardToken = async (payload: {
     cardNumber: string;
     securityCode: string;
@@ -2086,7 +2022,6 @@ class ApiService {
     return res.data;
   };
 
-  // ===== Feed =====
   getFeedConfigurations = async (): Promise<FeedConfiguration[]> => {
     if (ApiService.cache.feedConfigurations) {
       return ApiService.cache.feedConfigurations as FeedConfiguration[];
@@ -2107,7 +2042,7 @@ class ApiService {
     payload: CreateFeedConfigurationInput,
   ): Promise<FeedConfiguration> => {
     const res = await this.client.post("/admin/feed/configurations", payload);
-    ApiService.cache.feedConfigurations = null; // Invalidar cache
+    ApiService.cache.feedConfigurations = null;
     return res.data;
   };
 
@@ -2119,13 +2054,13 @@ class ApiService {
       `/admin/feed/configurations/${id}`,
       payload,
     );
-    ApiService.cache.feedConfigurations = null; // Invalidar cache
+    ApiService.cache.feedConfigurations = null;
     return res.data;
   };
 
   deleteFeedConfiguration = async (id: string): Promise<void> => {
     await this.client.delete(`/admin/feed/configurations/${id}`);
-    ApiService.cache.feedConfigurations = null; // Invalidar cache
+    ApiService.cache.feedConfigurations = null;
   };
 
   createFeedBanner = async (
@@ -2204,7 +2139,6 @@ class ApiService {
     ApiService.cache.feedConfigurations = null;
   };
 
-  // ===== Feed Section Items =====
   createFeedSectionItem = async (
     data: CreateFeedSectionItemInput,
   ): Promise<FeedSectionItem> => {
@@ -2230,7 +2164,6 @@ class ApiService {
     ApiService.cache.feedConfigurations = null;
   };
 
-  // ===== Public Feed =====
   getPublicFeed = async (
     configId?: string,
     page?: number,
@@ -2240,7 +2173,6 @@ class ApiService {
       page ?? "all"
     }_per_${perPage ?? "all"}`;
 
-    // Retornar do cache se disponível
     if (ApiService.cache[cacheKey]) {
       return ApiService.cache[cacheKey] as PublicFeedResponse;
     }
@@ -2252,13 +2184,11 @@ class ApiService {
     const queryString = paramsArr.length ? `?${paramsArr.join("&")}` : "";
     const response = await this.client.get(`/feed${queryString}`);
 
-    // Armazenar no cache
     ApiService.cache[cacheKey] = response.data;
 
     return response.data;
   };
 
-  // ===== Reports =====
   getStockReport = async (threshold: number = 5) => {
     const res = await this.client.get(`/reports/stock?threshold=${threshold}`);
     return res.data;
@@ -2276,9 +2206,6 @@ class ApiService {
     return res.data;
   };
 
-  // ===== Customer Management =====
-
-  // Listar clientes com filtros
   listCustomers = async (filters?: {
     follow_up?: boolean;
     service_status?: string;
@@ -2300,19 +2227,16 @@ class ApiService {
     return response.data;
   };
 
-  // Buscar informações completas de um cliente
   getCustomerInfo = async (phone: string): Promise<CombinedCustomerInfo> => {
     const response = await this.client.get(`/customers/${phone}`);
     return response.data;
   };
 
-  // Criar ou atualizar cliente
   upsertCustomer = async (data: UpsertCustomerInput): Promise<N8NCustomer> => {
     const response = await this.client.post("/customers", data);
     return response.data;
   };
 
-  // Atualizar follow-up
   updateCustomerFollowUp = async (
     phone: string,
     followUp: boolean,
@@ -2323,7 +2247,6 @@ class ApiService {
     return response.data;
   };
 
-  // Atualizar status de serviço
   updateCustomerServiceStatus = async (
     phone: string,
     status: string,
@@ -2335,7 +2258,6 @@ class ApiService {
     return response.data;
   };
 
-  // Atualizar status de cliente
   updateCustomerStatus = async (
     phone: string,
     alreadyCustomer: boolean,
@@ -2347,7 +2269,6 @@ class ApiService {
     return response.data;
   };
 
-  // Atualizar nome do cliente
   updateCustomerName = async (
     phone: string,
     name: string,
@@ -2358,7 +2279,6 @@ class ApiService {
     return response.data;
   };
 
-  // Enviar mensagem ao cliente
   sendMessageToCustomer = async (
     phone: string,
     message: string,
@@ -2370,19 +2290,16 @@ class ApiService {
     return response.data;
   };
 
-  // Listar clientes para follow-up
   getFollowUpCustomers = async (): Promise<CombinedCustomerInfo[]> => {
     const response = await this.client.get("/customers/follow-up");
     return response.data;
   };
 
-  // Sincronizar usuário do app para n8n
   syncAppUserToN8N = async (userId: string): Promise<{ success: boolean }> => {
     const response = await this.client.post(`/customers/sync/${userId}`);
     return response.data;
   };
 
-  // ===== Item Constraints =====
   getItemConstraints = async (
     itemId: string,
     itemType: "PRODUCT" | "ADDITIONAL",
@@ -2393,14 +2310,13 @@ class ApiService {
     return res.data;
   };
 
-  // ✅ NOVO: Customization Review & Validation
   getOrderReviewData = async (orderId: string) => {
     const res = await this.client.get(`/customization/review/${orderId}`);
     return res.data;
   };
 
   validateOrderCustomizationsFiles = async (orderId: string) => {
-    // Nota: Rota precisa ser registrada no backend
+
     const res = await this.client.get(
       `/orders/${orderId}/customizations/validate`,
     );
@@ -2422,7 +2338,7 @@ export function useApi() {
     (key: string) => api.clearCache(key),
     [api],
   );
-  // Evita recriar objeto a cada render (quebrando dependências em useEffect em consumidores)
+
   const value = useMemo(
     () => ({
       ...api,

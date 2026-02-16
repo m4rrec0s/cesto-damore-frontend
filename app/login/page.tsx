@@ -24,12 +24,10 @@ function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  // URL de redirecionamento após login
   const redirectTo =
     searchParams.get("redirect") || searchParams.get("redirectTo") || "/";
   const reason = searchParams.get("reason");
 
-  // Mensagens baseadas no motivo do redirecionamento
   const getReasonMessage = () => {
     switch (reason) {
       case "token_expired":
@@ -49,7 +47,6 @@ function LoginForm() {
 
   const reasonMessage = getReasonMessage();
 
-  // Se já estiver logado, redirecionar
   useEffect(() => {
     if (user) {
       router.push(redirectTo);
@@ -84,7 +81,7 @@ function LoginForm() {
 
     try {
       await api.register({ name, email, password });
-      // Após registro, fazer login automaticamente
+
       const response = await api.login({ email, password });
       login(response.user, response.appToken);
       router.push(redirectTo);

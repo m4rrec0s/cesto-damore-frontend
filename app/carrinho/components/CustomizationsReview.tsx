@@ -23,7 +23,7 @@ interface CartItemForReview {
     name: string;
     image_url?: string | null;
   };
-  // ✅ Adicionado suporte para additionals (itens extras)
+  
   additionals?: {
     id: string;
     item_id?: string;
@@ -51,8 +51,8 @@ interface AvailableCustomization {
   isRequired: boolean;
   itemId: string;
   itemName: string;
-  componentId: string; // ✅ Unique ID of the component instance
-  isAdditional?: boolean; // ✅ Flag para identificar adicionais
+  componentId: string; 
+  isAdditional?: boolean; 
 }
 
 interface ProductValidation {
@@ -65,7 +65,7 @@ interface ProductValidation {
   isComplete: boolean;
 }
 
-// Interfaces para evitar erros de tipo e uso de 'any'
+
 interface CustomizationPreview {
   preview_url?: string;
   url?: string;
@@ -91,7 +91,7 @@ interface PersonalizationData {
   [key: string]: unknown;
 }
 
-// Tipo para customizações do modal (compatível com ItemCustomizationModal)
+
 interface ModalCustomization {
   id: string;
   name: string;
@@ -117,7 +117,7 @@ const isCustomizationFilled = (
       return text.length >= 2;
     }
     case "MULTIPLE_CHOICE": {
-      // Relaxado: ter opção OU label já conta como preenchido
+      
       const hasOption = !!(
         custom.selected_option ||
         data.id ||
@@ -134,11 +134,11 @@ const isCustomizationFilled = (
     }
     case "IMAGES": {
       const photos = custom.photos || data.photos || data.files || [];
-      // Relaxado: Se tem fotos de algum jeito, tá preenchido
+      
       return Array.isArray(photos) && photos.length > 0;
     }
     case "DYNAMIC_LAYOUT": {
-      // Relaxado: se tiver arte final OU fabric state OU label, consideramos preenchido
+      
       const fabricState = data.fabricState;
       const artworkUrl =
         custom.text ||
@@ -180,18 +180,18 @@ const getCustomizationHint = (type: string, name: string): string => {
   return hints[type] || `Complete a personalização "${name}"`;
 };
 
-// Extrai o texto limpo de um valor que pode estar serializado
+
 const extractCleanText = (text: string | undefined): string => {
   if (!text) return "";
 
   let cleaned = text;
 
-  // Se começar com "field-", extrair o valor após o ": "
+  
   if (cleaned.startsWith("field-")) {
     const colonIndex = cleaned.indexOf(":");
     if (colonIndex !== -1) {
       cleaned = cleaned.substring(colonIndex + 1).trim();
-      // Remover ", text: ", ", fields: ", etc. se existirem
+      
       const commaIndex = cleaned.indexOf(",");
       if (commaIndex !== -1) {
         cleaned = cleaned.substring(0, commaIndex).trim();
@@ -199,7 +199,7 @@ const extractCleanText = (text: string | undefined): string => {
     }
   }
 
-  // Se contiver ", text: ", extrair o valor após isso
+  
   if (cleaned.includes(", text: ")) {
     const textMatch = cleaned.match(/,\s*text:\s*([^,]+)/);
     if (textMatch && textMatch[1]) {
@@ -207,20 +207,20 @@ const extractCleanText = (text: string | undefined): string => {
     }
   }
 
-  // 🔥 NOVO: Remover prefixo "text: " se existir
+  
   if (cleaned.startsWith('"text: ') && cleaned.endsWith('"')) {
-    // Remove aspas externas e o prefixo "text: "
+    
     cleaned = cleaned.slice(7, -1);
   } else if (cleaned.startsWith("text: ")) {
     cleaned = cleaned.substring(6);
   }
 
-  // Se for JSON, tentar parsear
+  
   try {
     if (cleaned.startsWith("{")) {
       const obj = JSON.parse(cleaned);
       if (obj.text) return obj.text;
-      // Procurar por propriedade que começe com "field-"
+      
       for (const key of Object.keys(obj)) {
         if (key.startsWith("field-")) {
           return obj[key];
@@ -228,10 +228,10 @@ const extractCleanText = (text: string | undefined): string => {
       }
     }
   } catch {
-    // Não é JSON válido, continuar
+    
   }
 
-  // Retornar o texto limpo
+  
   return cleaned;
 };
 
@@ -280,9 +280,9 @@ const mapCustomizationType = (backendType: string): string => {
   return typeMap[backendType] || backendType;
 };
 
-// =============================================
-// COMPONENTE PRINCIPAL
-// =============================================
+
+
+
 
 const CustomizationFallback = ({
   customization,
@@ -338,7 +338,7 @@ export function CustomizationsReview({
   );
   const [isLoading, setIsLoading] = useState(true);
 
-  // Estado do modal
+  
   const [modalOpen, setModalOpen] = useState(false);
   const [activeItemId, setActiveItemId] = useState<string | null>(null);
   const [activeItemName, setActiveItemName] = useState<string>("");
@@ -350,7 +350,7 @@ export function CustomizationsReview({
     null,
   );
 
-  // ✅ Função para validar arquivos no backend
+  
   const fetchFileValidation = useCallback(async () => {
     if (!orderId) return;
     try {
@@ -372,7 +372,7 @@ export function CustomizationsReview({
 
     if (orderId) {
       try {
-        await fetchFileValidation(); // Validar arquivos em paralelo ou sequencial
+        await fetchFileValidation(); 
         const reviewData = await getOrderReviewData(orderId);
 
         const results: ProductValidation[] = reviewData.map((data: any) => {
@@ -456,7 +456,7 @@ export function CustomizationsReview({
         return;
       } catch (error) {
         console.error("Erro ao buscar dados de revisão consolidados:", error);
-        // Fallback para o método antigo em caso de erro
+        
       }
     }
 
@@ -473,7 +473,7 @@ export function CustomizationsReview({
 
         if (product.components && product.components.length > 0) {
           for (const component of product.components) {
-            // ✅ Validar item_id antes de buscar customizações
+            
             if (!component.item_id || !component.item?.id) {
               console.warn(`Componente sem item_id válido:`, component);
               continue;
@@ -493,7 +493,7 @@ export function CustomizationsReview({
                 itemId: component.item_id,
                 itemName:
                   configResponse?.item?.name || component.item?.name || "Item",
-                componentId: component.id, // ✅ Add componentId
+                componentId: component.id, 
                 isAdditional: false,
               }));
 
@@ -507,7 +507,7 @@ export function CustomizationsReview({
           }
         }
 
-        // ✅ NOVO: Buscar customizações de ITEMS ADICIONAIS
+        
         if (cartItem.additionals && cartItem.additionals.length > 0) {
           for (const additional of cartItem.additionals) {
             if (!additional.item_id && !additional.item?.id) continue;
@@ -530,8 +530,8 @@ export function CustomizationsReview({
                   additional.item?.name ||
                   configResponse?.item?.name ||
                   "Adicional",
-                componentId: additional.id, // O ID do relacionamento no carrinho
-                isAdditional: true, // ✅ Marca como adicional
+                componentId: additional.id, 
+                isAdditional: true, 
               }));
               allAvailable.push(...mapped);
             } catch (err) {
@@ -541,22 +541,22 @@ export function CustomizationsReview({
         }
 
         const filled = cartItem.customizations || [];
-        // ✅ MUDANÇA: Mostrar TODAS as customizações, não só as obrigatórias
+        
         const missingRequired = allAvailable.filter((avail) => {
           const filledCustom = filled.find(
             (f) =>
               (f.customization_id === avail.id ||
                 f.customization_id?.includes(avail.id)) &&
-              // ✅ Match by componentId if present, else fallback
+              
               (!f.componentId ||
                 f.componentId === avail.componentId ||
                 f.componentId === avail.itemId),
           );
-          // Se é obrigatória E não está preenchida, adicionar na lista
+          
           if (avail.isRequired && !isCustomizationFilled(filledCustom)) {
             return true;
           }
-          // Se é opcional, nunca aparecer em missingRequired
+          
           return false;
         });
 
@@ -566,7 +566,7 @@ export function CustomizationsReview({
           availableCustomizations: allAvailable,
           filledCustomizations: filled,
           missingRequired,
-          // ✅ MUDANÇA: isComplete agora é true apenas se TODAS as OBRIGATÓRIAS estão preenchidas
+          
           isComplete: missingRequired.length === 0,
         });
       } catch (error) {
@@ -592,7 +592,7 @@ export function CustomizationsReview({
             isRequired: true,
             itemId: "",
             itemName: "",
-            componentId: "", // Fallback
+            componentId: "", 
           })),
           isComplete: missingFromFilled.length === 0,
         });
@@ -656,12 +656,12 @@ export function CustomizationsReview({
           customization_data: c.customization_data,
         }));
 
-        // ✅ MUDANÇA: Quando orderId existe, buscar customizações do validations state
-        // (que vem do backend), não do cartItems (que é local)
+        
+        
         let filled: CartCustomization[] = [];
 
         if (orderId) {
-          // Buscar do validations state (dados do backend)
+          
           const validation = validations.find((v) => v.productId === productId);
           if (validation) {
             filled = validation.filledCustomizations.filter(
@@ -669,7 +669,7 @@ export function CustomizationsReview({
             );
           }
         } else {
-          // Fallback: buscar do cartItems (quando não há orderId)
+          
           const cartItem = cartItems.find((i) => i.product_id === productId);
           filled =
             cartItem?.customizations?.filter(
@@ -763,7 +763,7 @@ export function CustomizationsReview({
             if (sanitizedData.images && Array.isArray(sanitizedData.images)) {
               sanitizedData.images = sanitizedData.images.map(
                 (img: Record<string, unknown>) => {
-                  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+                  
                   const { imageBuffer, ...rest } = img;
                   return rest;
                 },
@@ -931,7 +931,7 @@ export function CustomizationsReview({
             validation.availableCustomizations.forEach((avail) => {
               if (!avail.itemId) return;
 
-              // Garantir que a chave seja consistente
+              
               const componentIdKey = avail.componentId || avail.itemId;
 
               if (!itemsMap.has(componentIdKey)) {
@@ -947,10 +947,10 @@ export function CustomizationsReview({
               const entry = itemsMap.get(componentIdKey)!;
               entry.allCustomizations.push(avail);
 
-              // Tentar encontrar o preenchimento correspondente
+              
               const filledCustom = validation.filledCustomizations.find(
                 (f) =>
-                  // Match por ID ou Titulo
+                  
                   (f.customization_id === avail.id ||
                     f.customization_id?.split(":")[0] === avail.id ||
                     f.title?.toLowerCase() === avail.name?.toLowerCase() ||
@@ -962,7 +962,7 @@ export function CustomizationsReview({
               const isFilled = isCustomizationFilled(filledCustom);
 
               if (filledCustom && isFilled) {
-                // Evitar duplicatas no array filled
+                
                 if (
                   !entry.filled.some(
                     (f) =>
@@ -974,7 +974,7 @@ export function CustomizationsReview({
                   entry.filled.push(filledCustom);
                 }
               } else if (avail.isRequired) {
-                // Se é obrigatório e não está preenchido, vai para missing
+                
                 entry.missing.push(avail);
               }
             });
@@ -996,7 +996,7 @@ export function CustomizationsReview({
                     cIdx,
                   ) => {
                     const isIncomplete = missing.length > 0;
-                    // const totalCustomizations = allCustomizations.length;
+                    
 
                     return (
                       <div
@@ -1007,7 +1007,6 @@ export function CustomizationsReview({
                             : "border-gray-200 bg-white/50"
                         }`}
                       >
-                        {/* Header do item */}
                         <div className="flex items-start justify-between mb-2">
                           <div className="flex items-start gap-3 flex-1">
                             <div className="flex-1">
@@ -1024,7 +1023,6 @@ export function CustomizationsReview({
                             </div>
                             {filled.length > 0 && (
                               <div className="max-w-[60%] flex flex-col gap-2">
-                                {/* 🚨 Renderizar customizações inválidas / arquivos perdidos */}
                                 {filled
                                   .filter(
                                     (f) =>
@@ -1047,7 +1045,6 @@ export function CustomizationsReview({
                                     />
                                   ))}
 
-                                {/* ✅ Renderizar customizações válidas */}
                                 <div className="flex flex-wrap gap-1.5">
                                   {filled
                                     .filter(
@@ -1132,7 +1129,6 @@ export function CustomizationsReview({
           })}
         </div>
 
-        {/* Mensagem de conclusão */}
         {allComplete && validations.length > 0 && (
           <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-lg flex items-center gap-2">
             <CheckCircle2 className="h-5 w-5 text-green-600 flex-shrink-0" />
@@ -1144,7 +1140,6 @@ export function CustomizationsReview({
         )}
       </Card>
 
-      {/* Modal de customização */}
       {activeItemId && (
         <ItemCustomizationModal
           isOpen={modalOpen}
@@ -1160,9 +1155,6 @@ export function CustomizationsReview({
   );
 }
 
-// =============================================
-// FUNÇÕES UTILITÁRIAS EXPORTADAS
-// =============================================
 
 export function validateCustomizations(
   cartItems: Array<{

@@ -214,7 +214,7 @@ export function SiteHeader() {
         </div>
       </header>
 
-      {/* Desktop Sub-navigation */}
+      
       <div className="hidden lg:block w-full bg-white border-b border-gray-100 py-3">
         <nav className="flex items-center justify-center gap-8 text-[13px] font-semibold text-gray-600 max-w-[90%] mx-auto">
           {menuItems.map((item) => {
@@ -264,7 +264,7 @@ export function SiteHeader() {
           </div>
         </div>
 
-        {/* Navigation Links */}
+        
         <nav className="flex-1 overflow-y-auto">
           <div className="py-2">
             {menuItems.map((item) => {
@@ -306,7 +306,7 @@ export function SiteHeader() {
           </div>
         </nav>
 
-        {/* Logout Button */}
+        
         {user && (
           <div className="p-4 border-t bg-gray-50">
             <Button
@@ -326,7 +326,7 @@ export function SiteHeader() {
         </SheetContent>
       </Sheet>
 
-      {/* Logout Confirmation Dialog */}
+      
       <Dialog open={isDialogUserOpen} onOpenChange={setIsDialogUserOpen}>
         <DialogContent>
           <DialogHeader>

@@ -43,7 +43,6 @@ export function useCustomizationUpload(): UseCustomizationUploadReturn {
         setIsLoading(true);
         setError(null);
 
-        // Validações básicas
         if (!file.type.startsWith("image/")) {
           throw new Error("Por favor, selecione uma imagem válida");
         }

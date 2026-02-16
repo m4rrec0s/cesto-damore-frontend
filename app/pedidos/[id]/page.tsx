@@ -113,7 +113,7 @@ export default function OrderDetailsPage() {
             setOrder(newOrder);
           }
         } catch {
-          // ignore
+
         }
       } catch (error) {
         console.error("Erro ao buscar pedido:", error);
@@ -130,7 +130,7 @@ export default function OrderDetailsPage() {
 
   useWebhookNotification({
     orderId: id,
-    enabled: false, // Desabilitar temporariamente para investigar loop
+    enabled: false,
     onPaymentApproved: sseOnPaymentApproved,
   });
 
@@ -240,15 +240,15 @@ export default function OrderDetailsPage() {
             </div>
           </div>
 
-          {/* Timeline */}
+          
           <div className="mt-8">
             <h3 className="font-semibold text-gray-700 mb-4">
               Status do Pedido
             </h3>
             <div className="relative">
-              {/* Background line */}
+              
               <div className="absolute top-4 left-0 right-0 h-1 bg-gray-200 rounded mx-2"></div>
-              {/* Colored line */}
+              
               {(() => {
                 const statuses = ["PENDING", "PAID", "SHIPPED", "DELIVERED"];
                 const currentIndex = statuses.indexOf(order.status);
@@ -263,7 +263,7 @@ export default function OrderDetailsPage() {
                   ></div>
                 );
               })()}
-              {/* Dots and labels */}
+              
               <div className="flex justify-between relative">
                 {(["PENDING", "PAID", "SHIPPED", "DELIVERED"] as const).map(
                   (s, idx) => {
@@ -306,7 +306,7 @@ export default function OrderDetailsPage() {
           </div>
         </div>
 
-        {/* Detalhes adicionais: endereço, pagamento, etc. */}
+        
         <div className="mt-6 grid grid-cols-2 gap-6">
           <div className="bg-white shadow rounded-lg p-6">
             <h4 className="text-sm font-semibold text-gray-700">

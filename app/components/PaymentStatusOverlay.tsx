@@ -25,21 +25,18 @@ export function PaymentStatusOverlay({
   >("entering");
 
   useEffect(() => {
-    // Mostra o overlay quando o status mudar
+
     if (status) {
       setShow(true);
       setAnimationPhase("entering");
 
-      // Após animação de entrada
       const enterTimer = setTimeout(() => {
         setAnimationPhase("visible");
 
-        // Para status de sucesso, após 2 segundos inicia animação de saída
         if (status === "success") {
           const exitTimer = setTimeout(() => {
             setAnimationPhase("exiting");
 
-            // Após animação de saída, executa callback
             const completeTimer = setTimeout(() => {
               onAnimationComplete?.();
             }, 500);
@@ -155,7 +152,7 @@ export function PaymentStatusOverlay({
         `}
       >
         <div className="flex flex-col items-center text-center space-y-4">
-          {/* Ícone com animação */}
+          
           <div
             className={`
               ${config.pulse ? "animate-pulse" : ""}
@@ -171,15 +168,15 @@ export function PaymentStatusOverlay({
             />
           </div>
 
-          {/* Título */}
+          
           <h3 className="text-2xl font-bold text-gray-900">{config.title}</h3>
 
-          {/* Mensagem */}
+          
           <p className="text-gray-600 text-sm leading-relaxed">
             {config.message}
           </p>
 
-          {/* Status de sucesso - informação adicional */}
+          
           {status === "success" && (
             <div className="mt-4 p-4 bg-white rounded-lg border border-green-200 w-full">
               <p className="text-xs text-gray-500 mb-1">
@@ -194,7 +191,7 @@ export function PaymentStatusOverlay({
             </div>
           )}
 
-          {/* Status pendente - informação adicional */}
+          
           {status === "pending" && (
             <div className="flex items-center gap-2 text-yellow-600">
               <Loader2 className="w-4 h-4 animate-spin" />

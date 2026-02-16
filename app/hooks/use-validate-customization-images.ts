@@ -18,7 +18,7 @@ export interface ValidationResult {
  * const result = await validateCustomizationImages(cartCustomizations);
  * if (!result.isValid) {
  *   const cleaned = removeInvalidImages(cartCustomizations, result.invalidImages);
- *   // Mostrar erro e aplicar as customizações limpas
+ *
  * }
  */
 export function useValidateCustomizationImages() {
@@ -42,7 +42,6 @@ export function useValidateCustomizationImages() {
         return { isValid: true, invalidImages: [] };
       }
 
-      // Coletar todas as URLs de imagens para validar
       const urlsToValidate: Array<{
         url: string;
         customizationType: string;
@@ -53,11 +52,10 @@ export function useValidateCustomizationImages() {
         const customizationType = custom.customization_type || "UNKNOWN";
         const customizationTitle = custom.title || customizationType;
 
-        // IMAGES customization - validar photos[]
         if (customizationType === "IMAGES" && custom.photos) {
           custom.photos.forEach((photo) => {
             if (photo.preview_url) {
-              // Apenas adicionar URLs que parecem ser temporárias ou do servidor
+
               if (
                 photo.preview_url.includes("/uploads/temp/") ||
                 photo.preview_url.includes("https://api")
@@ -72,7 +70,6 @@ export function useValidateCustomizationImages() {
           });
         }
 
-        // DYNAMIC_LAYOUT customization - validar image.preview_url
         if (customizationType === "DYNAMIC_LAYOUT") {
           if (custom.image?.preview_url) {
             if (
@@ -86,7 +83,7 @@ export function useValidateCustomizationImages() {
               });
             }
           } else if (custom.is_required) {
-            // Se é DYNAMIC_LAYOUT obrigatório e não tem imagem, adicionar erro
+
             missingImages.push(
               `${customizationTitle} - Imagem obrigatória não foi enviada`,
             );
@@ -94,7 +91,6 @@ export function useValidateCustomizationImages() {
         }
       });
 
-      // Se há imagens faltando, retornar erro imediatamente
       if (missingImages.length > 0) {
         return {
           isValid: false,
@@ -107,12 +103,10 @@ export function useValidateCustomizationImages() {
         };
       }
 
-      // Se não há URLs para validar, considerar válido
       if (urlsToValidate.length === 0) {
         return { isValid: true, invalidImages: [] };
       }
 
-      // Validar cada URL em paralelo com timeout
       const validationPromises = urlsToValidate.map((item) =>
         api
           .validateTempImageExists(item.url)
@@ -132,7 +126,6 @@ export function useValidateCustomizationImages() {
 
       const results = await Promise.all(validationPromises);
 
-      // Coletar URLs que não existem mais
       results.forEach((result) => {
         if (!result.exists) {
           invalidImages.push(result.url);
@@ -169,21 +162,18 @@ export function useValidateCustomizationImages() {
         .map((custom) => {
           const clone = { ...custom };
 
-          // Se é IMAGES, remover photos com URLs inválidas
           if (clone.customization_type === "IMAGES" && clone.photos) {
             clone.photos = clone.photos.filter(
               (photo) =>
                 !invalidImageUrls.includes(photo.preview_url || "") &&
-                photo.preview_url, // Também remover entries com preview_url vazio
+                photo.preview_url,
             );
 
-            // Se ficou sem fotos, remover a customização
             if (clone.photos.length === 0) {
               return null;
             }
           }
 
-          // Se é DYNAMIC_LAYOUT, limpar image se URL for inválida
           if (clone.customization_type === "DYNAMIC_LAYOUT" && clone.image) {
             if (invalidImageUrls.includes(clone.image.preview_url || "")) {
               clone.image = undefined;

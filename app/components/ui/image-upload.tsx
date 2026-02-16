@@ -31,12 +31,11 @@ export function ImageUpload({
     }
 
     if (file.size > 5 * 1024 * 1024) {
-      // 5MB limit
+
       alert("O arquivo deve ter no máximo 5MB.");
       return;
     }
 
-    // Criar preview
     const url = URL.createObjectURL(file);
     setPreviewUrl(url);
     onChange(url, file);

@@ -37,7 +37,6 @@ export function QRCodePIX({ pixData, onCopyCode }: QRCodePIXProps) {
   const [qrImageError, setQrImageError] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  // Calcular tempo restante
   useEffect(() => {
     if (!pixData.expires_at) return;
 
@@ -47,7 +46,7 @@ export function QRCodePIX({ pixData, onCopyCode }: QRCodePIXProps) {
       const difference = expiry - now;
 
       if (difference > 0) {
-        setTimeLeft(Math.floor(difference / 1000)); // em segundos
+        setTimeLeft(Math.floor(difference / 1000));
       } else {
         setTimeLeft(0);
       }
@@ -94,7 +93,7 @@ export function QRCodePIX({ pixData, onCopyCode }: QRCodePIXProps) {
 
   return (
     <div className="w-full max-w-md mx-auto space-y-6 p-4">
-      {/* Header com valor */}
+      
       <motion.div
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
@@ -106,7 +105,7 @@ export function QRCodePIX({ pixData, onCopyCode }: QRCodePIXProps) {
         </p>
       </motion.div>
 
-      {/* Timer */}
+      
       {timeLeft > 0 && (
         <motion.div
           initial={{ opacity: 0, scale: 0.95 }}
@@ -126,7 +125,7 @@ export function QRCodePIX({ pixData, onCopyCode }: QRCodePIXProps) {
         </motion.div>
       )}
 
-      {/* QR Code Card */}
+      
       <motion.div
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
@@ -143,7 +142,7 @@ export function QRCodePIX({ pixData, onCopyCode }: QRCodePIXProps) {
               </p>
             </div>
 
-            {/* QR Code Image */}
+            
             <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
               {!qrImageError && pixData.qr_code_base64 ? (
                 <motion.div
@@ -173,14 +172,14 @@ export function QRCodePIX({ pixData, onCopyCode }: QRCodePIXProps) {
               )}
             </div>
 
-            {/* Divider */}
+            
             <div className="w-full flex items-center gap-3 my-2">
               <div className="flex-1 h-px bg-slate-200"></div>
               <span className="text-xs text-gray-500 font-medium">ou</span>
               <div className="flex-1 h-px bg-slate-200"></div>
             </div>
 
-            {/* Código PIX */}
+            
             <div className="w-full space-y-3">
               <h4 className="text-sm font-semibold text-gray-900 text-center">
                 Copie o código PIX
@@ -211,7 +210,7 @@ export function QRCodePIX({ pixData, onCopyCode }: QRCodePIXProps) {
         </Card>
       </motion.div>
 
-      {/* Action Buttons */}
+      
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -248,7 +247,7 @@ export function QRCodePIX({ pixData, onCopyCode }: QRCodePIXProps) {
         )}
       </motion.div>
 
-      {/* Footer info */}
+      
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}

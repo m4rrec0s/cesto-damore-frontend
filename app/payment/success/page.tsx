@@ -11,7 +11,7 @@ export default function PaymentSuccess() {
   const { clearCart } = useCart();
 
   useEffect(() => {
-    // Limpar o carrinho após pagamento bem-sucedido
+
     clearCart();
   }, [clearCart]);
 

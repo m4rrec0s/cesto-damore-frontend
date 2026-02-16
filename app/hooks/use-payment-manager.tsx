@@ -73,7 +73,6 @@ export function usePaymentManager() {
     setPendingOrder(null);
   }, []);
 
-  // Verificar pedido pendente ao montar o componente
   useEffect(() => {
     checkPendingOrder();
   }, [checkPendingOrder]);

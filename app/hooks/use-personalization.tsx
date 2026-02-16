@@ -11,9 +11,6 @@ export function usePersonalization() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  /**
-   * Buscar layouts base disponíveis
-   */
   const fetchLayoutBases = useCallback(
     async (itemType?: string): Promise<LayoutBase[]> => {
       try {
@@ -56,11 +53,10 @@ export function usePersonalization() {
   const fileToImageData = useCallback(
     async (file: File, slotId: string): Promise<ImageData> => {
       try {
-        // Ler arquivo como array buffer
+
         const arrayBuffer = await file.arrayBuffer();
         const uint8Array = new Uint8Array(arrayBuffer);
 
-        // Obter dimensões
         const dimensions = await new Promise<{ width: number; height: number }>(
           (resolve, reject) => {
             const img = new Image();
@@ -109,7 +105,6 @@ export function usePersonalization() {
           throw new Error("Usuário não autenticado");
         }
 
-        // Converter ImageData para formato serializável
         const serializedImages = images.map((img) => ({
           slotId: img.slotId,
           imageBuffer: Array.from(img.imageBuffer as Uint8Array),

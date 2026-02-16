@@ -31,26 +31,24 @@ const centerAspectCrop = (
   mediaHeight: number,
   aspect: number | undefined,
 ): PercentCrop => {
-  // Se aspect não definido, usar quadrado (1:1)
+
   const targetAspect = aspect || 1;
 
-  // Calcular dimensões do crop baseado no aspect ratio
   const imageAspect = mediaWidth / mediaHeight;
 
   let cropWidth: number;
   let cropHeight: number;
 
   if (imageAspect > targetAspect) {
-    // Imagem é mais larga que o target - limitar pela altura
+
     cropHeight = mediaHeight;
     cropWidth = cropHeight * targetAspect;
   } else {
-    // Imagem é mais alta que o target - limitar pela largura
+
     cropWidth = mediaWidth;
     cropHeight = cropWidth / targetAspect;
   }
 
-  // Converter para porcentagem
   const widthPercent = (cropWidth / mediaWidth) * 100;
   const heightPercent = (cropHeight / mediaHeight) * 100;
 
@@ -99,8 +97,6 @@ const getCroppedPngImage = async (
 
   const croppedImageUrl = canvas.toDataURL("image/png");
 
-  // Converter dataURL para Blob manualmente para evitar erros de "Failed to fetch"
-  // que ocorrem em alguns casos com fetch(dataURL)
   const byteString = atob(croppedImageUrl.split(",")[1]);
   const mimeString = croppedImageUrl.split(",")[0].split(":")[1].split(";")[0];
   const ab = new ArrayBuffer(byteString.length);
@@ -206,7 +202,6 @@ export const ImageCrop = ({
     setCompletedCrop(pixelCrop);
     onComplete?.(pixelCrop, percentCrop);
 
-    // Aplicar crop automaticamente quando completo
     if (imgRef.current && pixelCrop.width > 0 && pixelCrop.height > 0) {
       try {
         const croppedImage = await getCroppedPngImage(
@@ -381,7 +376,6 @@ export const ImageCropReset = ({
   );
 };
 
-// Keep the original Cropper component for backward compatibility
 export type CropperProps = Omit<ReactCropProps, "onChange"> & {
   file: File;
   maxImageSize?: number;

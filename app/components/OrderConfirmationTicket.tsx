@@ -38,9 +38,9 @@ export function OrderConfirmationTicket({
       className="w-full max-w-md mx-auto px-4 py-8"
     >
       <div className="relative">
-        {/* Ticket Card */}
+        
         <Card className="bg-white rounded-[2rem] overflow-hidden shadow-2xl border-0 relative">
-          {/* Top Section */}
+          
           <div className="p-8 text-center space-y-4">
             <motion.div
               initial={{ scale: 0 }}
@@ -62,14 +62,14 @@ export function OrderConfirmationTicket({
             </p>
           </div>
 
-          {/* Dashed Separator with Cutouts */}
+          
           <div className="relative h-px w-full my-2">
             <div className="absolute left-0 top-1/2 -translate-y-1/2 w-full border-t-2 border-dashed border-gray-200" />
             <div className="absolute -left-3 top-1/2 -translate-y-1/2 w-6 h-6 bg-gray-50 rounded-full" />
             <div className="absolute -right-3 top-1/2 -translate-y-1/2 w-6 h-6 bg-gray-50 rounded-full" />
           </div>
 
-          {/* Details Section */}
+          
           <div className="p-8 space-y-8">
             <div className="flex justify-between items-start">
               <div className="space-y-1">
@@ -111,7 +111,7 @@ export function OrderConfirmationTicket({
               </div>
             </div>
 
-            {/* Payment Method */}
+            
             <div className="bg-gray-50 rounded-xl p-4 flex items-center gap-4">
               <div className="flex -space-x-2">
                 <div className="w-8 h-8 rounded-full bg-red-500 opacity-80" />
@@ -126,7 +126,7 @@ export function OrderConfirmationTicket({
               </div>
             </div>
 
-            {/* Barcode Simulation */}
+            
             <div className="space-y-2">
               <div className="h-12 w-full flex items-end justify-between gap-[2px] opacity-60">
                 {[...Array(40)].map((_, i) => (
@@ -143,7 +143,7 @@ export function OrderConfirmationTicket({
             </div>
           </div>
 
-          {/* Action Button */}
+          
           <div className="p-8 pt-0">
             <Button
               onClick={onTrackOrder}

@@ -1,4 +1,4 @@
-// ================ NEW REFACTORED TYPES (Aligned with Backend) ================
+
 
 /**
  * Tipos de regras de customização
@@ -89,8 +89,6 @@ export type RuleAvailableOptions =
   | { items: SubstitutionItem[] }
   | null;
 
-// ================ Backend DTO Types ================
-
 /**
  * Layout DTO retornado pelo backend
  */
@@ -164,7 +162,7 @@ export interface CustomizationConfigResponse {
     name: string;
     type?: ItemType;
     allowsCustomization?: boolean;
-    allows_customization?: boolean; // Backend retorna em snake_case
+    allows_customization?: boolean;
     has3dPreview?: boolean;
   };
   customizations: Array<{
@@ -243,8 +241,6 @@ export interface ValidationResponse {
   warnings: string[];
 }
 
-// ================ Frontend State Types ================
-
 export interface ItemConstraint {
   id: string;
   target_item_id: string;
@@ -296,22 +292,17 @@ export interface UserPhoto {
 }
 
 export interface CustomizationData {
-  // Para LAYOUT_PRESET
+
   selected_layout_id?: string;
 
-  // Para LAYOUT_WITH_PHOTOS
   selected_layout_with_photos_id?: string;
 
-  // Para PHOTO_UPLOAD e LAYOUT_WITH_PHOTOS
   photos?: UserPhoto[];
 
-  // Para TEXT_INPUT
   text?: string;
 
-  // Para OPTION_SELECT
   selected_option?: string;
 
-  // Para ITEM_SUBSTITUTION
   selected_item?: {
     original_item: string;
     selected_item: string;
@@ -337,8 +328,6 @@ export interface ValidationResult {
   valid: boolean;
   errors: string[];
 }
-
-// ================ LEGACY TYPES (Mantidos para retrocompatibilidade) ================
 
 export type CustomizationTypeValue =
   | "PHOTO_UPLOAD"
@@ -380,8 +369,6 @@ export interface CustomizationRuleInput {
   available_options?: CustomizationAvailableOptions | null;
   display_order?: number;
 }
-
-// ================ HELPER FUNCTIONS ================
 
 /**
  * Helper para verificar se é um array de layouts prontos

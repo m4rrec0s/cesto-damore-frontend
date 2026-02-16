@@ -9,7 +9,6 @@ interface PaymentMethodSelectorProps {
   onMethodChange: (method: "pix" | "card") => void;
 }
 
-// SVG Icons
 const PixIcon = () => <Image src="/pix.svg" alt="PIX" width={24} height={24} />;
 
 const CardIcon = () => (
@@ -67,7 +66,7 @@ export function PaymentMethodSelector({
                   : "border-gray-200 hover:border-gray-300"
               }`}
             >
-              {/* Selected Indicator */}
+              
               {isSelected && (
                 <motion.div
                   layoutId="payment-indicator"

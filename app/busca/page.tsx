@@ -193,7 +193,7 @@ function SearchPageContent() {
                 </div>
               </div>
 
-              {/* Filtro de Tipos */}
+              
               <div>
                 <h3 className="font-medium text-sm text-gray-700 mb-3">
                   Tipos
@@ -229,7 +229,7 @@ function SearchPageContent() {
             </div>
           </aside>
 
-          {/* Grid de Produtos */}
+          
           <main className="flex-1">
             {loading ? (
               <div className="flex items-center justify-center h-64">
@@ -282,7 +282,7 @@ function SearchPageContent() {
                   ))}
                 </div>
 
-                {/* Paginação */}
+                
                 {totalPages > 1 && (
                   <div className="flex justify-center items-center gap-2">
                     <Button
@@ -296,7 +296,7 @@ function SearchPageContent() {
                     <div className="flex gap-1">
                       {Array.from({ length: totalPages }, (_, i) => i + 1)
                         .filter((page) => {
-                          // Mostra sempre a primeira, última e páginas próximas à atual
+
                           return (
                             page === 1 ||
                             page === totalPages ||
@@ -304,7 +304,7 @@ function SearchPageContent() {
                           );
                         })
                         .map((page, index, array) => {
-                          // Adiciona "..." entre páginas não consecutivas
+
                           const showEllipsis =
                             index > 0 && page - array[index - 1] > 1;
 

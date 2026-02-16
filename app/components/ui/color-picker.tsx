@@ -11,26 +11,26 @@ interface ColorPickerProps {
 }
 
 const presetColors = [
-  "#FFFFFF", // Branco
-  "#000000", // Preto
-  "#F43F5E", // Rose
-  "#EF4444", // Red
-  "#F97316", // rose
-  "#F59E0B", // Amber
-  "#EAB308", // Yellow
-  "#84CC16", // Lime
-  "#22C55E", // Green
-  "#10B981", // Emerald
-  "#14B8A6", // Teal
-  "#06B6D4", // Cyan
-  "#0EA5E9", // Sky
-  "#3B82F6", // Blue
-  "#6366F1", // Indigo
-  "#8B5CF6", // Violet
-  "#A855F7", // Purple
-  "#D946EF", // Fuchsia
-  "#EC4899", // Pink
-  "#9CA3AF", // Gray
+  "#FFFFFF",
+  "#000000",
+  "#F43F5E",
+  "#EF4444",
+  "#F97316",
+  "#F59E0B",
+  "#EAB308",
+  "#84CC16",
+  "#22C55E",
+  "#10B981",
+  "#14B8A6",
+  "#06B6D4",
+  "#0EA5E9",
+  "#3B82F6",
+  "#6366F1",
+  "#8B5CF6",
+  "#A855F7",
+  "#D946EF",
+  "#EC4899",
+  "#9CA3AF",
 ];
 
 export function ColorPicker({
@@ -60,7 +60,7 @@ export function ColorPicker({
       )}
 
       <div className="flex items-center gap-3">
-        {/* Seletor nativo de cor */}
+        
         <div className="relative">
           <input
             type="color"
@@ -72,7 +72,7 @@ export function ColorPicker({
           />
         </div>
 
-        {/* Input de texto para o código hex */}
+        
         <input
           type="text"
           value={customColor}
@@ -89,7 +89,7 @@ export function ColorPicker({
           className="px-3 py-2 border border-gray-300 rounded-md text-sm font-mono uppercase w-28"
         />
 
-        {/* Cor atual */}
+        
         <div className="flex items-center gap-2">
           <div
             className={cn(
@@ -101,7 +101,7 @@ export function ColorPicker({
         </div>
       </div>
 
-      {/* Cores predefinidas */}
+      
       <div>
         <p className="text-xs text-gray-600 mb-2">Cores predefinidas:</p>
         <div className="grid grid-cols-10 gap-1.5">

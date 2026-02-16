@@ -24,7 +24,7 @@ interface AdvancedPersonalizationEditorProps {
   layoutBase: LayoutBase;
   onComplete?: (images: ImageData[], previewUrl: string) => void;
   onCancel?: () => void;
-  showCanvasPreview?: boolean; // Preview instantâneo com Canvas 2D
+  showCanvasPreview?: boolean;
 }
 
 export default function AdvancedPersonalizationEditor({
@@ -35,11 +35,9 @@ export default function AdvancedPersonalizationEditor({
 }: AdvancedPersonalizationEditorProps) {
   const { loading, error, fileToImageData } = usePersonalization();
 
-  // Items (para associar customizações). Carregado via API /items.
   const [items, setItems] = useState<Array<{ id: string; name: string }>>([]);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
 
-  // MULTIPLE_CHOICE options (local management + upload support)
   const [multipleChoiceOptions, setMultipleChoiceOptions] = useState<
     Array<{
       id: string;
@@ -59,7 +57,7 @@ export default function AdvancedPersonalizationEditor({
           id?: string;
           name?: string;
         }>;
-        // Map minimal shape
+
         const mapped = (data || []).map((it) => ({
           id: it.id || "",
           name: it.name || "(sem nome)",
@@ -73,7 +71,6 @@ export default function AdvancedPersonalizationEditor({
     fetchItems();
   }, []);
 
-  // Upload de imagem para opção MULTIPLE_CHOICE
   const uploadOptionImage = async (file: File, optionId: string) => {
     try {
       setMultipleChoiceOptions((prev) =>
@@ -309,7 +306,7 @@ export default function AdvancedPersonalizationEditor({
       ctx.clip();
 
       if (!imageData) {
-        ctx.fillStyle = "#1f2937"; // tailwind bg-gray-800
+        ctx.fillStyle = "#1f2937";
         ctx.fillRect(slotX, slotY, slotWidth, slotHeight);
 
         ctx.fillStyle = "#ffffff";
@@ -550,7 +547,7 @@ export default function AdvancedPersonalizationEditor({
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-      {/* Slots */}
+      
       <Card>
         <CardHeader>
           <CardTitle>Personalize seu item</CardTitle>
@@ -617,7 +614,7 @@ export default function AdvancedPersonalizationEditor({
                 style={{ display: baseImageLoaded ? "block" : "none" }}
               />
             ) : (
-              // 3D Preview
+
               <div className="w-full h-full min-h-[400px]">
                 {previewTextureUrl ? (
                   <Model3DViewer
@@ -630,31 +627,27 @@ export default function AdvancedPersonalizationEditor({
                     textures={
                       layoutBase.item_type?.toLowerCase() === "caneca"
                         ? (() => {
-                            // Configurações do cilindro (baseadas em teste-customizacao)
+
                             const CYLINDER_RADIUS = 0.46;
                             const CYLINDER_SEGMENTS = 200;
-                            const CYLINDER_HANDLE_GAP = Math.PI / 8; // espaço reservado para as asas
-                            const PRINT_AREA_HEIGHT = 0.95; // altura da área de impressão em metros
+                            const CYLINDER_HANDLE_GAP = Math.PI / 8;
+                            const PRINT_AREA_HEIGHT = 0.95;
                             const FULL_WRAP_MAX_THETA =
                               Math.PI * 2 - CYLINDER_HANDLE_GAP * 2;
 
-                            // Estimar largura em metros usando a proporção do layout (px)
                             const widthMeters =
                               (layoutBase.width / layoutBase.height) *
                               PRINT_AREA_HEIGHT;
 
-                            // Converter largura linear (m) para ângulo (radianos)
                             let thetaLength = widthMeters / CYLINDER_RADIUS;
                             if (!isFinite(thetaLength) || thetaLength <= 0) {
                               thetaLength = Math.PI / 2;
                             }
-                            // Limitar para não invadir as asas
+
                             thetaLength = Math.min(
                               thetaLength,
                               FULL_WRAP_MAX_THETA,
                             );
-
-                            // Usar configurações padrão do viewer para theta start/length
 
                             return [
                               {
@@ -670,7 +663,7 @@ export default function AdvancedPersonalizationEditor({
                                   radius: CYLINDER_RADIUS,
                                   height: PRINT_AREA_HEIGHT,
                                   segments: CYLINDER_SEGMENTS,
-                                  // Não passar thetaStart/thetaLength -> usar defaults do Model3DViewer
+
                                 },
                               },
                             ];
@@ -725,7 +718,7 @@ export default function AdvancedPersonalizationEditor({
               </div>
             )}
 
-            {/* Associe esta customização a um item (opcional) */}
+            
             <div className="mt-4">
               <Label>Associar a Item (opcional)</Label>
               {items.length === 0 ? (
@@ -749,7 +742,7 @@ export default function AdvancedPersonalizationEditor({
               )}
             </div>
 
-            {/* MULTIPLE_CHOICE: gerenciar opções com imagens */}
+            
             <div className="mt-4 border-t pt-4">
               <div className="flex items-center justify-between">
                 <Label>Opções (Multiple Choice)</Label>

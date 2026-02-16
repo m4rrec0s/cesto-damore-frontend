@@ -1,24 +1,3 @@
-/**
- * Utilitário para gerenciar armazenamento de customizações em localStorage
- * com schema compacto e sem base64
- *
- * Exemplo de estrutura otimizada:
- * {
- *   "productId": "8278449881407",
- *   "customization": {
- *     "343628": "template-683447",              // Template ID
- *     "layer-314974": "ws:uploads/hash.jpg",   // URL relativa
- *     "layer-314974-pos": { x: 0.15, y: -0.3, w: 0.78, h: 1.128, r: 0.75, a: 0 },
- *     "layer-395759": "Marcos & Lizandra",     // Texto
- *     "layer-484922-vis": true,                // Visibilidade
- *     "layer-586399": "2024",                  // Outro texto
- *     "layer-744172": 9364947                  // Número
- *   },
- *   "ts": 1769089537859,
- *   "exp": 1769175937859  // Expira em 24h
- * }
- */
-
 type CustomizationValue =
   | string
   | number
@@ -65,13 +44,10 @@ interface CleanupResult {
 }
 
 class CustomizationStorage {
-  private readonly DEFAULT_TTL_MS = 24 * 60 * 60 * 1000; // 24 horas
+  private readonly DEFAULT_TTL_MS = 24 * 60 * 60 * 1000;
   private readonly PREFIX = "cesto-design";
-  private readonly WARNING_THRESHOLD = 0.8; // 80% do limite
+  private readonly WARNING_THRESHOLD = 0.8;
 
-  /**
-   * Salvar customização com schema compacto
-   */
   save(
     productId: string,
     customization: Record<string, CustomizationValue | PositionData>,
@@ -88,7 +64,6 @@ class CustomizationStorage {
       const key = `${this.PREFIX}:${productId}`;
       const jsonStr = JSON.stringify(state);
 
-      // Verificar se vai ultrapassar limite antes de salvar
       const currentSize = this.getCurrentStorageSize();
       const newSize = new Blob([jsonStr]).size;
 
@@ -125,9 +100,6 @@ class CustomizationStorage {
     }
   }
 
-  /**
-   * Carregar customização
-   */
   load(productId: string): CustomizationState | null {
     try {
       const key = `${this.PREFIX}:${productId}`;
@@ -139,7 +111,7 @@ class CustomizationStorage {
 
       const state = JSON.parse(jsonStr) as CustomizationState;
 
-      // Verificar expiração
+     
       if (state.exp && Date.now() > state.exp) {
         console.warn(`⚠️ Rascunho de ${productId} expirou`);
         localStorage.removeItem(key);
@@ -153,17 +125,11 @@ class CustomizationStorage {
     }
   }
 
-  /**
-   * Deletar customização
-   */
   delete(productId: string) {
     const key = `${this.PREFIX}:${productId}`;
     localStorage.removeItem(key);
   }
 
-  /**
-   * Listar todos os rascunhos
-   */
   listAllDrafts(): Array<{
     productId: string;
     timestamp: Date;
@@ -194,23 +160,19 @@ class CustomizationStorage {
     return drafts;
   }
 
-  /**
-   * Otimizar customização: remover base64, usar URLs
-   * Reduz tamanho de ~2-5MB para ~5-10KB
-   */
   private compactifyCustomization(
     custom: Record<string, CustomizationValue | PositionData>,
   ): Record<string, CustomizationValue | PositionData> {
     const compacted: Record<string, CustomizationValue | PositionData> = {};
 
     for (const [key, value] of Object.entries(custom)) {
-      // Remover base64 (começam com "data:")
+     
       if (typeof value === "string" && value.startsWith("data:")) {
         console.warn(`🗑️ Removido base64: ${key}`);
         continue;
       }
 
-      // Compactar nomes de propriedades posicionais
+     
       if (key.includes("-position")) {
         const newKey = key.replace("-position", "-pos");
         if (
@@ -231,30 +193,28 @@ class CustomizationStorage {
         continue;
       }
 
-      // Compactar visibility
+     
       if (key.includes("-visibility")) {
         const newKey = key.replace("-visibility", "-vis");
         compacted[newKey] = value;
         continue;
       }
 
-      // Manter outros valores
+     
       compacted[key] = value;
     }
 
     return compacted;
   }
 
-  /**
-   * Descompactar customização (reverter compactação)
-   */
+
   expandCustomization(
     compacted: Record<string, CustomizationValue | PositionData>,
   ): Record<string, CustomizationValue | PositionData> {
     const expanded: Record<string, CustomizationValue | PositionData> = {};
 
     for (const [key, value] of Object.entries(compacted)) {
-      // Reverter nomes posicionais
+     
       if (key.includes("-pos")) {
         const newKey = key.replace("-pos", "-position");
         if (
@@ -290,7 +250,7 @@ class CustomizationStorage {
         continue;
       }
 
-      // Reverter visibility
+     
       if (key.includes("-vis")) {
         const newKey = key.replace("-vis", "-visibility");
         expanded[newKey] = value;
@@ -303,9 +263,6 @@ class CustomizationStorage {
     return expanded;
   }
 
-  /**
-   * Obter quota de armazenamento
-   */
   getStorageQuota(): StorageQuota {
     const used = this.getCurrentStorageSize();
     const limit = this.getStorageLimit();
@@ -317,9 +274,6 @@ class CustomizationStorage {
     };
   }
 
-  /**
-   * Limpar rascunhos expirados
-   */
   private cleanupAllExpired() {
     const now = Date.now();
     let deletedCount = 0;
@@ -348,7 +302,7 @@ class CustomizationStorage {
       }
     }
 
-    // Deletar fora do loop para não afetar iteração
+   
     keysToDelete.forEach((key) => localStorage.removeItem(key));
 
     return { deletedCount, freedBytes } as CleanupResult;
@@ -375,9 +329,6 @@ class CustomizationStorage {
     keys.forEach((key) => localStorage.removeItem(key));
   }
 
-  /**
-   * Tamanho atual usado (aproximado)
-   */
   private getCurrentStorageSize(): number {
     let total = 0;
 
@@ -394,14 +345,8 @@ class CustomizationStorage {
     return total;
   }
 
-  /**
-   * Limite padrão de localStorage (5MB)
-   */
   private getStorageLimit(): number {
-    // Most browsers: 5MB = 5242880 bytes
-    // Safari: 5MB
-    // Firefox: 10MB
-    return 5 * 1024 * 1024; // 5MB
+    return 5 * 1024 * 1024;
   }
 }
 

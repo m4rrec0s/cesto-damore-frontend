@@ -13,8 +13,8 @@ import { useAuth } from "./use-auth";
 import type { CustomizationValue, PhotoUploadData } from "./use-customization";
 
 export interface CartCustomization extends CustomizationValue {
-  id?: string; // ✅ Database record ID (OrderItemCustomization.id)
-  componentId?: string; // ✅ ProductComponent.id (to distinguish multiple identical items)
+  id?: string;
+  componentId?: string;
   title: string;
   customization_type: CustomizationTypeValue;
   is_required: boolean;
@@ -23,9 +23,9 @@ export interface CartCustomization extends CustomizationValue {
   selected_item_label?: string;
   label_selected?: string;
   additional_time?: number;
-  data?: Record<string, unknown>; // ✅ Store raw data for complex customizations (DYNAMIC_LAYOUT)
-  fabricState?: string; // ✅ Store Fabric.js JSON state
-  value?: string; // ✅ Store serialized JSON value from backend
+  data?: Record<string, unknown>;
+  fabricState?: string;
+  value?: string;
 }
 
 interface OrderAdditionalItem {
@@ -55,7 +55,7 @@ export interface CartItem {
   discount?: number;
   additional_ids?: string[];
   additionals?: Additional[];
-  additional_colors?: Record<string, string>; // Mapeia additional_id -> color_id selecionado
+  additional_colors?: Record<string, string>;
   customizations?: CartCustomization[];
   customization_total?: number;
   product: Product;
@@ -101,7 +101,7 @@ const serializeCustomizations = (customizations?: CartCustomization[]) => {
   }
 
   const normalized = customizations.map((customization) => {
-    // Definir campos a serem excluídos do 'data' (pois já estão na raiz)
+
     const baseFields = [
       "text",
       "photos",
@@ -134,13 +134,13 @@ const serializeCustomizations = (customizations?: CartCustomization[]) => {
             selected_item: customization.selected_item.selected_item,
           }
         : null,
-      // ✅ Incluir label fields para detecção de duplicatas
+
       label_selected: customization.label_selected || null,
       selected_item_label: customization.selected_item_label || null,
       selected_option_label: customization.selected_option_label || null,
       componentId: customization.componentId || null,
       data: Object.keys(cleanData).length > 0 ? cleanData : null,
-      fabricState: customization.fabricState || null, // ✅ Serialize Fabric.js state
+      fabricState: customization.fabricState || null,
       photos:
         customization.photos?.map(
           (photo) =>
@@ -330,7 +330,7 @@ export function useCart(): CartContextType {
   const [pendingOrderId, setPendingOrderId] = useState<string | null>(null);
 
   const isInitializedRef = useRef<boolean>(false);
-  const getOrderAttemptedRef = useRef<Set<string>>(new Set()); // Rastrear quais orders já foram carregadas
+  const getOrderAttemptedRef = useRef<Set<string>>(new Set());
 
   const calculateTotals = useCallback((items: CartItem[]): CartState => {
     const safeItems = Array.isArray(items) ? items : [];
@@ -372,13 +372,11 @@ export function useCart(): CartContextType {
     [],
   );
 
-  // Quando metadata do pedido muda, sincronizar com o backend (se houver rascunho)
   useEffect(() => {
     if (!user) return;
-    // Apenas sincronizar metadata se houver pendingOrderId (evita criar pedido sem itens)
+
     if (!pendingOrderId) return;
 
-    // ✅ Sincronizar apenas metadata (não itens) para evitar loop
     const syncMetadata = async () => {
       try {
         await api.updateOrderMetadata(pendingOrderId, {
@@ -400,7 +398,6 @@ export function useCart(): CartContextType {
     user,
   ]);
 
-  // ✅ NOVO: Helper para converter pedido do backend em itens do carrinho local
   const transformOrderToCartItems = useCallback(
     async (serverOrder: Order): Promise<CartItem[]> => {
       if (!serverOrder || !serverOrder.items) return [];
@@ -444,7 +441,7 @@ export function useCart(): CartContextType {
           if (orderItem.customizations && orderItem.customizations.length > 0) {
             for (const customization of orderItem.customizations) {
               try {
-                // Desserializar campo 'value'
+
                 let data: Record<string, unknown> = {};
 
                 if (typeof customization.value === "string") {
@@ -456,22 +453,19 @@ export function useCart(): CartContextType {
                   data = customization.value as Record<string, unknown>;
                 }
 
-                const componentId = (data.componentId as string) || undefined; // ✅ Extract componentId
+                const componentId = (data.componentId as string) || undefined;
                 const customizationId = (customization.customization_id ||
                   data.customization_id ||
                   data.customizationRuleId ||
                   "") as string;
 
-                // ✅ NOVO: Extrair ID base se for composto (ruleId:componentId)
                 const baseRuleId = customizationId.includes(":")
                   ? customizationId.split(":")[0]
                   : customizationId;
 
-                // ✅ NOVO: Verificar se a customização é obrigatória e o tipo a partir das regras do produto
                 let isRequired = false;
                 let inferredType: string | undefined;
 
-                // 1. Procurar nas customizações diretas do item (se houver)
                 if (product.customizations) {
                   const rule = product.customizations.find(
                     (c: Customization) => c.id === baseRuleId,
@@ -482,7 +476,6 @@ export function useCart(): CartContextType {
                   }
                 }
 
-                // 2. Procurar nos componentes do produto
                 if (!isRequired && product.components) {
                   product.components.forEach((comp: ProductComponent) => {
                     const rule = comp.item?.customizations?.find(
@@ -503,7 +496,7 @@ export function useCart(): CartContextType {
                 if (customizationType === "TEXT") {
                   customizations.push({
                     id: customization.id,
-                    componentId, // ✅ Set componentId
+                    componentId,
                     customization_id: customizationId,
                     title: (data.title as string) || "Personalização",
                     customization_type: "TEXT",
@@ -518,7 +511,7 @@ export function useCart(): CartContextType {
                 } else if (customizationType === "MULTIPLE_CHOICE") {
                   customizations.push({
                     id: customization.id,
-                    componentId, // ✅ Set componentId
+                    componentId,
                     customization_id: customizationId,
                     title: (data.title as string) || "Personalização",
                     customization_type: "MULTIPLE_CHOICE",
@@ -539,7 +532,7 @@ export function useCart(): CartContextType {
                 } else if (customizationType === "IMAGES") {
                   customizations.push({
                     id: customization.id,
-                    componentId, // ✅ Set componentId
+                    componentId,
                     customization_id: customizationId,
                     title: (data.title as string) || "Personalização",
                     customization_type: "IMAGES",
@@ -554,7 +547,7 @@ export function useCart(): CartContextType {
                 } else if (customizationType === "DYNAMIC_LAYOUT") {
                   customizations.push({
                     id: customization.id,
-                    componentId, // ✅ Set componentId
+                    componentId,
                     customization_id: customizationId,
                     title: (data.title as string) || "Design",
                     customization_type: "DYNAMIC_LAYOUT",
@@ -581,7 +574,7 @@ export function useCart(): CartContextType {
                 } else {
                   customizations.push({
                     id: customization.id,
-                    componentId, // ✅ Set componentId
+                    componentId,
                     customization_id: customizationId,
                     title: (data.title as string) || "Personalização",
                     customization_type:
@@ -639,12 +632,10 @@ export function useCart(): CartContextType {
     [api],
   );
 
-  // Carregar pedido pendente existente quando usuário faz login
   useEffect(() => {
     const loadPendingOrder = async () => {
       if (!user) return;
 
-      // Prevenir múltiplas execuções simultâneas
       if (isInitializedRef.current) return;
 
       try {
@@ -656,7 +647,6 @@ export function useCart(): CartContextType {
         ) {
           const cartItems = await transformOrderToCartItems(pendingOrder);
 
-          // Carregar metadata do pedido (sem disparar sync)
           if (
             pendingOrder.send_anonymously !== undefined ||
             pendingOrder.complement
@@ -671,15 +661,14 @@ export function useCart(): CartContextType {
           setCart(updatedCart);
           setPendingOrderId(pendingOrder.id);
 
-          // ✅ Marcar como inicializado APÓS carregar o pedido
           isInitializedRef.current = true;
         } else {
-          // ✅ Mesmo sem pedido pendente, marcar como inicializado
+
           isInitializedRef.current = true;
         }
       } catch (error) {
         console.error("Erro ao carregar pedido pendente:", error);
-        // ✅ Mesmo com erro, marcar como inicializado para não bloquear o app
+
         isInitializedRef.current = true;
       }
     };
@@ -706,16 +695,16 @@ export function useCart(): CartContextType {
           photos: custom.photos,
           selected_option: custom.selected_option,
           selected_item: custom.selected_item,
-          // ✅ CRITICAL: Include componentId for instance isolation
+
           componentId: custom.componentId,
-          // ✅ Include all label fields for DYNAMIC_LAYOUT and other types
+
           selected_option_label: custom.selected_option_label,
           selected_item_label: custom.selected_item_label,
           label_selected: custom.label_selected,
           price_adjustment: custom.price_adjustment,
           additional_time: custom.additional_time || 0,
-          fabricState: custom.fabricState, // ✅ Include Fabric state in customization_data
-          ...custom.data, // ✅ Merge raw data into customization_data
+          fabricState: custom.fabricState,
+          ...custom.data,
         },
       })),
     }));
@@ -744,10 +733,9 @@ export function useCart(): CartContextType {
             pendingOrderId &&
             getOrderAttemptedRef.current.has(pendingOrderId)
           ) {
-            // Já tentamos carregar essa order, não fazer novamente
+
             try {
-              // Se já carregamos antes, só checar se está PENDING antes de deletar
-              // Sem fazer uma nova requisição
+
               await api.deleteOrder(pendingOrderId);
               setPendingOrderId(null);
               setOrderMetadata({
@@ -758,7 +746,7 @@ export function useCart(): CartContextType {
               console.error("Erro ao deletar pedido pendente:", error);
             }
           } else if (pendingOrderId) {
-            // Primeira vez tentando carregar
+
             try {
               const serverOrder = await api.getOrder(pendingOrderId);
               getOrderAttemptedRef.current.add(pendingOrderId);
@@ -844,16 +832,16 @@ export function useCart(): CartContextType {
               };
               const newOrder = await api.createOrder(payload);
               setPendingOrderId(newOrder?.id || null);
-              // ✅ Não chamar transformOrderToCartItems aqui - evita loop de requisições
+
             } else {
-              // Outros erros, propagar
+
               throw updateError;
             }
           }
         }
       } catch (error: unknown) {
         console.error("Erro ao sincronizar carrinho com backend:", error);
-        // Se receber 403 (por exemplo: pedido cancelado, permissão negada), limpar pending order local
+
         try {
           const maybe = error as { response?: { status: number } };
           const status = maybe?.response?.status;
@@ -871,10 +859,10 @@ export function useCart(): CartContextType {
             );
           }
         } catch {
-          // ignore
+
         }
       } finally {
-        // ✅ Sempre liberar o lock
+
         syncLockRef.current = false;
       }
     },
@@ -890,8 +878,6 @@ export function useCart(): CartContextType {
 
   const syncTimeoutRef = useRef<number | null>(null);
 
-  // ✅ CACHE para otimizar performance do Calendar
-  // Evita recalcular timeSlots para datas já verificadas
   const dateDisabledCacheRef = useRef<Map<string, boolean>>(new Map());
 
   const debouncedSync = useCallback(
@@ -907,13 +893,10 @@ export function useCart(): CartContextType {
     [syncCartToBackend],
   );
 
-  // ✅ Limpar cache de datas desabilitadas quando o carrinho muda
-  // Pois a data de entrega mais cedo pode ter mudado
   useEffect(() => {
     dateDisabledCacheRef.current.clear();
   }, [cart]);
 
-  // Quando o usuário autentica, sincronizar/recuperar rascunho do backend
   useEffect(() => {
     const init = async () => {
       if (!user) return;
@@ -923,10 +906,9 @@ export function useCart(): CartContextType {
           pendingOrderId &&
           !getOrderAttemptedRef.current.has(pendingOrderId)
         ) {
-          // Marcar como já tentado para evitar múltiplas requisições
+
           getOrderAttemptedRef.current.add(pendingOrderId);
 
-          // Tentar recuperar pedido pendente e preencher o carrinho local caso esteja vazio
           const serverOrder = await api.getOrder(pendingOrderId);
           if (serverOrder?.items && serverOrder.items.length > 0) {
             const transformedCart = calculateTotals(
@@ -986,7 +968,7 @@ export function useCart(): CartContextType {
                     product_id: item.product_id,
                     quantity: item.quantity,
                     price: item.price,
-                    // If server returns an effectivePrice already computed, use it.
+
                     effectivePrice:
                       item.effectivePrice !== undefined
                         ? item.effectivePrice
@@ -1005,7 +987,7 @@ export function useCart(): CartContextType {
             if (transformedCart.items.length > 0 && cart.items.length === 0) {
               setCart(transformedCart);
             }
-            // Se o pedido do servidor tiver metadata, atualizar o estado local
+
             if (
               typeof serverOrder.send_anonymously !== "undefined" ||
               serverOrder.complement
@@ -1017,7 +999,7 @@ export function useCart(): CartContextType {
             }
           }
         } else if (cart.items.length > 0) {
-          // Sincronizar local -> server sempre que houver itens e não existir rascunho
+
           await syncCartToBackend(cart);
         }
       } catch (error) {
@@ -1032,8 +1014,8 @@ export function useCart(): CartContextType {
     api,
     calculateTotals,
     syncCartToBackend,
-    cart, // Added 'cart'
-    setOrderMetadata, // Added 'setOrderMetadata'
+    cart,
+    setOrderMetadata,
     cart.items.length,
   ]);
 
@@ -1142,11 +1124,9 @@ export function useCart(): CartContextType {
           return updatedCart;
         });
 
-        // ✅ NÃO mostrar toast aqui - deixar para o componente chamador
-        // O toast deve ser mostrado onde addToCart é chamado
       } catch (error) {
         console.error("❌ [addToCart] Erro:", error);
-        // ✅ Propagar erro para quem chamou tratar
+
         throw error;
       }
     },
@@ -1226,7 +1206,7 @@ export function useCart(): CartContextType {
               }
             }
           } catch (err) {
-            // ✅ ROLLBACK: If sync fails, restore the item
+
             console.error("Erro ao sincronizar remoção com backend:", err);
             if (removedItem) {
               setCart((prev) => {
@@ -1320,7 +1300,6 @@ export function useCart(): CartContextType {
           serializeCustomizations(oldCustomizations);
         const targetColors = serializeAdditionalColors(additionalColors);
 
-        // Encontrar o item com as customizações antigas
         const itemIndex = currentItems.findIndex(
           (item) =>
             item.product_id === productId &&
@@ -1338,25 +1317,20 @@ export function useCart(): CartContextType {
         const newItems = [...currentItems];
         const item = newItems[itemIndex];
 
-        // ✅ FIX: Mesclar customizações em vez de substituir
-        // Isso preserva as que não foram editadas
         const mergedCustomizations = mergeCustomizations(
           item.customizations || [],
           newCustomizations,
         );
 
-        // Calcular novo total de customização
         const customizationEntries = cloneCustomizations(mergedCustomizations);
         const customizationTotal =
           calculateCustomizationTotal(customizationEntries);
 
-        // Recalcular preço efetivo
         const baseEffective = item.price * (1 - (item.discount || 0) / 100);
         const effectivePrice = Number(
           (baseEffective + customizationTotal).toFixed(2),
         );
 
-        // Atualizar item com customizações mescladas
         newItems[itemIndex] = {
           ...item,
           customizations:
@@ -1374,7 +1348,6 @@ export function useCart(): CartContextType {
     [calculateTotals, debouncedSync],
   );
 
-  // ✅ FIX: Função para mesclar customizações (não perder as não editadas)
   const mergeCustomizations = (
     existing: CartCustomization[],
     updated: CartCustomization[],
@@ -1383,19 +1356,19 @@ export function useCart(): CartContextType {
 
     for (const newCustom of updated) {
       const existingIndex = merged.findIndex((c) => {
-        // ✅ Se ambos têm 'id' (record ID), usar para match exato
+
         if (c.id && newCustom.id) {
           return c.id === newCustom.id;
         }
-        // ✅ Fallback: match por Rule ID (apenas para novas customizações ainda não salvas)
+
         return c.customization_id === newCustom.customization_id;
       });
 
       if (existingIndex >= 0) {
-        // Atualizar customização existente
+
         merged[existingIndex] = { ...newCustom };
       } else {
-        // Adicionar nova customização
+
         merged.push({ ...newCustom });
       }
     }
@@ -1443,25 +1416,22 @@ export function useCart(): CartContextType {
         throw new Error("Carrinho está vazio");
       }
 
-      // Extrair cidade e estado se não fornecidos nas opções
       let deliveryCity = options?.deliveryCity;
       let deliveryState = options?.deliveryState;
 
       if (!deliveryCity || !deliveryState) {
-        // Tentar extrair do endereço se não fornecidos
+
         if (deliveryAddress) {
           const addressParts = deliveryAddress.split("/");
           if (addressParts.length >= 2) {
             const statePart = addressParts[addressParts.length - 1];
             const cityPart = addressParts[addressParts.length - 2];
 
-            // Extrair estado após o último '/'
             const stateMatch = statePart.match(/([A-Z]{2})/);
             if (stateMatch) {
               deliveryState = stateMatch[1];
             }
 
-            // Extrair cidade (remover tudo após '-' se existir)
             const cityMatch = cityPart.split(",").pop()?.split("-")[0]?.trim();
             if (cityMatch) {
               deliveryCity = cityMatch;
@@ -1474,7 +1444,6 @@ export function useCart(): CartContextType {
         throw new Error("Cidade e estado de entrega são obrigatórios");
       }
 
-      // Validar método de pagamento
       if (
         !options?.paymentMethod ||
         (options.paymentMethod !== "pix" && options.paymentMethod !== "card")
@@ -1484,7 +1453,6 @@ export function useCart(): CartContextType {
         );
       }
 
-      // Validar telefone do destinatário
       if (!options?.recipientPhone || options.recipientPhone.trim() === "") {
         throw new Error("Telefone do destinatário é obrigatório");
       }
@@ -1639,7 +1607,6 @@ export function useCart(): CartContextType {
     });
   }, [cart.items]);
 
-  // Helper functions for Brazil Timezone
   const createBrazilDate = useCallback(
     (
       year: number,
@@ -1648,7 +1615,7 @@ export function useCart(): CartContextType {
       hour: number,
       minute: number,
     ): Date => {
-      // Construct ISO string with fixed -03:00 offset
+
       const y = year;
       const m = String(month + 1).padStart(2, "0");
       const d = String(day).padStart(2, "0");
@@ -1660,14 +1627,14 @@ export function useCart(): CartContextType {
   );
 
   const getBrazilTimeComponents = useCallback((date: Date) => {
-    // Return components as if in Sao_Paulo
+
     const str = date.toLocaleString("en-US", {
       timeZone: "America/Sao_Paulo",
       hour12: false,
     });
     const parts = str.split(", ");
     if (parts.length < 2) {
-      // Fallback: return current date components if format is unexpected
+
       return {
         year: date.getFullYear(),
         month: date.getMonth(),
@@ -1681,7 +1648,7 @@ export function useCart(): CartContextType {
     const dateParts = datePart.split("/").map(Number);
     const timeParts = timePart.split(":").map(Number);
     if (dateParts.length < 3 || timeParts.length < 2) {
-      // Fallback if parsing fails
+
       return {
         year: date.getFullYear(),
         month: date.getMonth(),
@@ -1711,16 +1678,14 @@ export function useCart(): CartContextType {
     let maxTime = 0;
 
     cart.items.forEach((item) => {
-      // 1. Base do produto
+
       const productTime = item.product.production_time || 0;
       let itemMaxTime = productTime;
 
-      // 2. ✅ CORRIGIDO: Buscar additional_time do DYNAMIC_LAYOUT selecionado
-      // O additional_time é armazenado direto na customização (vem de client-product-page.tsx)
       if (item.customizations) {
         item.customizations.forEach((custom) => {
           if (custom.customization_type === "DYNAMIC_LAYOUT") {
-            // Verificar se existe additional_time (já vem preenchido do DYNAMIC_LAYOUT selecionado)
+
             const dynamicLayoutTime = custom.additional_time || 0;
             if (dynamicLayoutTime > 0) {
               itemMaxTime = Math.max(itemMaxTime, dynamicLayoutTime);
@@ -1729,7 +1694,6 @@ export function useCart(): CartContextType {
         });
       }
 
-      // 3. Verificar componentes do produto (que podem ter dynamic_layout)
       if (item.product.components) {
         item.product.components.forEach((comp) => {
           if (comp.item?.layout_base?.additional_time) {
@@ -1743,28 +1707,18 @@ export function useCart(): CartContextType {
 
       maxTime = Math.max(maxTime, itemMaxTime);
 
-      // 4. Adicionais podem ter seu próprio dynamic_layout
-      // (Nota: Por enquanto, a estrutura de adicionais não inclui dynamic_layout)
-      // item.additionals?.forEach((add) => {
-      //   if (add.item?.dynamic_layout?.additional_time) {
-      //     maxTime = Math.max(maxTime, add.item.dynamic_layout.additional_time);
-      //   }
-      // });
     });
 
-    return maxTime > 0 ? maxTime : 1; // Garantir pelo menos 1 hora
+    return maxTime > 0 ? maxTime : 1;
   }, [cart.items]);
 
-  // ✅ Alias para compatibilidade com código anterior
   const getMinPreparationHours = useCallback((): number => {
     return getMaxProductionTime();
   }, [getMaxProductionTime]);
 
-  // Removed legacy getBrazilTime and parseTimeOnDate as they are replaced by new helpers
-
   const isWithinServiceHours = useCallback(
     (date: Date): boolean => {
-      // Logic: Convert 'date' to Brazil time components to check against window strings
+
       const { hour, minute } = getBrazilTimeComponents(date);
       const currentMinutes = hour * 60 + minute;
 
@@ -1822,7 +1776,6 @@ export function useCart(): CartContextType {
       const candidate = new Date(afterDate);
       candidate.setSeconds(0, 0);
 
-      // Procurar até 14 dias à frente
       const limit = new Date(candidate);
       limit.setDate(limit.getDate() + 14);
 
@@ -1834,18 +1787,15 @@ export function useCart(): CartContextType {
         const windows = getDeliveryWindows();
         const relevantWindows = isWknd ? windows.weekends : windows.weekdays;
 
-        // Procurar uma janela que comece após o horário atual
         for (const window of relevantWindows) {
           const [startH, startM] = window.start.split(":").map(Number);
           const startTotal = startH * 60 + startM;
 
-          // Se a janela começa após o horário atual neste dia
           if (startTotal > currentMinutes) {
             return createBrazilDate(year, month, day, startH, startM);
           }
         }
 
-        // Tentar o próximo dia às 00:00
         const nextDay = createBrazilDate(year, month, day + 1, 0, 0);
         const nextDayComponents = getBrazilTimeComponents(nextDay);
         const nextIsWknd = isWeekend(nextDay);
@@ -1864,11 +1814,9 @@ export function useCart(): CartContextType {
           );
         }
 
-        // Avançar um dia
         candidate.setTime(candidate.getTime() + 24 * 60 * 60 * 1000);
       }
 
-      // Fallback
       const { year, month, day } = getBrazilTimeComponents(candidate);
       return createBrazilDate(year, month, day + 1, 8, 0);
     },
@@ -1879,43 +1827,39 @@ export function useCart(): CartContextType {
     const now = new Date();
     let remainingProductionMinutes = getMinPreparationHours() * 60;
 
-    // Começar do momento atual
     let current = new Date(now);
 
-    // Se não estiver em horário comercial, ir para o próximo início
     if (!isWithinServiceHours(current)) {
       current = getNextServiceWindowStart(current);
     }
 
-    // Limite de busca: 14 dias
     const limit = new Date(now);
     limit.setDate(limit.getDate() + 14);
 
     while (remainingProductionMinutes > 0 && current < limit) {
-      // Quanto tempo resta na janela atual?
+
       const remainingInWindow = getRemainingMinutesInCurrentWindow(current);
 
       if (remainingInWindow > 0) {
         if (remainingInWindow >= remainingProductionMinutes) {
-          // Produção termina dentro desta janela
+
           current = new Date(
             current.getTime() + remainingProductionMinutes * 60 * 1000,
           );
           remainingProductionMinutes = 0;
         } else {
-          // Consumir todo o tempo restante da janela
+
           remainingProductionMinutes -= remainingInWindow;
           current = new Date(current.getTime() + remainingInWindow * 60 * 1000);
-          // Ir para a próxima janela de funcionamento
+
           current = getNextServiceWindowStart(current);
         }
       } else {
-        // Não está em janela de funcionamento, ir para a próxima
+
         current = getNextServiceWindowStart(current);
       }
     }
 
-    // Alinhar ao próximo intervalo de 30 min
     const { year, month, day, hour, minute } = getBrazilTimeComponents(current);
     const remainder = minute % 30;
     let alignedMinute = minute;
@@ -1930,7 +1874,6 @@ export function useCart(): CartContextType {
 
     let result = createBrazilDate(year, month, day, alignedHour, alignedMinute);
 
-    // Verificar se o resultado está dentro do horário de funcionamento
     if (!isWithinServiceHours(result)) {
       result = getNextServiceWindowStart(result);
     }
@@ -1947,13 +1890,11 @@ export function useCart(): CartContextType {
 
   const generateTimeSlots = useCallback(
     (baseDate: Date): TimeSlot[] => {
-      // baseDate: data selecionada no calendário
+
       const { year, month, day } = getBrazilTimeComponents(baseDate);
 
-      // Construir objeto Date representando o meio-dia no Brasil para verificar se é FDS
       const checkDate = createBrazilDate(year, month, day, 12, 0);
 
-      // Bloquear Domingos (0)
       if (checkDate.getDay() === 0) {
         return [];
       }
@@ -1964,13 +1905,12 @@ export function useCart(): CartContextType {
       const relevantWindows = isWknd ? windows.weekends : windows.weekdays;
 
       const slots: TimeSlot[] = [];
-      const earliestTime = getEarliestDeliveryDateTime(); // Absolute timestamp of earliest valid slot
+      const earliestTime = getEarliestDeliveryDateTime();
 
       relevantWindows.forEach((window) => {
         const [startH, startM] = window.start.split(":").map(Number);
         const [endH, endM] = window.end.split(":").map(Number);
 
-        // Construir Inicio e Fim da janela absolute timestamps
         const windowStart = createBrazilDate(year, month, day, startH, startM);
         const windowEnd = createBrazilDate(year, month, day, endH, endM);
 
@@ -1978,9 +1918,8 @@ export function useCart(): CartContextType {
 
         while (iter < windowEnd) {
           const slotStart = new Date(iter);
-          const slotEnd = new Date(iter.getTime() + 60 * 60 * 1000); // 1 hora de duração
+          const slotEnd = new Date(iter.getTime() + 60 * 60 * 1000);
 
-          // O slot é válido se começar DEPOIS ou IGUAL ao earliestTime
           if (slotStart >= earliestTime) {
             const startStr = slotStart.toLocaleTimeString("pt-BR", {
               timeZone: "America/Sao_Paulo",
@@ -1999,21 +1938,17 @@ export function useCart(): CartContextType {
             });
           }
 
-          // Incremento: 30 minutos
           iter.setTime(iter.getTime() + 30 * 60 * 1000);
         }
       });
 
-      // Adicionar opção "A combinar"
-      // Usamos 23:59:59 como marcador para "A combinar"
       const agreeLaterDate = createBrazilDate(year, month, day, 23, 59);
-      // Garantir que não duplica se já existir (improvável)
+
       slots.push({
         value: agreeLaterDate.toISOString(),
         label: "A combinar (entraremos em contato)",
       });
 
-      // Deduplicate by label just in case
       const uniqueSlots = slots.filter(
         (slot, index, self) =>
           index === self.findIndex((t) => t.label === slot.label),
@@ -2037,14 +1972,12 @@ export function useCart(): CartContextType {
 
     const dates: AvailableDate[] = [];
 
-    // Gerar próximos 7 dias
     for (let i = 0; i < 7; i++) {
       const date = new Date(baseDate);
       date.setDate(date.getDate() + i);
 
       const timeSlots = generateTimeSlots(date);
 
-      // Só adicionar datas que tenham slots disponíveis
       if (timeSlots.length > 0) {
         dates.push({ date, slots: timeSlots });
       }
@@ -2055,14 +1988,13 @@ export function useCart(): CartContextType {
 
   const isDateDisabledInCalendar = useCallback(
     (date: Date): boolean => {
-      // ✅ Usar cache para evitar recalcular para a mesma data
-      const dateKey = date.toISOString().split("T")[0]; // Formato: YYYY-MM-DD
+
+      const dateKey = date.toISOString().split("T")[0];
 
       if (dateDisabledCacheRef.current.has(dateKey)) {
         return dateDisabledCacheRef.current.get(dateKey) || false;
       }
 
-      // Calcular e cachear
       const timeSlots = generateTimeSlots(date);
       const isDisabled = timeSlots.length === 0;
       dateDisabledCacheRef.current.set(dateKey, isDisabled);
@@ -2095,15 +2027,12 @@ export function useCart(): CartContextType {
     const now = new Date();
     const prodHours = getMinPreparationHours();
 
-    // Quando a produção termina (tempo real, pode ser fora do expediente)
     const productionEndsAt = new Date(
       now.getTime() + prodHours * 60 * 60 * 1000,
     );
 
-    // Encontrar primeira disponibilidade de retirada/entrega APÓS término da produção
     const earliestPickupTime = getEarliestDeliveryDateTime();
 
-    // Formatar para exibição
     const formattedProductionEnds = productionEndsAt.toLocaleString("pt-BR", {
       timeZone: "America/Sao_Paulo",
       weekday: "short",
@@ -2166,7 +2095,6 @@ export function useCart(): CartContextType {
         throw new Error("Carrinho está vazio");
       }
 
-      // Criar o pedido primeiro
       const order = await createOrder(
         userId,
         deliveryAddress,
@@ -2174,7 +2102,6 @@ export function useCart(): CartContextType {
         options,
       );
 
-      // Retornar URL para checkout transparente
       const checkoutUrl = `/checkout-transparente?orderId=${order.id}`;
 
       return {
@@ -2244,7 +2171,6 @@ export function useCart(): CartContextType {
 
         const response = await api.createTransparentPayment(payload);
 
-        // Limpar carrinho apenas se pagamento foi iniciado com sucesso
         if (response.success) {
           clearCart();
         }

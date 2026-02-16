@@ -3,35 +3,32 @@
  * Formato: +55 (XX) XXXXX-XXXX ou +55 (XX) XXXX-XXXX
  */
 export function formatPhoneNumber(value: string): string {
-  // Remove tudo que não é dígito
+
   const numbers = value.replace(/\D/g, "");
 
-  // Se começar com 55, considera código do país
   let cleaned = numbers;
   if (numbers.startsWith("55")) {
     cleaned = numbers.substring(2);
   }
 
-  // Limita a 11 dígitos (DDD + número)
   cleaned = cleaned.substring(0, 11);
 
-  // Formata conforme o tamanho
   if (cleaned.length === 0) {
     return "";
   } else if (cleaned.length <= 2) {
-    // Apenas DDD
+
     return `+55 (${cleaned}`;
   } else if (cleaned.length <= 6) {
-    // DDD + parte do número
+
     return `+55 (${cleaned.substring(0, 2)}) ${cleaned.substring(2)}`;
   } else if (cleaned.length <= 10) {
-    // Formato antigo: (XX) XXXX-XXXX
+
     return `+55 (${cleaned.substring(0, 2)}) ${cleaned.substring(
       2,
       6
     )}-${cleaned.substring(6)}`;
   } else {
-    // Formato novo: (XX) XXXXX-XXXX
+
     return `+55 (${cleaned.substring(0, 2)}) ${cleaned.substring(
       2,
       7
@@ -52,9 +49,6 @@ export function unformatPhoneNumber(value: string): string {
 export function isValidPhone(value: string): boolean {
   const numbers = unformatPhoneNumber(value);
 
-  // Deve ter 13 dígitos (55 + DDD + número)
-  // ou 11 dígitos (DDD + número)
-  // ou 10 dígitos (DDD + número fixo sem 9)
   return (
     numbers.length === 13 || numbers.length === 11 || numbers.length === 10
   );
@@ -67,23 +61,18 @@ export function isValidPhone(value: string): boolean {
 export function normalizePhoneForBackend(value: string): string {
   let numbers = unformatPhoneNumber(value);
 
-  // Remove código do país se existir
   if (numbers.startsWith("55")) {
     numbers = numbers.substring(2);
   }
 
-  // Se tiver 11 dígitos e o terceiro dígito for 9, manter como está (celular)
-  // Se tiver 12 dígitos (pode ter vindo com 55 + DDD + 9 + número), remover o primeiro 9
   if (numbers.length === 11) {
-    // Formato: DDNNNNNNNNN
-    // Se for DDD + 9 + 8 dígitos = celular (manter)
+
     return numbers;
   } else if (numbers.length === 10) {
-    // Formato: DDNNNNNNNN (telefone fixo ou celular sem 9)
+
     return numbers;
   }
 
-  // Para qualquer outro caso, retornar apenas os últimos 10 ou 11 dígitos
   return numbers.substring(Math.max(0, numbers.length - 11));
 }
 
@@ -110,13 +99,13 @@ export function displayPhoneNumber(value: string | null | undefined): string {
   const numbers = value.replace(/\D/g, "");
 
   if (numbers.startsWith("55") && numbers.length === 13) {
-    // Formato internacional completo
+
     const ddd = numbers.substring(2, 4);
     const firstPart = numbers.substring(4, 9);
     const secondPart = numbers.substring(9, 13);
     return `+55 (${ddd}) ${firstPart}-${secondPart}`;
   } else if (numbers.length === 11) {
-    // Formato nacional
+
     const ddd = numbers.substring(0, 2);
     const firstPart = numbers.substring(2, 7);
     const secondPart = numbers.substring(7, 11);

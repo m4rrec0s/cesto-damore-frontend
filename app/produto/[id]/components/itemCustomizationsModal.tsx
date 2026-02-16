@@ -202,7 +202,6 @@ export function ItemCustomizationModal({
         }
       > = {};
 
-      // Use Promise.all to fetch in parallel, but skip if cached
       const toFetch = layouts.filter((l) => !layoutCacheRef.current[l.id]);
       const fetchPromises = toFetch.map(async (l) => {
         try {
@@ -228,7 +227,6 @@ export function ItemCustomizationModal({
         if (item) fetchedLayouts[item.id] = item;
       }
 
-      // Reuse cached layouts for those already fetched earlier
       for (const layout of layouts) {
         if (layoutCacheRef.current[layout.id] && !fetchedLayouts[layout.id]) {
           const fullLayout = layoutCacheRef.current[layout.id]!;
@@ -327,7 +325,6 @@ export function ItemCustomizationModal({
               ? "/3DModels/quadro.glb"
               : undefined;
 
-        // Normalizar para os novos tipos
         const standardType =
           normalizedType === "caneca"
             ? "mug"
@@ -356,7 +353,6 @@ export function ItemCustomizationModal({
     [customizations],
   );
 
-  // ✅ Initialize customizationData from initialValues (fallback for reopening modal)
   useEffect(() => {
     if (!isOpen) return;
 
@@ -384,7 +380,7 @@ export function ItemCustomizationModal({
               };
             }
           } else if (c.type === "TEXT") {
-            // Se o valor for um objeto com campo 'text', extrair
+
             if (
               typeof val === "object" &&
               val !== null &&
@@ -402,7 +398,6 @@ export function ItemCustomizationModal({
 
       setCustomizationData(newData);
 
-      // ✅ Restore DYNAMIC_LAYOUT state if present
       const baseLayoutCustom = customizations.find(
         (c) => c.type === "DYNAMIC_LAYOUT",
       );
@@ -451,7 +446,7 @@ export function ItemCustomizationModal({
           previewUrl,
           fabricState,
           highQualityUrl,
-          // ✅ CRITICAL: Manter dados do layout selecionado
+
           item_type: existingData.item_type,
           model_url: existingData.model_url,
           layout_id: existingData.layout_id,
@@ -486,7 +481,7 @@ export function ItemCustomizationModal({
           };
           if (layoutData.layout_id) {
             const cachedLayout = layoutCacheRef.current[layoutData.layout_id];
-            // ✅ CORREÇÃO: API retorna 'productionTime' (não 'additional_time')
+
             const apiProductionTime =
               (cachedLayout as unknown as { productionTime?: number })
                 ?.productionTime ||
@@ -552,13 +547,11 @@ export function ItemCustomizationModal({
     [],
   );
 
-  // Effect to process the next file in the queue
   useEffect(() => {
     if (pendingFiles.length > 0 && !isCropping && !cropDialogOpen) {
       const nextFile = pendingFiles[0];
       const customId = currentCustomizationId;
 
-      // Safety check: we need a customization ID target
       if (!customId) return;
 
       const customization = customizations.find((c) => c.id === customId);
@@ -624,7 +617,6 @@ export function ItemCustomizationModal({
         const maxImages =
           customization.customization_data.dynamic_layout?.max_images || 10;
 
-        // Use Ref to get latest files, avoiding stale closures
         const currentFiles =
           uploadingFilesRef.current[currentCustomizationId] || [];
 
@@ -635,12 +627,10 @@ export function ItemCustomizationModal({
           [currentCustomizationId]: totalFiles,
         }));
 
-        // Notificar pai sobre o número de imagens adicionadas
         if (onImagesUpdate && itemId) {
           onImagesUpdate(itemId, totalFiles.length, maxImages);
         }
 
-        // Processar arquivos para preview/base64
         const processedFiles: ProcessedFile[] = [];
         for (let i = 0; i < totalFiles.length; i++) {
           const f = totalFiles[i];
@@ -681,7 +671,6 @@ export function ItemCustomizationModal({
   const handleDetailsConfirm = (croppedImageUrl: string) => {
     handleCropComplete(croppedImageUrl);
 
-    // Remove processed file from queue
     setPendingFiles((prev) => prev.slice(1));
     setCropDialogOpen(false);
     setFileToCrop(null);
@@ -690,14 +679,6 @@ export function ItemCustomizationModal({
       setIsCropping(false);
     }, 500);
   };
-
-  // const handleCropCancel = () => {
-  //   // If canceled, we also remove it from queue to avoid getting stuck
-  //   setPendingFiles((prev) => prev.slice(1));
-  //   setCropDialogOpen(false);
-  //   setFileToCrop(null);
-  //   setIsCropping(false);
-  // };
 
   const handleRemoveFile = useCallback(
     async (customizationId: string, index: number) => {
@@ -726,7 +707,7 @@ export function ItemCustomizationModal({
           file,
           preview: URL.createObjectURL(file),
           position: idx,
-          base64, // ✅ Dados base64 para upload ao Drive
+          base64,
           mime_type: file.type,
           size: file.size,
         };
@@ -913,8 +894,7 @@ export function ItemCustomizationModal({
     const fields = customization.customization_data.fields || [];
 
     return (
-      <div className="space-y-4">
-        {/* Cabeçalho Minimalista */}
+      <div className="space-y-4 pb-5">
         <div className="p-4 rounded-lg bg-neutral-50 border border-neutral-200 shadow-sm relative overflow-hidden">
           <div className="flex items-center gap-3 relative z-10">
             <div className="p-2 rounded-lg bg-neutral-100 shadow-sm">
@@ -1035,7 +1015,7 @@ export function ItemCustomizationModal({
                   | undefined;
 
                 if (data && Object.keys(data).length > 0) {
-                  // Se houver apenas um campo, não repetir o label (ex: "Mesagem: Te amo") -> "Te amo"
+
                   const textParts =
                     fields.length === 1
                       ? data[fields[0].id] || ""
@@ -1043,7 +1023,6 @@ export function ItemCustomizationModal({
                           .map((f) => `${f.label}: ${data[f.id] || ""}`)
                           .join("\n");
 
-                  // ✅ Enviar apenas o texto limpo para o backend
                   result.push({
                     ruleId: customization.id,
                     customizationType: CustomizationType.TEXT,
@@ -1086,7 +1065,6 @@ export function ItemCustomizationModal({
     const maxImages =
       customization.customization_data.dynamic_layout?.max_images || 10;
 
-    // ✅ FIX: Se não temos files em uploadingFiles, tentar restaurar de customizationData ou initialValues
     if (currentFiles.length === 0) {
       const dataFromState = customizationData[customization.id];
       if (Array.isArray(dataFromState) && dataFromState.length > 0) {
@@ -1191,7 +1169,7 @@ export function ItemCustomizationModal({
                     accept="image/*"
                     onChange={(e) => {
                       handleFileUpload(customization.id, e.target.files);
-                      e.target.value = ""; // Reset input to allow selecting the same file again or triggering change
+                      e.target.value = "";
                     }}
                   />
 
@@ -1270,12 +1248,10 @@ export function ItemCustomizationModal({
   const renderMultipleChoiceCustomization = (customization: Customization) => {
     const options = customization.customization_data.options || [];
 
-    // ✅ FIX: Usar initialValues como fallback se customizationData está vazio
     let data = customizationData[customization.id] as
       | { id?: string; label?: string }
       | undefined;
 
-    // Se não temos dados selecionados, procurar nos initialValues
     if (
       !data &&
       initialValues &&
@@ -1285,13 +1261,13 @@ export function ItemCustomizationModal({
       let matchedOption: (typeof options)[0] | undefined;
 
       if (typeof initialValue === "string") {
-        // String: procurar pela opção correspondente
+
         matchedOption = options.find(
           (opt: (typeof options)[0]) =>
             opt.id === initialValue || opt.value === initialValue,
         );
       } else if (initialValue !== null && typeof initialValue === "object") {
-        // Object: verificar se tem id property
+
         const objValue = initialValue as Record<string, unknown>;
         if (typeof objValue.id === "string") {
           matchedOption = options.find(
@@ -1305,7 +1281,7 @@ export function ItemCustomizationModal({
           id: matchedOption.id,
           label: matchedOption.label,
         };
-        // Atualizar state com o fallback
+
         setCustomizationData((prev) => ({
           ...prev,
           [customization.id]: data,
@@ -1449,7 +1425,7 @@ export function ItemCustomizationModal({
                         label?: string;
                       };
                       if (choiceData.id) {
-                        // ✅ Encontrar o price_adjustment da opção selecionada
+
                         const selectedOption =
                           custom.customization_data.options?.find(
                             (opt: { id: string }) => opt.id === choiceData.id,
@@ -1462,7 +1438,7 @@ export function ItemCustomizationModal({
                           ruleId: custom.id,
                           customizationType: CustomizationType.MULTIPLE_CHOICE,
                           data: {
-                            id: choiceData.id, // ✅ id no nível raiz para validação
+                            id: choiceData.id,
                             selected_option: choiceData.id,
                             selected_option_label: choiceData.label || "",
                             _customizationName: custom.name,
@@ -1590,7 +1566,7 @@ export function ItemCustomizationModal({
         </div>
       </DialogContent>
 
-      {/* Dialog de Crop de Imagem */}
+      
       {fileToCrop && (
         <ImageCropDialog
           file={fileToCrop}

@@ -14,19 +14,14 @@ interface CustomizationContextValue {
   loading: boolean;
   error: string | null;
 
-  // Carregar regras de customização
   loadRules: (productId: string) => Promise<void>;
 
-  // Atualizar dados de customização
   updateCustomization: (ruleId: string, data: CustomizationData) => void;
 
-  // Gerar preview
   generatePreview: () => Promise<PreviewResponse | null>;
 
-  // Validar customizações
   validate: () => Promise<ValidationResult>;
 
-  // Limpar estado
   reset: () => void;
 }
 
@@ -52,7 +47,7 @@ export function CustomizationProvider({
       setError(null);
 
       try {
-        // Usar novo endpoint unificado
+
         await api.get(`/customizations/${productId}`);
 
         setState({
@@ -93,7 +88,7 @@ export function CustomizationProvider({
 
       setLoading(true);
       try {
-        // Consolidar dados de customização
+
         const customizationData: Record<string, unknown> = {};
 
         for (const [ruleId, data] of Object.entries(state.data)) {
@@ -105,7 +100,6 @@ export function CustomizationProvider({
           customizationData,
         })) as PreviewResponse;
 
-        // Atualizar estado com preview
         setState((prev) => {
           if (!prev) return prev;
           return {
@@ -130,7 +124,7 @@ export function CustomizationProvider({
     }
 
     try {
-      // Converter dados de customização para formato esperado
+
       const customizations = Object.entries(state.data).map(
         ([ruleId, data]) => ({
           rule_id: ruleId,

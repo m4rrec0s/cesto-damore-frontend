@@ -23,14 +23,12 @@ interface FeedItemCardProps {
 function FeedItemCard({ item }: FeedItemCardProps) {
   const { item_data, item_type, custom_title, custom_subtitle } = item;
 
-  // Type guards para os diferentes tipos de dados
   const isProduct = item_type === "product" && item_data;
   const isCategory = item_type === "category" && item_data;
   const isAdditional = item_type === "additional" && item_data;
 
   if (!item_data) return null;
 
-  // Type assertions para os dados dos itens
   const productData = item_data as {
     id: string;
     name: string;
@@ -56,7 +54,7 @@ function FeedItemCard({ item }: FeedItemCardProps) {
   const renderProductCard = () => (
     <Link href={`/produto/${productData.id}`}>
       <div className="group bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden hover:shadow-lg transition-all duration-300 hover:scale-105 cursor-pointer">
-        {/* Product Image */}
+        
         <div className="relative aspect-square overflow-hidden bg-gray-100">
           {productData.image_url ? (
             <Image
@@ -71,7 +69,7 @@ function FeedItemCard({ item }: FeedItemCardProps) {
             </div>
           )}
 
-          {/* Discount badge */}
+          
           {productData.discount && productData.discount > 0 && (
             <div className="absolute top-2 left-2 bg-red-500 text-white text-xs font-bold px-2 py-1 rounded">
               -{productData.discount}%
@@ -79,7 +77,7 @@ function FeedItemCard({ item }: FeedItemCardProps) {
           )}
         </div>
 
-        {/* Product Info */}
+        
         <div className="p-4">
           <h3 className="font-semibold text-gray-900 mb-2 line-clamp-2">
             {custom_title || productData.name}
@@ -147,7 +145,7 @@ function FeedItemCard({ item }: FeedItemCardProps) {
 
   const renderAdditionalCard = () => (
     <div className="group bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden hover:shadow-lg transition-all duration-300 hover:scale-105">
-      {/* Additional Image */}
+      
       <div className="relative aspect-square overflow-hidden bg-gray-100">
         {additionalData.image_url ? (
           <Image
@@ -162,7 +160,7 @@ function FeedItemCard({ item }: FeedItemCardProps) {
           </div>
         )}
 
-        {/* Discount badge */}
+        
         {additionalData.discount && additionalData.discount > 0 && (
           <div className="absolute top-2 left-2 bg-red-500 text-white text-xs font-bold px-2 py-1 rounded">
             -{additionalData.discount}%
@@ -170,7 +168,7 @@ function FeedItemCard({ item }: FeedItemCardProps) {
         )}
       </div>
 
-      {/* Additional Info */}
+      
       <div className="p-4">
         <h3 className="font-semibold text-gray-900 mb-2 line-clamp-2">
           {custom_title || additionalData.name}
@@ -232,11 +230,11 @@ export default function SectionDetailPage() {
     const fetchSectionData = async () => {
       try {
         setLoading(true);
-        // Buscar todas as configurações de feed públicas
+
         const feedData = await api.getPublicFeed();
 
         if (feedData && feedData.sections) {
-          // Encontrar a seção específica pelo ID
+
           const foundSection = feedData.sections.find(
             (s) => s.id === sectionId
           );
@@ -299,7 +297,7 @@ export default function SectionDetailPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-none sm:max-w-[90%] mx-auto px-4 py-8">
-        {/* Header with back button */}
+        
         <div className="mb-8">
           <Link
             href="/"
@@ -319,7 +317,7 @@ export default function SectionDetailPage() {
           </p>
         </div>
 
-        {/* Items Grid */}
+        
         {section.items.length === 0 ? (
           <div className="text-center py-12 bg-white rounded-lg border-2 border-dashed border-gray-300">
             <Package className="h-16 w-16 text-gray-400 mx-auto mb-4" />

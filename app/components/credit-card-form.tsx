@@ -58,7 +58,6 @@ interface ValidationErrors {
   email?: string;
 }
 
-// Algoritmo de Luhn para validar número do cartão
 const validateCardNumber = (cardNumber: string): boolean => {
   const cleanNumber = cardNumber.replace(/\s/g, "");
   if (!/^\d{13,19}$/.test(cleanNumber)) return false;
@@ -83,7 +82,6 @@ const validateCardNumber = (cardNumber: string): boolean => {
   return sum % 10 === 0;
 };
 
-// Detecta a bandeira do cartão
 const detectCardBrand = (cardNumber: string): string => {
   const cleanNumber = cardNumber.replace(/\s/g, "");
 
@@ -103,7 +101,6 @@ const detectCardBrand = (cardNumber: string): string => {
   return "unknown";
 };
 
-// Valida CPF
 const validateCPF = (cpf: string): boolean => {
   const cleanCPF = cpf.replace(/\D/g, "");
   if (cleanCPF.length !== 11) return false;
@@ -128,7 +125,6 @@ const validateCPF = (cpf: string): boolean => {
   return true;
 };
 
-// Valida CNPJ
 const validateCNPJ = (cnpj: string): boolean => {
   const cleanCNPJ = cnpj.replace(/\D/g, "");
   if (cleanCNPJ.length !== 14) return false;
@@ -243,7 +239,6 @@ export function CreditCardForm({
           setIssuerId(response.issuer?.id);
           setPaymentMethodId(response.payment_method_id);
 
-          // Resetar seleção se não for válida
           if (
             !response.payer_costs.find(
               (i: { installments: number }) => i.installments === installments
@@ -254,7 +249,7 @@ export function CreditCardForm({
         }
       } catch (error) {
         console.error("Erro ao buscar parcelas:", error);
-        // Fallback para parcelas padrão se falhar
+
         generateDefaultInstallments();
       }
     },
@@ -267,7 +262,6 @@ export function CreditCardForm({
       const brand = detectCardBrand(cardNumber);
       setCardBrand(brand);
 
-      // Buscar parcelas se tivermos pelo menos 6 dígitos (BIN)
       const cleanNumber = cardNumber.replace(/\s/g, "");
       if (cleanNumber.length >= 6) {
         const bin = cleanNumber.substring(0, 6);
@@ -279,14 +273,12 @@ export function CreditCardForm({
     }
   }, [cardNumber, amount, installments, fetchInstallments]);
 
-  // Formatação do número do cartão (XXXX XXXX XXXX XXXX)
   const formatCardNumber = (value: string) => {
     const cleaned = value.replace(/\D/g, "");
     const formatted = cleaned.match(/.{1,4}/g)?.join(" ") || cleaned;
-    return formatted.substring(0, 19); // 16 dígitos + 3 espaços
+    return formatted.substring(0, 19);
   };
 
-  // Formatação do CPF (XXX.XXX.XXX-XX)
   const formatCPF = (value: string) => {
     const cleaned = value.replace(/\D/g, "");
     if (cleaned.length <= 11) {
@@ -298,7 +290,6 @@ export function CreditCardForm({
     return cleaned.substring(0, 11);
   };
 
-  // Formatação do CNPJ (XX.XXX.XXX/XXXX-XX)
   const formatCNPJ = (value: string) => {
     const cleaned = value.replace(/\D/g, "");
     if (cleaned.length <= 14) {
@@ -322,22 +313,16 @@ export function CreditCardForm({
   const validateForm = (): boolean => {
     const newErrors: ValidationErrors = {};
 
-    // Validar número do cartão
     if (!cardNumber.trim()) {
       newErrors.cardNumber = "Número do cartão é obrigatório";
     } else if (!validateCardNumber(cardNumber)) {
       newErrors.cardNumber = "Número do cartão inválido";
     }
 
-    // Validar nome do titular
     if (!cardholderName.trim()) {
       newErrors.cardholderName = "Nome do titular é obrigatório";
     }
-    // else if (cardholderName.trim().split(" ").length < 2) {
-    //   newErrors.cardholderName = "Informe nome e sobrenome";
-    // }
 
-    // Validar mês de expiração
     if (!expirationMonth) {
       newErrors.expirationMonth = "Mês é obrigatório";
     } else {
@@ -347,7 +332,6 @@ export function CreditCardForm({
       }
     }
 
-    // Validar ano de expiração
     if (!expirationYear) {
       newErrors.expirationYear = "Ano é obrigatório";
     } else {
@@ -365,14 +349,12 @@ export function CreditCardForm({
       }
     }
 
-    // Validar CVV
     if (!securityCode.trim()) {
       newErrors.securityCode = "CVV é obrigatório";
     } else if (!/^\d{3,4}$/.test(securityCode)) {
       newErrors.securityCode = "CVV inválido (3 ou 4 dígitos)";
     }
 
-    // Validar documento
     if (!identificationNumber.trim()) {
       newErrors.identificationNumber = `${identificationType} é obrigatório`;
     } else {
@@ -388,7 +370,6 @@ export function CreditCardForm({
       }
     }
 
-    // Validar email
     if (!email.trim()) {
       newErrors.email = "Email é obrigatório";
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
@@ -797,7 +778,7 @@ export function CreditCardForm({
           </div>
         </motion.div>
 
-        {/* Submit Button */}
+        
         <motion.button
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}

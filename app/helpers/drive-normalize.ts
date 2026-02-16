@@ -8,20 +8,16 @@ const normalizeGoogleDriveUrl = (url: string): string => {
     return url;
   }
 
-  // Extrair FILE_ID de diferentes formatos
   let fileId = null;
 
-  // Formato: /file/d/FILE_ID/view
   let match = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
   if (match) fileId = match[1];
 
-  // Formato: ?id=FILE_ID ou &id=FILE_ID
   if (!fileId) {
     match = url.match(/[?&]id=([a-zA-Z0-9_-]+)/);
     if (match) fileId = match[1];
   }
 
-  // Se encontrou FILE_ID, retornar URL de download direto
   if (fileId) {
     return `https://drive.google.com/uc?export=download&id=${fileId}`;
   }

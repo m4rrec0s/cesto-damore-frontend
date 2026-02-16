@@ -40,8 +40,8 @@ interface UsePaymentPollingReturn {
 export function usePaymentPolling({
   orderId,
   enabled = true,
-  maxAttempts = 60, // 60 tentativas = 5 minutos (a cada 5 segundos)
-  intervalMs = 5000, // 5 segundos entre cada verificação
+  maxAttempts = 60,
+  intervalMs = 5000,
   onSuccess,
   onFailure,
   onTimeout,
@@ -56,7 +56,7 @@ export function usePaymentPolling({
 
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const attemptsRef = useRef(0);
-  const hasTimeoutRef = useRef(false); // Previne restart após timeout
+  const hasTimeoutRef = useRef(false);
 
   const stopPolling = useCallback(() => {
     if (intervalRef.current) {
@@ -73,7 +73,6 @@ export function usePaymentPolling({
       return;
     }
 
-    // Se já foi aprovado, não verificar novamente
     if (status === "success") {
       stopPolling();
       return;
@@ -92,13 +91,6 @@ export function usePaymentPolling({
 
       const paymentStatus = order.payment?.status;
       const orderStatus = order.status;
-
-      // const safePaymentId = order.payment?.id
-      //   ? `${order.payment?.id.slice(0, 4)}...${order.payment?.id.slice(-4)}`
-      //   : undefined;
-      // const safeMercadoId = order.payment?.mercado_pago_id
-      //   ? `***${order.payment?.mercado_pago_id.slice(-4)}`
-      //   : undefined;
 
       if (!order.payment && orderStatus === "PAID") {
         setStatus("success");
@@ -139,7 +131,6 @@ export function usePaymentPolling({
         return;
       }
 
-      // Pagamento em processamento/validação
       if (
         paymentStatus === "PROCESSING" ||
         paymentStatus === "IN_PROCESS" ||
@@ -148,13 +139,12 @@ export function usePaymentPolling({
       ) {
         setStatus("pending");
         onPending?.(order);
-        // Continua polling
+
       }
 
-      // Ainda pendente, continua verificando
       if (attemptsRef.current >= maxAttempts) {
         setStatus("timeout");
-        hasTimeoutRef.current = true; // Marca como com timeout para evitar restart
+        hasTimeoutRef.current = true;
         stopPolling();
         onTimeout?.();
         return;
@@ -193,10 +183,8 @@ export function usePaymentPolling({
     attemptsRef.current = 0;
     setAttempts(0);
 
-    // Primeira verificação imediata
     checkOrderStatus();
 
-    // Configura verificações periódicas
     intervalRef.current = setInterval(() => {
       checkOrderStatus();
     }, intervalMs);
@@ -209,10 +197,9 @@ export function usePaymentPolling({
     setAttempts(0);
     setError(null);
     attemptsRef.current = 0;
-    hasTimeoutRef.current = false; // Reset o flag de timeout
+    hasTimeoutRef.current = false;
   }, [stopPolling]);
 
-  // Auto-start quando enabled e orderId são fornecidos
   useEffect(() => {
     if (enabled && orderId && status === "idle" && !hasTimeoutRef.current) {
       startPolling();
@@ -223,7 +210,6 @@ export function usePaymentPolling({
     };
   }, [enabled, orderId, status, startPolling, stopPolling]);
 
-  // Cleanup ao desmontar
   useEffect(() => {
     return () => {
       if (intervalRef.current) {

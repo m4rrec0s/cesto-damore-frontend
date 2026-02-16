@@ -46,7 +46,6 @@ export function LayoutSlotEditor({
     null,
   );
 
-  // Estados para crop de imagem
   const [cropDialogOpen, setCropDialogOpen] = useState(false);
   const [fileToCrop, setFileToCrop] = useState<File | null>(null);
   const [cropAspect, setCropAspect] = useState<number | undefined>(undefined);
@@ -56,7 +55,6 @@ export function LayoutSlotEditor({
   const baseImageRef = useRef<HTMLImageElement | null>(null);
   const slotImagesRef = useRef<Map<string, HTMLImageElement>>(new Map());
 
-  // Carregar imagem base
   useEffect(() => {
     const loadBaseImage = async () => {
       try {
@@ -73,10 +71,8 @@ export function LayoutSlotEditor({
           toast.error("Erro ao carregar imagem base do layout");
         };
 
-        // Normalizar URL do Google Drive
         const normalizedUrl = getDirectImageUrl(layoutBase.previewImageUrl);
 
-        // Se for URL do Google Drive, usar proxy
         if (normalizedUrl.includes("drive.google.com")) {
           const proxyUrl = `/api/proxy-image?url=${encodeURIComponent(
             normalizedUrl,
@@ -177,10 +173,8 @@ export function LayoutSlotEditor({
       ctx.restore();
     });
 
-    // Draw base image LAST so it overlays the slots (handling transparency)
     ctx.drawImage(baseImageRef.current, 0, 0, canvas.width, canvas.height);
 
-    // Atualizar preview URL
     try {
       const previewUrl = canvas.toDataURL("image/png");
       onPreviewChange(previewUrl);
@@ -233,7 +227,6 @@ export function LayoutSlotEditor({
       return;
     }
 
-    // Calcular o aspect ratio do slot para o crop
     const slot = layoutBase.slots.find((s) => s.id === slotId);
     const aspect = slot
       ? (slot.width * layoutBase.width) / (slot.height * layoutBase.height)
@@ -249,7 +242,7 @@ export function LayoutSlotEditor({
     if (!currentSlotId) return;
 
     try {
-      // 1. Converter DataURL para Blob para upload (Sem usar fetch para evitar problemas de CSP/DataURL)
+
       const blob = dataURLtoBlob(croppedImageUrl);
       const file = new File([blob], "cropped-image.png", {
         type: "image/png",
@@ -271,7 +264,6 @@ export function LayoutSlotEditor({
         [currentSlotId]: { file, preview, imageData },
       }));
 
-      // Atualizar lista de imagens
       const allImages = Object.values({
         ...slotImages,
         [currentSlotId]: { file, preview, imageData },
@@ -304,7 +296,6 @@ export function LayoutSlotEditor({
       slotImagesRef.current.delete(slotId);
       updateCanvasPreview();
 
-      // Atualizar lista de imagens
       const newSlotImages = { ...slotImages };
       delete newSlotImages[slotId];
       const allImages = Object.values(newSlotImages)
@@ -600,10 +591,10 @@ export function LayoutSlotEditor({
         </CardContent>
       </Card>
 
-      {/* Canvas oculto para gerar preview quando em modo de edição */}
+      
       {viewMode === "edit" && <canvas ref={canvasRef} className="hidden" />}
 
-      {/* Dialog de Crop de Imagem */}
+      
       {fileToCrop && (
         <ImageCropDialog
           file={fileToCrop}

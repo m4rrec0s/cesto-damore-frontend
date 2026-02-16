@@ -107,7 +107,7 @@ export default function PedidosPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-rose-50 via-white to-pink-50">
-      {/* Header */}
+      
       <div className="border-b border-gray-100 sticky top-0 z-10 backdrop-blur-sm bg-white/90">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 py-4 sm:py-6">
           <div className="flex items-center gap-3">
@@ -126,7 +126,7 @@ export default function PedidosPage() {
         </div>
       </div>
 
-      {/* Content */}
+      
       <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
         {orders.length === 0 ? (
           <Card className="border-0 shadow-lg bg-white/80 backdrop-blur">
@@ -159,7 +159,7 @@ export default function PedidosPage() {
                   key={order.id}
                   className="border-0 shadow-md hover:shadow-xl transition-all duration-300 bg-white/80 backdrop-blur overflow-hidden"
                 >
-                  {/* Header do Card - Mobile Optimized */}
+                  
                   <div className="bg-gradient-to-r from-gray-50 to-white p-4 sm:p-5 border-b border-gray-100">
                     <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
                       <div className="flex-1">
@@ -200,7 +200,7 @@ export default function PedidosPage() {
                     </div>
                   </div>
 
-                  {/* Delivery Date */}
+                  
                   {order.delivery_date && (
                     <div className="mx-4 sm:mx-5 mt-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-3 border border-blue-100">
                       <div className="flex items-start gap-2">
@@ -224,7 +224,7 @@ export default function PedidosPage() {
                     </div>
                   )}
 
-                  {/* Items - Mobile Optimized */}
+                  
                   <div className="p-4 sm:p-5">
                     <p className="text-xs sm:text-sm font-semibold text-gray-700 mb-3">
                       Itens do pedido ({order.items.length})
@@ -271,7 +271,7 @@ export default function PedidosPage() {
                     </div>
                   </div>
 
-                  {/* Progress Timeline - Simplified for Mobile */}
+                  
                   {order.status !== "CANCELED" && (
                     <div className="px-4 sm:px-5 pb-4">
                       <div className="bg-gray-50 rounded-xl p-3 sm:p-4">
@@ -340,7 +340,7 @@ export default function PedidosPage() {
                     </div>
                   )}
 
-                  {/* Footer Button */}
+                  
                   <div className="border-t border-gray-100 px-4 sm:px-5 py-3 bg-gray-50/50">
                     <Button
                       variant="ghost"

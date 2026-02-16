@@ -49,7 +49,7 @@ export const StepPayment = ({
         </h2>
 
         <div className="space-y-3">
-          {/* Opção PIX */}
+          
           <div
             onClick={() => setPaymentMethod("pix")}
             className={cn(
@@ -117,7 +117,7 @@ export const StepPayment = ({
             )}
           </div>
 
-          {/* Opção Cartão */}
+          
           <div
             onClick={() => setPaymentMethod("card")}
             className={cn(
@@ -174,7 +174,7 @@ export const StepPayment = ({
         </div>
       )}
 
-      {/* Selo de Segurança */}
+      
       <div className="flex flex-col items-center justify-center pt-4 pb-8 space-y-3 opacity-60">
         <div className="flex items-center gap-2 text-gray-400">
           <ShieldCheck className="h-5 w-5" />

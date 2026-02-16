@@ -22,7 +22,6 @@ export default function AppWrapper({ children }: { children: ReactNode }) {
   );
 }
 
-// Criar um contexto simples para o CartSheet
 import { createContext, useContext } from "react";
 
 interface CartSheetContextType {

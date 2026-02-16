@@ -2,27 +2,25 @@
  * Tipos para sistema de personalização de itens
  */
 
-// ===== Slot Definition =====
 export interface SlotDef {
   id: string;
-  x: number; // % do left relativo à base (0-100)
-  y: number; // % do top relativo à base (0-100)
-  width: number; // % da largura da base
-  height: number; // % da altura da base
-  rotation?: number; // graus
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  rotation?: number;
   zIndex?: number;
   fit?: "cover" | "contain";
 }
 
-// ===== Layout Base =====
 export interface LayoutBase {
   id: string;
   name: string;
   title: string;
-  item_type: string; // "caneca" | "quadro" | ...
-  previewImageUrl: string; // URL da imagem base
-  model_url?: string; // URL do modelo 3D (opcional)
-  width: number; // px reais da imagem base
+  item_type: string;
+  previewImageUrl: string;
+  model_url?: string;
+  width: number;
   height: number;
   slots: SlotDef[];
   additional_time: number;
@@ -41,7 +39,7 @@ export interface CreateLayoutBaseInput {
   height: number;
   slots: SlotDef[];
   additional_time?: number;
-  image?: File; // Arquivo da imagem base
+  image?: File;
 }
 
 export interface UpdateLayoutBaseInput {
@@ -53,17 +51,15 @@ export interface UpdateLayoutBaseInput {
   image?: File;
 }
 
-// ===== Image Data =====
 export interface ImageData {
   slotId: string;
-  imageBuffer: Buffer | Uint8Array; // Dados da imagem diretamente
+  imageBuffer: Buffer | Uint8Array;
   mimeType: string;
   width: number;
   height: number;
   originalName: string;
 }
 
-// ===== Personalization =====
 export interface Personalization {
   id: string;
   order_id: string;
@@ -87,18 +83,16 @@ export interface CommitPersonalizationResponse {
   finalImageUrl: string;
 }
 
-// ===== Preview =====
 export interface PreviewRequest {
   layoutBaseId: string;
   images: ImageData[];
-  width?: number; // Largura máxima do preview (default: 800)
+  width?: number;
 }
 
 export interface PreviewResponse {
-  previewUrl: string; // Data URL (base64)
+  previewUrl: string;
 }
 
-// ===== Item com Layout Base =====
 export interface ItemWithLayout {
   id: string;
   name: string;

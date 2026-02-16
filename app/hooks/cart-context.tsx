@@ -101,7 +101,7 @@ interface CartContextType {
       };
     }
   ) => Promise<unknown>;
-  // Funções de entrega
+
   getDeliveryWindows: () => {
     weekdays: DeliveryWindow[];
     weekends: DeliveryWindow[];
@@ -137,13 +137,11 @@ export function CartProvider({
 }) {
   const cartHook = useCart();
 
-  // Criar um wrapper para addToCart que chama a callback
   const wrappedAddToCart: typeof cartHook.addToCart = async (...args) => {
     await cartHook.addToCart(...args);
     onCartItemAdded?.();
   };
 
-  // Adicionar callback e wrapper ao objeto do hook
   const contextValue: CartContextType = {
     ...cartHook,
     addToCart: wrappedAddToCart,

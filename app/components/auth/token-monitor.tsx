@@ -4,7 +4,6 @@ import { useEffect } from "react";
 import { useAuth } from "../../hooks/use-auth";
 import { useRouter } from "next/navigation";
 
-// Função para decodificar JWT
 function decodeJWT(token: string) {
   try {
     const parts = token.split(".");
@@ -19,7 +18,6 @@ function decodeJWT(token: string) {
   }
 }
 
-// Função para verificar se o token está prestes a expirar (5 minutos antes)
 function isTokenNearExpiry(token: string, minutesBefore: number = 5): boolean {
   const payload = decodeJWT(token);
   if (!payload || !payload.exp) {
@@ -31,7 +29,6 @@ function isTokenNearExpiry(token: string, minutesBefore: number = 5): boolean {
   return timeUntilExpiry <= minutesBefore * 60;
 }
 
-// Função para verificar se o token está expirado
 function isTokenExpired(token: string): boolean {
   const payload = decodeJWT(token);
   if (!payload || !payload.exp) {
@@ -53,14 +50,12 @@ export default function TokenMonitor({ children }: TokenMonitorProps) {
   useEffect(() => {
     if (!appToken || !user) return;
 
-    // Verificar imediatamente se o token está expirado
     if (isTokenExpired(appToken)) {
       logout();
       router.push("/login?reason=token_expired");
       return;
     }
 
-    // Configurar verificação periódica do token
     const checkTokenInterval = setInterval(() => {
       if (!appToken) {
         clearInterval(checkTokenInterval);
@@ -72,10 +67,9 @@ export default function TokenMonitor({ children }: TokenMonitorProps) {
         logout();
         router.push("/login?reason=token_expired");
       } else if (isTokenNearExpiry(appToken)) {
-        // Aqui você pode implementar renovação automática do token
-        // ou mostrar um aviso para o usuário
+
       }
-    }, 60000); // Verificar a cada minuto
+    }, 60000);
 
     return () => clearInterval(checkTokenInterval);
   }, [appToken, logout, router, user]);

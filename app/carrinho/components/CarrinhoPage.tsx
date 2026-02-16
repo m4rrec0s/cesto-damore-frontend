@@ -46,7 +46,6 @@ const SHIPPING_RULES: Record<string, { pix: number; card: number }> = {
   "sao jose da mata": { pix: 15, card: 25 },
 };
 
-// Mapeamento de steps semântico
 const STEP_MAP = {
   cart: 1,
   shipping: 2,
@@ -99,7 +98,6 @@ const getAdditionalFinalPrice = (
   return basePrice + adjustmentTotal;
 };
 
-// Tipos para os componentes
 interface CartItem {
   product_id: string;
   product: {
@@ -127,8 +125,6 @@ interface CartItem {
   customizations?: CartCustomization[];
   customization_total?: number;
 }
-
-// Componentes funcionais para o layout responsivo
 
 export default function CarrinhoPageContent() {
   const router = useRouter();
@@ -170,7 +166,6 @@ export default function CarrinhoPageContent() {
     "delivery",
   );
 
-  // Sincronizar currentStep com query params
   useEffect(() => {
     const stepParam = searchParams.get("step") as keyof typeof STEP_MAP | null;
     if (stepParam && stepParam in STEP_MAP) {
@@ -178,7 +173,6 @@ export default function CarrinhoPageContent() {
     }
   }, [searchParams]);
 
-  // Atualizar URL quando step mudar
   const updateStepUrl = useCallback(
     (step: 1 | 2 | 3) => {
       const params = new URLSearchParams();
@@ -190,17 +184,16 @@ export default function CarrinhoPageContent() {
     [router],
   );
 
-  // Helper para formatar CPF/CNPJ visualmente
   const formatDocument = (value: string) => {
     const numbers = value.replace(/\D/g, "");
     if (numbers.length <= 11) {
-      // CPF: 000.000.000-00
+
       return numbers
         .replace(/(\d{3})(\d)/, "$1.$2")
         .replace(/(\d{3})(\d)/, "$1.$2")
         .replace(/(\d{3})(\d{1,2})$/, "$1-$2");
     } else {
-      // CNPJ: 00.000.000/0000-00
+
       return numbers
         .replace(/^(\d{2})(\d)/, "$1.$2")
         .replace(/^(\d{2})\.(\d{3})(\d)/, "$1.$2.$3")
@@ -216,12 +209,10 @@ export default function CarrinhoPageContent() {
       const normalizedDate = new Date(date);
       normalizedDate.setHours(0, 0, 0, 0);
 
-      // ✅ Verificar se está fora do intervalo permitido
       if (normalizedDate < minDate || normalizedDate > maxDate) {
         return true;
       }
 
-      // ✅ Usar função memoizada do hook (mais otimizada)
       return isDateDisabledInCalendar(date);
     },
     [getDeliveryDateBounds, isDateDisabledInCalendar],
@@ -262,17 +253,16 @@ export default function CarrinhoPageContent() {
   const sseDisconnectCountRef = useRef(0);
   const pixGeneratedForOrderRef = useRef<string | null>(null);
   const updatingOrderMetadataRef = useRef(false);
-  const creatingOrderRef = useRef(false); // ✅ Proteção contra duplicação de pedidos
+  const creatingOrderRef = useRef(false);
 
   useEffect(() => {
     pollingStartedRef.current = false;
     sseDisconnectCountRef.current = 0;
   }, [currentOrderId]);
 
-  // Cleanup quando componente desmontar ou usuário sair da página
   useEffect(() => {
     return () => {
-      // Parar polling ao desmontar
+
       setCurrentOrderId(null);
       setPaymentStatus("");
       disconnectSSERef.current?.();
@@ -328,8 +318,8 @@ export default function CarrinhoPageContent() {
   const { startPolling } = usePaymentPolling({
     orderId: currentOrderId,
     enabled: Boolean(currentOrderId && paymentStatus === "pending"),
-    maxAttempts: 3, // Apenas 3 tentativas (15 segundos total)
-    intervalMs: 5000, // 5 segundos entre tentativas
+    maxAttempts: 3,
+    intervalMs: 5000,
     onSuccess: handlePaymentSuccess,
     onFailure: () => {
       setPaymentStatus("failure");
@@ -339,9 +329,9 @@ export default function CarrinhoPageContent() {
       toast.error("Pagamento recusado. Verifique os dados do pagamento.");
     },
     onTimeout: () => {
-      // Parar o polling quando o timeout é atingido
-      setPaymentStatus(""); // Resetar status para parar o polling
-      setCurrentOrderId(null); // Limpar order ID para evitar restart do polling
+
+      setPaymentStatus("");
+      setCurrentOrderId(null);
       setPaymentError(
         "O tempo de espera expirou. Verifique o status do seu pedido na página 'Meus Pedidos'.",
       );
@@ -371,7 +361,7 @@ export default function CarrinhoPageContent() {
 
   const sseOnDisconnected = useCallback(() => {
     sseDisconnectCountRef.current += 1;
-    // Só iniciar polling fallback se ainda temos um pedido em progresso e SSE desconectou
+
     if (
       sseDisconnectCountRef.current >= 3 &&
       !pollingStartedRef.current &&
@@ -390,7 +380,7 @@ export default function CarrinhoPageContent() {
         `❌ SSE Error (${sseDisconnectCountRef.current}/3):`,
         error,
       );
-      // Só iniciar polling fallback se ainda temos um pedido em progresso
+
       if (
         sseDisconnectCountRef.current >= 3 &&
         !pollingStartedRef.current &&
@@ -412,7 +402,7 @@ export default function CarrinhoPageContent() {
       }
       paymentApprovedRef.current = true;
 
-      disconnectSSERef.current?.(); // Desconectar SSE após aprovação
+      disconnectSSERef.current?.();
 
       const orderIdFromData = (data as { orderId?: string })?.orderId;
 
@@ -545,7 +535,6 @@ export default function CarrinhoPageContent() {
         setCustomerPhone(formatPhoneNumber(user.phone));
       }
 
-      // Preencher documento se o usuário já tiver um cadastrado
       if (user.document && !userDocument) {
         setUserDocument(user.document.replace(/\D/g, ""));
       }
@@ -561,26 +550,23 @@ export default function CarrinhoPageContent() {
           }
         }
 
-        // Tentar extrair rua e número
         const streetMatch = addressStr.match(/^([^,]+),\s*(\d+)/);
         if (streetMatch) {
           setAddress(streetMatch[1].trim());
           setHouseNumber(streetMatch[2].trim());
         } else {
-          // Se não conseguir extrair, colocar tudo no endereço
+
           const basicAddress = addressStr.split("-")[0]?.split(",")[0]?.trim();
           if (basicAddress) {
             setAddress(basicAddress);
           }
         }
 
-        // Tentar extrair bairro
         const neighborhoodMatch = addressStr.match(/-\s*([^,]+),/);
         if (neighborhoodMatch) {
           setNeighborhood(neighborhoodMatch[1].trim());
         }
 
-        // Tentar extrair cidade e estado se não foram preenchidos ainda
         if (!user.city && !user.state && !city && !state) {
           const cityStateMatch = addressStr.match(/,\s*([^/]+)\/(\w{2})/);
           if (cityStateMatch) {
@@ -590,7 +576,7 @@ export default function CarrinhoPageContent() {
         }
       }
     } else if (!user) {
-      // Limpar campos se não houver usuário
+
       setZipCode("");
       setAddress("");
       setHouseNumber("");
@@ -611,7 +597,6 @@ export default function CarrinhoPageContent() {
       try {
         if (hasPendingOrder && pendingOrder) {
           setCurrentOrderId(pendingOrder.id);
-          // ✅ Não salvar pendingOrderId no localStorage - carregar via API
 
           const orderPaymentMethod = pendingOrder.payment?.payment_method;
           setPaymentMethod(
@@ -621,19 +606,19 @@ export default function CarrinhoPageContent() {
                 ? "card"
                 : undefined,
           );
-          // Preencher campos do pedido (se houver)
+
           if (pendingOrder.delivery_address) {
             const addressStr = pendingOrder.delivery_address;
             const isPickupAddress = addressStr.includes("Retirada na Loja");
 
             if (!isPickupAddress) {
-              // Tentar extrair rua e número corretamente
+
               const streetMatch = addressStr.match(/^([^,]+),\s*(\d+)/);
               if (streetMatch) {
                 setAddress(streetMatch[1].trim());
                 setHouseNumber(streetMatch[2].trim());
               } else {
-                // Fallback: tentar pegar apenas a primeira parte antes da vírgula
+
                 const parts = addressStr.split(",");
                 if (parts.length > 0) {
                   setAddress(parts[0].trim());
@@ -641,13 +626,13 @@ export default function CarrinhoPageContent() {
                   setAddress(addressStr);
                 }
               }
-              // Tentar extrair número se não foi pego pelo regex acima
+
               if (!streetMatch) {
                 const numMatch = addressStr.match(/\b(\d{1,4}[A-Za-z\-]*)\b/);
                 if (numMatch) setHouseNumber(numMatch[1]);
               }
             } else {
-              // Se for retirada, não preencher endereço
+
               setAddress("");
               setHouseNumber("");
             }
@@ -659,9 +644,9 @@ export default function CarrinhoPageContent() {
             setSendAnonymously(Boolean(pendingOrder.send_anonymously));
           }
           if (pendingOrder.recipient_phone) {
-            // Format: stored as +55XXXXXXXXXXX or 55xxxxxxxxx or only digits
+
             const digits = pendingOrder.recipient_phone.replace(/\D/g, "");
-            // Save without country code (UI expects local number)
+
             const localNumber = digits.startsWith("55")
               ? digits.substring(2)
               : digits;
@@ -685,7 +670,7 @@ export default function CarrinhoPageContent() {
                 setSelectedTime(`${hh}:${mm}`);
               }
             } catch {
-              // ignore invalid date
+
             }
           }
 
@@ -701,12 +686,11 @@ export default function CarrinhoPageContent() {
             setZipCode(pendingOrder.user.zip_code.replace(/\D/g, ""));
           }
 
-          // Mostrar banner visível para pedido pendente com pagamento PENDING
           if (pendingOrder.payment?.status === "PENDING") {
             setShowPendingOrderBanner(true);
             window.scrollTo({ top: 0, behavior: "smooth" });
           } else {
-            // Para outros status, apenas preencher dados sem notificação invasiva
+
             setShowPendingOrderBanner(false);
           }
         }
@@ -719,15 +703,14 @@ export default function CarrinhoPageContent() {
     detect();
   }, [hasPendingOrder, pendingOrder]);
 
-  // Se não houver pedido pendente, desconectar o SSE e limpar pendingOrderId local
   useEffect(() => {
     if (!hasPendingOrder) {
       try {
         disconnectSSE?.();
         localStorage.removeItem("pendingOrderId");
         setCurrentOrderId(null);
-      } catch {
-        /* ignore */
+      } catch (error) {
+        console.error("Erro ao limpar pedido pendente:", error);
       }
     }
   }, [hasPendingOrder, disconnectSSE]);
@@ -753,22 +736,18 @@ export default function CarrinhoPageContent() {
   const shippingCost = useMemo(() => {
     if (!paymentMethod) return null;
 
-    // Retirada na loja: sempre grátis
     if (optionSelected === "pickup") {
       return 0;
     }
 
-    // Entrega: validar endereço
     if (!isAddressServed || !shippingRule) {
       return null;
     }
 
-    // Se for PIX em Campina Grande, frete é grátis
     if (paymentMethod === "pix" && normalizedCity === "campina grande") {
       return 0;
     }
 
-    // Caso contrário, aplicar a regra de frete normal
     return shippingRule[paymentMethod];
   }, [
     paymentMethod,
@@ -778,7 +757,6 @@ export default function CarrinhoPageContent() {
     normalizedCity,
   ]);
 
-  // Desconto de Retirada (apenas PIX)
   const pickupDiscount = useMemo(() => {
     if (optionSelected === "pickup" && paymentMethod === "pix") {
       return 10.0;
@@ -1017,7 +995,6 @@ export default function CarrinhoPageContent() {
           cardholderName: user.name || "",
         };
 
-        // 🔍 DEBUG: Log do payload antes de enviar
         console.log("💾 Payload de pagamento:", {
           orderId: payload.orderId,
           paymentMethodId: payload.paymentMethodId,
@@ -1057,7 +1034,6 @@ export default function CarrinhoPageContent() {
         const errorMessage =
           error instanceof Error ? error.message : "Erro desconhecido";
 
-        // 🔍 Detectar erro específico de token/chave pública
         let friendlyError = `Pagamento recusado: ${errorMessage}`;
         if (
           errorMessage.includes("Token") ||
@@ -1116,7 +1092,6 @@ export default function CarrinhoPageContent() {
     }
   }, [isAddressServed, paymentMethod]);
 
-  // Handler para editar customizações - redireciona para a página do produto
   const handleEditCustomizations = useCallback(
     (item: CartItem) => {
       router.push(`/produto/${item.product_id}`);
@@ -1189,7 +1164,6 @@ export default function CarrinhoPageContent() {
     );
   }
 
-  // Função para traduzir erros do Mercado Pago para mensagens amigáveis
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const getFriendlyPaymentError = (statusDetail: string): string => {
     const errorMap: Record<string, string> = {
@@ -1233,7 +1207,7 @@ export default function CarrinhoPageContent() {
     cartItems.length > 0 && validateCustomizations(cartItems);
 
   const canProceedToStep3 = (() => {
-    // Validações comuns
+
     const commonValid =
       customerPhone.trim() !== "" &&
       isValidPhone(customerPhone) &&
@@ -1243,10 +1217,10 @@ export default function CarrinhoPageContent() {
       validateCustomizations(cartItems);
 
     if (optionSelected === "pickup") {
-      // Para pickup não precisamos validar endereço detalhado, só os contatos
+
       return commonValid;
     } else {
-      // Para delivery precisamos de endereço completo e served
+
       return (
         commonValid &&
         recipientPhone.trim() !== "" &&
@@ -1262,7 +1236,7 @@ export default function CarrinhoPageContent() {
   })();
 
   const handleNextStep = async () => {
-    // Evitar múltiplas chamadas simultâneas
+
     if (isProcessing) {
       console.warn("Requisição em progresso, ignorando clique duplicado");
       return;
@@ -1316,7 +1290,7 @@ export default function CarrinhoPageContent() {
       }
 
       if (!currentOrderId && !hasPendingOrder) {
-        // ✅ PROTEÇÃO: Verificar se já está criando pedido
+
         if (creatingOrderRef.current) {
           console.warn(
             "⚠️ Criação de pedido já em progresso, ignorando requisição duplicada",
@@ -1336,9 +1310,9 @@ export default function CarrinhoPageContent() {
         }
 
         setIsProcessing(true);
-        creatingOrderRef.current = true; // ✅ Marcar que está criando
+        creatingOrderRef.current = true;
         try {
-          // Se "A combinar" for selecionado (23:59), enviar null para backend
+
           let finalDateForBackend = finalDeliveryDate;
           if (selectedTime === "23:59") {
             finalDateForBackend = null;
@@ -1356,7 +1330,7 @@ export default function CarrinhoPageContent() {
             {
               shippingCost: shippingCost || 0,
               paymentMethod: "pix",
-              grandTotal: grandTotal, // Usar grandTotal calculado com desconto
+              grandTotal: grandTotal,
               deliveryCity: isPickup ? "Campina Grande" : city,
               deliveryState: isPickup ? "PB" : state,
               recipientPhone: normalizePhoneForBackend(recipientPhone),
@@ -1388,7 +1362,6 @@ export default function CarrinhoPageContent() {
             throw new Error("Não foi possível identificar o pedido gerado.");
           }
 
-          // ✅ Não salvar pendingOrderId no localStorage - carregar via API
           setCurrentOrderId(createdOrderId);
 
           toast.success("Pedido criado! Selecione a forma de pagamento.");
@@ -1401,12 +1374,12 @@ export default function CarrinhoPageContent() {
           return;
         } finally {
           setIsProcessing(false);
-          creatingOrderRef.current = false; // ✅ Liberar proteção
+          creatingOrderRef.current = false;
         }
       }
 
       if (currentOrderId) {
-        // Evitar múltiplas chamadas simultâneas a updateOrderMetadata
+
         if (updatingOrderMetadataRef.current) {
           console.warn(
             "Já há uma atualização em progresso, ignorando requisição duplicada",
@@ -1421,7 +1394,6 @@ export default function CarrinhoPageContent() {
             ? "Retirada na Loja - R. Dr. Raif Ramalho, 350 - Jardim Tavares, Campina Grande - PB, 58402-025"
             : `${address}, ${houseNumber} - ${neighborhood}, ${city}/${state} - CEP: ${zipCode}`;
 
-          // Se "A combinar" (23:59), tratar como null
           let finalDateForBackend = finalDeliveryDate;
           if (selectedTime === "23:59") {
             finalDateForBackend = null;
@@ -1432,20 +1404,20 @@ export default function CarrinhoPageContent() {
             delivery_city: isPickup ? "Campina Grande" : city,
             delivery_state: isPickup ? "PB" : state,
             recipient_phone: normalizePhoneForBackend(recipientPhone),
-            delivery_date: finalDateForBackend?.toISOString() || null, // Allow null explicitamente
+            delivery_date: finalDateForBackend?.toISOString() || null,
             send_anonymously: sendAnonymously,
             complement: complemento,
             delivery_method: optionSelected as "delivery" | "pickup",
           });
         } catch (err) {
           console.error("Erro ao atualizar metadata do pedido pendente:", err);
-          // Se o pedido foi cancelado/removido no backend, remover local pending state e desconectar SSE
+
           try {
             localStorage.removeItem("pendingOrderId");
             setCurrentOrderId(null);
             disconnectSSE?.();
           } catch {
-            // Ignore cleanup errors
+
           }
         } finally {
           updatingOrderMetadataRef.current = false;
@@ -1591,7 +1563,7 @@ export default function CarrinhoPageContent() {
       ) : (
         <div className="min-h-screen bg-[#f5f5f5] relative">
           <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 lg:py-12">
-            {/* Banner para Pedido Pendente com Pagamento */}
+            
             {showPendingOrderBanner &&
               pendingOrder?.payment?.status === "PENDING" && (
                 <motion.div
@@ -1639,10 +1611,10 @@ export default function CarrinhoPageContent() {
               )}
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-              {/* Main Content - 2/3 width */}
+              
               <div className="lg:col-span-2 space-y-6">
                 <AnimatePresence mode="wait">
-                  {/* Etapa 1: Revisão do Carrinho com Customizações */}
+                  
                   {currentStep === 1 && (
                     <div key="step1" className="space-y-6">
                       <StepCart
@@ -1653,7 +1625,7 @@ export default function CarrinhoPageContent() {
                         onEditCustomizations={handleEditCustomizations}
                       />
 
-                      {/* CustomizationsReview integrado abaixo dos produtos */}
+                      
                       {cartItems.length > 0 && (
                         <div className="mt-8 pt-6 border-t border-gray-200">
                           <CustomizationsReview
@@ -1748,7 +1720,7 @@ export default function CarrinhoPageContent() {
         </div>
       )}
 
-      {/* -- Overlay with check animation -- */}
+      
       <AnimatePresence>
         {confirmationState === "animating" && (
           <motion.div

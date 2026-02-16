@@ -77,17 +77,15 @@ export function MPCardPaymentForm({
   useEffect(() => {
     mountedRef.current = true;
 
-    // Inicializar MP se ainda não foi (usando lib centralizada)
     if (MP_PUBLIC_KEY) {
       initializeMercadoPago(MP_PUBLIC_KEY);
     }
 
-    // Delay maior para garantir estabilidade do DOM
     const timer = setTimeout(() => {
       if (mountedRef.current) {
         setIsDelayedReady(true);
       }
-    }, 800); // 800ms delay para maior estabilidade
+    }, 800);
 
     return () => {
       mountedRef.current = false;
@@ -100,14 +98,14 @@ export function MPCardPaymentForm({
     setCardPaymentReady(false);
     setIsDelayedReady(false);
     setRetryCount((prev) => prev + 1);
-    // Força remontagem do Brick com nova key
+
     setBrickKey(Date.now());
   }, []);
 
   const handleOnSubmit = useCallback(
     async (formData: CardPaymentFormData) => {
       try {
-        // 🔍 DEBUG: Log detalhado do submit
+
         console.log("🔍 DEBUG - CardPayment Submit:", {
           timestamp: new Date().toISOString(),
           hasToken: !!formData?.token,
@@ -217,7 +215,6 @@ export function MPCardPaymentForm({
     );
   }
 
-  // Mostrar loading enquanto aguarda o delay
   if (!isDelayedReady) {
     return (
       <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
@@ -319,7 +316,7 @@ export function MPCardPaymentForm({
         </div>
       )}
 
-      {/* Debug info em desenvolvimento */}
+      
       {process.env.NODE_ENV === "development" && (
         <div className="p-2 bg-gray-100 text-xs text-gray-500 border-t">
           <p>🔑 PK: {MP_PUBLIC_KEY?.substring(0, 15)}...</p>

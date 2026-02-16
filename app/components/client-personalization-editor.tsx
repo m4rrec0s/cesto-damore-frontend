@@ -33,7 +33,6 @@ export default function ClientPersonalizationEditor({
   >(new Map());
   const [baseImageLoaded, setBaseImageLoaded] = useState(false);
 
-  // Estados para crop de imagem
   const [cropDialogOpen, setCropDialogOpen] = useState(false);
   const [fileToCrop, setFileToCrop] = useState<File | null>(null);
   const [cropAspect, setCropAspect] = useState<number | undefined>(undefined);
@@ -98,7 +97,6 @@ export default function ClientPersonalizationEditor({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [layoutBase.previewImageUrl]);
 
-  // Restore state from initialImages
   useEffect(() => {
     const restoreState = async () => {
       if (
@@ -114,7 +112,6 @@ export default function ClientPersonalizationEditor({
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           let previewUrl = (imgData as any).previewUrl;
 
-          // Recreate blob URL if missing but buffer exists
           if (!previewUrl && imgData.imageBuffer) {
             const buffer = imgData.imageBuffer;
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -128,7 +125,7 @@ export default function ClientPersonalizationEditor({
             img.src = previewUrl;
             await new Promise((resolve) => {
               img.onload = resolve;
-              img.onerror = resolve; // Continue even if one fails
+              img.onerror = resolve;
             });
 
             slotImagesRef.current.set(imgData.slotId, img);
@@ -233,7 +230,6 @@ export default function ClientPersonalizationEditor({
       ctx.restore();
     });
 
-    // Draw base image LAST so it overlays the slots
     ctx.drawImage(baseImageRef.current, 0, 0, canvas.width, canvas.height);
   }, [layoutBase, uploadedImages]);
 
@@ -248,10 +244,8 @@ export default function ClientPersonalizationEditor({
       return;
     }
 
-    // SEMPRE usar crop quadrado (1:1) para evitar problemas
     const aspect = 1;
 
-    // Abrir dialog de crop
     setFileToCrop(file);
     setCropAspect(aspect);
     setCurrentSlotId(slotId);
@@ -262,16 +256,14 @@ export default function ClientPersonalizationEditor({
     if (!currentSlotId) return;
 
     try {
-      // 1. Converter DataURL para Blob para upload (Sem usar fetch para evitar problemas de CSP/DataURL)
+
       const blob = dataURLtoBlob(croppedImageUrl);
       const file = new File([blob], "cropped-image.png", {
         type: "image/png",
       });
 
-      // Criar preview URL
       const previewUrl = URL.createObjectURL(file);
 
-      // Carregar imagem para o canvas
       const img = new Image();
       img.crossOrigin = "anonymous";
       img.src = previewUrl;
@@ -281,20 +273,16 @@ export default function ClientPersonalizationEditor({
         img.onerror = reject;
       });
 
-      // Armazenar imagem carregada
       slotImagesRef.current.set(currentSlotId, img);
 
-      // Converter para ImageData
       const imageData = await fileToImageData(file, currentSlotId);
 
-      // Atualizar estado
       setUploadedImages((prev) => {
         const newMap = new Map(prev);
         newMap.set(currentSlotId, { ...imageData, previewUrl });
         return newMap;
       });
 
-      // Atualizar canvas após estado ser atualizado
       setTimeout(() => {
         updateCanvasPreview();
       }, 100);
@@ -333,7 +321,7 @@ export default function ClientPersonalizationEditor({
   }, []);
 
   const handleComplete = () => {
-    // Se tem slots mas nenhuma imagem foi adicionada
+
     if (layoutBase.slots.length > 0 && uploadedImages.size === 0) {
       toast.error("Adicione pelo menos uma foto");
       return;
@@ -488,7 +476,7 @@ export default function ClientPersonalizationEditor({
         </Button>
       </div>
 
-      {/* Dialog de Crop de Imagem */}
+      
       {fileToCrop && (
         <ImageCropDialog
           file={fileToCrop}

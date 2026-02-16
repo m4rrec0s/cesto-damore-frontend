@@ -21,8 +21,8 @@ interface PaymentUpdateData {
 interface UseWebhookNotificationOptions {
   orderId: string | null;
   enabled?: boolean;
-  enablePollingFallback?: boolean; // 🔥 NOVO: Habilita polling quando SSE falhar
-  pollingInterval?: number; // 🔥 NOVO: Intervalo de polling em ms (padrão: 5000)
+  enablePollingFallback?: boolean;
+  pollingInterval?: number;
   onPaymentUpdate?: (data: PaymentUpdateData) => void;
   onPaymentApproved?: (data: PaymentUpdateData) => void;
   onPaymentRejected?: (data: PaymentUpdateData) => void;
@@ -32,13 +32,13 @@ interface UseWebhookNotificationOptions {
   onDisconnected?: () => void;
 }
 
-const MAX_RECONNECT_ATTEMPTS = 3; // 🔥 NOVO: Limite de tentativas SSE antes de fallback
-const DEFAULT_POLLING_INTERVAL = 5000; // 🔥 NOVO: 5 segundos
+const MAX_RECONNECT_ATTEMPTS = 3;
+const DEFAULT_POLLING_INTERVAL = 5000;
 
 export function useWebhookNotification({
   orderId,
   enabled = true,
-  enablePollingFallback = true, // 🔥 NOVO: Polling habilitado por padrão
+  enablePollingFallback = true,
   pollingInterval = DEFAULT_POLLING_INTERVAL,
   onPaymentUpdate,
   onPaymentApproved,
@@ -50,16 +50,15 @@ export function useWebhookNotification({
 }: UseWebhookNotificationOptions) {
   const api = useApi();
   const eventSourceRef = useRef<EventSource | null>(null);
-  const pollingIntervalRef = useRef<number | null>(null); // 🔥 NOVO: Timer de polling
+  const pollingIntervalRef = useRef<number | null>(null);
   const [isConnected, setIsConnected] = useState(false);
-  const [isPolling, setIsPolling] = useState(false); // 🔥 NOVO: Estado de polling
+  const [isPolling, setIsPolling] = useState(false);
   const reconnectAttemptsRef = useRef(0);
   const reconnectTimeoutRef = useRef<number | null>(null);
   const connectRef = useRef<(() => void) | null>(null);
   const lastConnectTimeRef = useRef<number | null>(null);
-  const lastPaymentStatusRef = useRef<string | null>(null); // 🔥 NOVO: Evita notificações duplicadas
+  const lastPaymentStatusRef = useRef<string | null>(null);
 
-  // 🔥 NOVO: Parar polling
   const stopPolling = useCallback(() => {
     if (pollingIntervalRef.current) {
       clearInterval(pollingIntervalRef.current);
@@ -68,7 +67,6 @@ export function useWebhookNotification({
     }
   }, []);
 
-  // 🔥 NOVO: Função de polling como fallback
   const pollOrderStatus = useCallback(async () => {
     if (!orderId) return;
 
@@ -79,7 +77,6 @@ export function useWebhookNotification({
 
       const currentStatus = order.payment.status;
 
-      // Evitar notificações duplicadas
       if (lastPaymentStatusRef.current === currentStatus) {
         return;
       }
@@ -101,16 +98,15 @@ export function useWebhookNotification({
 
       onPaymentUpdate?.(paymentData);
 
-      // Disparar callbacks específicos
       if (currentStatus === "APPROVED") {
         onPaymentApproved?.(paymentData);
-        stopPolling(); // 🔥 Parar polling após aprovação
+        stopPolling();
       } else if (
         currentStatus === "REJECTED" ||
         currentStatus === "CANCELLED"
       ) {
         onPaymentRejected?.(paymentData);
-        stopPolling(); // 🔥 Parar polling após rejeição
+        stopPolling();
       } else if (
         currentStatus === "PENDING" ||
         currentStatus === "IN_PROCESS"
@@ -119,7 +115,7 @@ export function useWebhookNotification({
       }
     } catch (error) {
       console.error("❌ Erro ao fazer polling de status:", error);
-      // Não parar polling em caso de erro - pode ser temporário
+
     }
   }, [
     orderId,
@@ -205,7 +201,6 @@ export function useWebhookNotification({
         setIsConnected(false);
         onDisconnected?.();
 
-        // 🔥 NOVO: Iniciar polling fallback após MAX_RECONNECT_ATTEMPTS
         if (
           enablePollingFallback &&
           reconnectAttemptsRef.current >= MAX_RECONNECT_ATTEMPTS
@@ -232,7 +227,6 @@ export function useWebhookNotification({
         eventSourceRef.current = null;
       } catch {}
 
-      // 🔥 MELHORADO: Verificar limite de tentativas antes de reconectar
       if (attempt < MAX_RECONNECT_ATTEMPTS) {
         reconnectTimeoutRef.current = window.setTimeout(() => {
           try {
@@ -244,7 +238,7 @@ export function useWebhookNotification({
           }
         }, backoffMs);
       } else if (enablePollingFallback) {
-        // 🔥 NOVO: Após esgotar tentativas SSE, iniciar polling
+
         console.warn(
           `⚠️ SSE reconnection limit reached. Switching to polling fallback.`,
         );
@@ -321,7 +315,6 @@ export function useWebhookNotification({
       reconnectAttemptsRef.current = 0;
     }
 
-    // 🔥 NOVO: Limpar polling também
     stopPolling();
   }, [onDisconnected, stopPolling]);
 
@@ -339,7 +332,7 @@ export function useWebhookNotification({
 
   return {
     isConnected,
-    isPolling, // 🔥 NOVO: Expor estado de polling
+    isPolling,
     disconnect,
     reconnect: () => {
       disconnect();

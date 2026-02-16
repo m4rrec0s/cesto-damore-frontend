@@ -5,10 +5,9 @@ import { motion } from "motion/react";
 
 export function AnimatedFramesLoader() {
   return (
-    <div className="flex flex-col items-center justify-center gap-8">
-      {/* Pincel desenhando um quadro */}
+    <div className="flex flex-col items-center justify-center space-y-8 p-10 bg-white/50 backdrop-blur-md rounded-3xl border border-white/20 shadow-xl">
       <div className="relative w-32 h-32">
-        {/* Canvas/Quadro background */}
+        
         <motion.div
           className="absolute inset-0 bg-white border-4 border-purple-400 rounded-lg shadow-lg"
           initial={{ opacity: 0 }}
@@ -16,7 +15,7 @@ export function AnimatedFramesLoader() {
           transition={{ duration: 0.3 }}
         />
 
-        {/* Moldura sendo desenhada */}
+        
         <svg
           className="absolute inset-0 w-32 h-32"
           viewBox="0 0 128 128"
@@ -26,7 +25,7 @@ export function AnimatedFramesLoader() {
           strokeLinecap="round"
           strokeLinejoin="round"
         >
-          {/* Linha superior */}
+          
           <motion.line
             x1="16"
             y1="16"
@@ -46,7 +45,7 @@ export function AnimatedFramesLoader() {
             }}
           />
 
-          {/* Linha direita */}
+          
           <motion.line
             x1="112"
             y1="16"
@@ -67,7 +66,7 @@ export function AnimatedFramesLoader() {
             }}
           />
 
-          {/* Linha inferior */}
+          
           <motion.line
             x1="112"
             y1="112"
@@ -88,7 +87,7 @@ export function AnimatedFramesLoader() {
             }}
           />
 
-          {/* Linha esquerda */}
+          
           <motion.line
             x1="16"
             y1="112"
@@ -109,7 +108,7 @@ export function AnimatedFramesLoader() {
             }}
           />
 
-          {/* Pincelada decorativa interna */}
+          
           <motion.path
             d="M 32 40 Q 64 32 96 48"
             className="text-pink-500"
@@ -127,7 +126,7 @@ export function AnimatedFramesLoader() {
             }}
           />
 
-          {/* Pincelada decorativa 2 */}
+          
           <motion.path
             d="M 40 70 Q 64 60 88 80"
             className="text-pink-500"
@@ -146,7 +145,7 @@ export function AnimatedFramesLoader() {
           />
         </svg>
 
-        {/* Pincel animado */}
+        
         <motion.div
           className="absolute w-6 h-6 pointer-events-none"
           initial={{ x: 100, y: 10, rotate: -45 }}
@@ -178,7 +177,7 @@ export function AnimatedFramesLoader() {
         </motion.div>
       </div>
 
-      {/* Texto animado */}
+      
       <motion.div
         className="text-center space-y-2"
         initial={{ opacity: 0 }}

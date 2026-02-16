@@ -90,7 +90,7 @@ export default function Home() {
 
   useEffect(() => {
     const loadData = async () => {
-      // 1. Tentar carregar do cache para renderização instantânea (opcional se feedData for rápido)
+
       if (cachedData?.products) {
         try {
           const productsCache = cachedData?.products as unknown as {
@@ -120,7 +120,7 @@ export default function Home() {
       try {
         let feed: PublicFeedResponse | null = null;
         try {
-          // Busca o feed público (banners + seções iniciais)
+
           feed = await api.getPublicFeed(undefined, 1, perPage);
           setFeedData(feed);
           setSections(feed?.sections || []);
@@ -132,7 +132,6 @@ export default function Home() {
           console.error("❌ Erro ao carregar feed:", feedError);
           setUseFallback(true);
 
-          // Fallback para produtos se o feed falhar
           const productsResponse = await api.getProducts({ perPage: 8 });
           const featuredProducts = productsResponse.products.map(
             (product: ApiProduct) => ({

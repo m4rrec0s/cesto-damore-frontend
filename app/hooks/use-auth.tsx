@@ -11,7 +11,6 @@ import { auth } from "@/app/config/firebase";
 import { GoogleAuthProvider, signInWithPopup } from "firebase/auth";
 import { useApi } from "@/app/hooks/use-api";
 
-// ✅ SEGURANÇA: Funções para validação de token
 function decodeToken(token: string): Record<string, unknown> | null {
   try {
     const parts = token.split(".");
@@ -37,7 +36,7 @@ interface User {
   image_url?: string | null;
   phone?: string | null;
   address?: string | null;
-  role?: string; // ✅ VALIDADO NO SERVIDOR - nunca confiar no cliente
+  role?: string;
   document?: string | null;
   city?: string | null;
   state?: string | null;
@@ -62,7 +61,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const api = useApi();
 
   useEffect(() => {
-    // Carregar dados do localStorage na inicialização
+
     if (typeof window !== "undefined") {
       const storedUserId = localStorage.getItem("userId");
       const storedAppToken = localStorage.getItem("appToken");
@@ -70,7 +69,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (storedUserId && storedAppToken && storedAppToken !== "undefined") {
         const tokenData = decodeToken(storedAppToken);
 
-        // ✅ SEGURANÇA: Verificar se token expirou
         if (tokenData && isTokenExpired(tokenData)) {
           console.warn("⏰ Token expirado ao carregar do localStorage");
           localStorage.removeItem("userId");
@@ -82,7 +80,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return;
         }
 
-        // ✅ SEGURANÇA: Buscar dados completos do usuário via API
         api
           .getUser(storedUserId)
           .then((userData) => {
@@ -110,7 +107,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [api]);
 
   const login = (userData: User, token: string) => {
-    // ✅ SEGURANÇA: Validar token antes de salvar
+
     const tokenData = decodeToken(token);
     if (!tokenData || isTokenExpired(tokenData)) {
       console.error("❌ Token inválido ou expirado");
@@ -120,12 +117,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(userData);
     setAppToken(token);
     if (typeof window !== "undefined") {
-      // ✅ SEGURANÇA: Salvar apenas userId e appToken
+
       localStorage.setItem("userId", userData.id);
       localStorage.setItem("appToken", token);
       localStorage.setItem("tokenTimestamp", Date.now().toString());
 
-      // ✅ SEGURANÇA: Max 12 horas de expiração + flags Secure/SameSite
       document.cookie = `appToken=${token}; path=/; max-age=${
         12 * 60 * 60
       }; Secure; SameSite=Strict`;
@@ -140,7 +136,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       localStorage.removeItem("appToken");
       localStorage.removeItem("tokenTimestamp");
 
-      // Limpar cookies também
       document.cookie =
         "appToken=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT";
     }

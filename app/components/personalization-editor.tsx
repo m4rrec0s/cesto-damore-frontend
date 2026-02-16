@@ -43,13 +43,12 @@ export default function PersonalizationEditor({
 
   const handleFileUpload = async (slotId: string, file: File) => {
     try {
-      // Validar tamanho
+
       if (file.size > 10 * 1024 * 1024) {
         toast.error("Arquivo muito grande. Máximo: 10MB");
         return;
       }
 
-      // Validar tipo
       if (!file.type.startsWith("image/")) {
         toast.error("Apenas imagens são permitidas");
         return;
@@ -65,7 +64,6 @@ export default function PersonalizationEditor({
 
       toast.success("Imagem carregada para preview");
 
-      // Gerar preview automaticamente
       await handleGeneratePreview();
     } catch (err) {
       console.error("Erro no upload:", err);
@@ -85,7 +83,6 @@ export default function PersonalizationEditor({
       });
       toast.success("Imagem removida");
 
-      // Atualizar preview
       await handleGeneratePreview();
     } catch (err) {
       console.error("Erro ao remover:", err);
@@ -192,7 +189,7 @@ export default function PersonalizationEditor({
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-      {/* Slots */}
+      
       <Card>
         <CardHeader>
           <CardTitle>Personalize seu item</CardTitle>
@@ -220,7 +217,7 @@ export default function PersonalizationEditor({
         </CardContent>
       </Card>
 
-      {/* Preview */}
+      
       <Card>
         <CardHeader>
           <CardTitle>Preview</CardTitle>

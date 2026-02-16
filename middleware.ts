@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-// Função para decodificar JWT (apenas para verificar expiração)
 function decodeJWT(token: string) {
   try {
     const parts = token.split(".");
@@ -16,11 +15,10 @@ function decodeJWT(token: string) {
   }
 }
 
-// Função para verificar se o token está expirado
 function isTokenExpired(token: string): boolean {
   const payload = decodeJWT(token);
   if (!payload || !payload.exp) {
-    return true; // Se não conseguir decodificar ou não tem exp, considera expirado
+    return true;
   }
 
   const currentTime = Math.floor(Date.now() / 1000);

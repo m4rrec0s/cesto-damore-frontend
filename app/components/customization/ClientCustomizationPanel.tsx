@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-// import Image from "next/image";
+
 import { Image as ImageIcon, Type, Check, Loader2 } from "lucide-react";
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
@@ -103,7 +103,6 @@ export function ClientCustomizationPanel({
       return;
     }
 
-    // Validar com o backend
     try {
       const inputs = customizationClientService.buildCustomizationInputs();
       const response = await api.validateCustomizationsV2({
@@ -151,7 +150,7 @@ export function ClientCustomizationPanel({
 
   return (
     <div className="space-y-6">
-      {/* Progress indicator */}
+      
       <div className="flex items-center justify-between">
         <div className="text-sm text-muted-foreground">
           Passo {currentRuleIndex + 1} de {customizations.length}
@@ -168,7 +167,7 @@ export function ClientCustomizationPanel({
         </div>
       </div>
 
-      {/* Current customization */}
+      
       {currentCustomization && (
         <CustomizationRuleStep
           customization={currentCustomization}
@@ -181,7 +180,7 @@ export function ClientCustomizationPanel({
         />
       )}
 
-      {/* Navigation buttons */}
+      
       <div className="flex justify-between gap-4">
         <Button
           variant="outline"
@@ -236,7 +235,6 @@ function CustomizationRuleStep({
   const handleFileUpload = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
 
-    // Converter cada arquivo para base64
     const photoPromises = Array.from(files).map(async (file) => {
       const reader = new FileReader();
       const base64Promise = new Promise<string>((resolve) => {
@@ -248,7 +246,7 @@ function CustomizationRuleStep({
       return {
         file,
         preview: URL.createObjectURL(file),
-        base64, // ✅ Dados base64 para upload ao Drive
+        base64,
         mime_type: file.type,
         size: file.size,
       };
@@ -296,7 +294,7 @@ function CustomizationRuleStep({
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
-        {/* IMAGES */}
+        
         {customization.type === "IMAGES" && (
           <div className="space-y-4">
             <Label htmlFor="photo-upload" className="flex items-center gap-2">
@@ -328,7 +326,7 @@ function CustomizationRuleStep({
           </div>
         )}
 
-        {/* TEXT */}
+        
         {customization.type === "TEXT" && (
           <div className="space-y-2">
             <Label htmlFor="text-input" className="flex items-center gap-2">
@@ -345,7 +343,7 @@ function CustomizationRuleStep({
           </div>
         )}
 
-        {/* MULTIPLE_CHOICE */}
+        
         {customization.type === "MULTIPLE_CHOICE" && options && (
           <div className="space-y-2">
             <Label>Escolha uma Opção</Label>

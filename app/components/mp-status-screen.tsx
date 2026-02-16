@@ -74,7 +74,6 @@ export function MPStatusScreen({
   useEffect(() => {
     mountedRef.current = true;
 
-    // Inicializar MP se necessário (usando lib centralizada)
     if (MP_PUBLIC_KEY) {
       initializeMercadoPago(MP_PUBLIC_KEY);
     }
@@ -91,7 +90,7 @@ export function MPStatusScreen({
           controller.unmount();
         }
       } catch {
-        // Ignorar erros de cleanup
+
       }
     };
   }, []);
@@ -124,7 +123,7 @@ export function MPStatusScreen({
 
   return (
     <div className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden">
-      {/* Custom Header */}
+      
       <div className={`p-6 ${config.bgColor} border-b border-gray-100`}>
         <div className="flex items-center justify-center gap-3">
           <StatusIcon className={`h-10 w-10 ${config.iconColor}`} />
@@ -135,7 +134,7 @@ export function MPStatusScreen({
         </div>
       </div>
 
-      {/* Status Screen Brick */}
+      
       <div className="p-4 sm:p-6 relative min-h-[300px]">
         <StatusScreen
           initialization={{
@@ -152,7 +151,7 @@ export function MPStatusScreen({
         )}
       </div>
 
-      {/* Continue Button */}
+      
       {onContinue && isReady && (
         <div className="px-4 sm:px-6 pb-6">
           <button

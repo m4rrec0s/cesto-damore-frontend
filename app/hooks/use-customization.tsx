@@ -59,9 +59,6 @@ interface UploadedFile {
   expires_at: string;
 }
 
-// const SESSION_ID_KEY = "customization_session_id";
-// const CUSTOMIZATIONS_KEY = "customizations_data";
-
 /**
  * Hook para gerenciar customizações de produtos/adicionais
  *
@@ -76,25 +73,18 @@ export function useCustomization(
   itemId: string,
   itemType: "product" | "additional",
 ) {
-  const baseURL = process.env.NEXT_PUBLIC_API_URL;
-
-  const [sessionId, setSessionId] = useState<string>("");
-  const [customizations, setCustomizations] = useState<CustomizationValue[]>(
-    [],
-  );
   const [availableCustomizations, setAvailableCustomizations] = useState<
     CustomizationType[]
   >([]);
-  const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
+  const [customizations, setCustomizations] = useState<CustomizationValue[]>([]);
+  const baseURL = process.env.NEXT_PUBLIC_API_URL;
 
-  /**
-   * Inicializar ou recuperar sessionId
-   */
   useEffect(() => {
-    // Generate fresh session ID on mount
-    const newSessionId = `session_${Date.now()}_${Math.random()
+    const newSessionId = `sess_${Math.random()
       .toString(36)
       .substring(2, 15)}`;
     setSessionId(newSessionId);
@@ -110,7 +100,7 @@ export function useCustomization(
   const saveToLocalStorage = useCallback(
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     (_data: CustomizationValue[]) => {
-      // No-op: localStorage disabled
+
     },
     [],
   );
@@ -181,7 +171,6 @@ export function useCustomization(
 
         const uploadedFile = await response.json();
 
-        // Adicionar à lista de arquivos
         setUploadedFiles((prev) => [...prev, uploadedFile]);
 
         return uploadedFile;
@@ -219,7 +208,6 @@ export function useCustomization(
           throw new Error("Erro ao deletar arquivo");
         }
 
-        // Remover da lista
         setUploadedFiles((prev) => prev.filter((f) => f.id !== fileId));
       } catch (err: unknown) {
         const message =
@@ -246,11 +234,11 @@ export function useCustomization(
         let updated: CustomizationValue[];
 
         if (existingIndex >= 0) {
-          // Atualizar existente
+
           updated = [...prev];
           updated[existingIndex] = { ...updated[existingIndex], ...value };
         } else {
-          // Adicionar novo
+
           updated = [...prev, { customization_id: customizationId, ...value }];
         }
 
@@ -298,7 +286,6 @@ export function useCustomization(
         return;
       }
 
-      // Validar por tipo
       switch (custom.customization_type) {
         case "IMAGES":
           if (!userValue.photos || userValue.photos.length === 0) {
@@ -344,7 +331,7 @@ export function useCustomization(
    */
   const clearCustomizations = useCallback(() => {
     setCustomizations([]);
-    // localStorage.removeItem(`${CUSTOMIZATIONS_KEY}_${itemType}_${itemId}`);
+
   }, []);
 
   /**
@@ -381,7 +368,7 @@ export function useCustomization(
   }, [sessionId, baseURL]);
 
   return {
-    // Estado
+
     sessionId,
     customizations,
     availableCustomizations,
@@ -389,7 +376,6 @@ export function useCustomization(
     loading,
     error,
 
-    // Métodos
     fetchAvailableCustomizations,
     uploadFile,
     deleteFile,
