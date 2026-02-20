@@ -4,8 +4,7 @@ import { useEffect, useState, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { ProductCard } from "@/app/components/layout/product-card";
 import { Button } from "@/app/components/ui/button";
-import { Input } from "@/app/components/ui/input";
-import { Search, Filter, X } from "lucide-react";
+import { Search, X } from "lucide-react";
 import useApi, { Product, Category, Type } from "@/app/hooks/use-api";
 import { toast } from "sonner";
 
@@ -29,7 +28,7 @@ function SearchPageContent() {
     parseInt(searchParams.get("page") || "1")
   );
   const [totalPages, setTotalPages] = useState(1);
-  const [showFilters, setShowFilters] = useState(false);
+  const [showFilters] = useState(false);
 
   const loadFilters = async () => {
     try {
@@ -89,11 +88,6 @@ function SearchPageContent() {
     loadProducts();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
-
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    updateURL({ q: searchTerm, page: "1" });
-  };
 
   const updateURL = (params: Record<string, string>) => {
     const newParams = new URLSearchParams(searchParams.toString());

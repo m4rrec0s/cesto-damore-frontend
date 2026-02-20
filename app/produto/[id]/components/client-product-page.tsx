@@ -24,6 +24,7 @@ import useApi, {
 import { useCartContext } from "@/app/hooks/cart-context";
 import type { CartCustomization } from "@/app/hooks/use-cart";
 import { useLayoutApi } from "@/app/hooks/use-layout-api";
+import { sanitizeProductDescription } from "@/app/utils/descriptionSanitizer";
 import { Model3DViewer } from "./Model3DViewer";
 import { MockupGallery } from "./MockupGallery";
 import AdditionalCard from "./additional-card";
@@ -1146,7 +1147,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
               <div className="prose prose-sm max-w-none text-gray-600">
                 {product.description ? (
                   <div
-                    dangerouslySetInnerHTML={{ __html: product.description }}
+                    dangerouslySetInnerHTML={{ __html: sanitizeProductDescription(product.description) }}
                   />
                 ) : (
                   <p className="text-gray-400 italic">

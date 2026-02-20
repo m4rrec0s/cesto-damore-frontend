@@ -79,7 +79,8 @@ const getCroppedPngImage = async (
   const scaleX = imageSrc.naturalWidth / imageSrc.width;
   const scaleY = imageSrc.naturalHeight / imageSrc.height;
 
-  ctx.imageSmoothingEnabled = false;
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
   canvas.width = pixelCrop.width;
   canvas.height = pixelCrop.height;
 
@@ -95,7 +96,7 @@ const getCroppedPngImage = async (
     canvas.height,
   );
 
-  const croppedImageUrl = canvas.toDataURL("image/png");
+  const croppedImageUrl = canvas.toDataURL("image/png", 1.0);
 
   const byteString = atob(croppedImageUrl.split(",")[1]);
   const mimeString = croppedImageUrl.split(",")[0].split(":")[1].split(";")[0];

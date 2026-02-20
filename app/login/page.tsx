@@ -6,6 +6,7 @@ import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import { useAuth } from "@/app/hooks/use-auth";
 import { useApi } from "@/app/hooks/use-api";
+import { useRestoreGuestCart } from "@/app/hooks/use-restore-guest-cart";
 import { AlertCircle, Mail, Lock } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
@@ -23,6 +24,7 @@ function LoginForm() {
   const api = useApi();
   const router = useRouter();
   const searchParams = useSearchParams();
+  useRestoreGuestCart();
 
   const redirectTo =
     searchParams.get("redirect") || searchParams.get("redirectTo") || "/";

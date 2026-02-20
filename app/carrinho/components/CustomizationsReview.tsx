@@ -762,11 +762,8 @@ export function CustomizationsReview({
 
             if (sanitizedData.images && Array.isArray(sanitizedData.images)) {
               sanitizedData.images = sanitizedData.images.map(
-                (img: Record<string, unknown>) => {
-                  
-                  const { imageBuffer, ...rest } = img;
-                  return rest;
-                },
+                // eslint-disable-next-line @typescript-eslint/no-unused-vars
+                ({ imageBuffer: _, ...rest }: Record<string, unknown>) => rest,
               );
             }
 

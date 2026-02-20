@@ -832,6 +832,23 @@ export default function CarrinhoPageContent() {
 
       try {
         if (!user) {
+          // Save cart data before redirecting to login
+          const { guestCartService } = await import(
+            "@/app/services/guestCartService"
+          );
+
+          const itemsToSave = cart.items.map((item) => ({
+            productId: item.product_id,
+            quantity: item.quantity,
+            additionals: item.additionals,
+            additionalColors: item.additional_colors,
+            customizations: item.customizations,
+          }));
+
+          if (itemsToSave.length > 0) {
+            guestCartService.saveGuestCart(itemsToSave);
+          }
+
           router.push("/login");
           return;
         }
@@ -942,6 +959,7 @@ export default function CarrinhoPageContent() {
     mapPaymentStatus,
     router,
     optionSelected,
+    cart,
   ]);
 
   useEffect(() => {
