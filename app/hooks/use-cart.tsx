@@ -1582,7 +1582,7 @@ export function useCart(): CartContextType {
   } => {
     return {
       weekdays: [
-        { start: "07:30", end: "12:00" },
+        { start: "08:30", end: "12:00" },
         { start: "14:00", end: "16:30" },
       ],
       weekends: [{ start: "08:00", end: "11:00" }],
