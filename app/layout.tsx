@@ -28,9 +28,18 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const apiOrigin =
+    process.env.NEXT_PUBLIC_API_URL?.replace(/\/api$/, "") ||
+    "https://api.cestodamore.com.br";
+
   return (
     <html lang="pt-BR" data-scroll-behavior="smooth">
-      <head></head>
+      <head>
+        <link rel="dns-prefetch" href={apiOrigin} />
+        <link rel="preconnect" href={apiOrigin} crossOrigin="" />
+        <link rel="dns-prefetch" href="https://drive.google.com" />
+        <link rel="preconnect" href="https://drive.google.com" crossOrigin="" />
+      </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-gray-50 text-gray-900`}
       >

@@ -42,6 +42,90 @@ import { getInternalImageUrl } from "@/lib/image-helper";
 const formatCurrency = (value: number) =>
   value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
+const getCustomizationPreviewUrls = (input: CustomizationInput): string[] => {
+  const data = (input.data as Record<string, unknown>) || {};
+  const urls: string[] = [];
+
+  const addUrl = (value: unknown) => {
+    if (typeof value === "string" && value.trim().length > 0) {
+      urls.push(value);
+    }
+  };
+
+  if (input.customizationType === CustomizationType.DYNAMIC_LAYOUT) {
+    addUrl(data.highQualityUrl);
+    addUrl(data.previewUrl);
+    if (typeof data.final_artwork === "object" && data.final_artwork) {
+      addUrl((data.final_artwork as Record<string, unknown>).preview_url);
+    }
+    if (typeof data.image === "object" && data.image) {
+      addUrl((data.image as Record<string, unknown>).preview_url);
+    }
+  }
+
+  if (input.customizationType === CustomizationType.IMAGES) {
+    const previews = data.previews;
+    if (Array.isArray(previews)) {
+      previews.forEach(addUrl);
+    }
+    const photos = data.photos;
+    if (Array.isArray(photos)) {
+      photos.forEach((photo) => {
+        if (typeof photo === "string") addUrl(photo);
+        if (typeof photo === "object" && photo !== null) {
+          const p = photo as Record<string, unknown>;
+          addUrl(p.preview_url);
+          addUrl(p.url);
+        }
+      });
+    }
+  }
+
+  return [...new Set(urls)];
+};
+
+const getCustomizationPreviewLabel = (input: CustomizationInput): string => {
+  const data = (input.data as Record<string, unknown>) || {};
+  const name = (data._customizationName as string) || "Personalização";
+
+  if (input.customizationType === CustomizationType.TEXT) {
+    const text =
+      (data.text as string) ||
+      Object.entries(data)
+        .filter(([key, value]) => key.startsWith("field-") && !!value)
+        .map(([, value]) => String(value).trim())
+        .filter(Boolean)
+        .join(" | ");
+    return text ? `${name}: ${text}` : name;
+  }
+
+  if (input.customizationType === CustomizationType.MULTIPLE_CHOICE) {
+    const selected =
+      (data.selected_option_label as string) ||
+      (data.label as string) ||
+      (data.selected_option as string) ||
+      "";
+    return selected ? `${name}: ${selected}` : name;
+  }
+
+  if (input.customizationType === CustomizationType.IMAGES) {
+    const count =
+      (Array.isArray(data.previews) ? data.previews.length : 0) ||
+      (Array.isArray(data.photos) ? data.photos.length : 0);
+    return `${name}: ${count} foto(s)`;
+  }
+
+  if (input.customizationType === CustomizationType.DYNAMIC_LAYOUT) {
+    return `${name}: ${
+      (data.layout_name as string) ||
+      (data.name as string) ||
+      "Design personalizado"
+    }`;
+  }
+
+  return name;
+};
+
 const ClientProductPage = ({ id }: { id: string }) => {
   const {
     getProduct,
@@ -1312,8 +1396,10 @@ const ClientProductPage = ({ id }: { id: string }) => {
                   {components
                     .filter((c) => c.item.allows_customization)
                     .map((component) => {
+                      const componentCustomizations =
+                        itemCustomizations[component.id] || [];
                       const hasCustomizations =
-                        itemCustomizations[component.id]?.length > 0;
+                        componentCustomizations.length > 0;
                       const requiredCount =
                         component.item.customizations?.filter(
                           (c) => c.isRequired,
@@ -1359,6 +1445,38 @@ const ClientProductPage = ({ id }: { id: string }) => {
                                   </span>
                                 )}
                               </p>
+                              {hasCustomizations && (
+                                <div className="mt-2 space-y-1">
+                                  {componentCustomizations.map((custom, idx) => {
+                                    const label =
+                                      getCustomizationPreviewLabel(custom);
+                                    const previews =
+                                      getCustomizationPreviewUrls(custom);
+                                    return (
+                                      <div key={`${component.id}-${idx}`}>
+                                        <p className="text-[11px] text-gray-700 truncate">
+                                          {label}
+                                        </p>
+                                        {previews.length > 0 && (
+                                          <div className="mt-1 flex gap-1.5">
+                                            {previews
+                                              .slice(0, 3)
+                                              .map((url, previewIdx) => (
+                                                // eslint-disable-next-line @next/next/no-img-element
+                                                <img
+                                                  key={`${component.id}-preview-${previewIdx}`}
+                                                  src={url}
+                                                  alt={`${component.item.name} preview ${previewIdx + 1}`}
+                                                  className="h-8 w-8 rounded border border-gray-200 object-cover"
+                                                />
+                                              ))}
+                                          </div>
+                                        )}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              )}
                             </div>
                           </div>
                           <div className="flex items-center gap-2">

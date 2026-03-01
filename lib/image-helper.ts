@@ -1,21 +1,18 @@
-export function getInternalImageUrl(url: string | null | undefined): string {
+export function getInternalImageUrl(
+  url: string | null | undefined,
+  size: "w500" | "w800" | "w1200" | "w1600" = "w1200",
+): string {
   if (!url) return "";
 
-  if (typeof window !== "undefined") return url;
+  // Keep src stable across SSR/client hydration to avoid re-request flicker.
+  const normalized = url.trim();
 
-  const publicApiUrl = "https://api.cestodamore.com.br";
-  const internalApiUrl = process.env.NEXT_PUBLIC_API_URL;
-
-  if (!internalApiUrl) {
-    console.warn(
-      "⚠️ NEXT_PUBLIC_API_URL não definido - retornando URL original",
-    );
-    return url;
+  if (
+    normalized.includes("drive.google.com") ||
+    normalized.includes("drive.usercontent.google.com")
+  ) {
+    return `/api/proxy-image?url=${encodeURIComponent(normalized)}&size=${size}`;
   }
 
-  if (url.startsWith(publicApiUrl)) {
-    return url.replace(publicApiUrl, internalApiUrl);
-  }
-
-  return url;
+  return normalized;
 }

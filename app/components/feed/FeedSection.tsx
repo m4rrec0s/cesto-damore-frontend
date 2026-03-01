@@ -23,9 +23,10 @@ interface FeedSectionProps {
 
 interface FeedItemCardProps {
   item: PublicFeedItem;
+  imagePriority?: boolean;
 }
 
-function FeedItemCard({ item }: FeedItemCardProps) {
+function FeedItemCard({ item, imagePriority = false }: FeedItemCardProps) {
   const { item_data, item_type, custom_title, custom_subtitle } = item;
 
   const isProduct = item_type === "product" && item_data;
@@ -51,7 +52,11 @@ function FeedItemCard({ item }: FeedItemCardProps) {
   };
 
   const renderProductCard = () => (
-    <ProductCard props={productData} className="max-sm:min-w-[150px]" />
+    <ProductCard
+      props={productData}
+      className="max-sm:min-w-[150px]"
+      imagePriority={imagePriority}
+    />
   );
 
   const renderCategoryCard = () => (
@@ -79,10 +84,16 @@ function FeedItemCard({ item }: FeedItemCardProps) {
       <div className="relative aspect-square overflow-hidden bg-gray-100">
         {additionalData.image_url ? (
           <Image
-            src={getInternalImageUrl(additionalData.image_url)}
+            src={getInternalImageUrl(
+              additionalData.image_url,
+              imagePriority ? "w800" : "w500",
+            )}
             alt={custom_title || additionalData.name}
             fill
             className="object-cover group-hover:scale-110 transition-transform duration-500"
+            priority={imagePriority}
+            loading={imagePriority ? "eager" : "lazy"}
+            fetchPriority={imagePriority ? "high" : "auto"}
             sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, (max-width: 1024px) 25vw, 16vw"
           />
         ) : (
@@ -160,10 +171,18 @@ export default function FeedSection({ section }: FeedSectionProps) {
       >
         <div className="absolute inset-0">
           <Image
-            src={getInternalImageUrl(product.image_url) || "/placeholder.png"}
+            src={
+              getInternalImageUrl(
+                product.image_url,
+                rank <= 2 ? "w1200" : "w800",
+              ) || "/placeholder.png"
+            }
             alt={product.name}
             fill
             className="object-cover opacity-90 transition-transform duration-500 group-hover:scale-105"
+            priority={rank <= 2}
+            loading={rank <= 2 ? "eager" : "lazy"}
+            fetchPriority={rank <= 2 ? "high" : "auto"}
             sizes="(max-width: 640px) 80vw, (max-width: 1024px) 35vw, 25vw"
           />
           <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
@@ -246,7 +265,7 @@ export default function FeedSection({ section }: FeedSectionProps) {
               className="animate-fadeIn"
               style={{ animationDelay: `${index * 50}ms` }}
             >
-              <FeedItemCard item={item} />
+              <FeedItemCard item={item} imagePriority={index < 4} />
             </div>
           ))}
         </div>

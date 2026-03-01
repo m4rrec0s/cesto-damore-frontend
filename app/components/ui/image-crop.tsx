@@ -79,10 +79,21 @@ const getCroppedPngImage = async (
   const scaleX = imageSrc.naturalWidth / imageSrc.width;
   const scaleY = imageSrc.naturalHeight / imageSrc.height;
 
+  const safeScale = Math.max(0.1, Math.min(1, scaleFactor || 1));
+  // Preserve native resolution from the selected crop area.
+  const targetWidth = Math.max(
+    1,
+    Math.floor(pixelCrop.width * scaleX * safeScale),
+  );
+  const targetHeight = Math.max(
+    1,
+    Math.floor(pixelCrop.height * scaleY * safeScale),
+  );
+
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = "high";
-  canvas.width = pixelCrop.width;
-  canvas.height = pixelCrop.height;
+  canvas.width = targetWidth;
+  canvas.height = targetHeight;
 
   ctx.drawImage(
     imageSrc,
@@ -92,8 +103,8 @@ const getCroppedPngImage = async (
     pixelCrop.height * scaleY,
     0,
     0,
-    canvas.width,
-    canvas.height,
+    targetWidth,
+    targetHeight,
   );
 
   const croppedImageUrl = canvas.toDataURL("image/png", 1.0);
@@ -107,10 +118,10 @@ const getCroppedPngImage = async (
   }
   const blob = new Blob([ab], { type: mimeString });
 
-  if (blob.size > maxImageSize) {
+  if (blob.size > maxImageSize && safeScale > 0.12) {
     return await getCroppedPngImage(
       imageSrc,
-      scaleFactor * 0.9,
+      safeScale * 0.9,
       pixelCrop,
       maxImageSize,
     );

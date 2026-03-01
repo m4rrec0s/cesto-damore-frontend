@@ -68,6 +68,18 @@ const normalizeString = (value: string) =>
     : "";
 
 type PaymentStatusType = "" | "pending" | "success" | "failure";
+type CheckoutValidationIssue = {
+  reason: string;
+  itemName?: string;
+  productName?: string;
+};
+type CustomizationsValidationStatus = {
+  valid: boolean;
+  source: "backend" | "local";
+  recommendations?: string[];
+  missingRequired?: CheckoutValidationIssue[];
+  invalidCustomizations?: CheckoutValidationIssue[];
+};
 
 const getAdditionalFinalPrice = (
   additionalId: string,
@@ -254,6 +266,7 @@ export default function CarrinhoPageContent() {
   const pixGeneratedForOrderRef = useRef<string | null>(null);
   const updatingOrderMetadataRef = useRef(false);
   const creatingOrderRef = useRef(false);
+  const lastRealtimeStatusRef = useRef<string | null>(null);
 
   useEffect(() => {
     pollingStartedRef.current = false;
@@ -461,13 +474,41 @@ export default function CarrinhoPageContent() {
     });
   }, []);
 
-  const sseOnPaymentPending = useCallback(() => {}, []);
+  const sseOnPaymentPending = useCallback(
+    (data: unknown) => {
+      const status = ((data as { status?: string })?.status || "").toLowerCase();
+      if (status && lastRealtimeStatusRef.current !== status) {
+        lastRealtimeStatusRef.current = status;
+        toast.info("Pagamento em processamento", {
+          description:
+            status === "in_process"
+              ? "Seu pagamento foi recebido e está em análise."
+              : "Aguardando confirmação do pagamento.",
+        });
+      }
+      setPaymentStatus("pending");
+    },
+    [],
+  );
 
-  const sseOnPaymentUpdate = useCallback(() => {}, []);
+  const sseOnPaymentUpdate = useCallback(
+    (data: unknown) => {
+      const statusRaw = ((data as { status?: string })?.status || "").toLowerCase();
+      if (!statusRaw) return;
+      const normalized = mapPaymentStatus(statusRaw);
+
+      if (normalized === "pending") {
+        setPaymentStatus("pending");
+      } else if (normalized === "failure") {
+        setPaymentStatus("failure");
+      }
+    },
+    [mapPaymentStatus],
+  );
 
   const { disconnect: disconnectSSE } = useWebhookNotification({
     orderId: currentOrderId,
-    enabled: false,
+    enabled: Boolean(currentOrderId),
     onPaymentUpdate: sseOnPaymentUpdate,
     onPaymentApproved: sseOnPaymentApproved,
     onPaymentRejected: sseOnPaymentRejected,
@@ -590,6 +631,8 @@ export default function CarrinhoPageContent() {
 
   const [checkingPendingOrder, setCheckingPendingOrder] = useState(true);
   const [showPendingOrderBanner, setShowPendingOrderBanner] = useState(false);
+  const [customizationsValidationStatus, setCustomizationsValidationStatus] =
+    useState<CustomizationsValidationStatus | null>(null);
 
   useEffect(() => {
     const detect = async () => {
@@ -719,8 +762,137 @@ export default function CarrinhoPageContent() {
     () => (Array.isArray(cart?.items) ? cart.items : []),
     [cart?.items],
   );
+  const localCustomizationsValid = useMemo(
+    () => validateCustomizations(cartItems),
+    [cartItems],
+  );
+  const customizationsValid = useMemo(() => {
+    const hasBackendValidation =
+      Boolean(currentOrderId) &&
+      customizationsValidationStatus?.source === "backend";
+
+    if (hasBackendValidation) {
+      return Boolean(customizationsValidationStatus?.valid);
+    }
+
+    return localCustomizationsValid;
+  }, [
+    currentOrderId,
+    customizationsValidationStatus?.source,
+    customizationsValidationStatus?.valid,
+    localCustomizationsValid,
+  ]);
 
   const cartTotal = cart?.total || 0;
+  const isPendingPaymentExpired = useMemo(() => {
+    if (!pendingOrder?.payment) return false;
+    if (pendingOrder.payment.status !== "PENDING") return false;
+
+    const paymentMethod = (pendingOrder.payment.payment_method || "").toLowerCase();
+    // Expiration rule is specific for PIX QRCode.
+    if (paymentMethod && paymentMethod !== "pix") return false;
+
+    const createdAt =
+      pendingOrder.payment.created_at ||
+      pendingOrder.payment.updated_at ||
+      pendingOrder.created_at;
+
+    if (!createdAt) return false;
+
+    const createdMs = new Date(createdAt).getTime();
+    if (Number.isNaN(createdMs)) return false;
+
+    const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
+    return Date.now() - createdMs > TWENTY_FOUR_HOURS_MS;
+  }, [pendingOrder]);
+  const isDeliveryScheduleValid = useMemo(() => {
+    if (!selectedDate || !selectedTime) return false;
+    if (isDateDisabled(selectedDate)) return false;
+
+    const slots = generateTimeSlots(selectedDate);
+    if (!slots || slots.length === 0) return false;
+
+    if (slots.some((slot) => slot.value === selectedTime)) {
+      return true;
+    }
+
+    // Backward compatibility for legacy values in HH:mm format.
+    const selectedParsed = new Date(selectedTime);
+    const selectedFromLegacy = !Number.isNaN(selectedParsed.getTime())
+      ? selectedParsed
+      : (() => {
+          const [h, m] = selectedTime.split(":").map(Number);
+          if (Number.isNaN(h) || Number.isNaN(m)) return null;
+          const legacyDate = new Date(selectedDate);
+          legacyDate.setHours(h, m, 0, 0);
+          return legacyDate;
+        })();
+
+    if (!selectedFromLegacy) return false;
+
+    return slots.some((slot) => {
+      const slotDate = new Date(slot.value);
+      return (
+        !Number.isNaN(slotDate.getTime()) &&
+        slotDate.getHours() === selectedFromLegacy.getHours() &&
+        slotDate.getMinutes() === selectedFromLegacy.getMinutes()
+      );
+    });
+  }, [selectedDate, selectedTime, isDateDisabled, generateTimeSlots]);
+  const checkoutReadyForPayment = customizationsValid && isDeliveryScheduleValid;
+  const shouldShowPendingBanner = useMemo(
+    () =>
+      Boolean(showPendingOrderBanner) &&
+      currentStep !== 3 &&
+      pendingOrder?.payment?.status === "PENDING" &&
+      !isPendingPaymentExpired &&
+      !pixData,
+    [
+      showPendingOrderBanner,
+      currentStep,
+      pendingOrder?.payment?.status,
+      isPendingPaymentExpired,
+      pixData,
+    ],
+  );
+  const shouldShowExpiredPendingBanner = useMemo(
+    () =>
+      Boolean(showPendingOrderBanner) &&
+      currentStep !== 3 &&
+      pendingOrder?.payment?.status === "PENDING" &&
+      isPendingPaymentExpired,
+    [
+      showPendingOrderBanner,
+      currentStep,
+      pendingOrder?.payment?.status,
+      isPendingPaymentExpired,
+    ],
+  );
+
+  const handleRegenerateExpiredPix = useCallback(() => {
+    if (!customizationsValid) {
+      toast.error(
+        "Complete as personalizações pendentes antes de gerar um novo QR Code.",
+      );
+      return;
+    }
+    if (!isDeliveryScheduleValid) {
+      toast.error(
+        "A data/horário de entrega não está mais disponível. Ajuste o agendamento antes de gerar novo QR Code.",
+      );
+      updateStepUrl(2);
+      return;
+    }
+
+    setPaymentMethod("pix");
+    setPixData(null);
+    setPaymentStatus("");
+    setPaymentError(null);
+    pixGeneratedForOrderRef.current = null;
+
+    updateStepUrl(3);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }, [customizationsValid, isDeliveryScheduleValid, updateStepUrl]);
 
   const acceptedCities = useMemo(() => ACCEPTED_CITIES, []);
   const normalizedCity = useMemo(() => normalizeString(city), [city]);
@@ -968,6 +1140,13 @@ export default function CarrinhoPageContent() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [paymentMethod, currentStep]);
+
+  useEffect(() => {
+    if (!isPendingPaymentExpired) return;
+    setPixData(null);
+    setPaymentStatus("");
+    pixGeneratedForOrderRef.current = null;
+  }, [isPendingPaymentExpired]);
 
   const handleCardSubmit = useCallback(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1221,8 +1400,7 @@ export default function CarrinhoPageContent() {
     );
   };
 
-  const canProceedToStep2 =
-    cartItems.length > 0 && validateCustomizations(cartItems);
+  const canProceedToStep2 = cartItems.length > 0 && customizationsValid;
 
   const canProceedToStep3 = (() => {
 
@@ -1232,7 +1410,8 @@ export default function CarrinhoPageContent() {
       userDocument.trim().length >= 11 &&
       selectedDate !== undefined &&
       selectedTime !== "" &&
-      validateCustomizations(cartItems);
+      isDeliveryScheduleValid &&
+      customizationsValid;
 
     if (optionSelected === "pickup") {
 
@@ -1447,6 +1626,36 @@ export default function CarrinhoPageContent() {
     }
   };
 
+  const handleValidationStatusChange = (
+    status: CustomizationsValidationStatus,
+  ) => {
+    setCustomizationsValidationStatus((prev) => {
+      const sameSource = prev?.source === status.source;
+      const sameValid = prev?.valid === status.valid;
+      const sameRecommendations =
+        JSON.stringify(prev?.recommendations || []) ===
+        JSON.stringify(status.recommendations || []);
+      const sameMissing =
+        JSON.stringify(prev?.missingRequired || []) ===
+        JSON.stringify(status.missingRequired || []);
+      const sameInvalid =
+        JSON.stringify(prev?.invalidCustomizations || []) ===
+        JSON.stringify(status.invalidCustomizations || []);
+
+      if (
+        sameSource &&
+        sameValid &&
+        sameRecommendations &&
+        sameMissing &&
+        sameInvalid
+      ) {
+        return prev;
+      }
+
+      return status;
+    });
+  };
+
   const OrderSummary = () => {
     const maxProdTime = getMaxProductionTime();
 
@@ -1523,6 +1732,17 @@ export default function CarrinhoPageContent() {
                     </p>
                   </div>
                 )}
+              {currentStep === 2 &&
+                selectedDate &&
+                selectedTime &&
+                !isDeliveryScheduleValid && (
+                  <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded-lg">
+                    <p className="text-sm text-red-800 font-medium">
+                      ⚠️ O horário/data escolhidos não estão mais disponíveis.
+                      Selecione um novo agendamento para continuar.
+                    </p>
+                  </div>
+                )}
               <div className="flex gap-3">
                 {currentStep > 1 && (
                   <Button
@@ -1582,8 +1802,7 @@ export default function CarrinhoPageContent() {
         <div className="min-h-screen bg-[#f5f5f5] relative">
           <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 lg:py-12">
             
-            {showPendingOrderBanner &&
-              pendingOrder?.payment?.status === "PENDING" && (
+            {shouldShowPendingBanner && (
                 <motion.div
                   initial={{ opacity: 0, y: -10 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -1612,21 +1831,86 @@ export default function CarrinhoPageContent() {
                         <p className="text-amber-700 text-xs lg:text-sm mt-1">
                           Você tem um pedido com pagamento pendente. Complete o
                           pagamento para finalizar sua compra.
+                          {!customizationsValid &&
+                            " Antes, complete as personalizações pendentes."}
+                          {!isDeliveryScheduleValid &&
+                            " A data/horário da entrega não está mais disponível e precisa ser atualizado."}
                         </p>
                       </div>
                     </div>
                     <Button
                       onClick={() => {
+                        if (!customizationsValid) {
+                          toast.error(
+                            "Complete as personalizações pendentes antes de ir para o pagamento.",
+                          );
+                          return;
+                        }
+                        if (!isDeliveryScheduleValid) {
+                          toast.error(
+                            "A data/horário de entrega não está mais disponível. Ajuste o agendamento para continuar.",
+                          );
+                          updateStepUrl(2);
+                          return;
+                        }
                         updateStepUrl(3);
                         window.scrollTo({ top: 0, behavior: "smooth" });
                       }}
-                      className="bg-amber-600 hover:bg-amber-700 text-white text-xs lg:text-sm px-4 py-2 lg:px-6 lg:py-2 whitespace-nowrap flex-shrink-0"
+                      disabled={!checkoutReadyForPayment}
+                      className="bg-amber-600 hover:bg-amber-700 disabled:bg-amber-300 text-white text-xs lg:text-sm px-4 py-2 lg:px-6 lg:py-2 whitespace-nowrap flex-shrink-0"
                     >
                       Ir para Pagamento
                     </Button>
                   </div>
                 </motion.div>
               )}
+
+            {shouldShowExpiredPendingBanner && (
+              <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                className="mb-6 p-4 lg:p-6 bg-gradient-to-r from-blue-50 to-cyan-50 border-l-4 border-blue-500 rounded-lg shadow-sm"
+              >
+                <div className="flex items-start gap-3 lg:gap-4 justify-between flex-col lg:flex-row lg:items-center">
+                  <div className="flex items-start gap-3">
+                    <div className="mt-0.5 text-blue-600 flex-shrink-0">
+                      <svg
+                        className="w-5 h-5 lg:w-6 lg:h-6"
+                        fill="currentColor"
+                        viewBox="0 0 20 20"
+                      >
+                        <path
+                          fillRule="evenodd"
+                          d="M18 10A8 8 0 11 2 10a8 8 0 0116 0zm-8-4a1 1 0 00-.993.883L9 7v3a1 1 0 001.993.117L11 10V7a1 1 0 00-1-1zm0 8a1.25 1.25 0 100-2.5A1.25 1.25 0 0010 14z"
+                          clipRule="evenodd"
+                        />
+                      </svg>
+                    </div>
+                    <div>
+                      <h3 className="font-semibold text-blue-900 text-sm lg:text-base">
+                        QR Code Expirado
+                      </h3>
+                      <p className="text-blue-700 text-xs lg:text-sm mt-1">
+                        Seu QR Code PIX anterior expirou (validade de 24h).
+                        Gere um novo para concluir o pagamento.
+                        {!customizationsValid &&
+                          " Antes, complete as personalizações pendentes."}
+                        {!isDeliveryScheduleValid &&
+                          " A data/horário da entrega não está mais disponível e precisa ser atualizado."}
+                      </p>
+                    </div>
+                  </div>
+                  <Button
+                    onClick={handleRegenerateExpiredPix}
+                    disabled={!checkoutReadyForPayment}
+                    className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white text-xs lg:text-sm px-4 py-2 lg:px-6 lg:py-2 whitespace-nowrap flex-shrink-0"
+                  >
+                    Gerar Novo QR Code
+                  </Button>
+                </div>
+              </motion.div>
+            )}
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
               
@@ -1650,6 +1934,9 @@ export default function CarrinhoPageContent() {
                             cartItems={cartItems}
                             orderId={currentOrderId}
                             onCustomizationUpdate={handleCustomizationUpdate}
+                            onValidationStatusChange={
+                              handleValidationStatusChange
+                            }
                           />
                         </div>
                       )}

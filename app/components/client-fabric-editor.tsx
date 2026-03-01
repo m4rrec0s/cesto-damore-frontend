@@ -87,6 +87,7 @@ export default function ClientFabricEditor({
 }: ClientFabricEditorProps) {
   const [fabricRef, setFabricRef] = useState<FabricCanvas | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const initRunRef = useRef(0);
 
   const [editableTexts, setEditableTexts] = useState<Record<string, string>>(
     {},
@@ -366,12 +367,20 @@ export default function ClientFabricEditor({
   useEffect(() => {
     let canvasInstance: FabricCanvas | null = null;
     let isMounted = true;
+    const runId = ++initRunRef.current;
+
+    const isCanvasAlive = (canvas: FabricCanvas | null) => {
+      if (!canvas) return false;
+      const anyCanvas = canvas as any;
+      return Boolean(anyCanvas?.contextContainer && anyCanvas?.lowerCanvasEl);
+    };
 
     const initFabric = async () => {
       try {
         const { Canvas, FabricObject } = await import("fabric");
 
-        if (!containerRef.current || !isMounted) return;
+        if (!containerRef.current || !isMounted || runId !== initRunRef.current)
+          return;
 
         FabricObject.ownDefaults.objectCaching = false;
         FabricObject.ownDefaults.minScaleLimit = 0.05;
@@ -443,6 +452,14 @@ export default function ClientFabricEditor({
                 await new Promise((r) => setTimeout(r, 250));
               }
 
+              if (
+                !isMounted ||
+                runId !== initRunRef.current ||
+                !isCanvasAlive(canvasInstance)
+              ) {
+                return;
+              }
+
               const apiBase = (process.env.NEXT_PUBLIC_API_URL || "").replace(
                 /\/api$/,
                 "",
@@ -475,13 +492,23 @@ export default function ClientFabricEditor({
               });
             }
 
-            await canvasInstance.loadFromJSON(state);
+            if (isCanvasAlive(canvasInstance)) {
+              await canvasInstance.loadFromJSON(state);
+            }
           } catch (jsonErr) {
             console.error(
               "Erro ao carregar estado parcial do canvas:",
               jsonErr,
             );
           }
+        }
+
+        if (
+          !isMounted ||
+          runId !== initRunRef.current ||
+          !isCanvasAlive(canvasInstance)
+        ) {
+          return;
         }
 
         canvasInstance.setViewportTransform([
@@ -494,7 +521,9 @@ export default function ClientFabricEditor({
         ]);
 
         if (!isMounted) {
-          canvasInstance.dispose();
+          if (isCanvasAlive(canvasInstance)) {
+            canvasInstance.dispose();
+          }
           return;
         }
 
@@ -567,7 +596,9 @@ export default function ClientFabricEditor({
 
     return () => {
       isMounted = false;
-      if (canvasInstance) canvasInstance.dispose();
+      if (canvasInstance && isCanvasAlive(canvasInstance)) {
+        canvasInstance.dispose();
+      }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [layoutBase, initialState]);
@@ -684,13 +715,13 @@ export default function ClientFabricEditor({
 
       const highQualityUrl = fabricRef.toDataURL({
         format: "png",
-        multiplier: 3 / INTERNAL_DPI_MULTIPLIER,
+        multiplier: 4 / INTERNAL_DPI_MULTIPLIER,
         enableRetinaScaling: false,
       });
 
       const previewUrl = fabricRef.toDataURL({
         format: "png",
-        multiplier: 0.8 / INTERNAL_DPI_MULTIPLIER,
+        multiplier: 2 / INTERNAL_DPI_MULTIPLIER,
         enableRetinaScaling: false,
       });
 

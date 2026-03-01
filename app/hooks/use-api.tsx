@@ -424,6 +424,8 @@ export interface Order {
     status: string;
     payment_method?: string | null;
     approved_at?: string | null;
+    created_at?: string | null;
+    updated_at?: string | null;
     mercado_pago_id?: string | null;
     webhook_attempts?: number | null;
     last_webhook_at?: string | null;

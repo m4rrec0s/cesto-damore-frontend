@@ -80,7 +80,7 @@ export async function GET(request: NextRequest) {
         headers: {
           "Content-Type": cached.contentType,
           "Cache-Control":
-            "public, max-age=86400, stale-while-revalidate=604800",
+            "public, max-age=86400, s-maxage=86400, stale-while-revalidate=604800",
           "Access-Control-Allow-Origin": "*",
           "X-Cache": "HIT",
         },
@@ -92,11 +92,11 @@ export async function GET(request: NextRequest) {
     let finalUrl = imageUrl;
 
     if (fileId) {
-
-      finalUrl = `https://drive.google.com/uc?id=${fileId}&export=download`;
+      // Thumbnail endpoint is much faster for previews and supports size.
+      finalUrl = `https://drive.google.com/thumbnail?id=${fileId}&sz=${size}`;
     }
 
-    const response = await fetch(finalUrl, {
+    let response = await fetch(finalUrl, {
       headers: {
         "User-Agent":
           "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -104,9 +104,25 @@ export async function GET(request: NextRequest) {
         "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8",
       },
       redirect: "follow",
-
-      signal: AbortSignal.timeout(15000),
+      signal: AbortSignal.timeout(8000),
     });
+
+    // Fallback to export download for edge cases where thumbnail URL fails.
+    if (!response.ok && fileId) {
+      response = await fetch(
+        `https://drive.google.com/uc?id=${fileId}&export=download`,
+        {
+          headers: {
+            "User-Agent":
+              "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            Accept: "image/*",
+            "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8",
+          },
+          redirect: "follow",
+          signal: AbortSignal.timeout(12000),
+        },
+      );
+    }
 
     if (!response.ok) {
       console.error(
@@ -133,7 +149,8 @@ export async function GET(request: NextRequest) {
       status: 200,
       headers: {
         "Content-Type": contentType,
-        "Cache-Control": "public, max-age=86400, stale-while-revalidate=604800",
+        "Cache-Control":
+          "public, max-age=86400, s-maxage=86400, stale-while-revalidate=604800",
         "Access-Control-Allow-Origin": "*",
         "X-Cache": "MISS",
       },

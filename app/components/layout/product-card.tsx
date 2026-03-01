@@ -22,9 +22,14 @@ interface ProductCardProps {
     discount?: number;
   };
   className?: string;
+  imagePriority?: boolean;
 }
 
-export function ProductCard({ props, className }: ProductCardProps) {
+export function ProductCard({
+  props,
+  className,
+  imagePriority = false,
+}: ProductCardProps) {
   const [activeCategory, setActiveCategory] = useState(0);
 
   const finalPrice = props.discount
@@ -56,11 +61,18 @@ export function ProductCard({ props, className }: ProductCardProps) {
     >
       <div className="relative aspect-square w-full overflow-hidden rounded-xl bg-gray-100">
         <Image
-          src={getInternalImageUrl(props.image_url) || "/placeholder.png"}
+          src={
+            getInternalImageUrl(props.image_url, imagePriority ? "w800" : "w500") ||
+            "/placeholder.png"
+          }
           alt={props.name}
           fill
           className="object-cover transition-transform duration-300 group-hover:scale-105"
           quality={70}
+          priority={imagePriority}
+          loading={imagePriority ? "eager" : "lazy"}
+          fetchPriority={imagePriority ? "high" : "auto"}
+          sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 16vw"
         />
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/10 via-transparent to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
         {categories.length > 0 ? (

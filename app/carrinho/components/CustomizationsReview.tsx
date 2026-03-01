@@ -1,7 +1,7 @@
 "use client";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import { Badge } from "@/app/components/ui/badge";
 import { AlertCircle, CheckCircle2, Edit2, Loader2 } from "lucide-react";
 import { Button } from "@/app/components/ui/button";
@@ -42,6 +42,13 @@ interface CustomizationsReviewProps {
     componentId?: string,
   ) => void;
   onCustomizationSaved?: () => void;
+  onValidationStatusChange?: (status: {
+    valid: boolean;
+    source: "backend" | "local";
+    recommendations?: string[];
+    missingRequired?: CheckoutValidationIssue[];
+    invalidCustomizations?: CheckoutValidationIssue[];
+  }) => void;
 }
 
 interface AvailableCustomization {
@@ -63,6 +70,16 @@ interface ProductValidation {
   filledCustomizations: CartCustomization[];
   missingRequired: AvailableCustomization[];
   isComplete: boolean;
+}
+
+interface CheckoutValidationIssue {
+  orderItemId?: string;
+  productName?: string;
+  itemName?: string;
+  componentId?: string;
+  customizationId?: string;
+  customizationName?: string;
+  reason: string;
 }
 
 
@@ -237,27 +254,107 @@ const extractCleanText = (text: string | undefined): string => {
 
 const getCustomizationSummary = (custom: CartCustomization): string => {
   if (!isCustomizationFilled(custom)) return "";
+  const data = (custom.data as Record<string, unknown>) || {};
+
+  const getTextFallback = () => {
+    const directText = extractCleanText(custom.text);
+    if (directText) return directText;
+
+    const dataText = extractCleanText((data.text as string) || "");
+    if (dataText) return dataText;
+
+    const fieldValues = Object.entries(data)
+      .filter(([key, value]) => key.startsWith("field-") && !!value)
+      .map(([, value]) => String(value).trim())
+      .filter(Boolean);
+
+    return fieldValues.join(" | ");
+  };
 
   switch (custom.customization_type) {
     case "TEXT": {
-      const cleanText = extractCleanText(custom.text);
+      const cleanText = getTextFallback();
       return cleanText ? `Texto: "${cleanText}"` : "";
     }
     case "MULTIPLE_CHOICE":
-      return custom.label_selected || custom.selected_option_label || "";
+      return (
+        custom.label_selected ||
+        custom.selected_option_label ||
+        (data.selected_option_label as string) ||
+        (data.label as string) ||
+        (data.selected_option as string) ||
+        ""
+      );
     case "IMAGES":
-      return custom.photos && custom.photos.length > 0
-        ? `${custom.photos.length} foto(s)`
+      return getCustomizationImageUrls(custom).length > 0
+        ? `${getCustomizationImageUrls(custom).length} foto(s)`
         : "";
     case "DYNAMIC_LAYOUT":
       return (
         custom.label_selected ||
         custom.selected_item_label ||
+        (data.layout_name as string) ||
         "Design personalizado"
       );
     default:
       return "";
   }
+};
+
+const getCustomizationImageUrls = (custom: CartCustomization): string[] => {
+  const data = (custom.data as Record<string, unknown>) || {};
+  const urls: string[] = [];
+
+  const addIfUrl = (value: unknown) => {
+    if (typeof value === "string" && value.trim().length > 0) {
+      urls.push(value);
+    }
+  };
+
+  if (Array.isArray(custom.photos)) {
+    custom.photos.forEach((photo) => {
+      addIfUrl(photo.preview_url);
+      addIfUrl((photo as unknown as { url?: string }).url);
+    });
+  }
+
+  const dataPhotos = data.photos;
+  if (Array.isArray(dataPhotos)) {
+    dataPhotos.forEach((photo) => {
+      if (typeof photo === "string") addIfUrl(photo);
+      if (typeof photo === "object" && photo !== null) {
+        const p = photo as Record<string, unknown>;
+        addIfUrl(p.preview_url);
+        addIfUrl(p.url);
+        addIfUrl(p.base64);
+      }
+    });
+  }
+
+  const dataImages = data.images;
+  if (Array.isArray(dataImages)) {
+    dataImages.forEach((image) => {
+      if (typeof image === "string") addIfUrl(image);
+      if (typeof image === "object" && image !== null) {
+        const img = image as Record<string, unknown>;
+        addIfUrl(img.preview_url);
+        addIfUrl(img.url);
+      }
+    });
+  }
+
+  if (custom.customization_type === "DYNAMIC_LAYOUT") {
+    addIfUrl(custom.text);
+    addIfUrl(data.previewUrl);
+    if (typeof data.final_artwork === "object" && data.final_artwork) {
+      addIfUrl((data.final_artwork as Record<string, unknown>).preview_url);
+    }
+    if (typeof data.image === "object" && data.image) {
+      addIfUrl((data.image as Record<string, unknown>).preview_url);
+    }
+  }
+
+  return [...new Set(urls)];
 };
 
 const isSameComponent = (
@@ -322,7 +419,13 @@ export function CustomizationsReview({
   orderId,
   onCustomizationUpdate,
   onCustomizationSaved,
+  onValidationStatusChange,
 }: CustomizationsReviewProps) {
+  const validationStatusChangeRef = useRef(onValidationStatusChange);
+  useEffect(() => {
+    validationStatusChangeRef.current = onValidationStatusChange;
+  }, [onValidationStatusChange]);
+
   const {
     getProduct,
     getItemCustomizations,
@@ -336,6 +439,12 @@ export function CustomizationsReview({
   const [fileValidation, setFileValidation] = useState<Record<string, boolean>>(
     {},
   );
+  const [backendValidationState, setBackendValidationState] = useState<{
+    valid?: boolean;
+    recommendations?: string[];
+    missingRequired?: CheckoutValidationIssue[];
+    invalidCustomizations?: CheckoutValidationIssue[];
+  } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   
@@ -357,6 +466,21 @@ export function CustomizationsReview({
       const result = await validateOrderCustomizationsFiles(orderId);
       if (result && result.files) {
         setFileValidation(result.files);
+      }
+      if (result && typeof result.valid === "boolean") {
+        setBackendValidationState({
+          valid: result.valid,
+          recommendations: result.recommendations,
+          missingRequired: result.missingRequired,
+          invalidCustomizations: result.invalidCustomizations,
+        });
+        validationStatusChangeRef.current?.({
+          valid: result.valid,
+          source: "backend",
+          recommendations: result.recommendations,
+          missingRequired: result.missingRequired,
+          invalidCustomizations: result.invalidCustomizations,
+        });
       }
     } catch (error) {
       console.error("Erro ao validar arquivos:", error);
@@ -600,6 +724,10 @@ export function CustomizationsReview({
     }
 
     setValidations(results);
+    validationStatusChangeRef.current?.({
+      valid: results.every((r) => r.isComplete),
+      source: "local",
+    });
     setIsLoading(false);
   }, [
     cartItems,
@@ -863,12 +991,21 @@ export function CustomizationsReview({
     return null;
   }
 
-  const totalMissing = validations.reduce(
+  const totalMissingLocal = validations.reduce(
     (acc, v) => acc + v.missingRequired.length,
     0,
   );
+  const totalMissingBackend =
+    (backendValidationState?.missingRequired?.length || 0) +
+    (backendValidationState?.invalidCustomizations?.length || 0);
+  const totalMissing =
+    typeof backendValidationState?.valid === "boolean"
+      ? totalMissingBackend
+      : totalMissingLocal;
   const allComplete =
-    validations.length > 0 && validations.every((v) => v.isComplete);
+    typeof backendValidationState?.valid === "boolean"
+      ? backendValidationState.valid
+      : validations.length > 0 && validations.every((v) => v.isComplete);
 
   if (isLoading || isSaving) {
     return (
@@ -993,6 +1130,11 @@ export function CustomizationsReview({
                     cIdx,
                   ) => {
                     const isIncomplete = missing.length > 0;
+                    const currentItemData = itemsMap.get(componentId);
+                    const isAdditionalContext =
+                      currentItemData?.allCustomizations.some(
+                        (c) => c.isAdditional,
+                      ) || false;
                     
 
                     return (
@@ -1013,9 +1155,19 @@ export function CustomizationsReview({
                                 </h3>
                               </div>
                               {itemName && (
-                                <p className="text-[11px] text-gray-500 mt-0.5 leading-tight">
-                                  {itemName}
-                                </p>
+                                <div className="mt-0.5 flex items-center gap-1.5">
+                                  <p className="text-[11px] text-gray-500 leading-tight">
+                                    {itemName}
+                                  </p>
+                                  <Badge
+                                    variant="outline"
+                                    className="text-[9px] px-1.5 py-0 h-4 border-gray-200 text-gray-600"
+                                  >
+                                    {isAdditionalContext
+                                      ? "Adicional"
+                                      : "Produto"}
+                                  </Badge>
+                                </div>
                               )}
                             </div>
                             {filled.length > 0 && (
@@ -1068,6 +1220,53 @@ export function CustomizationsReview({
                                       );
                                     })}
                                 </div>
+
+                                {filled
+                                  .filter(
+                                    (f) =>
+                                      !fileValidation ||
+                                      (f.id && fileValidation[f.id] !== false),
+                                  )
+                                  .map((f, idx) => {
+                                    const previewUrls =
+                                      getCustomizationImageUrls(f);
+                                    if (previewUrls.length === 0) return null;
+                                    return (
+                                      <div
+                                        key={`preview-${f.id || f.customization_id}-${idx}`}
+                                        className="mt-1"
+                                      >
+                                        <p className="text-[10px] text-gray-500 mb-1">
+                                          {f.title}
+                                        </p>
+                                        <div className="flex flex-wrap gap-1.5">
+                                          {previewUrls.slice(0, 4).map((url, pIdx) => (
+                                            <button
+                                              key={`img-${pIdx}`}
+                                              type="button"
+                                              onClick={() =>
+                                                handleEditItem(
+                                                  validation.productId,
+                                                  itemId,
+                                                  itemName || "Item",
+                                                  componentId,
+                                                )
+                                              }
+                                              className="rounded border border-gray-200 hover:border-gray-400"
+                                              title="Editar esta personalização"
+                                            >
+                                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                                              <img
+                                                src={url}
+                                                alt={`${f.title} ${pIdx + 1}`}
+                                                className="h-10 w-10 rounded object-cover"
+                                              />
+                                            </button>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
                               </div>
                             )}
                           </div>
@@ -1135,6 +1334,46 @@ export function CustomizationsReview({
             </p>
           </div>
         )}
+
+        {!allComplete &&
+          ((backendValidationState?.missingRequired &&
+            backendValidationState.missingRequired.length > 0) ||
+            (backendValidationState?.invalidCustomizations &&
+              backendValidationState.invalidCustomizations.length > 0)) && (
+            <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+              <p className="text-xs font-semibold text-amber-800 mb-1">
+                Pendências validadas no servidor:
+              </p>
+              <ul className="text-xs text-amber-700 list-disc pl-4 space-y-1">
+                {[
+                  ...(backendValidationState?.missingRequired || []),
+                  ...(backendValidationState?.invalidCustomizations || []),
+                ]
+                  .slice(0, 4)
+                  .map((issue, idx) => (
+                    <li key={`issue-${idx}`}>
+                      {issue.reason}
+                      {issue.itemName ? ` (${issue.itemName})` : ""}
+                    </li>
+                  ))}
+              </ul>
+            </div>
+          )}
+
+        {!allComplete &&
+          backendValidationState?.recommendations &&
+          backendValidationState.recommendations.length > 0 && (
+            <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+              <p className="text-xs font-semibold text-amber-800 mb-1">
+                Recomendações de validação:
+              </p>
+              <ul className="text-xs text-amber-700 list-disc pl-4 space-y-1">
+                {backendValidationState.recommendations.slice(0, 3).map((r, idx) => (
+                  <li key={`rec-${idx}`}>{r}</li>
+                ))}
+              </ul>
+            </div>
+          )}
       </Card>
 
       {activeItemId && (

@@ -51,6 +51,15 @@ interface ProcessedFile {
   size: number;
 }
 
+interface PreviewImageEntry {
+  preview: string;
+  file?: File;
+  base64?: string;
+  mime_type?: string;
+  size?: number;
+  original_name?: string;
+}
+
 interface Customization {
   id: string;
   name: string;
@@ -680,10 +689,80 @@ export function ItemCustomizationModal({
     }, 500);
   };
 
+  const resolvePreviewUrlFromImageValue = useCallback((value: unknown) => {
+    if (!value) return "";
+    if (typeof value === "string") return value;
+    if (value instanceof File) return URL.createObjectURL(value);
+
+    if (typeof value === "object") {
+      const candidate = value as Record<string, unknown>;
+      return (
+        (candidate.preview as string) ||
+        (candidate.preview_url as string) ||
+        (candidate.url as string) ||
+        (candidate.base64 as string) ||
+        ""
+      );
+    }
+
+    return "";
+  }, []);
+
+  const extractImageEntries = useCallback(
+    (customizationId: string): PreviewImageEntry[] => {
+      const fromState = customizationData[customizationId];
+      const sourceArray = Array.isArray(fromState)
+        ? fromState
+        : Array.isArray(initialValues?.[customizationId])
+          ? (initialValues?.[customizationId] as unknown[])
+          : [];
+
+      const entries = sourceArray
+        .map((entry) => {
+          if (entry instanceof File) {
+            return {
+              preview: URL.createObjectURL(entry),
+              file: entry,
+              mime_type: entry.type,
+              size: entry.size,
+              original_name: entry.name,
+            } as PreviewImageEntry;
+          }
+
+          if (typeof entry === "object" && entry !== null) {
+            const obj = entry as Record<string, unknown>;
+            const preview = resolvePreviewUrlFromImageValue(entry);
+            if (!preview) return null;
+            return {
+              preview,
+              file: obj.file instanceof File ? (obj.file as File) : undefined,
+              base64: (obj.base64 as string) || undefined,
+              mime_type: (obj.mime_type as string) || undefined,
+              size:
+                typeof obj.size === "number" ? (obj.size as number) : undefined,
+              original_name:
+                (obj.original_name as string) ||
+                (obj.file_name as string) ||
+                undefined,
+            } as PreviewImageEntry;
+          }
+
+          return null;
+        })
+        .filter((entry): entry is PreviewImageEntry => !!entry && !!entry.preview);
+
+      return entries;
+    },
+    [customizationData, initialValues, resolvePreviewUrlFromImageValue],
+  );
+
   const handleRemoveFile = useCallback(
     async (customizationId: string, index: number) => {
-      const currentFiles = uploadingFiles[customizationId] || [];
-      const newFiles = currentFiles.filter((_, i) => i !== index);
+      const currentEntries = extractImageEntries(customizationId);
+      const newEntries = currentEntries.filter((_, i) => i !== index);
+      const newFiles = newEntries
+        .map((entry) => entry.file)
+        .filter((file): file is File => file instanceof File);
 
       setUploadingFiles((prev) => ({ ...prev, [customizationId]: newFiles }));
       const customization = customizations.find(
@@ -695,32 +774,12 @@ export function ItemCustomizationModal({
         onImagesUpdate(itemId, newFiles.length, maxImages);
       }
 
-      const filesDataPromises = newFiles.map(async (file, idx) => {
-        const reader = new FileReader();
-        const base64Promise = new Promise<string>((resolve) => {
-          reader.onloadend = () => resolve(reader.result as string);
-          reader.readAsDataURL(file);
-        });
-        const base64 = await base64Promise;
-
-        return {
-          file,
-          preview: URL.createObjectURL(file),
-          position: idx,
-          base64,
-          mime_type: file.type,
-          size: file.size,
-        };
-      });
-
-      const filesData = await Promise.all(filesDataPromises);
-
       setCustomizationData((prev) => ({
         ...prev,
-        [customizationId]: filesData,
+        [customizationId]: newEntries,
       }));
     },
-    [uploadingFiles, customizations, itemId, onImagesUpdate],
+    [extractImageEntries, customizations, itemId, onImagesUpdate],
   );
 
   const handleOptionSelect = useCallback(
@@ -735,6 +794,20 @@ export function ItemCustomizationModal({
 
   const renderDynamicLayoutSelection = (customization: Customization) => {
     const layouts = customization.customization_data.layouts || [];
+    const currentData =
+      (customizationData[customization.id] as Record<string, unknown>) || {};
+    const currentLayoutName =
+      (currentData.layout_name as string) ||
+      (currentData.selected_item_label as string) ||
+      "";
+    const currentPreview =
+      (currentData.highQualityUrl as string) ||
+      (currentData.previewUrl as string) ||
+      ((currentData.final_artwork as Record<string, unknown> | undefined)
+        ?.preview_url as string) ||
+      ((currentData.image as Record<string, unknown> | undefined)
+        ?.preview_url as string) ||
+      "";
 
     return (
       <div className="space-y-4">
@@ -751,6 +824,34 @@ export function ItemCustomizationModal({
             </p>
           )}
         </div>
+
+        {(currentLayoutName || currentPreview) && (
+          <Card className="p-3 border border-neutral-200 bg-white">
+            <p className="text-xs font-semibold text-neutral-700 mb-2 uppercase tracking-wide">
+              Layout selecionado
+            </p>
+            <div className="flex items-center gap-3">
+              {currentPreview ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={currentPreview}
+                  alt={currentLayoutName || "Arte final"}
+                  className="h-16 w-16 rounded-md object-cover border border-neutral-200"
+                />
+              ) : null}
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-neutral-900 truncate">
+                  {currentLayoutName || "Design personalizado"}
+                </p>
+                {currentPreview && (
+                  <p className="text-xs text-neutral-500">
+                    Arte final disponível
+                  </p>
+                )}
+              </div>
+            </div>
+          </Card>
+        )}
 
         {layouts.length === 0 ? (
           <Card className="p-8 text-center bg-gray-50">
@@ -1061,22 +1162,10 @@ export function ItemCustomizationModal({
   };
 
   const renderImageCustomization = (customization: Customization) => {
-    let currentFiles = uploadingFiles[customization.id] || [];
+    const imageEntries = extractImageEntries(customization.id);
     const maxImages =
       customization.customization_data.dynamic_layout?.max_images || 10;
-
-    if (currentFiles.length === 0) {
-      const dataFromState = customizationData[customization.id];
-      if (Array.isArray(dataFromState) && dataFromState.length > 0) {
-        currentFiles = dataFromState as unknown as File[];
-      } else if (
-        initialValues &&
-        Array.isArray(initialValues[customization.id])
-      ) {
-      }
-    }
-
-    const hasImages = currentFiles.length > 0;
+    const hasImages = imageEntries.length > 0;
 
     return (
       <div className="space-y-4 pb-5">
@@ -1102,13 +1191,13 @@ export function ItemCustomizationModal({
             </div>
           </div>
           <p className="text-xs text-neutral-500 mt-2 ml-11">
-            {currentFiles.length}/{maxImages} imagens
+            {imageEntries.length}/{maxImages} imagens
           </p>
         </div>
 
-        {currentFiles.length > 0 && (
+        {imageEntries.length > 0 && (
           <div className="grid grid-cols-4 gap-3 bg-white p-3 rounded-lg border border-neutral-200">
-            {currentFiles.map((file, index) => (
+            {imageEntries.map((entry, index) => (
               <motion.div
                 key={index}
                 initial={{ opacity: 0, scale: 0.8 }}
@@ -1117,7 +1206,7 @@ export function ItemCustomizationModal({
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
-                  src={URL.createObjectURL(file)}
+                  src={entry.preview}
                   alt={`Upload ${index + 1}`}
                   className="w-full h-full object-cover"
                 />
@@ -1139,9 +1228,9 @@ export function ItemCustomizationModal({
 
         <div className="space-y-3">
           {Array.from({
-            length: Math.max(0, maxImages - currentFiles.length),
+            length: Math.max(0, maxImages - imageEntries.length),
           }).map((_, relativeIndex) => {
-            const globalIndex = currentFiles.length + relativeIndex;
+            const globalIndex = imageEntries.length + relativeIndex;
             return (
               <div key={`empty-slot-${globalIndex}`}>
                 <label
@@ -1182,7 +1271,7 @@ export function ItemCustomizationModal({
           })}
         </div>
 
-        {hasImages && currentFiles.length === maxImages && (
+        {hasImages && (
           <motion.div
             className="fixed bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-white via-white to-transparent border-t-2 border-green-200 shadow-2xl"
             initial={{ opacity: 0, y: 100 }}
@@ -1209,21 +1298,19 @@ export function ItemCustomizationModal({
               <Button
                 onClick={() => {
                   const result: CustomizationInput[] = [];
-                  const filesData = customizationData[customization.id] as
-                    | ProcessedFile[]
-                    | undefined;
-
-                  if (filesData && filesData.length > 0) {
+                  if (imageEntries.length > 0) {
                     result.push({
                       ruleId: customization.id,
                       customizationRuleId: customization.id,
                       customizationType: CustomizationType.IMAGES,
                       data: {
-                        files: filesData.map((item) => item.file),
-                        previews: filesData.map(
+                        files: imageEntries
+                          .map((item) => item.file)
+                          .filter((file): file is File => file instanceof File),
+                        previews: imageEntries.map(
                           (item) => item.base64 || item.preview,
                         ),
-                        count: filesData.length,
+                        count: imageEntries.length,
                         _customizationName: customization.name,
                         _priceAdjustment: customization.price || 0,
                       } as unknown as Record<string, unknown>,
@@ -1236,7 +1323,7 @@ export function ItemCustomizationModal({
                 className="flex-1 gap-2 bg-green-600 hover:bg-green-700"
               >
                 <CheckCircle2 className="h-4 w-4" />
-                Confirmar
+                Confirmar fotos
               </Button>
             </div>
           </motion.div>
@@ -1316,6 +1403,17 @@ export function ItemCustomizationModal({
             </div>
           </div>
         </div>
+
+        {selectedLabel && (
+          <Card className="p-3 border border-neutral-200 bg-white">
+            <p className="text-xs font-semibold text-neutral-700 mb-1 uppercase tracking-wide">
+              Opção selecionada
+            </p>
+            <p className="text-sm font-medium text-neutral-900">
+              {selectedLabel}
+            </p>
+          </Card>
+        )}
 
         <div className="h-[40vh] space-y-2 overflow-y-auto px-5">
           {options.map((option) => {

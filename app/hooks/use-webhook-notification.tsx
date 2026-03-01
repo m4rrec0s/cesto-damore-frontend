@@ -142,6 +142,7 @@ export function useWebhookNotification({
     (event: MessageEvent) => {
       try {
         const data: PaymentUpdateData = JSON.parse(event.data);
+        const normalizedStatus = (data.status || "").toLowerCase();
 
         onPaymentUpdate?.(data);
 
@@ -157,16 +158,19 @@ export function useWebhookNotification({
             break;
 
           case "payment_update":
-            if (data.status === "approved") {
+            if (normalizedStatus === "approved" || normalizedStatus === "authorized") {
               onPaymentApproved?.(data);
             } else if (
-              data.status === "rejected" ||
-              data.status === "cancelled"
+              normalizedStatus === "rejected" ||
+              normalizedStatus === "cancelled" ||
+              normalizedStatus === "refunded" ||
+              normalizedStatus === "charged_back"
             ) {
               onPaymentRejected?.(data);
             } else if (
-              data.status === "pending" ||
-              data.status === "in_process"
+              normalizedStatus === "pending" ||
+              normalizedStatus === "in_process" ||
+              normalizedStatus === "processing"
             ) {
               onPaymentPending?.(data);
             }

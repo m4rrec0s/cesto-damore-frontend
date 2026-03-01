@@ -43,6 +43,7 @@ export default function FeedBannerCarousel({
                 <Image
                   src={getInternalImageUrl(
                     banner.image_url || "banner-placeholder.png",
+                    "w1600",
                   )}
                   alt={banner.title}
                   fill
