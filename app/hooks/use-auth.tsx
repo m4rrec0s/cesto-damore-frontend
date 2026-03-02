@@ -61,7 +61,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const api = useApi();
 
   useEffect(() => {
-
     if (typeof window !== "undefined") {
       const storedUserId = localStorage.getItem("userId");
       const storedAppToken = localStorage.getItem("appToken");
@@ -107,7 +106,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [api]);
 
   const login = (userData: User, token: string) => {
-
     const tokenData = decodeToken(token);
     if (!tokenData || isTokenExpired(tokenData)) {
       console.error("❌ Token inválido ou expirado");
@@ -117,7 +115,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(userData);
     setAppToken(token);
     if (typeof window !== "undefined") {
-
       localStorage.setItem("userId", userData.id);
       localStorage.setItem("appToken", token);
       localStorage.setItem("tokenTimestamp", Date.now().toString());
@@ -135,6 +132,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       localStorage.removeItem("userId");
       localStorage.removeItem("appToken");
       localStorage.removeItem("tokenTimestamp");
+      localStorage.removeItem("cart");
+      localStorage.removeItem("guest_cart_state");
+      localStorage.removeItem("guest_customizations");
 
       document.cookie =
         "appToken=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT";

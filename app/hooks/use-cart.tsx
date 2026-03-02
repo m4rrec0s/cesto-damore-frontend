@@ -101,7 +101,6 @@ const serializeCustomizations = (customizations?: CartCustomization[]) => {
   }
 
   const normalized = customizations.map((customization) => {
-
     const baseFields = [
       "text",
       "photos",
@@ -170,6 +169,95 @@ const cloneCustomizations = (
       ? { ...customization.selected_item }
       : undefined,
   }));
+};
+
+const mergeCustomizationEntries = (
+  existing: CartCustomization[] = [],
+  incoming: CartCustomization[] = [],
+): CartCustomization[] => {
+  if (existing.length === 0) return cloneCustomizations(incoming);
+  if (incoming.length === 0) return cloneCustomizations(existing);
+
+  const merged = cloneCustomizations(existing);
+
+  for (const next of incoming) {
+    const nextId = next.id || next.customization_id;
+    const index = merged.findIndex((current) => {
+      const currentId = current.id || current.customization_id;
+      return currentId === nextId;
+    });
+
+    if (index >= 0) {
+      merged[index] = { ...merged[index], ...next };
+    } else {
+      merged.push({ ...next });
+    }
+  }
+
+  return merged;
+};
+
+const buildCartItemIdentity = (item: CartItem): string => {
+  const additionsKey = serializeAdditionals(item.additional_ids);
+  const colorsKey = serializeAdditionalColors(item.additional_colors);
+  const customizationsKey = serializeCustomizations(item.customizations);
+  return `${item.product_id}|${additionsKey}|${colorsKey}|${customizationsKey}`;
+};
+
+const mergeCartItemLists = (
+  primary: CartItem[],
+  secondary: CartItem[],
+): CartItem[] => {
+  const mergedMap = new Map<string, CartItem>();
+
+  const upsert = (item: CartItem) => {
+    const key = buildCartItemIdentity(item);
+    const existing = mergedMap.get(key);
+
+    if (!existing) {
+      mergedMap.set(key, {
+        ...item,
+        customizations: item.customizations
+          ? cloneCustomizations(item.customizations)
+          : undefined,
+      });
+      return;
+    }
+
+    const mergedCustomizations = mergeCustomizationEntries(
+      existing.customizations || [],
+      item.customizations || [],
+    );
+
+    const mergedItem: CartItem = {
+      ...existing,
+      ...item,
+      quantity: existing.quantity + item.quantity,
+      customizations:
+        mergedCustomizations.length > 0 ? mergedCustomizations : undefined,
+    };
+
+    const mergedCustomizationTotal = calculateCustomizationTotal(
+      mergedItem.customizations,
+    );
+    mergedItem.customization_total =
+      mergedItem.customizations && mergedItem.customizations.length > 0
+        ? mergedCustomizationTotal
+        : undefined;
+
+    const baseEffective =
+      mergedItem.price * (1 - (mergedItem.discount || 0) / 100);
+    mergedItem.effectivePrice = Number(
+      (baseEffective + mergedCustomizationTotal).toFixed(2),
+    );
+
+    mergedMap.set(key, mergedItem);
+  };
+
+  primary.forEach(upsert);
+  secondary.forEach(upsert);
+
+  return Array.from(mergedMap.values());
 };
 
 const calculateCustomizationTotal = (
@@ -331,6 +419,7 @@ export function useCart(): CartContextType {
 
   const isInitializedRef = useRef<boolean>(false);
   const getOrderAttemptedRef = useRef<Set<string>>(new Set());
+  const previousUserIdRef = useRef<string | null>(null);
 
   const calculateTotals = useCallback((items: CartItem[]): CartState => {
     const safeItems = Array.isArray(items) ? items : [];
@@ -410,11 +499,13 @@ export function useCart(): CartContextType {
 
           const additionalPriceMap = new Map<string, number>();
           if (orderItem.additionals && orderItem.additionals.length > 0) {
-            orderItem.additionals.forEach((add: { additional_id: string; price?: number }) => {
-              if (typeof add.price === "number") {
-                additionalPriceMap.set(add.additional_id, add.price);
-              }
-            });
+            orderItem.additionals.forEach(
+              (add: { additional_id: string; price?: number }) => {
+                if (typeof add.price === "number") {
+                  additionalPriceMap.set(add.additional_id, add.price);
+                }
+              },
+            );
           }
 
           const additionals =
@@ -441,7 +532,6 @@ export function useCart(): CartContextType {
           if (orderItem.customizations && orderItem.customizations.length > 0) {
             for (const customization of orderItem.customizations) {
               try {
-
                 let data: Record<string, unknown> = {};
 
                 if (typeof customization.value === "string") {
@@ -633,6 +723,29 @@ export function useCart(): CartContextType {
   );
 
   useEffect(() => {
+    const currentUserId = user?.id || null;
+    const previousUserId = previousUserIdRef.current;
+
+    if (previousUserId !== currentUserId) {
+      getOrderAttemptedRef.current.clear();
+      setPendingOrderId(null);
+      isInitializedRef.current = false;
+
+      if (!currentUserId) {
+        setCart({ items: [], total: 0, itemCount: 0 });
+        _setOrderMetadata({});
+
+        if (typeof window !== "undefined") {
+          localStorage.removeItem("guest_cart_state");
+          localStorage.removeItem("guest_customizations");
+        }
+      }
+
+      previousUserIdRef.current = currentUserId;
+    }
+  }, [user?.id]);
+
+  useEffect(() => {
     const loadPendingOrder = async () => {
       if (!user) return;
 
@@ -645,7 +758,7 @@ export function useCart(): CartContextType {
           pendingOrder.items &&
           pendingOrder.items.length > 0
         ) {
-          const cartItems = await transformOrderToCartItems(pendingOrder);
+          const serverCartItems = await transformOrderToCartItems(pendingOrder);
 
           if (
             pendingOrder.send_anonymously !== undefined ||
@@ -657,13 +770,13 @@ export function useCart(): CartContextType {
             });
           }
 
-          const updatedCart = calculateTotals(cartItems);
+          const mergedItems = mergeCartItemLists(cart.items, serverCartItems);
+          const updatedCart = calculateTotals(mergedItems);
           setCart(updatedCart);
           setPendingOrderId(pendingOrder.id);
 
           isInitializedRef.current = true;
         } else {
-
           isInitializedRef.current = true;
         }
       } catch (error) {
@@ -674,7 +787,14 @@ export function useCart(): CartContextType {
     };
 
     loadPendingOrder();
-  }, [user, api, calculateTotals, setOrderMetadata, transformOrderToCartItems]);
+  }, [
+    user,
+    api,
+    calculateTotals,
+    setOrderMetadata,
+    transformOrderToCartItems,
+    cart.items,
+  ]);
 
   const cartItemsToOrderItems = useCallback((items: CartItem[]) => {
     return items.map((item) => ({
@@ -733,9 +853,7 @@ export function useCart(): CartContextType {
             pendingOrderId &&
             getOrderAttemptedRef.current.has(pendingOrderId)
           ) {
-
             try {
-
               await api.deleteOrder(pendingOrderId);
               setPendingOrderId(null);
               setOrderMetadata({
@@ -746,7 +864,6 @@ export function useCart(): CartContextType {
               console.error("Erro ao deletar pedido pendente:", error);
             }
           } else if (pendingOrderId) {
-
             try {
               const serverOrder = await api.getOrder(pendingOrderId);
               getOrderAttemptedRef.current.add(pendingOrderId);
@@ -832,9 +949,7 @@ export function useCart(): CartContextType {
               };
               const newOrder = await api.createOrder(payload);
               setPendingOrderId(newOrder?.id || null);
-
             } else {
-
               throw updateError;
             }
           }
@@ -858,11 +973,8 @@ export function useCart(): CartContextType {
               "Erro ao sincronizar o carrinho com o servidor. Tente novamente mais tarde.",
             );
           }
-        } catch {
-
-        }
+        } catch {}
       } finally {
-
         syncLockRef.current = false;
       }
     },
@@ -906,7 +1018,6 @@ export function useCart(): CartContextType {
           pendingOrderId &&
           !getOrderAttemptedRef.current.has(pendingOrderId)
         ) {
-
           getOrderAttemptedRef.current.add(pendingOrderId);
 
           const serverOrder = await api.getOrder(pendingOrderId);
@@ -999,7 +1110,6 @@ export function useCart(): CartContextType {
             }
           }
         } else if (cart.items.length > 0) {
-
           await syncCartToBackend(cart);
         }
       } catch (error) {
@@ -1037,7 +1147,8 @@ export function useCart(): CartContextType {
 
         const additionalsWithPrice = additionalDetails.map((additional) => {
           const customPrice = additional.compatible_products?.find(
-            (entry: { product_id: string; is_active: boolean; }) => entry.product_id === productId && entry.is_active,
+            (entry: { product_id: string; is_active: boolean }) =>
+              entry.product_id === productId && entry.is_active,
           )?.custom_price;
 
           return {
@@ -1123,7 +1234,6 @@ export function useCart(): CartContextType {
           debouncedSync(updatedCart);
           return updatedCart;
         });
-
       } catch (error) {
         console.error("❌ [addToCart] Erro:", error);
 
@@ -1206,7 +1316,6 @@ export function useCart(): CartContextType {
               }
             }
           } catch (err) {
-
             console.error("Erro ao sincronizar remoção com backend:", err);
             if (removedItem) {
               setCart((prev) => {
@@ -1352,28 +1461,7 @@ export function useCart(): CartContextType {
     existing: CartCustomization[],
     updated: CartCustomization[],
   ): CartCustomization[] => {
-    const merged = [...existing];
-
-    for (const newCustom of updated) {
-      const existingIndex = merged.findIndex((c) => {
-
-        if (c.id && newCustom.id) {
-          return c.id === newCustom.id;
-        }
-
-        return c.customization_id === newCustom.customization_id;
-      });
-
-      if (existingIndex >= 0) {
-
-        merged[existingIndex] = { ...newCustom };
-      } else {
-
-        merged.push({ ...newCustom });
-      }
-    }
-
-    return merged;
+    return mergeCustomizationEntries(existing, updated);
   };
 
   const clearCart = useCallback(() => {
@@ -1420,7 +1508,6 @@ export function useCart(): CartContextType {
       let deliveryState = options?.deliveryState;
 
       if (!deliveryCity || !deliveryState) {
-
         if (deliveryAddress) {
           const addressParts = deliveryAddress.split("/");
           if (addressParts.length >= 2) {
@@ -1615,7 +1702,6 @@ export function useCart(): CartContextType {
       hour: number,
       minute: number,
     ): Date => {
-
       const y = year;
       const m = String(month + 1).padStart(2, "0");
       const d = String(day).padStart(2, "0");
@@ -1627,14 +1713,12 @@ export function useCart(): CartContextType {
   );
 
   const getBrazilTimeComponents = useCallback((date: Date) => {
-
     const str = date.toLocaleString("en-US", {
       timeZone: "America/Sao_Paulo",
       hour12: false,
     });
     const parts = str.split(", ");
     if (parts.length < 2) {
-
       return {
         year: date.getFullYear(),
         month: date.getMonth(),
@@ -1648,7 +1732,6 @@ export function useCart(): CartContextType {
     const dateParts = datePart.split("/").map(Number);
     const timeParts = timePart.split(":").map(Number);
     if (dateParts.length < 3 || timeParts.length < 2) {
-
       return {
         year: date.getFullYear(),
         month: date.getMonth(),
@@ -1678,14 +1761,12 @@ export function useCart(): CartContextType {
     let maxTime = 0;
 
     cart.items.forEach((item) => {
-
       const productTime = item.product.production_time || 0;
       let itemMaxTime = productTime;
 
       if (item.customizations) {
         item.customizations.forEach((custom) => {
           if (custom.customization_type === "DYNAMIC_LAYOUT") {
-
             const dynamicLayoutTime = custom.additional_time || 0;
             if (dynamicLayoutTime > 0) {
               itemMaxTime = Math.max(itemMaxTime, dynamicLayoutTime);
@@ -1706,7 +1787,6 @@ export function useCart(): CartContextType {
       }
 
       maxTime = Math.max(maxTime, itemMaxTime);
-
     });
 
     return maxTime > 0 ? maxTime : 1;
@@ -1718,7 +1798,6 @@ export function useCart(): CartContextType {
 
   const isWithinServiceHours = useCallback(
     (date: Date): boolean => {
-
       const { hour, minute } = getBrazilTimeComponents(date);
       const currentMinutes = hour * 60 + minute;
 
@@ -1837,25 +1916,21 @@ export function useCart(): CartContextType {
     limit.setDate(limit.getDate() + 14);
 
     while (remainingProductionMinutes > 0 && current < limit) {
-
       const remainingInWindow = getRemainingMinutesInCurrentWindow(current);
 
       if (remainingInWindow > 0) {
         if (remainingInWindow >= remainingProductionMinutes) {
-
           current = new Date(
             current.getTime() + remainingProductionMinutes * 60 * 1000,
           );
           remainingProductionMinutes = 0;
         } else {
-
           remainingProductionMinutes -= remainingInWindow;
           current = new Date(current.getTime() + remainingInWindow * 60 * 1000);
 
           current = getNextServiceWindowStart(current);
         }
       } else {
-
         current = getNextServiceWindowStart(current);
       }
     }
@@ -1890,7 +1965,6 @@ export function useCart(): CartContextType {
 
   const generateTimeSlots = useCallback(
     (baseDate: Date): TimeSlot[] => {
-
       const { year, month, day } = getBrazilTimeComponents(baseDate);
 
       const checkDate = createBrazilDate(year, month, day, 12, 0);
@@ -1988,7 +2062,6 @@ export function useCart(): CartContextType {
 
   const isDateDisabledInCalendar = useCallback(
     (date: Date): boolean => {
-
       const dateKey = date.toISOString().split("T")[0];
 
       if (dateDisabledCacheRef.current.has(dateKey)) {

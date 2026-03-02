@@ -199,13 +199,11 @@ export default function CarrinhoPageContent() {
   const formatDocument = (value: string) => {
     const numbers = value.replace(/\D/g, "");
     if (numbers.length <= 11) {
-
       return numbers
         .replace(/(\d{3})(\d)/, "$1.$2")
         .replace(/(\d{3})(\d)/, "$1.$2")
         .replace(/(\d{3})(\d{1,2})$/, "$1-$2");
     } else {
-
       return numbers
         .replace(/^(\d{2})(\d)/, "$1.$2")
         .replace(/^(\d{2})\.(\d{3})(\d)/, "$1.$2.$3")
@@ -275,7 +273,6 @@ export default function CarrinhoPageContent() {
 
   useEffect(() => {
     return () => {
-
       setCurrentOrderId(null);
       setPaymentStatus("");
       disconnectSSERef.current?.();
@@ -342,7 +339,6 @@ export default function CarrinhoPageContent() {
       toast.error("Pagamento recusado. Verifique os dados do pagamento.");
     },
     onTimeout: () => {
-
       setPaymentStatus("");
       setCurrentOrderId(null);
       setPaymentError(
@@ -474,26 +470,25 @@ export default function CarrinhoPageContent() {
     });
   }, []);
 
-  const sseOnPaymentPending = useCallback(
-    (data: unknown) => {
-      const status = ((data as { status?: string })?.status || "").toLowerCase();
-      if (status && lastRealtimeStatusRef.current !== status) {
-        lastRealtimeStatusRef.current = status;
-        toast.info("Pagamento em processamento", {
-          description:
-            status === "in_process"
-              ? "Seu pagamento foi recebido e está em análise."
-              : "Aguardando confirmação do pagamento.",
-        });
-      }
-      setPaymentStatus("pending");
-    },
-    [],
-  );
+  const sseOnPaymentPending = useCallback((data: unknown) => {
+    const status = ((data as { status?: string })?.status || "").toLowerCase();
+    if (status && lastRealtimeStatusRef.current !== status) {
+      lastRealtimeStatusRef.current = status;
+      toast.info("Pagamento em processamento", {
+        description:
+          status === "in_process"
+            ? "Seu pagamento foi recebido e está em análise."
+            : "Aguardando confirmação do pagamento.",
+      });
+    }
+    setPaymentStatus("pending");
+  }, []);
 
   const sseOnPaymentUpdate = useCallback(
     (data: unknown) => {
-      const statusRaw = ((data as { status?: string })?.status || "").toLowerCase();
+      const statusRaw = (
+        (data as { status?: string })?.status || ""
+      ).toLowerCase();
       if (!statusRaw) return;
       const normalized = mapPaymentStatus(statusRaw);
 
@@ -596,7 +591,6 @@ export default function CarrinhoPageContent() {
           setAddress(streetMatch[1].trim());
           setHouseNumber(streetMatch[2].trim());
         } else {
-
           const basicAddress = addressStr.split("-")[0]?.split(",")[0]?.trim();
           if (basicAddress) {
             setAddress(basicAddress);
@@ -617,7 +611,6 @@ export default function CarrinhoPageContent() {
         }
       }
     } else if (!user) {
-
       setZipCode("");
       setAddress("");
       setHouseNumber("");
@@ -655,13 +648,11 @@ export default function CarrinhoPageContent() {
             const isPickupAddress = addressStr.includes("Retirada na Loja");
 
             if (!isPickupAddress) {
-
               const streetMatch = addressStr.match(/^([^,]+),\s*(\d+)/);
               if (streetMatch) {
                 setAddress(streetMatch[1].trim());
                 setHouseNumber(streetMatch[2].trim());
               } else {
-
                 const parts = addressStr.split(",");
                 if (parts.length > 0) {
                   setAddress(parts[0].trim());
@@ -675,7 +666,6 @@ export default function CarrinhoPageContent() {
                 if (numMatch) setHouseNumber(numMatch[1]);
               }
             } else {
-
               setAddress("");
               setHouseNumber("");
             }
@@ -687,7 +677,6 @@ export default function CarrinhoPageContent() {
             setSendAnonymously(Boolean(pendingOrder.send_anonymously));
           }
           if (pendingOrder.recipient_phone) {
-
             const digits = pendingOrder.recipient_phone.replace(/\D/g, "");
 
             const localNumber = digits.startsWith("55")
@@ -712,9 +701,7 @@ export default function CarrinhoPageContent() {
                 const mm = String(dt.getMinutes()).padStart(2, "0");
                 setSelectedTime(`${hh}:${mm}`);
               }
-            } catch {
-
-            }
+            } catch {}
           }
 
           if (pendingOrder.user?.phone) {
@@ -733,7 +720,6 @@ export default function CarrinhoPageContent() {
             setShowPendingOrderBanner(true);
             window.scrollTo({ top: 0, behavior: "smooth" });
           } else {
-
             setShowPendingOrderBanner(false);
           }
         }
@@ -788,7 +774,9 @@ export default function CarrinhoPageContent() {
     if (!pendingOrder?.payment) return false;
     if (pendingOrder.payment.status !== "PENDING") return false;
 
-    const paymentMethod = (pendingOrder.payment.payment_method || "").toLowerCase();
+    const paymentMethod = (
+      pendingOrder.payment.payment_method || ""
+    ).toLowerCase();
     // Expiration rule is specific for PIX QRCode.
     if (paymentMethod && paymentMethod !== "pix") return false;
 
@@ -839,7 +827,8 @@ export default function CarrinhoPageContent() {
       );
     });
   }, [selectedDate, selectedTime, isDateDisabled, generateTimeSlots]);
-  const checkoutReadyForPayment = customizationsValid && isDeliveryScheduleValid;
+  const checkoutReadyForPayment =
+    customizationsValid && isDeliveryScheduleValid;
   const shouldShowPendingBanner = useMemo(
     () =>
       Boolean(showPendingOrderBanner) &&
@@ -971,17 +960,13 @@ export default function CarrinhoPageContent() {
       cartItems.reduce(
         (sum, item) =>
           sum +
-            (item.additionals?.reduce(
-              (a, add) =>
-                a +
-                getAdditionalFinalPrice(
-                  add.id,
-                  add.price,
-                  item.customizations,
-                ) *
-                  item.quantity,
-              0,
-            ) || 0),
+          (item.additionals?.reduce(
+            (a, add) =>
+              a +
+              getAdditionalFinalPrice(add.id, add.price, item.customizations) *
+                item.quantity,
+            0,
+          ) || 0),
         0,
       ),
     [cartItems],
@@ -1005,14 +990,14 @@ export default function CarrinhoPageContent() {
       try {
         if (!user) {
           // Save cart data before redirecting to login
-          const { guestCartService } = await import(
-            "@/app/services/guestCartService"
-          );
+          const { guestCartService } =
+            await import("@/app/services/guestCartService");
 
           const itemsToSave = cart.items.map((item) => ({
             productId: item.product_id,
             quantity: item.quantity,
-            additionals: item.additionals,
+            additionals:
+              item.additional_ids || item.additionals?.map((add) => add.id),
             additionalColors: item.additional_colors,
             customizations: item.customizations,
           }));
@@ -1403,7 +1388,6 @@ export default function CarrinhoPageContent() {
   const canProceedToStep2 = cartItems.length > 0 && customizationsValid;
 
   const canProceedToStep3 = (() => {
-
     const commonValid =
       customerPhone.trim() !== "" &&
       isValidPhone(customerPhone) &&
@@ -1414,10 +1398,8 @@ export default function CarrinhoPageContent() {
       customizationsValid;
 
     if (optionSelected === "pickup") {
-
       return commonValid;
     } else {
-
       return (
         commonValid &&
         recipientPhone.trim() !== "" &&
@@ -1433,7 +1415,6 @@ export default function CarrinhoPageContent() {
   })();
 
   const handleNextStep = async () => {
-
     if (isProcessing) {
       console.warn("Requisição em progresso, ignorando clique duplicado");
       return;
@@ -1487,7 +1468,6 @@ export default function CarrinhoPageContent() {
       }
 
       if (!currentOrderId && !hasPendingOrder) {
-
         if (creatingOrderRef.current) {
           console.warn(
             "⚠️ Criação de pedido já em progresso, ignorando requisição duplicada",
@@ -1509,7 +1489,6 @@ export default function CarrinhoPageContent() {
         setIsProcessing(true);
         creatingOrderRef.current = true;
         try {
-
           let finalDateForBackend = finalDeliveryDate;
           if (selectedTime === "23:59") {
             finalDateForBackend = null;
@@ -1576,7 +1555,6 @@ export default function CarrinhoPageContent() {
       }
 
       if (currentOrderId) {
-
         if (updatingOrderMetadataRef.current) {
           console.warn(
             "Já há uma atualização em progresso, ignorando requisição duplicada",
@@ -1613,9 +1591,7 @@ export default function CarrinhoPageContent() {
             localStorage.removeItem("pendingOrderId");
             setCurrentOrderId(null);
             disconnectSSE?.();
-          } catch {
-
-          }
+          } catch {}
         } finally {
           updatingOrderMetadataRef.current = false;
         }
@@ -1801,69 +1777,68 @@ export default function CarrinhoPageContent() {
       ) : (
         <div className="min-h-screen bg-[#f5f5f5] relative">
           <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 lg:py-12">
-            
             {shouldShowPendingBanner && (
-                <motion.div
-                  initial={{ opacity: 0, y: -10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -10 }}
-                  className="mb-6 p-4 lg:p-6 bg-gradient-to-r from-amber-50 to-orange-50 border-l-4 border-amber-500 rounded-lg shadow-sm"
-                >
-                  <div className="flex items-start gap-3 lg:gap-4 justify-between flex-col lg:flex-row lg:items-center">
-                    <div className="flex items-start gap-3">
-                      <div className="mt-0.5 text-amber-600 flex-shrink-0">
-                        <svg
-                          className="w-5 h-5 lg:w-6 lg:h-6"
-                          fill="currentColor"
-                          viewBox="0 0 20 20"
-                        >
-                          <path
-                            fillRule="evenodd"
-                            d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
-                            clipRule="evenodd"
-                          />
-                        </svg>
-                      </div>
-                      <div>
-                        <h3 className="font-semibold text-amber-900 text-sm lg:text-base">
-                          Pagamento Pendente
-                        </h3>
-                        <p className="text-amber-700 text-xs lg:text-sm mt-1">
-                          Você tem um pedido com pagamento pendente. Complete o
-                          pagamento para finalizar sua compra.
-                          {!customizationsValid &&
-                            " Antes, complete as personalizações pendentes."}
-                          {!isDeliveryScheduleValid &&
-                            " A data/horário da entrega não está mais disponível e precisa ser atualizado."}
-                        </p>
-                      </div>
+              <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                className="mb-6 p-4 lg:p-6 bg-gradient-to-r from-amber-50 to-orange-50 border-l-4 border-amber-500 rounded-lg shadow-sm"
+              >
+                <div className="flex items-start gap-3 lg:gap-4 justify-between flex-col lg:flex-row lg:items-center">
+                  <div className="flex items-start gap-3">
+                    <div className="mt-0.5 text-amber-600 flex-shrink-0">
+                      <svg
+                        className="w-5 h-5 lg:w-6 lg:h-6"
+                        fill="currentColor"
+                        viewBox="0 0 20 20"
+                      >
+                        <path
+                          fillRule="evenodd"
+                          d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
+                          clipRule="evenodd"
+                        />
+                      </svg>
                     </div>
-                    <Button
-                      onClick={() => {
-                        if (!customizationsValid) {
-                          toast.error(
-                            "Complete as personalizações pendentes antes de ir para o pagamento.",
-                          );
-                          return;
-                        }
-                        if (!isDeliveryScheduleValid) {
-                          toast.error(
-                            "A data/horário de entrega não está mais disponível. Ajuste o agendamento para continuar.",
-                          );
-                          updateStepUrl(2);
-                          return;
-                        }
-                        updateStepUrl(3);
-                        window.scrollTo({ top: 0, behavior: "smooth" });
-                      }}
-                      disabled={!checkoutReadyForPayment}
-                      className="bg-amber-600 hover:bg-amber-700 disabled:bg-amber-300 text-white text-xs lg:text-sm px-4 py-2 lg:px-6 lg:py-2 whitespace-nowrap flex-shrink-0"
-                    >
-                      Ir para Pagamento
-                    </Button>
+                    <div>
+                      <h3 className="font-semibold text-amber-900 text-sm lg:text-base">
+                        Pagamento Pendente
+                      </h3>
+                      <p className="text-amber-700 text-xs lg:text-sm mt-1">
+                        Você tem um pedido com pagamento pendente. Complete o
+                        pagamento para finalizar sua compra.
+                        {!customizationsValid &&
+                          " Antes, complete as personalizações pendentes."}
+                        {!isDeliveryScheduleValid &&
+                          " A data/horário da entrega não está mais disponível e precisa ser atualizado."}
+                      </p>
+                    </div>
                   </div>
-                </motion.div>
-              )}
+                  <Button
+                    onClick={() => {
+                      if (!customizationsValid) {
+                        toast.error(
+                          "Complete as personalizações pendentes antes de ir para o pagamento.",
+                        );
+                        return;
+                      }
+                      if (!isDeliveryScheduleValid) {
+                        toast.error(
+                          "A data/horário de entrega não está mais disponível. Ajuste o agendamento para continuar.",
+                        );
+                        updateStepUrl(2);
+                        return;
+                      }
+                      updateStepUrl(3);
+                      window.scrollTo({ top: 0, behavior: "smooth" });
+                    }}
+                    disabled={!checkoutReadyForPayment}
+                    className="bg-amber-600 hover:bg-amber-700 disabled:bg-amber-300 text-white text-xs lg:text-sm px-4 py-2 lg:px-6 lg:py-2 whitespace-nowrap flex-shrink-0"
+                  >
+                    Ir para Pagamento
+                  </Button>
+                </div>
+              </motion.div>
+            )}
 
             {shouldShowExpiredPendingBanner && (
               <motion.div
@@ -1892,8 +1867,8 @@ export default function CarrinhoPageContent() {
                         QR Code Expirado
                       </h3>
                       <p className="text-blue-700 text-xs lg:text-sm mt-1">
-                        Seu QR Code PIX anterior expirou (validade de 24h).
-                        Gere um novo para concluir o pagamento.
+                        Seu QR Code PIX anterior expirou (validade de 24h). Gere
+                        um novo para concluir o pagamento.
                         {!customizationsValid &&
                           " Antes, complete as personalizações pendentes."}
                         {!isDeliveryScheduleValid &&
@@ -1913,10 +1888,8 @@ export default function CarrinhoPageContent() {
             )}
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-              
               <div className="lg:col-span-2 space-y-6">
                 <AnimatePresence mode="wait">
-                  
                   {currentStep === 1 && (
                     <div key="step1" className="space-y-6">
                       <StepCart
@@ -1927,7 +1900,6 @@ export default function CarrinhoPageContent() {
                         onEditCustomizations={handleEditCustomizations}
                       />
 
-                      
                       {cartItems.length > 0 && (
                         <div className="mt-8 pt-6 border-t border-gray-200">
                           <CustomizationsReview
@@ -2025,7 +1997,6 @@ export default function CarrinhoPageContent() {
         </div>
       )}
 
-      
       <AnimatePresence>
         {confirmationState === "animating" && (
           <motion.div
