@@ -3,6 +3,7 @@
 import React, { ReactNode, useState, useCallback } from "react";
 import { CartProvider } from "@/app/hooks/cart-context";
 import TokenMonitor from "../auth/token-monitor";
+import ServerActionRecovery from "../runtime/server-action-recovery";
 
 export default function AppWrapper({ children }: { children: ReactNode }) {
   const [isCartOpen, setIsCartOpen] = useState(false);
@@ -13,6 +14,7 @@ export default function AppWrapper({ children }: { children: ReactNode }) {
 
   return (
     <CartProvider onCartItemAdded={handleCartItemAdded}>
+      <ServerActionRecovery />
       <TokenMonitor>
         <CartSheetProvider isOpen={isCartOpen} setIsOpen={setIsCartOpen}>
           {children}
