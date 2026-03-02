@@ -206,7 +206,10 @@ export default function FeedSection({ section }: FeedSectionProps) {
 
   if (section.section_type === "BEST_SELLERS") {
     return (
-      <section className="w-full py-6">
+    <section
+      className="w-full py-6"
+      style={{ contentVisibility: "auto", containIntrinsicSize: "720px" }}
+    >
         <div className="mx-auto max-w-none sm:max-w-[90%] px-4">
           <header className="mb-4 flex items-center justify-between">
             <div>
@@ -239,7 +242,10 @@ export default function FeedSection({ section }: FeedSectionProps) {
   const viewAllUrl = `/section/${section.id}`;
 
   return (
-    <section className="w-full py-4">
+    <section
+      className="w-full py-4"
+      style={{ contentVisibility: "auto", containIntrinsicSize: "620px" }}
+    >
       <div className="mx-auto max-w-none sm:max-w-[90%] px-4">
         {section.title && (
           <header className="w-full flex items-center justify-between mb-6">
@@ -260,11 +266,7 @@ export default function FeedSection({ section }: FeedSectionProps) {
 
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 md:gap-6">
           {displayItems.map((item: PublicFeedItem, index: number) => (
-            <div
-              key={item.id}
-              className="animate-fadeIn"
-              style={{ animationDelay: `${index * 50}ms` }}
-            >
+            <div key={item.id}>
               <FeedItemCard item={item} imagePriority={index < 4} />
             </div>
           ))}

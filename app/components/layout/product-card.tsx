@@ -2,7 +2,6 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useState } from "react";
 import { cn } from "@/app/lib/utils";
 import { getInternalImageUrl } from "@/lib/image-helper";
 import { Badge } from "../ui/badge";
@@ -30,8 +29,6 @@ export function ProductCard({
   className,
   imagePriority = false,
 }: ProductCardProps) {
-  const [activeCategory, setActiveCategory] = useState(0);
-
   const finalPrice = props.discount
     ? props.price - (props.discount * props.price) / 100
     : props.price;
@@ -40,16 +37,6 @@ export function ProductCard({
   const categories = (props.categories || [])
     .map((item) => item.category.name)
     .filter((name): name is string => Boolean(name));
-
-  useEffect(() => {
-    if (categories.length === 0) return;
-
-    const interval = setInterval(() => {
-      setActiveCategory((prev) => (prev + 1) % categories.length);
-    }, 10000);
-
-    return () => clearInterval(interval);
-  }, [categories.length]);
 
   return (
     <Link
@@ -76,12 +63,9 @@ export function ProductCard({
         />
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/10 via-transparent to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
         {categories.length > 0 ? (
-          <div className="category-carousel absolute left-2 top-2">
-            <Badge
-              key={activeCategory}
-              className="category-carousel-badge border border-white/40 bg-white/90 text-gray-700"
-            >
-              {categories[activeCategory]}
+          <div className="absolute left-2 top-2 max-w-[70%]">
+            <Badge className="max-w-full truncate border border-white/40 bg-white/90 text-gray-700">
+              {categories[0]}
             </Badge>
           </div>
         ) : null}

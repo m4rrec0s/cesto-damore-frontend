@@ -118,7 +118,7 @@
   }
 
   html {
-    scroll-behavior: smooth;
+    scroll-behavior: auto;
     scroll-padding-top: 2rem;
   }
 
@@ -126,11 +126,6 @@
     @apply bg-background text-foreground;
     -webkit-overflow-scrolling: touch;
     overscroll-behavior-y: none;
-  }
-
-  /* Smooth scrolling para todos os containers com scroll */
-  * {
-    scroll-behavior: smooth;
   }
 }
 

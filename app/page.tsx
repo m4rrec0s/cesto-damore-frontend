@@ -9,15 +9,8 @@ import {
 import { Button } from "./components/ui/button";
 import { RefreshCw } from "lucide-react";
 import { DatabaseErrorFallback } from "./components/database-error-fallback";
-import dynamic from "next/dynamic";
-
-const FeedBannerCarousel = dynamic(
-  () => import("./components/feed/FeedBannerCarousel"),
-  { loading: () => <div className="h-48 bg-gray-100 animate-pulse" /> }
-);
-const FeedSection = dynamic(() => import("./components/feed/FeedSection"), {
-  loading: () => <div className="h-36 bg-gray-100 animate-pulse" />,
-});
+import FeedBannerCarousel from "./components/feed/FeedBannerCarousel";
+import FeedSection from "./components/feed/FeedSection";
 import InfiniteScroll from "react-infinite-scroll-component";
 
 interface GridProduct {
@@ -189,14 +182,14 @@ export default function Home() {
         !useFallback &&
         feedData.banners &&
         feedData.banners.length > 0 && (
-          <div className="w-full animate-fadeIn">
+          <div className="w-full">
             <FeedBannerCarousel banners={feedData.banners} />
           </div>
         )}
 
       {feedData && !useFallback ? (
         <div
-          className="space-y-8 pb-12 animate-fadeIn"
+          className="space-y-8 pb-12"
           ref={scrollContainerRef}
         >
           <InfiniteScroll
@@ -216,12 +209,8 @@ export default function Home() {
             }
           >
             {sections &&
-              sections.map((section, index) => (
-                <div
-                  key={section.id}
-                  className="animate-slideUp"
-                  style={{ animationDelay: `${index * 100}ms` }}
-                >
+              sections.map((section) => (
+                <div key={section.id}>
                   <FeedSection section={section} />
                 </div>
               ))}
