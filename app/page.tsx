@@ -41,7 +41,6 @@ export default function Home() {
     perPage?: number;
   } | null>(null);
   const [useFallback, setUseFallback] = useState(false);
-
   const [scrollThreshold, setScrollThreshold] = useState<string>("1300px");
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -83,7 +82,6 @@ export default function Home() {
 
   useEffect(() => {
     const loadData = async () => {
-
       if (cachedData?.products) {
         try {
           const productsCache = cachedData?.products as unknown as {
@@ -105,7 +103,7 @@ export default function Home() {
               .slice(0, 8);
             setProducts(featuredProducts);
           }
-        } catch { }
+        } catch {}
       }
 
       setError(null);
@@ -113,7 +111,6 @@ export default function Home() {
       try {
         let feed: PublicFeedResponse | null = null;
         try {
-
           feed = await api.getPublicFeed(undefined, 1, perPage);
           setFeedData(feed);
           setSections(feed?.sections || []);
@@ -135,15 +132,20 @@ export default function Home() {
               image_url: product.image_url || null,
               categoryName: product.categories?.[0]?.name || "Sem categoria",
               categoryNames: product.categories?.map((cat) => cat.name) || [],
-            })
+            }),
           );
           setProducts(featuredProducts.slice(0, 8));
           setInitialLoad(false);
         }
       } catch (err: unknown) {
         console.error("❌ Erro crítico ao carregar dados:", err);
-        const errorMessage = err instanceof Error ? err.message : "Erro desconhecido";
-        setError(errorMessage.includes("connection") ? "Erro de conexão com o servidor." : `Não foi possível carregar os dados: ${errorMessage}`);
+        const errorMessage =
+          err instanceof Error ? err.message : "Erro desconhecido";
+        setError(
+          errorMessage.includes("connection")
+            ? "Erro de conexão com o servidor."
+            : `Não foi possível carregar os dados: ${errorMessage}`,
+        );
         setInitialLoad(false);
       } finally {
         setLoading(false);
@@ -188,10 +190,7 @@ export default function Home() {
         )}
 
       {feedData && !useFallback ? (
-        <div
-          className="space-y-8 pb-12"
-          ref={scrollContainerRef}
-        >
+        <div className="space-y-8 pb-12" ref={scrollContainerRef}>
           <InfiniteScroll
             dataLength={sections.length}
             next={() => loadMoreSections()}

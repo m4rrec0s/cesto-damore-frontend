@@ -7,17 +7,17 @@ import { Input } from "@/app/components/ui/input";
 import { useAuth } from "@/app/hooks/use-auth";
 import { useApi } from "@/app/hooks/use-api";
 import { useRestoreGuestCart } from "@/app/hooks/use-restore-guest-cart";
-import { AlertCircle, Mail, Lock } from "lucide-react";
+import { AlertCircle, Mail, Lock, User as UserIcon } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 
-function LoginForm() {
+function RegisterForm() {
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
-  const [isRegistering, setIsRegistering] = useState(false);
-  const [name, setName] = useState("");
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
 
   const { user, login, loginWithGoogle } = useAuth();
@@ -28,26 +28,6 @@ function LoginForm() {
 
   const redirectTo =
     searchParams.get("redirect") || searchParams.get("redirectTo") || "/";
-  const reason = searchParams.get("reason");
-
-  const getReasonMessage = () => {
-    switch (reason) {
-      case "token_expired":
-        return {
-          type: "warning",
-          message: "Sua sessão expirou. Por favor, faça login novamente.",
-        };
-      case "unauthorized":
-        return {
-          type: "error",
-          message: "Você não tem permissão para acessar esta área.",
-        };
-      default:
-        return null;
-    }
-  };
-
-  const reasonMessage = getReasonMessage();
 
   useEffect(() => {
     if (user) {
@@ -55,31 +35,16 @@ function LoginForm() {
     }
   }, [user, router, redirectTo]);
 
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsLoading(true);
-    setError("");
-
-    try {
-      const response = await api.login({ email, password });
-      login(response.user, response.appToken);
-      router.push(redirectTo);
-    } catch (error: unknown) {
-      const errorMessage =
-        error instanceof Error
-          ? error.message
-          : (error as { response?: { data?: { message?: string } } })?.response
-              ?.data?.message || "Erro ao fazer login";
-      setError(errorMessage);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     setError("");
+
+    if (password !== confirmPassword) {
+      setError("As senhas não coincidem.");
+      setIsLoading(false);
+      return;
+    }
 
     try {
       await api.register({ name, email, password });
@@ -99,7 +64,7 @@ function LoginForm() {
     }
   };
 
-  const handleGoogleLogin = async () => {
+  const handleGoogleRegister = async () => {
     setIsGoogleLoading(true);
     setError("");
 
@@ -107,11 +72,11 @@ function LoginForm() {
       await loginWithGoogle();
       router.push(redirectTo);
     } catch (err) {
-      console.error("Erro no login com Google:", err);
+      console.error("Erro no cadastro com Google:", err);
       const errorMessage =
         err instanceof Error
           ? err.message
-          : "Erro ao fazer login com Google. Tente novamente.";
+          : "Erro ao criar conta com Google. Tente novamente.";
       setError(errorMessage);
     } finally {
       setIsGoogleLoading(false);
@@ -162,27 +127,10 @@ function LoginForm() {
               />
             </div>
             <h1 className="text-3xl font-bold text-gray-900 mb-2">
-              {isRegistering ? "Criar Conta" : "Entrar"}
+              Criar Conta
             </h1>
-            <p className="text-gray-600">
-              {isRegistering
-                ? "Crie sua conta para fazer pedidos"
-                : "Entre em sua conta para continuar"}
-            </p>
+            <p className="text-gray-600">Crie sua conta para fazer pedidos</p>
           </div>
-
-          {reasonMessage && (
-            <div
-              className={`mb-6 p-4 rounded-lg flex items-center gap-2 ${
-                reasonMessage.type === "warning"
-                  ? "bg-yellow-50 border border-yellow-200 text-yellow-700"
-                  : "bg-red-50 border border-red-200 text-red-700"
-              }`}
-            >
-              <AlertCircle className="h-4 w-4 flex-shrink-0" />
-              <span className="text-sm">{reasonMessage.message}</span>
-            </div>
-          )}
 
           {error && (
             <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2 text-red-700">
@@ -191,15 +139,13 @@ function LoginForm() {
             </div>
           )}
 
-          <form
-            onSubmit={isRegistering ? handleRegister : handleLogin}
-            className="space-y-4"
-          >
-            {isRegistering && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Nome completo
-                </label>
+          <form onSubmit={handleRegister} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Nome completo
+              </label>
+              <div className="relative">
+                <UserIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
                 <Input
                   type="text"
                   value={name}
@@ -207,9 +153,10 @@ function LoginForm() {
                   placeholder="Seu nome completo"
                   required
                   disabled={isLoading}
+                  className="pl-10"
                 />
               </div>
-            )}
+            </div>
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -248,6 +195,25 @@ function LoginForm() {
               </div>
             </div>
 
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Confirmar senha
+              </label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <Input
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="••••••••"
+                  className="pl-10"
+                  required
+                  disabled={isLoading}
+                  minLength={6}
+                />
+              </div>
+            </div>
+
             <Button
               type="submit"
               className="w-full bg-rose-600 hover:bg-rose-700 text-white"
@@ -256,27 +222,18 @@ function LoginForm() {
               {isLoading ? (
                 <div className="flex items-center gap-2">
                   <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                  {isRegistering ? "Criando conta..." : "Entrando..."}
+                  Criando conta...
                 </div>
-              ) : isRegistering ? (
-                "Criar Conta"
               ) : (
-                "Entrar"
+                "Criar Conta"
               )}
             </Button>
           </form>
 
           <div className="mt-6 text-center">
-            <button
-              type="button"
-              onClick={() => setIsRegistering(!isRegistering)}
-              className="text-rose-600 hover:text-rose-700 font-medium"
-              disabled={isLoading || isGoogleLoading}
-            >
-              {isRegistering
-                ? "Já tem uma conta? Fazer login"
-                : "Não tem conta? Criar agora"}
-            </button>
+            <p className="text-sm text-gray-600">
+              Já tem conta? Faça login pelo menu superior.
+            </p>
           </div>
 
           <div className="mt-6">
@@ -294,7 +251,7 @@ function LoginForm() {
             <Button
               type="button"
               variant="outline"
-              onClick={handleGoogleLogin}
+              onClick={handleGoogleRegister}
               disabled={isLoading || isGoogleLoading}
               className="w-full mt-4"
             >
@@ -323,7 +280,7 @@ function LoginForm() {
                       d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
                     />
                   </svg>
-                  Google
+                  Cadastrar com Google
                 </>
               )}
             </Button>
@@ -352,7 +309,7 @@ const LoginPage = () => {
         </div>
       }
     >
-      <LoginForm />
+      <RegisterForm />
     </Suspense>
   );
 };

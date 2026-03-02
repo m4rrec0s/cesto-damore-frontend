@@ -31,6 +31,7 @@ import AdditionalCard from "./additional-card";
 import Link from "next/link";
 import { ProductCard } from "@/app/components/layout/product-card";
 import { useRouter } from "next/navigation";
+import { useAuth } from "@/app/hooks/use-auth";
 import {
   CustomizationType,
   type CustomizationInput,
@@ -38,6 +39,7 @@ import {
 import type { SlotDef } from "@/app/types/personalization";
 import { ItemCustomizationModal } from "./itemCustomizationsModal";
 import { getInternalImageUrl } from "@/lib/image-helper";
+import { useLoginPrompt } from "@/app/components/layout/app-wrapper";
 
 const formatCurrency = (value: number) =>
   value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -134,6 +136,8 @@ const ClientProductPage = ({ id }: { id: string }) => {
     uploadCustomizationImage,
   } = useApi();
   const { addToCart, cart } = useCartContext();
+  const { user } = useAuth();
+  const { openPrompt } = useLoginPrompt();
 
   const [product, setProduct] = useState<Product>({} as Product);
   const [loadingProduct, setLoadingProduct] = useState(true);
@@ -170,6 +174,16 @@ const ClientProductPage = ({ id }: { id: string }) => {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [loadingLayouts, setLoadingLayouts] = useState(false);
   const isUploading = false;
+
+  const ensureAuthenticated = useCallback(() => {
+    if (user) {
+      return true;
+    }
+
+    openPrompt({ force: true });
+    toast.info("Faça login para continuar.");
+    return false;
+  }, [user, openPrompt]);
 
   const isNewProduct = useCallback((createdAt: string) => {
     const createdDate = new Date(createdAt);
@@ -266,6 +280,10 @@ const ClientProductPage = ({ id }: { id: string }) => {
 
   const handleAddAdditionalToCart = useCallback(
     async (additionalId: string) => {
+      if (!ensureAuthenticated()) {
+        return;
+      }
+
       setSelectedAdditionalIds((prev) =>
         prev.includes(additionalId)
           ? prev.filter((id) => id !== additionalId)
@@ -279,7 +297,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
         toast.info("Adicional removido da seleção");
       }
     },
-    [selectedAdditionalIds],
+    [selectedAdditionalIds, ensureAuthenticated],
   );
 
   const router = useRouter();
@@ -492,6 +510,10 @@ const ClientProductPage = ({ id }: { id: string }) => {
 
   const handleAddToCart = async () => {
     if (!product.id) return;
+
+    if (!ensureAuthenticated()) {
+      return;
+    }
 
     if (isUploading) {
       toast.info("Aguarde finalizar o carregamento das personalizações.");
@@ -1313,6 +1335,10 @@ const ClientProductPage = ({ id }: { id: string }) => {
                             <div
                               key={(layout as any).id}
                               onClick={() => {
+                                if (!ensureAuthenticated()) {
+                                  return;
+                                }
+
                                 const currentData =
                                   itemCustomizations[component.id] || [];
                                 const otherData = currentData.filter(
@@ -1393,9 +1419,12 @@ const ClientProductPage = ({ id }: { id: string }) => {
                       return (
                         <Button
                           key={component.id}
-                          onClick={() =>
-                            setActiveCustomizationModal(component.id)
-                          }
+                          onClick={() => {
+                            if (!ensureAuthenticated()) {
+                              return;
+                            }
+                            setActiveCustomizationModal(component.id);
+                          }}
                           variant="outline"
                           className="w-full justify-between h-auto py-3 px-4"
                         >
@@ -1603,9 +1632,12 @@ const ClientProductPage = ({ id }: { id: string }) => {
                         key={additional.id}
                         additional={additional}
                         productId={product.id}
-                        onCustomizeClick={(additionalId) =>
-                          setActiveAdditionalModal(additionalId)
-                        }
+                        onCustomizeClick={(additionalId) => {
+                          if (!ensureAuthenticated()) {
+                            return;
+                          }
+                          setActiveAdditionalModal(additionalId);
+                        }}
                         onAddToCart={handleAddAdditionalToCart}
                         hasCustomizations={
                           !!additionalCustomizations[additional.id]
