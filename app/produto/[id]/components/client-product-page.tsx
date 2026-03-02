@@ -260,7 +260,6 @@ const ClientProductPage = ({ id }: { id: string }) => {
       }
 
       setActiveAdditionalModal(null);
-
     },
     [],
   );
@@ -452,7 +451,6 @@ const ClientProductPage = ({ id }: { id: string }) => {
   }, [cart.items, product.id]);
 
   const { shouldShow3D, modelUrl, textureUrl, itemType } = useMemo(() => {
-
     const componentsToSearch = [
       ...(previewComponentId
         ? [components.find((c) => c.id === previewComponentId)]
@@ -517,7 +515,6 @@ const ClientProductPage = ({ id }: { id: string }) => {
             `${component.item.name} - ${reqCustom.name}`,
           );
         } else {
-
           const customData = componentData.find(
             (c) => c.ruleId === reqCustom.id,
           );
@@ -550,7 +547,6 @@ const ClientProductPage = ({ id }: { id: string }) => {
             }
 
             if (reqCustom.type === "IMAGES") {
-
               const imagesData = data as {
                 files?: File[];
                 previews?: string[];
@@ -621,13 +617,11 @@ const ClientProductPage = ({ id }: { id: string }) => {
     setAddingToCart(true);
 
     try {
-
       const cartCustomizations: CartCustomization[] = [];
 
       for (const [itemId, customizationInputs] of Object.entries(
         itemCustomizations,
       )) {
-
         const componentId = itemId;
 
         for (const input of customizationInputs) {
@@ -674,7 +668,6 @@ const ClientProductPage = ({ id }: { id: string }) => {
               data: data,
             });
           } else if (input.customizationType === "IMAGES") {
-
             const imagesData = data as {
               files?: File[];
               previews?: string[];
@@ -685,7 +678,6 @@ const ClientProductPage = ({ id }: { id: string }) => {
               imagesData.previews && imagesData.previews.length > 0
                 ? await Promise.all(
                     imagesData.previews.map(async (preview, index) => {
-
                       const file = imagesData.files?.[index];
                       const fileName = file?.name || `photo-${index + 1}.jpg`;
 
@@ -709,7 +701,6 @@ const ClientProductPage = ({ id }: { id: string }) => {
                           `❌ [IMAGES-3] Erro ao fazer upload de ${fileName}:`,
                           err,
                         );
-
                       }
 
                       return {
@@ -1045,7 +1036,6 @@ const ClientProductPage = ({ id }: { id: string }) => {
   return (
     <div className="min-h-screen bg-white">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8">
-        
         <nav className="text-xs sm:text-sm text-gray-500 mb-6">
           <Link href="/" className="hover:text-gray-900 transition-colors">
             Início
@@ -1066,9 +1056,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
         </nav>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12">
-          
           <div className="space-y-6">
-            
             <div className="relative aspect-square w-full bg-gray-50 rounded-2xl overflow-hidden">
               <Button
                 variant="ghost"
@@ -1101,7 +1089,6 @@ const ClientProductPage = ({ id }: { id: string }) => {
               )}
             </div>
 
-            
             {textureUrl && (
               <div className="bg-gray-50 rounded-2xl p-6 space-y-4">
                 <div className="flex items-center justify-between">
@@ -1168,7 +1155,6 @@ const ClientProductPage = ({ id }: { id: string }) => {
               </div>
             )}
 
-            
             {components && components.length > 0 && (
               <div className="space-y-3">
                 <h3 className="text-sm font-medium text-gray-700">
@@ -1223,7 +1209,6 @@ const ClientProductPage = ({ id }: { id: string }) => {
               </div>
             )}
 
-            
             <div className="bg-gray-50 rounded-2xl p-6">
               <h3 className="text-sm font-medium text-gray-900 mb-3">
                 Descrição
@@ -1231,7 +1216,9 @@ const ClientProductPage = ({ id }: { id: string }) => {
               <div className="prose prose-sm max-w-none text-gray-600">
                 {product.description ? (
                   <div
-                    dangerouslySetInnerHTML={{ __html: sanitizeProductDescription(product.description) }}
+                    dangerouslySetInnerHTML={{
+                      __html: sanitizeProductDescription(product.description),
+                    }}
                   />
                 ) : (
                   <p className="text-gray-400 italic">
@@ -1242,9 +1229,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
             </div>
           </div>
 
-          
           <div className="space-y-6">
-            
             <div className="space-y-3">
               <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight">
                 {product.name}
@@ -1278,7 +1263,6 @@ const ClientProductPage = ({ id }: { id: string }) => {
                 )}
               </div>
 
-              
               <div
                 className={cn(
                   "inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-sm",
@@ -1391,7 +1375,6 @@ const ClientProductPage = ({ id }: { id: string }) => {
                   );
                 })}
 
-                
                 <div className="space-y-2">
                   {components
                     .filter((c) => c.item.allows_customization)
@@ -1437,7 +1420,8 @@ const ClientProductPage = ({ id }: { id: string }) => {
                                 )}
                               </p>
                               <p className="text-xs text-gray-500">
-                                {totalCount} opção{totalCount !== 1 && "ões"}
+                                {totalCount}{" "}
+                                {totalCount > 1 ? "opções" : "opção"}
                                 {itemImagesCount[component.id] && (
                                   <span className="ml-2 text-blue-600">
                                     {itemImagesCount[component.id].current}/
@@ -1447,34 +1431,36 @@ const ClientProductPage = ({ id }: { id: string }) => {
                               </p>
                               {hasCustomizations && (
                                 <div className="mt-2 space-y-1">
-                                  {componentCustomizations.map((custom, idx) => {
-                                    const label =
-                                      getCustomizationPreviewLabel(custom);
-                                    const previews =
-                                      getCustomizationPreviewUrls(custom);
-                                    return (
-                                      <div key={`${component.id}-${idx}`}>
-                                        <p className="text-[11px] text-gray-700 truncate">
-                                          {label}
-                                        </p>
-                                        {previews.length > 0 && (
-                                          <div className="mt-1 flex gap-1.5">
-                                            {previews
-                                              .slice(0, 3)
-                                              .map((url, previewIdx) => (
-                                                // eslint-disable-next-line @next/next/no-img-element
-                                                <img
-                                                  key={`${component.id}-preview-${previewIdx}`}
-                                                  src={url}
-                                                  alt={`${component.item.name} preview ${previewIdx + 1}`}
-                                                  className="h-8 w-8 rounded border border-gray-200 object-cover"
-                                                />
-                                              ))}
-                                          </div>
-                                        )}
-                                      </div>
-                                    );
-                                  })}
+                                  {componentCustomizations.map(
+                                    (custom, idx) => {
+                                      const label =
+                                        getCustomizationPreviewLabel(custom);
+                                      const previews =
+                                        getCustomizationPreviewUrls(custom);
+                                      return (
+                                        <div key={`${component.id}-${idx}`}>
+                                          <p className="text-[11px] text-gray-700 truncate">
+                                            {label}
+                                          </p>
+                                          {previews.length > 0 && (
+                                            <div className="mt-1 flex gap-1.5">
+                                              {previews
+                                                .slice(0, 3)
+                                                .map((url, previewIdx) => (
+                                                  // eslint-disable-next-line @next/next/no-img-element
+                                                  <img
+                                                    key={`${component.id}-preview-${previewIdx}`}
+                                                    src={url}
+                                                    alt={`${component.item.name} preview ${previewIdx + 1}`}
+                                                    className="h-8 w-8 rounded border border-gray-200 object-cover"
+                                                  />
+                                                ))}
+                                            </div>
+                                          )}
+                                        </div>
+                                      );
+                                    },
+                                  )}
                                 </div>
                               )}
                             </div>
@@ -1492,7 +1478,6 @@ const ClientProductPage = ({ id }: { id: string }) => {
               </div>
             )}
 
-            
             <div className="space-y-3">
               <label className="text-sm font-medium text-gray-700">
                 Quantidade
@@ -1521,7 +1506,6 @@ const ClientProductPage = ({ id }: { id: string }) => {
               </div>
             </div>
 
-            
             <Button
               onClick={handleAddToCart}
               disabled={addingToCart || isUploading}
@@ -1543,7 +1527,6 @@ const ClientProductPage = ({ id }: { id: string }) => {
               )}
             </Button>
 
-            
             {additionals.length > 0 && (
               <div className="space-y-4 pt-6 border-t">
                 <div>
@@ -1627,7 +1610,6 @@ const ClientProductPage = ({ id }: { id: string }) => {
                         hasCustomizations={
                           !!additionalCustomizations[additional.id]
                         }
-
                         isInCartExternal={selectedAdditionalIds.includes(
                           additional.id,
                         )}
@@ -1646,7 +1628,6 @@ const ClientProductPage = ({ id }: { id: string }) => {
           </div>
         </div>
 
-        
         {product.related_products && product.related_products.length > 0 && (
           <div className="mt-16 pt-8 border-t">
             <h2 className="text-xl font-bold text-gray-900 mb-6">
@@ -1731,7 +1712,6 @@ const ClientProductPage = ({ id }: { id: string }) => {
           />
         ))}
 
-      
       {additionals
         .filter((a) => a.allows_customization)
         .map((additional) => (
