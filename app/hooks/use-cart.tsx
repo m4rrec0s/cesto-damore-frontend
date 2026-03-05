@@ -82,6 +82,79 @@ export interface AvailableDate {
   slots: TimeSlot[];
 }
 
+const toCartProductSnapshot = (product: Product): Product => {
+  const createdAt = product.created_at || new Date().toISOString();
+  const updatedAt = product.updated_at || createdAt;
+
+  return {
+    id: product.id,
+    name: product.name,
+    description: product.description,
+    price: product.price,
+    discount: product.discount,
+    image_url: product.image_url,
+    categories: Array.isArray(product.categories) ? product.categories : [],
+    type_id: product.type_id || "",
+    production_time: product.production_time || 0,
+    customizations: (product.customizations || []).map((customization) => ({
+      id: customization.id,
+      name: customization.name,
+      description: customization.description,
+      item_id: customization.item_id,
+      price: customization.price,
+      isRequired: customization.isRequired,
+      type: customization.type,
+      customization_data: customization.customization_data,
+      created_at: customization.created_at,
+      updated_at: customization.updated_at,
+    })),
+    components: (product.components || []).map((component) => ({
+      id: component.id,
+      product_id: component.product_id,
+      item_id: component.item_id,
+      quantity: component.quantity,
+      item: component.item
+        ? {
+            id: component.item.id,
+            name: component.item.name,
+            description: component.item.description,
+            type: component.item.type,
+            stock_quantity: component.item.stock_quantity,
+            base_price: component.item.base_price,
+            discount: component.item.discount,
+            image_url: component.item.image_url,
+            allows_customization: component.item.allows_customization,
+            layout_base_id: component.item.layout_base_id,
+            created_at: component.item.created_at,
+            updated_at: component.item.updated_at,
+            additionals: [],
+            customizations: (component.item.customizations || []).map((c) => ({
+              id: c.id,
+              name: c.name,
+              description: c.description,
+              item_id: c.item_id,
+              price: c.price,
+              isRequired: c.isRequired,
+              type: c.type,
+              customization_data: c.customization_data,
+              created_at: c.created_at,
+              updated_at: c.updated_at,
+            })),
+            layout_base: component.item.layout_base
+              ? {
+                  id: component.item.layout_base.id,
+                  additional_time:
+                    component.item.layout_base.additional_time || 0,
+                }
+              : undefined,
+          }
+        : ({} as ProductComponent["item"]),
+    })),
+    created_at: createdAt,
+    updated_at: updatedAt,
+  };
+};
+
 const serializeAdditionals = (additionals?: string[]) => {
   if (!additionals || additionals.length === 0) return "[]";
   return JSON.stringify([...additionals].sort());
@@ -710,7 +783,7 @@ export function useCart(): CartContextType {
               customizations.length > 0 ? customizations : undefined,
             customization_total:
               customizationTotal > 0 ? customizationTotal : undefined,
-            product,
+            product: toCartProductSnapshot(product),
           });
         } catch (err) {
           console.error(`Erro ao transformar item ${orderItem.id}:`, err);
@@ -1181,7 +1254,7 @@ export function useCart(): CartContextType {
             customizationEntries.length > 0 ? customizationEntries : undefined,
           customization_total:
             customizationEntries.length > 0 ? customizationTotal : undefined,
-          product,
+          product: toCartProductSnapshot(product),
         };
 
         setCart((prevCart) => {

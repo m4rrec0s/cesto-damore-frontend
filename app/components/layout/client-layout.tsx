@@ -18,7 +18,7 @@ const ClientLayout = ({ children }: { children: ReactNode }) => {
     return <>{children}</>;
   }
 
-  const isCartPage = pathname === "/carrinho";
+  const isCartPage = pathname === "/carrinho" || pathname.startsWith("/carrinho/");
 
   if (isCartPage) {
     return (

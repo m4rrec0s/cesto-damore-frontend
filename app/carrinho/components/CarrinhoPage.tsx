@@ -11,7 +11,7 @@ import { Card } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
 import { User, Loader2 } from "lucide-react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
   isValidPhone,
@@ -46,17 +46,19 @@ const SHIPPING_RULES: Record<string, { pix: number; card: number }> = {
   "sao jose da mata": { pix: 15, card: 25 },
 };
 
-const STEP_MAP = {
-  cart: 1,
-  shipping: 2,
-  payment: 3,
+const STEP_PATH_MAP = {
+  1: "/carrinho/itens",
+  2: "/carrinho/entrega",
+  3: "/carrinho/pagamento",
 } as const;
 
-const REVERSE_STEP_MAP = {
-  1: "cart",
-  2: "shipping",
-  3: "payment",
-} as const;
+const CHECKOUT_FORM_STORAGE_KEY = "checkout_form_state_v1";
+
+const getStepFromPath = (pathname: string): 1 | 2 | 3 => {
+  if (pathname.startsWith("/carrinho/pagamento")) return 3;
+  if (pathname.startsWith("/carrinho/entrega")) return 2;
+  return 1;
+};
 
 const normalizeString = (value: string) =>
   value
@@ -79,6 +81,24 @@ type CustomizationsValidationStatus = {
   recommendations?: string[];
   missingRequired?: CheckoutValidationIssue[];
   invalidCustomizations?: CheckoutValidationIssue[];
+};
+type PersistedCheckoutForm = {
+  optionSelected?: "delivery" | "pickup";
+  zipCode?: string;
+  address?: string;
+  houseNumber?: string;
+  neighborhood?: string;
+  city?: string;
+  state?: string;
+  customerPhone?: string;
+  recipientPhone?: string;
+  complemento?: string;
+  sendAnonymously?: boolean;
+  isSelfRecipient?: boolean;
+  userDocument?: string;
+  selectedDate?: string | null;
+  selectedTime?: string;
+  paymentMethod?: "pix" | "card";
 };
 
 const getAdditionalFinalPrice = (
@@ -140,7 +160,7 @@ interface CartItem {
 
 export default function CarrinhoPageContent() {
   const router = useRouter();
-  const searchParams = useSearchParams();
+  const pathname = usePathname();
   const [currentOrderId, setCurrentOrderId] = useState<string | null>(null);
   const { user, isLoading, login } = useAuth();
   const {
@@ -179,18 +199,12 @@ export default function CarrinhoPageContent() {
   );
 
   useEffect(() => {
-    const stepParam = searchParams.get("step") as keyof typeof STEP_MAP | null;
-    if (stepParam && stepParam in STEP_MAP) {
-      setCurrentStep(STEP_MAP[stepParam]);
-    }
-  }, [searchParams]);
+    setCurrentStep(getStepFromPath(pathname));
+  }, [pathname]);
 
   const updateStepUrl = useCallback(
     (step: 1 | 2 | 3) => {
-      const params = new URLSearchParams();
-      const stepName = REVERSE_STEP_MAP[step];
-      params.set("step", stepName);
-      router.push(`/carrinho?${params.toString()}`, { scroll: false });
+      router.push(STEP_PATH_MAP[step], { scroll: false });
       setCurrentStep(step);
     },
     [router],
@@ -265,11 +279,93 @@ export default function CarrinhoPageContent() {
   const updatingOrderMetadataRef = useRef(false);
   const creatingOrderRef = useRef(false);
   const lastRealtimeStatusRef = useRef<string | null>(null);
+  const restoredFormRef = useRef(false);
 
   useEffect(() => {
     pollingStartedRef.current = false;
     sseDisconnectCountRef.current = 0;
   }, [currentOrderId]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || restoredFormRef.current) return;
+
+    restoredFormRef.current = true;
+    try {
+      const raw = localStorage.getItem(CHECKOUT_FORM_STORAGE_KEY);
+      if (!raw) return;
+      const persisted = JSON.parse(raw) as PersistedCheckoutForm;
+
+      if (persisted.optionSelected) setOptionSelected(persisted.optionSelected);
+      if (persisted.zipCode) setZipCode(persisted.zipCode);
+      if (persisted.address) setAddress(persisted.address);
+      if (persisted.houseNumber) setHouseNumber(persisted.houseNumber);
+      if (persisted.neighborhood) setNeighborhood(persisted.neighborhood);
+      if (persisted.city) setCity(persisted.city);
+      if (persisted.state) setState(persisted.state);
+      if (persisted.customerPhone) setCustomerPhone(persisted.customerPhone);
+      if (persisted.recipientPhone) setRecipientPhone(persisted.recipientPhone);
+      if (persisted.complemento) setComplemento(persisted.complemento);
+      if (typeof persisted.sendAnonymously === "boolean") {
+        setSendAnonymously(persisted.sendAnonymously);
+      }
+      if (typeof persisted.isSelfRecipient === "boolean") {
+        setIsSelfRecipient(persisted.isSelfRecipient);
+      }
+      if (persisted.userDocument) setUserDocument(persisted.userDocument);
+      if (persisted.selectedDate) {
+        const parsedDate = new Date(persisted.selectedDate);
+        if (!Number.isNaN(parsedDate.getTime())) {
+          setSelectedDate(parsedDate);
+        }
+      }
+      if (persisted.selectedTime) setSelectedTime(persisted.selectedTime);
+      if (persisted.paymentMethod) setPaymentMethod(persisted.paymentMethod);
+    } catch (error) {
+      console.error("Erro ao restaurar estado do checkout:", error);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const payload: PersistedCheckoutForm = {
+      optionSelected,
+      zipCode,
+      address,
+      houseNumber,
+      neighborhood,
+      city,
+      state,
+      customerPhone,
+      recipientPhone,
+      complemento,
+      sendAnonymously,
+      isSelfRecipient,
+      userDocument,
+      selectedDate: selectedDate ? selectedDate.toISOString() : null,
+      selectedTime,
+      paymentMethod,
+    };
+
+    localStorage.setItem(CHECKOUT_FORM_STORAGE_KEY, JSON.stringify(payload));
+  }, [
+    optionSelected,
+    zipCode,
+    address,
+    houseNumber,
+    neighborhood,
+    city,
+    state,
+    customerPhone,
+    recipientPhone,
+    complemento,
+    sendAnonymously,
+    isSelfRecipient,
+    userDocument,
+    selectedDate,
+    selectedTime,
+    paymentMethod,
+  ]);
 
   useEffect(() => {
     return () => {
@@ -316,6 +412,7 @@ export default function CarrinhoPageContent() {
       setPaymentStatus("success");
       clearPendingOrder();
       clearCart();
+      localStorage.removeItem(CHECKOUT_FORM_STORAGE_KEY);
 
       setConfirmedOrder(order);
       setConfirmationState("animating");
@@ -424,6 +521,7 @@ export default function CarrinhoPageContent() {
             setConfirmationState("animating");
 
             localStorage.removeItem("pendingOrderId");
+            localStorage.removeItem(CHECKOUT_FORM_STORAGE_KEY);
             clearPendingOrder();
             clearCart();
 
@@ -450,6 +548,7 @@ export default function CarrinhoPageContent() {
 
       setPaymentStatus("success");
       localStorage.removeItem("pendingOrderId");
+      localStorage.removeItem(CHECKOUT_FORM_STORAGE_KEY);
       clearPendingOrder();
       clearCart();
 
@@ -1442,7 +1541,7 @@ export default function CarrinhoPageContent() {
       }
     }
     if (currentStep === 1 && canProceedToStep2) {
-      setCurrentStep(2);
+      updateStepUrl(2);
       window.scrollTo({ top: 0, behavior: "smooth" });
     } else if (currentStep === 2 && canProceedToStep3) {
       if (user?.id) {
