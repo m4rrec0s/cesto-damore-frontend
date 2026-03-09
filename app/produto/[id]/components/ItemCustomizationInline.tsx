@@ -50,6 +50,20 @@ interface Customization {
       max_file_size_mb?: number;
       accepted_formats?: string[];
     };
+    image_crop?: {
+      format?:
+        | "FREE"
+        | "1:1"
+        | "16:9"
+        | "4:3"
+        | "A4_PORTRAIT"
+        | "A4_LANDSCAPE"
+        | "CUSTOM";
+      aspect_ratio?: number;
+      width?: number;
+      height?: number;
+      unit?: "px" | "cm";
+    };
     options?: Array<{
       id: string;
       label: string;
@@ -70,6 +84,39 @@ interface Props {
 }
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
+
+const resolveAspectFromConfig = (customization: Customization) => {
+  const imageCrop = customization.customization_data.image_crop;
+
+  if (!imageCrop) return 1;
+
+  if (typeof imageCrop.aspect_ratio === "number" && imageCrop.aspect_ratio > 0) {
+    return imageCrop.aspect_ratio;
+  }
+
+  switch (imageCrop.format) {
+    case "FREE":
+      return undefined;
+    case "1:1":
+      return 1;
+    case "16:9":
+      return 16 / 9;
+    case "4:3":
+      return 4 / 3;
+    case "A4_PORTRAIT":
+      return 210 / 297;
+    case "A4_LANDSCAPE":
+      return 297 / 210;
+    case "CUSTOM": {
+      const width = Number(imageCrop.width) || 0;
+      const height = Number(imageCrop.height) || 0;
+      if (width > 0 && height > 0) return width / height;
+      return 1;
+    }
+    default:
+      return 1;
+  }
+};
 
 export function ItemCustomizationInline({
   customizations,
@@ -140,7 +187,7 @@ export function ItemCustomizationInline({
       let aspect: number | undefined;
 
       if (customization.type === "IMAGES") {
-        aspect = 1;
+        aspect = resolveAspectFromConfig(customization);
       } else if (customization.type === "DYNAMIC_LAYOUT") {
         aspect = undefined;
       }
@@ -687,6 +734,7 @@ export function ItemCustomizationInline({
           }}
           onCropComplete={handleCropComplete}
           aspect={cropAspect}
+          showAspectControls={false}
           title="Ajustar sua foto"
           description={
             cropAspect === 1

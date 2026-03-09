@@ -19,6 +19,7 @@ interface ImageCropDialogProps {
   onClose: () => void;
   onCropComplete: (croppedImage: string) => void;
   aspect?: number;
+  showAspectControls?: boolean;
   title?: string;
   description?: string;
 }
@@ -29,6 +30,7 @@ export function ImageCropDialog({
   onClose,
   onCropComplete,
   aspect,
+  showAspectControls = false,
   title = "Ajustar imagem",
   description = "Recorte a imagem para o tamanho ideal",
 }: ImageCropDialogProps) {
@@ -60,6 +62,7 @@ export function ImageCropDialog({
         </DialogHeader>
 
         <div className="space-y-4">
+          {showAspectControls && null}
           <ImageCrop
             file={file}
             aspect={aspect}
