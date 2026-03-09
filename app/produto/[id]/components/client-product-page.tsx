@@ -1600,7 +1600,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
                   </p>
                 </div>
 
-                <div className="flex gap-3 overflow-x-auto pb-2">
+                <div className="flex gap-3 overflow-x-auto pb-2 [&::-webkit-scrollbar]:hidden">
                   {additionals.map((additional) => {
                     const hasProductRequiredCustomizations = components.some(
                       (component) =>
@@ -1665,7 +1665,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
             <h2 className="text-xl font-bold text-gray-900 mb-6">
               Você também pode gostar
             </h2>
-            <div className="flex gap-4 overflow-x-auto pb-4">
+            <div className="flex gap-4 overflow-x-auto pb-4 [&::-webkit-scrollbar]:hidden">
               {product.related_products.map((relatedProduct) => (
                 <ProductCard
                   key={relatedProduct.id}

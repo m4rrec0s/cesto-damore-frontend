@@ -2,13 +2,7 @@
 
 import { CardPayment } from "@mercadopago/sdk-react";
 import { useEffect, useState, useCallback, useRef } from "react";
-import {
-  Loader2,
-  Lock,
-  AlertCircle,
-  RefreshCw,
-  CreditCard,
-} from "lucide-react";
+import { Loader2, AlertCircle, RefreshCw, CreditCard } from "lucide-react";
 import { initializeMercadoPago } from "../lib/mercadopago";
 
 const MP_PUBLIC_KEY = process.env.NEXT_PUBLIC_MERCADO_PAGO_PUBLIC_KEY;
@@ -259,7 +253,7 @@ export function MPCardPaymentForm({
 
   if (!isDelayedReady) {
     return (
-      <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
+      <div className="bg-white overflow-hidden">
         <div className="bg-gradient-to-r from-rose-500 to-rose-600 p-4 text-white">
           <div className="flex items-center gap-2">
             <CreditCard className="h-5 w-5" />
@@ -275,17 +269,7 @@ export function MPCardPaymentForm({
   }
 
   return (
-    <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
-      <div className="bg-gradient-to-r from-rose-500 to-rose-600 p-4 text-white">
-        <div className="flex items-center gap-2">
-          <Lock className="h-5 w-5" />
-          <span className="font-semibold">Pagamento Seguro</span>
-        </div>
-        <p className="text-sm text-rose-100 mt-1">
-          Seus dados são protegidos pelo Mercado Pago
-        </p>
-      </div>
-
+    <div className="bg-white overflow-hidden">
       {localError && (
         <div className="p-4 bg-red-50 border-b border-red-200">
           <div className="flex gap-3">
@@ -310,7 +294,7 @@ export function MPCardPaymentForm({
       )}
 
       {!localError && (
-        <div className="p-4 relative min-h-[400px]">
+        <div className="relative min-h-[400px]">
           <div ref={containerRef} id={`card-container-${brickKey}`}>
             <CardPayment
               key={`card-${orderId}-${brickKey}`}

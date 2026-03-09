@@ -241,7 +241,7 @@ export function CreditCardForm({
 
           if (
             !response.payer_costs.find(
-              (i: { installments: number }) => i.installments === installments
+              (i: { installments: number }) => i.installments === installments,
             )
           ) {
             setInstallments(1);
@@ -254,7 +254,7 @@ export function CreditCardForm({
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [amount, installments, generateDefaultInstallments]
+    [amount, installments, generateDefaultInstallments],
   );
 
   useEffect(() => {
@@ -411,7 +411,7 @@ export function CreditCardForm({
       setFormError(
         error instanceof Error
           ? error.message
-          : "Erro ao processar pagamento. Tente novamente."
+          : "Erro ao processar pagamento. Tente novamente.",
       );
     }
   };
@@ -455,8 +455,9 @@ export function CreditCardForm({
                   }
                   placeholder="0000 0000 0000 0000"
                   maxLength={19}
-                  className={`pr-40 text-lg tracking-widest font-semibold ${errors.cardNumber ? "border-red-500" : ""
-                    }`}
+                  className={`pr-40 text-lg tracking-widest font-semibold ${
+                    errors.cardNumber ? "border-red-500" : ""
+                  }`}
                 />
                 {cardBrand !== "unknown" && (
                   <motion.div
@@ -506,7 +507,7 @@ export function CreditCardForm({
                 value={cardholderName}
                 onChange={(e) =>
                   setCardholderName(
-                    e.target.value.toUpperCase().substring(0, 50)
+                    e.target.value.toUpperCase().substring(0, 50),
                   )
                 }
                 placeholder="NOME COMO ESTÁ NO CARTÃO"
@@ -589,7 +590,7 @@ export function CreditCardForm({
                   value={securityCode}
                   onChange={(e) =>
                     setSecurityCode(
-                      e.target.value.replace(/\D/g, "").substring(0, 4)
+                      e.target.value.replace(/\D/g, "").substring(0, 4),
                     )
                   }
                   placeholder="•••"
@@ -709,7 +710,9 @@ export function CreditCardForm({
                         >
                           <span className="flex items-center gap-2">
                             {option.recommended_message ? (
-                              <span className="font-medium">{option.recommended_message}</span>
+                              <span className="font-medium">
+                                {option.recommended_message}
+                              </span>
                             ) : (
                               <>
                                 <span className="font-medium">
@@ -723,21 +726,21 @@ export function CreditCardForm({
                                   })}
                                 </span>
                                 {option.installment_rate === 0 ||
-                                  (option.installment_amount &&
-                                    Math.abs(option.installment_amount - amount) < 0.05) ? (
+                                (option.installment_amount &&
+                                  Math.abs(option.installment_amount - amount) <
+                                    0.05) ? (
                                   <span className="text-green-600 text-xs font-semibold">
                                     (Sem juros)
                                   </span>
                                 ) : (
                                   <span className="text-gray-500 text-xs">
                                     (Total:{" "}
-                                    {(option.installment_amount || amount).toLocaleString(
-                                      "pt-BR",
-                                      {
-                                        style: "currency",
-                                        currency: "BRL",
-                                      }
-                                    )}
+                                    {(
+                                      option.installment_amount || amount
+                                    ).toLocaleString("pt-BR", {
+                                      style: "currency",
+                                      currency: "BRL",
+                                    })}
                                     )
                                   </span>
                                 )}
@@ -745,7 +748,7 @@ export function CreditCardForm({
                             )}
                           </span>
                         </SelectItem>
-                      )
+                      ),
                     )
                   ) : (
                     <SelectItem value="1">
@@ -767,7 +770,7 @@ export function CreditCardForm({
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.4 }}
-          className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-start gap-3 mt-6"
+          className="bg-blue-50 border border-blue-200 rounded-lg flex items-start gap-3 mt-4"
         >
           <Lock className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
           <div className="text-sm text-blue-800">
@@ -778,7 +781,6 @@ export function CreditCardForm({
           </div>
         </motion.div>
 
-        
         <motion.button
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}

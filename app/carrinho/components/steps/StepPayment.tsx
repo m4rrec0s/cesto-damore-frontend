@@ -164,7 +164,7 @@ export const StepPayment = ({
             </div>
 
             {paymentMethod === "card" && (
-              <div className="mt-6 pt-6 border-t border-gray-100 animate-in slide-in-from-top-2 duration-300">
+              <div className="mt-6 border-t border-gray-100 animate-in slide-in-from-top-2 duration-300">
                 <MPCardPaymentForm
                   amount={grandTotal}
                   orderId={currentOrderId}

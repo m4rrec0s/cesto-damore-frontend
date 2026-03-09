@@ -1,7 +1,7 @@
 "use client";
 
 import { Button } from "@/app/components/ui/button";
-import { CropIcon, RotateCcwIcon } from "lucide-react";
+import { CropIcon, Loader2, RotateCcwIcon } from "lucide-react";
 import { Slot } from "radix-ui";
 import {
   type ComponentProps,
@@ -31,7 +31,6 @@ const centerAspectCrop = (
   mediaHeight: number,
   aspect: number | undefined,
 ): PercentCrop => {
-
   const targetAspect = aspect || 1;
 
   const imageAspect = mediaWidth / mediaHeight;
@@ -40,11 +39,9 @@ const centerAspectCrop = (
   let cropHeight: number;
 
   if (imageAspect > targetAspect) {
-
     cropHeight = mediaHeight;
     cropWidth = cropHeight * targetAspect;
   } else {
-
     cropWidth = mediaWidth;
     cropHeight = cropWidth / targetAspect;
   }
@@ -140,12 +137,9 @@ type ImageCropContextType = {
   onCrop?: (croppedImage: string) => void;
   reactCropProps: Omit<ReactCropProps, "onChange" | "onComplete" | "children">;
   handleChange: (pixelCrop: PixelCrop, percentCrop: PercentCrop) => void;
-  handleComplete: (
-    pixelCrop: PixelCrop,
-    percentCrop: PercentCrop,
-  ) => Promise<void>;
+  handleComplete: (pixelCrop: PixelCrop, percentCrop: PercentCrop) => void;
   onImageLoad: (e: SyntheticEvent<HTMLImageElement>) => void;
-  applyCrop: () => Promise<void>;
+  applyCrop: () => Promise<string | undefined>;
   resetCrop: () => void;
 };
 
@@ -198,6 +192,14 @@ export const ImageCrop = ({
       const newCrop = centerAspectCrop(width, height, reactCropProps.aspect);
       setCrop(newCrop);
       setInitialCrop(newCrop);
+      const initialPixelCrop: PixelCrop = {
+        unit: "px",
+        x: Math.round((newCrop.x / 100) * width),
+        y: Math.round((newCrop.y / 100) * height),
+        width: Math.round((newCrop.width / 100) * width),
+        height: Math.round((newCrop.height / 100) * height),
+      };
+      setCompletedCrop(initialPixelCrop);
     },
     [reactCropProps.aspect],
   );
@@ -207,31 +209,14 @@ export const ImageCrop = ({
     onChange?.(pixelCrop, percentCrop);
   };
 
-  const handleComplete = async (
-    pixelCrop: PixelCrop,
-    percentCrop: PercentCrop,
-  ) => {
+  const handleComplete = (pixelCrop: PixelCrop, percentCrop: PercentCrop) => {
     setCompletedCrop(pixelCrop);
     onComplete?.(pixelCrop, percentCrop);
-
-    if (imgRef.current && pixelCrop.width > 0 && pixelCrop.height > 0) {
-      try {
-        const croppedImage = await getCroppedPngImage(
-          imgRef.current,
-          1,
-          pixelCrop,
-          maxImageSize,
-        );
-        onCrop?.(croppedImage);
-      } catch (error) {
-        console.error("Erro ao aplicar crop automaticamente:", error);
-      }
-    }
   };
 
-  const applyCrop = async () => {
+  const applyCrop = async (): Promise<string | undefined> => {
     if (!(imgRef.current && completedCrop)) {
-      return;
+      return undefined;
     }
 
     const croppedImage = await getCroppedPngImage(
@@ -242,6 +227,7 @@ export const ImageCrop = ({
     );
 
     onCrop?.(croppedImage);
+    return croppedImage;
   };
 
   const resetCrop = () => {
@@ -335,10 +321,16 @@ export const ImageCropApply = ({
   ...props
 }: ImageCropApplyProps) => {
   const { applyCrop } = useImageCrop();
+  const [isApplying, setIsApplying] = useState(false);
 
   const handleClick = async (e: MouseEvent<HTMLButtonElement>) => {
-    await applyCrop();
-    onClick?.(e);
+    setIsApplying(true);
+    try {
+      await applyCrop();
+      onClick?.(e);
+    } finally {
+      setIsApplying(false);
+    }
   };
 
   if (asChild) {
@@ -350,8 +342,15 @@ export const ImageCropApply = ({
   }
 
   return (
-    <Button onClick={handleClick} size="icon" variant="ghost" {...props}>
-      {children ?? <CropIcon className="size-4" />}
+    <Button onClick={handleClick} disabled={isApplying} {...props}>
+      {isApplying ? (
+        <>
+          <Loader2 className="size-4 animate-spin" />
+          Processando...
+        </>
+      ) : (
+        (children ?? <CropIcon className="size-4" />)
+      )}
     </Button>
   );
 };
