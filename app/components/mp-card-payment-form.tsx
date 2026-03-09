@@ -74,6 +74,16 @@ export function MPCardPaymentForm({
   const mountedRef = useRef(true);
   const containerRef = useRef<HTMLDivElement>(null);
 
+  const recreateCardBrick = useCallback(() => {
+    if (!mountedRef.current) return;
+
+    setLocalError(null);
+    setCardPaymentReady(false);
+    setIsDelayedReady(false);
+    setRetryCount((prev) => prev + 1);
+    setBrickKey(Date.now());
+  }, []);
+
   useEffect(() => {
     mountedRef.current = true;
 
@@ -94,13 +104,43 @@ export function MPCardPaymentForm({
   }, [brickKey]);
 
   const handleRetry = useCallback(() => {
-    setLocalError(null);
-    setCardPaymentReady(false);
-    setIsDelayedReady(false);
-    setRetryCount((prev) => prev + 1);
+    recreateCardBrick();
+  }, [recreateCardBrick]);
 
-    setBrickKey(Date.now());
-  }, []);
+  useEffect(() => {
+    const recoverWhenVisible = () => {
+      if (
+        document.visibilityState === "visible" &&
+        !isProcessing &&
+        !isSubmitting &&
+        (localError || !cardPaymentReady)
+      ) {
+        recreateCardBrick();
+      }
+    };
+
+    const onPageShow = (event: PageTransitionEvent) => {
+      if (event.persisted) {
+        recoverWhenVisible();
+      }
+    };
+
+    document.addEventListener("visibilitychange", recoverWhenVisible);
+    window.addEventListener("focus", recoverWhenVisible);
+    window.addEventListener("pageshow", onPageShow);
+
+    return () => {
+      document.removeEventListener("visibilitychange", recoverWhenVisible);
+      window.removeEventListener("focus", recoverWhenVisible);
+      window.removeEventListener("pageshow", onPageShow);
+    };
+  }, [
+    cardPaymentReady,
+    isProcessing,
+    isSubmitting,
+    localError,
+    recreateCardBrick,
+  ]);
 
   const handleOnSubmit = useCallback(
     async (formData: CardPaymentFormData) => {

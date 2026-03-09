@@ -54,7 +54,7 @@ export default function SobreNosPage() {
 
         <section className="mb-10">
           <h2 className="text-2xl font-semibold text-gray-900 mb-4">
-            Nossa História
+            Nosso Lema
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="rounded-xl border border-rose-100 bg-rose-50/60 p-4">
