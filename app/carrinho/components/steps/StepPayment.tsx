@@ -6,6 +6,7 @@ import { cn } from "@/app/lib/utils";
 import { QRCodePIX, type PixData } from "@/app/components/QRCodePIX";
 import { type MPPaymentFormData } from "@/app/components/mp-payment-brick";
 import { MPCardPaymentForm } from "@/app/components/mp-card-payment-form";
+import { useState } from "react";
 
 interface StepPaymentProps {
   paymentMethod: "pix" | "card" | null;
@@ -36,6 +37,8 @@ export const StepPayment = ({
   payerEmail,
   payerName,
 }: StepPaymentProps) => {
+  const [isBrickLoading, setIsBrickLoading] = useState(false);
+
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -49,14 +52,19 @@ export const StepPayment = ({
         </h2>
 
         <div className="space-y-3">
-          
           <div
-            onClick={() => setPaymentMethod("pix")}
+            onClick={() => {
+              if (isBrickLoading) return;
+              setPaymentMethod("pix");
+            }}
             className={cn(
-              "bg-white p-5 rounded-lg border cursor-pointer transition-all hover:bg-gray-50",
+              "bg-white p-5 rounded-lg border transition-all",
+              isBrickLoading
+                ? "cursor-not-allowed opacity-50"
+                : "cursor-pointer hover:bg-gray-50",
               paymentMethod === "pix"
                 ? "border-gray-200"
-                : "border-gray-100 opacity-70"
+                : "border-gray-100 opacity-70",
             )}
           >
             <div className="flex items-center gap-4">
@@ -65,7 +73,7 @@ export const StepPayment = ({
                   "w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all",
                   paymentMethod === "pix"
                     ? "border-[#3483fa]"
-                    : "border-gray-300"
+                    : "border-gray-300",
                 )}
               >
                 {paymentMethod === "pix" && (
@@ -117,14 +125,18 @@ export const StepPayment = ({
             )}
           </div>
 
-          
           <div
-            onClick={() => setPaymentMethod("card")}
+            onClick={() => {
+              if (paymentMethod !== "card") {
+                setPaymentMethod("card");
+                setIsBrickLoading(true);
+              }
+            }}
             className={cn(
               "bg-white p-5 rounded-lg border cursor-pointer transition-all hover:bg-gray-50",
               paymentMethod === "card"
                 ? "border-gray-200"
-                : "border-gray-100 opacity-70"
+                : "border-gray-100 opacity-70",
             )}
           >
             <div className="flex items-center gap-4">
@@ -133,7 +145,7 @@ export const StepPayment = ({
                   "w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all",
                   paymentMethod === "card"
                     ? "border-[#3483fa]"
-                    : "border-gray-300"
+                    : "border-gray-300",
                 )}
               >
                 {paymentMethod === "card" && (
@@ -160,6 +172,7 @@ export const StepPayment = ({
                   payerName={payerName}
                   onSubmit={handleCardSubmit}
                   isProcessing={isProcessing}
+                  onReady={() => setIsBrickLoading(false)}
                 />
               </div>
             )}
@@ -174,7 +187,6 @@ export const StepPayment = ({
         </div>
       )}
 
-      
       <div className="flex flex-col items-center justify-center pt-4 pb-8 space-y-3 opacity-60">
         <div className="flex items-center gap-2 text-gray-400">
           <ShieldCheck className="h-5 w-5" />

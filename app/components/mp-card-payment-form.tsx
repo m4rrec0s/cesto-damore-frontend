@@ -20,6 +20,7 @@ interface MPCardPaymentFormProps {
   payerName: string;
   onSubmit: (formData: MPCardFormData) => Promise<void>;
   isProcessing?: boolean;
+  onReady?: () => void;
 }
 
 export interface MPCardFormData {
@@ -64,6 +65,7 @@ export function MPCardPaymentForm({
   payerName,
   onSubmit,
   isProcessing = false,
+  onReady,
 }: MPCardPaymentFormProps) {
   const [localError, setLocalError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -145,7 +147,6 @@ export function MPCardPaymentForm({
   const handleOnSubmit = useCallback(
     async (formData: CardPaymentFormData) => {
       try {
-
         console.log("🔍 DEBUG - CardPayment Submit:", {
           timestamp: new Date().toISOString(),
           hasToken: !!formData?.token,
@@ -239,8 +240,9 @@ export function MPCardPaymentForm({
     if (mountedRef.current) {
       setCardPaymentReady(true);
       setLocalError(null);
+      onReady?.();
     }
-  }, []);
+  }, [onReady]);
 
   if (!MP_PUBLIC_KEY) {
     return (
@@ -356,7 +358,6 @@ export function MPCardPaymentForm({
         </div>
       )}
 
-      
       {process.env.NODE_ENV === "development" && (
         <div className="p-2 bg-gray-100 text-xs text-gray-500 border-t">
           <p>🔑 PK: {MP_PUBLIC_KEY?.substring(0, 15)}...</p>

@@ -97,6 +97,13 @@ interface Customization {
       image_url?: string;
       description?: string;
     }>;
+    image_crop?: {
+      format?: string;
+      aspect_ratio?: number;
+      width?: number;
+      height?: number;
+      unit?: string;
+    };
   };
 }
 
@@ -119,6 +126,31 @@ interface Props {
 type ModalStep = "selection" | "editing";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
+
+const resolveAspectFromConfig = (customization: Customization): number | undefined => {
+  const imageCrop = customization.customization_data.image_crop;
+
+  if (!imageCrop) return 1;
+
+  if (typeof imageCrop.aspect_ratio === "number" && imageCrop.aspect_ratio > 0) {
+    return imageCrop.aspect_ratio;
+  }
+
+  switch (imageCrop.format) {
+    case "FREE": return undefined;
+    case "1:1": return 1;
+    case "16:9": return 16 / 9;
+    case "4:3": return 4 / 3;
+    case "A4_PORTRAIT": return 210 / 297;
+    case "A4_LANDSCAPE": return 297 / 210;
+    case "CUSTOM": {
+      const w = Number(imageCrop.width) || 0;
+      const h = Number(imageCrop.height) || 0;
+      return w > 0 && h > 0 ? w / h : 1;
+    }
+    default: return 1;
+  }
+};
 
 export function ItemCustomizationModal({
   isOpen,
@@ -569,7 +601,7 @@ export function ItemCustomizationModal({
       let aspect: number | undefined;
 
       if (customization.type === "IMAGES") {
-        aspect = 1;
+        aspect = resolveAspectFromConfig(customization);
       } else if (customization.type === "DYNAMIC_LAYOUT") {
         aspect = undefined;
       }
@@ -1673,6 +1705,8 @@ export function ItemCustomizationModal({
             setCropDialogOpen(false);
             setFileToCrop(null);
             setCurrentCustomizationId(null);
+            setPendingFiles([]);
+            setIsCropping(false);
           }}
           onCropComplete={handleDetailsConfirm}
           aspect={cropAspect}
