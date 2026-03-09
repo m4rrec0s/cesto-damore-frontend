@@ -127,7 +127,6 @@ export default function ClientFabricEditor({
 
     const observer = new ResizeObserver((entries) => {
       for (const entry of entries) {
-
         const { width: availWidth, height: availHeight } = entry.contentRect;
 
         const margin = 32;
@@ -418,7 +417,6 @@ export default function ClientFabricEditor({
         );
 
         if (!canvasInstance.contextTop && !canvasInstance.contextContainer) {
-
           canvasInstance.setDimensions({
             width: width * INTERNAL_DPI_MULTIPLIER,
             height: height * INTERNAL_DPI_MULTIPLIER,
@@ -532,7 +530,6 @@ export default function ClientFabricEditor({
         const labels: Record<string, string> = {};
 
         for (const obj of objects as any[]) {
-
           obj.set({
             selectable: false,
             evented: false,
@@ -564,7 +561,6 @@ export default function ClientFabricEditor({
             if (!hasImg && !localImages[id]) {
               await addFramePlaceholder(canvasInstance, obj);
             } else if (localImages[id]) {
-
               await loadLocalImageToFrame(canvasInstance, obj, localImages[id]);
             }
           } else if (obj.isCustomizable) {
@@ -621,7 +617,6 @@ export default function ClientFabricEditor({
   ) => {
     const file = e.target.files?.[0];
     if (file && fabricRef) {
-
       const frame = fabricRef
         .getObjects()
         .find((o: any) => o.id === frameId || o.name === frameId);
@@ -646,7 +641,6 @@ export default function ClientFabricEditor({
     const tid = toast.loading("Processando imagem...");
 
     try {
-
       const blob = dataURLtoBlob(croppedImageUrl);
       const file = new File([blob], `crop_${currentFrameId}.png`, {
         type: "image/png",
@@ -702,7 +696,6 @@ export default function ClientFabricEditor({
 
     const tid = toast.loading("Gerando arquivos finais...");
     try {
-
       const originalTransform = [...(fabricRef as any).viewportTransform];
       (fabricRef as any).setViewportTransform([
         INTERNAL_DPI_MULTIPLIER,
@@ -747,7 +740,6 @@ export default function ClientFabricEditor({
 
   return (
     <div className="flex flex-col h-[82vh] min-h-[600px] overflow-hidden bg-gray-50/70">
-      
       <header className="shrink-0 z-10 bg-white/95 backdrop-blur-sm border-b border-gray-100 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-14 sm:h-16">
@@ -774,9 +766,7 @@ export default function ClientFabricEditor({
         </div>
       </header>
 
-      
       <main className="flex-1 flex flex-col lg:flex-row w-full px-4 sm:px-6 lg:px-10 py-4 lg:py-6 gap-4 lg:gap-8 overflow-hidden min-h-0">
-        
         <section className="flex-[1.2] lg:flex-1 w-full flex flex-col min-h-0 overflow-hidden">
           <div className="flex-1 bg-white rounded-2xl shadow-xl border border-gray-200/80 overflow-hidden relative flex flex-col">
             {loading && (
@@ -810,11 +800,9 @@ export default function ClientFabricEditor({
           </div>
         </section>
 
-        
         <aside className="w-full flex-1 lg:flex-none lg:w-80 xl:w-96 flex flex-col gap-6 lg:gap-8 overflow-y-auto h-full custom-scrollbar px-1 lg:px-2 pb-6 lg:pb-0 shrink-0 border-l border-gray-100/50 bg-white/50 lg:backdrop-blur-sm">
           <Card className="border border-rose-100/60 shadow-md bg-white/80 backdrop-blur-sm">
             <CardContent className="p-5 sm:p-6 lg:p-7 space-y-6 lg:space-y-7">
-              
               <div className="flex items-center gap-3 pb-4 border-b border-gray-100">
                 <div className="p-2 bg-rose-50 rounded-lg">
                   <Palette className="h-5 w-5 text-rose-600" />
@@ -824,7 +812,6 @@ export default function ClientFabricEditor({
                 </h4>
               </div>
 
-              
               {Object.keys(editableTexts).length > 0 && (
                 <div className="space-y-5">
                   <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-gray-500">
@@ -887,7 +874,6 @@ export default function ClientFabricEditor({
                 </div>
               )}
 
-              
               <div className="space-y-5 pt-5 border-t border-dashed border-gray-200">
                 <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-gray-500">
                   <ImageIcon className="h-4 w-4" />
@@ -987,7 +973,7 @@ export default function ClientFabricEditor({
           </Button>
 
           <p className="text-center text-xs text-gray-400 font-medium tracking-wide">
-            Garantia de Qualidade • Cesto dAmore
+            Garantia de Qualidade • Cesto d&apos;Amore
           </p>
         </aside>
       </main>

@@ -6,6 +6,7 @@ import { AuthProvider } from "./hooks/use-auth";
 import ClientLayout from "./components/layout/client-layout";
 import { Toaster } from "./components/ui/sonner";
 import AppWrapper from "./components/layout/app-wrapper";
+import { CookieBanner } from "./components/layout/cookie-banner";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -46,6 +47,7 @@ export default function RootLayout({
         <AuthProvider>
           <AppWrapper>
             <ClientLayout>{children}</ClientLayout>
+            <CookieBanner />
           </AppWrapper>
         </AuthProvider>
         <Toaster position="top-center" richColors />

@@ -24,13 +24,15 @@ export function SiteFooter() {
               <div className="relative w-12 h-12">
                 <Image
                   src="/logo.png"
-                  alt="Cesto dAmore"
+                  alt="Cesto d'Amore"
                   fill
-                  className="object-contain"
+                  className="object-contain invert"
                 />
               </div>
               <div>
-                <p className="text-white text-lg font-bold">Cesto dAmore</p>
+                <p className="text-white text-lg font-bold">
+                  Cesto d&apos;Amore
+                </p>
                 <p className="text-xs text-gray-400">Presentes e flores</p>
               </div>
             </div>
@@ -39,7 +41,7 @@ export function SiteFooter() {
             </p>
             <div className="flex items-center gap-3 mt-4">
               <a
-                href="https://wa.me/5583982163104"
+                href="https://tintim.link/whatsapp/0e438d1e-b6d6-41f8-ba1e-1a2554fb2089/e1e7a67b-23ad-4d79-b41f-faad52c88ddf"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="bg-gray-800 p-2 rounded-full hover:bg-rose-500 transition-colors"
@@ -59,7 +61,6 @@ export function SiteFooter() {
             </div>
           </div>
 
-          
           <div>
             <h3 className="text-white font-semibold text-lg mb-4 flex items-center gap-2">
               <Heart className="h-5 w-5 text-rose-500" />
@@ -109,7 +110,6 @@ export function SiteFooter() {
             </ul>
           </div>
 
-          
           <div>
             <h3 className="text-white font-semibold text-lg mb-4 flex items-center gap-2">
               <Shield className="h-5 w-5 text-rose-500" />
@@ -126,7 +126,7 @@ export function SiteFooter() {
               </li>
               <li>
                 <Link
-                  href="/sobre"
+                  href="/about-us"
                   className="text-sm hover:text-rose-400 transition-colors flex items-center gap-2"
                 >
                   → Sobre Nós
@@ -134,7 +134,7 @@ export function SiteFooter() {
               </li>
               <li>
                 <Link
-                  href="/politica-privacidade"
+                  href="/privacy-policy"
                   className="text-sm hover:text-rose-400 transition-colors flex items-center gap-2"
                 >
                   → Política de Privacidade
@@ -142,7 +142,7 @@ export function SiteFooter() {
               </li>
               <li>
                 <Link
-                  href="/termos-uso"
+                  href="/terms-of-use"
                   className="text-sm hover:text-rose-400 transition-colors flex items-center gap-2"
                 >
                   → Termos de Uso
@@ -150,7 +150,7 @@ export function SiteFooter() {
               </li>
               <li>
                 <Link
-                  href="/devolucoes"
+                  href="/devolutions"
                   className="text-sm hover:text-rose-400 transition-colors flex items-center gap-2"
                 >
                   → Trocas e Devoluções
@@ -159,7 +159,6 @@ export function SiteFooter() {
             </ul>
           </div>
 
-          
           <div>
             <h3 className="text-white font-semibold text-lg mb-4 flex items-center gap-2">
               <Truck className="h-5 w-5 text-rose-500" />
@@ -171,10 +170,10 @@ export function SiteFooter() {
                 <div>
                   <p className="font-medium text-white">WhatsApp 24h</p>
                   <a
-                    href="https://wa.me/5583982163104"
-                    className="hover:text-rose-400 transition-colors"
+                    href="https://tintim.link/whatsapp/0e438d1e-b6d6-41f8-ba1e-1a2554fb2089/e1e7a67b-23ad-4d79-b41f-faad52c88ddf"
+                    className="text-rose-400 transition-colors"
                   >
-                    (83) 98216-3104
+                    Clique Aqui para WhatsApp
                   </a>
                 </div>
               </li>
@@ -183,10 +182,10 @@ export function SiteFooter() {
                 <div>
                   <p className="font-medium text-white">E-mail</p>
                   <a
-                    href="mailto:contato@cestodamore.com.br"
+                    href="mailto:cestodamore17@gmail.com"
                     className="hover:text-rose-400 transition-colors"
                   >
-                    contato@cestodamore.com.br
+                    cestodamore17@gmail.com
                   </a>
                 </div>
               </li>
@@ -209,7 +208,6 @@ export function SiteFooter() {
           </div>
         </div>
 
-        
         <div className="border-t border-gray-800 pt-8 mb-8">
           <div className="flex flex-col items-center gap-4">
             <div className="flex items-center gap-2 text-sm font-semibold text-white">
@@ -217,14 +215,11 @@ export function SiteFooter() {
               Formas de Pagamento
             </div>
 
-            
             <div className="flex flex-wrap items-center justify-center gap-3">
-              
               <div className="bg-gray-800 px-4 py-2 rounded-lg border border-gray-700 hover:border-rose-500 transition-colors">
                 <span className="text-sm font-bold text-emerald-400">PIX</span>
               </div>
 
-              
               <div className="bg-gray-800 px-4 py-2 rounded-lg border border-gray-700 hover:border-rose-500 transition-colors flex items-center gap-2">
                 <div className="w-6 h-6 bg-blue-500 rounded flex items-center justify-center">
                   <span className="text-white text-xs font-bold">MP</span>
@@ -232,12 +227,10 @@ export function SiteFooter() {
                 <span className="text-sm font-medium">Mercado Pago</span>
               </div>
 
-              
               <div className="bg-gray-800 px-3 py-2 rounded-lg border border-gray-700 hover:border-rose-500 transition-colors">
                 <span className="text-sm font-bold text-blue-600">VISA</span>
               </div>
 
-              
               <div className="bg-gray-800 px-3 py-2 rounded-lg border border-gray-700 hover:border-rose-500 transition-colors flex items-center gap-1">
                 <div className="flex gap-0.5">
                   <div className="w-4 h-4 rounded-full bg-red-500 opacity-80"></div>
@@ -246,17 +239,14 @@ export function SiteFooter() {
                 <span className="text-sm font-bold">Mastercard</span>
               </div>
 
-              
               <div className="bg-gray-800 px-3 py-2 rounded-lg border border-gray-700 hover:border-rose-500 transition-colors">
                 <span className="text-sm font-bold text-yellow-500">ELO</span>
               </div>
 
-              
               <div className="bg-gray-800 px-3 py-2 rounded-lg border border-gray-700 hover:border-rose-500 transition-colors">
                 <span className="text-sm font-bold text-blue-400">AMEX</span>
               </div>
 
-              
               <div className="bg-gray-800 px-3 py-2 rounded-lg border border-gray-700 hover:border-rose-500 transition-colors">
                 <span className="text-sm font-bold text-red-600">
                   Hipercard
@@ -271,11 +261,10 @@ export function SiteFooter() {
           </div>
         </div>
 
-        
         <div className="border-t border-gray-800 pt-6">
           <div className="flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-gray-500">
             <p className="text-center md:text-left">
-              © {currentYear} Cesto dAmore. Todos os direitos reservados.
+              © {currentYear} Cesto d&apos;Amore. Todos os direitos reservados.
             </p>
             <p className="text-center font-mono md:text-right flex items-center gap-1">
               Desenvolvido_Por_
