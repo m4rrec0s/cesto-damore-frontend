@@ -127,6 +127,29 @@ type ModalStep = "selection" | "editing";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
+const resolveAssetUrl = (value: string | undefined): string => {
+  if (!value) return "";
+
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+
+  if (
+    trimmed.startsWith("http://") ||
+    trimmed.startsWith("https://") ||
+    trimmed.startsWith("data:") ||
+    trimmed.startsWith("blob:")
+  ) {
+    return trimmed;
+  }
+
+  if (trimmed.startsWith("/")) {
+    const apiBase = (API_URL || "").replace(/\/api\/?$/, "");
+    return apiBase ? `${apiBase}${trimmed}` : trimmed;
+  }
+
+  return trimmed;
+};
+
 const resolveAspectFromConfig = (
   customization: Customization,
 ): number | undefined => {
@@ -391,21 +414,7 @@ export function ItemCustomizationModal({
       ] as LayoutBase | undefined;
 
       if (!layoutData) {
-        const token =
-          typeof window !== "undefined"
-            ? localStorage.getItem("appToken") || localStorage.getItem("token")
-            : null;
-
-        const response = await fetch(`${API_URL}/layouts/dynamic/${layoutId}`, {
-          headers: {
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-            "ngrok-skip-browser-warning": "true",
-          },
-        });
-
-        if (!response.ok) throw new Error("Erro ao buscar layout");
-
-        const rawData = (await response.json()) as LayoutBase & {
+        const rawData = (await getLayoutById(layoutId)) as LayoutBase & {
           baseImageUrl?: string;
         };
 
@@ -792,17 +801,17 @@ export function ItemCustomizationModal({
 
   const resolvePreviewUrlFromImageValue = useCallback((value: unknown) => {
     if (!value) return "";
-    if (typeof value === "string") return value;
+    if (typeof value === "string") return resolveAssetUrl(value);
     if (value instanceof File) return URL.createObjectURL(value);
 
     if (typeof value === "object") {
       const candidate = value as Record<string, unknown>;
-      return (
+      return resolveAssetUrl(
         (candidate.preview as string) ||
-        (candidate.preview_url as string) ||
-        (candidate.url as string) ||
-        (candidate.base64 as string) ||
-        ""
+          (candidate.preview_url as string) ||
+          (candidate.url as string) ||
+          (candidate.base64 as string) ||
+          "",
       );
     }
 
@@ -842,6 +851,8 @@ export function ItemCustomizationModal({
           ? extractSourceArray(fromState)
           : extractSourceArray(initialValues?.[customizationId]);
 
+      const seen = new Set<string>();
+
       const entries = sourceArray
         .map((entry) => {
           if (entry instanceof File) {
@@ -880,7 +891,13 @@ export function ItemCustomizationModal({
         })
         .filter(
           (entry): entry is PreviewImageEntry => !!entry && !!entry.preview,
-        );
+        )
+        .filter((entry) => {
+          const key = entry.temp_filename || entry.preview;
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
 
       return entries;
     },

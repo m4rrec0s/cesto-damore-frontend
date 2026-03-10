@@ -29,6 +29,7 @@ import {
   CustomizationsReview,
   validateCustomizations,
 } from "./CustomizationsReview";
+import type { CustomizationInput } from "@/app/types/customization";
 
 const ACCEPTED_CITIES = [
   "Campina Grande",
@@ -175,6 +176,7 @@ export default function CarrinhoPageContent() {
     cart,
     updateQuantity,
     removeFromCart,
+    updateCustomizations,
     clearCart,
     createOrder,
     getMaxProductionTime,
@@ -183,8 +185,12 @@ export default function CarrinhoPageContent() {
     isDateDisabledInCalendar,
   } = useCartContext();
 
-  const { pendingOrder, hasPendingOrder, clearPendingOrder } =
-    usePaymentManager();
+  const {
+    pendingOrder,
+    hasPendingOrder,
+    clearPendingOrder,
+    checkPendingOrder,
+  } = usePaymentManager();
 
   const [currentStep, setCurrentStep] = useState<1 | 2 | 3>(1);
   const [paymentStatus, setPaymentStatus] = useState<PaymentStatusType>("");
@@ -1380,7 +1386,147 @@ export default function CarrinhoPageContent() {
     [router],
   );
 
-  const handleCustomizationUpdate = useCallback(() => {}, []);
+  const handleCustomizationUpdate = useCallback(
+    (
+      productId: string,
+      customizations: CustomizationInput[],
+      componentId?: string,
+    ) => {
+      const currentItems = Array.isArray(cart?.items) ? cart.items : [];
+      const targetItem =
+        currentItems.find((item) => {
+          if (item.product_id !== productId) return false;
+          if (!componentId) return true;
+
+          return (
+            item.additional_ids?.includes(componentId) ||
+            item.customizations?.some(
+              (customization) => customization.componentId === componentId,
+            )
+          );
+        }) || currentItems.find((item) => item.product_id === productId);
+
+      if (!targetItem) {
+        return;
+      }
+
+      const buildCustomizationId = (
+        input: CustomizationInput,
+        title: string,
+      ) => {
+        if (input.ruleId || input.customizationRuleId) {
+          const baseId = input.ruleId || input.customizationRuleId || title;
+          return componentId ? `${baseId}:${componentId}` : baseId;
+        }
+
+        return componentId ? `${title}:${componentId}` : title;
+      };
+
+      const mappedCustomizations: CartCustomization[] = customizations.map(
+        (customization) => {
+          const data =
+            (customization.data as Record<string, unknown> | undefined) || {};
+          const title =
+            (data._customizationName as string) ||
+            customization.customizationType;
+
+          if (customization.customizationType === "TEXT") {
+            const text = Object.entries(data)
+              .filter(([key, value]) => key !== "_customizationName" && !!value)
+              .map(([key, value]) => `${key}: ${value}`)
+              .join(", ");
+
+            return {
+              customization_id: buildCustomizationId(customization, title),
+              componentId,
+              title,
+              customization_type: "TEXT",
+              is_required: false,
+              price_adjustment: Number(data._priceAdjustment || 0),
+              text,
+              data,
+            };
+          }
+
+          if (customization.customizationType === "MULTIPLE_CHOICE") {
+            return {
+              customization_id: buildCustomizationId(customization, title),
+              componentId,
+              title,
+              customization_type: "MULTIPLE_CHOICE",
+              is_required: false,
+              price_adjustment: Number(data._priceAdjustment || 0),
+              selected_option:
+                (data.id as string) || (data.selected_option as string),
+              selected_option_label:
+                (data.label as string) ||
+                (data.selected_option_label as string) ||
+                undefined,
+              label_selected:
+                (data.label as string) ||
+                (data.selected_option_label as string) ||
+                undefined,
+              data,
+            };
+          }
+
+          if (customization.customizationType === "IMAGES") {
+            return {
+              customization_id: buildCustomizationId(customization, title),
+              componentId,
+              title,
+              customization_type: "IMAGES",
+              is_required: false,
+              price_adjustment: Number(data._priceAdjustment || 0),
+              photos: Array.isArray(data.photos)
+                ? (data.photos as CartCustomization["photos"])
+                : [],
+              data,
+            };
+          }
+
+          return {
+            customization_id: buildCustomizationId(customization, title),
+            componentId,
+            title,
+            customization_type: "DYNAMIC_LAYOUT",
+            is_required: false,
+            price_adjustment: Number(data._priceAdjustment || 0),
+            selected_item_label:
+              (data.selected_item_label as string) ||
+              (data.label_selected as string) ||
+              title,
+            label_selected:
+              (data.label_selected as string) ||
+              (data.selected_item_label as string) ||
+              title,
+            text:
+              (data.text as string) ||
+              (data.previewUrl as string) ||
+              ((data.final_artwork as { preview_url?: string } | undefined)
+                ?.preview_url as string | undefined),
+            additional_time: Number(data.additional_time || 0),
+            fabricState: data.fabricState as string | undefined,
+            data,
+          };
+        },
+      );
+
+      updateCustomizations(
+        productId,
+        targetItem.customizations || [],
+        mappedCustomizations,
+        targetItem.additional_ids,
+        targetItem.additional_colors,
+        false,
+      );
+    },
+    [cart?.items, updateCustomizations],
+  );
+
+  const handleCustomizationSaved = useCallback(async () => {
+    await checkPendingOrder();
+  }, [checkPendingOrder]);
 
   const handleCepSearch = async (cep: string) => {
     if (!cep || cep.length !== 8) {
@@ -2005,6 +2151,7 @@ export default function CarrinhoPageContent() {
                             cartItems={cartItems}
                             orderId={currentOrderId}
                             onCustomizationUpdate={handleCustomizationUpdate}
+                            onCustomizationSaved={handleCustomizationSaved}
                             onValidationStatusChange={
                               handleValidationStatusChange
                             }

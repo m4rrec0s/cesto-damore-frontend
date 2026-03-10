@@ -396,6 +396,7 @@ interface CartContextType {
     newCustomizations: CartCustomization[],
     additionals?: string[],
     additionalColors?: Record<string, string>,
+    syncWithBackend?: boolean,
   ) => void;
   clearCart: () => void;
   createOrder: (
@@ -1471,6 +1472,7 @@ export function useCart(): CartContextType {
       newCustomizations: CartCustomization[],
       additionals?: string[],
       additionalColors?: Record<string, string>,
+      syncWithBackend: boolean = true,
     ) => {
       setCart((prevCart) => {
         const currentItems = Array.isArray(prevCart.items)
@@ -1523,7 +1525,9 @@ export function useCart(): CartContextType {
         };
 
         const updatedCart = calculateTotals(newItems);
-        debouncedSync(updatedCart);
+        if (syncWithBackend) {
+          debouncedSync(updatedCart);
+        }
         return updatedCart;
       });
     },

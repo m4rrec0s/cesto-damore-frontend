@@ -68,7 +68,6 @@ export function MPCardPaymentForm({
   const [isDelayedReady, setIsDelayedReady] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
   const mountedRef = useRef(true);
-  const containerRef = useRef<HTMLDivElement>(null);
 
   const recreateCardBrick = useCallback(() => {
     if (!mountedRef.current) return;
@@ -102,41 +101,6 @@ export function MPCardPaymentForm({
   const handleRetry = useCallback(() => {
     recreateCardBrick();
   }, [recreateCardBrick]);
-
-  useEffect(() => {
-    const recoverWhenVisible = () => {
-      if (
-        document.visibilityState === "visible" &&
-        !isProcessing &&
-        !isSubmitting &&
-        (localError || !cardPaymentReady)
-      ) {
-        recreateCardBrick();
-      }
-    };
-
-    const onPageShow = (event: PageTransitionEvent) => {
-      if (event.persisted) {
-        recoverWhenVisible();
-      }
-    };
-
-    document.addEventListener("visibilitychange", recoverWhenVisible);
-    window.addEventListener("focus", recoverWhenVisible);
-    window.addEventListener("pageshow", onPageShow);
-
-    return () => {
-      document.removeEventListener("visibilitychange", recoverWhenVisible);
-      window.removeEventListener("focus", recoverWhenVisible);
-      window.removeEventListener("pageshow", onPageShow);
-    };
-  }, [
-    cardPaymentReady,
-    isProcessing,
-    isSubmitting,
-    localError,
-    recreateCardBrick,
-  ]);
 
   const handleOnSubmit = useCallback(
     async (formData: CardPaymentFormData) => {
@@ -295,7 +259,7 @@ export function MPCardPaymentForm({
 
       {!localError && (
         <div className="relative min-h-[400px]">
-          <div ref={containerRef} id={`card-container-${brickKey}`}>
+          <div id={`card-container-${brickKey}`}>
             <CardPayment
               key={`card-${orderId}-${brickKey}`}
               initialization={{

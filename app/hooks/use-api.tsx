@@ -580,6 +580,11 @@ interface CacheShape {
   [key: string]: unknown | null;
 }
 
+interface RequestCacheEntry<T = unknown> {
+  data: T;
+  expiresAt: number;
+}
+
 class ApiService {
   private static cache: CacheShape = {
     users: null,
@@ -590,6 +595,8 @@ class ApiService {
     orders: null,
     feedConfigurations: null,
   };
+  private static requestCache = new Map<string, RequestCacheEntry>();
+  private static inFlightRequests = new Map<string, Promise<unknown>>();
 
   private client = axios.create({
     baseURL: process.env.NEXT_PUBLIC_API_URL,
@@ -602,14 +609,65 @@ class ApiService {
     Object.keys(ApiService.cache).forEach((k) => {
       ApiService.cache[k] = null;
     });
+    ApiService.requestCache.clear();
+    ApiService.inFlightRequests.clear();
   }
   clearCache(key: string) {
     if (key in ApiService.cache) ApiService.cache[key] = null;
+    for (const cacheKey of ApiService.requestCache.keys()) {
+      if (cacheKey === key || cacheKey.startsWith(`${key}:`)) {
+        ApiService.requestCache.delete(cacheKey);
+      }
+    }
+  }
+
+  private clearRequestCacheByPrefix(...prefixes: string[]) {
+    if (prefixes.length === 0) return;
+
+    for (const cacheKey of ApiService.requestCache.keys()) {
+      if (prefixes.some((prefix) => cacheKey.startsWith(prefix))) {
+        ApiService.requestCache.delete(cacheKey);
+      }
+    }
+  }
+
+  private async getCachedResource<T>(
+    key: string,
+    fetcher: () => Promise<T>,
+    ttlMs = 30000,
+  ): Promise<T> {
+    const now = Date.now();
+    const cached = ApiService.requestCache.get(key);
+
+    if (cached && cached.expiresAt > now) {
+      return cached.data as T;
+    }
+
+    const inFlight = ApiService.inFlightRequests.get(key);
+    if (inFlight) {
+      return inFlight as Promise<T>;
+    }
+
+    const request = fetcher()
+      .then((data) => {
+        ApiService.requestCache.set(key, {
+          data,
+          expiresAt: Date.now() + ttlMs,
+        });
+        ApiService.inFlightRequests.delete(key);
+        return data;
+      })
+      .catch((error) => {
+        ApiService.inFlightRequests.delete(key);
+        throw error;
+      });
+
+    ApiService.inFlightRequests.set(key, request as Promise<unknown>);
+    return request;
   }
 
   constructor() {
     this.client.interceptors.request.use((config) => {
-
       config.headers = config.headers || {};
 
       config.headers["ngrok-skip-browser-warning"] = "true";
@@ -618,7 +676,6 @@ class ApiService {
         typeof window !== "undefined" ? localStorage.getItem("appToken") : null;
 
       if (token === "undefined" || token === "null" || !token) {
-
         if (
           typeof window !== "undefined" &&
           (token === "undefined" || token === "null")
@@ -849,7 +906,6 @@ class ApiService {
     imageFile?: File,
   ): Promise<Additional> => {
     if (imageFile) {
-
       const formData = new FormData();
       formData.append("name", payload.name || "");
       formData.append("description", payload.description || "");
@@ -870,7 +926,6 @@ class ApiService {
       this.clearCache("additionals");
       return res.data;
     } else {
-
       const res = await this.client.post("/additional", payload);
       this.clearCache("additionals");
       return res.data;
@@ -882,7 +937,6 @@ class ApiService {
     imageFile?: File,
   ): Promise<Additional> => {
     if (imageFile) {
-
       const formData = new FormData();
       if (payload.name) formData.append("name", payload.name);
       if (payload.description !== undefined)
@@ -903,7 +957,6 @@ class ApiService {
       this.clearCache("additionals");
       return res.data;
     } else {
-
       const res = await this.client.put(`/additional/${id}`, payload);
       this.clearCache("additionals");
       return res.data;
@@ -1012,14 +1065,17 @@ class ApiService {
   };
 
   getProduct = async (id: string): Promise<Product> =>
-    (await this.client.get(`/products/${id}`)).data;
+    this.getCachedResource(
+      `products:${id}`,
+      async () => (await this.client.get(`/products/${id}`)).data,
+      60000,
+    );
 
   createProduct = async (
     payload: Partial<ProductInput>,
     imageFile?: File,
   ): Promise<Product> => {
     if (imageFile) {
-
       const formData = new FormData();
       if (payload.name) formData.append("name", payload.name);
       if (payload.description !== undefined)
@@ -1054,7 +1110,6 @@ class ApiService {
     imageFile?: File,
   ): Promise<Product> => {
     if (imageFile) {
-
       const formData = new FormData();
       if (payload.name) formData.append("name", payload.name);
       if (payload.description !== undefined)
@@ -1078,7 +1133,6 @@ class ApiService {
       this.clearCache("products");
       return res.data;
     } else {
-
       const res = await this.client.put(`/products/${id}`, payload);
       this.clearCache("products");
       return res.data;
@@ -1126,7 +1180,11 @@ class ApiService {
     return res.data;
   };
   getOrder = async (id: string) =>
-    (await this.client.get(`/orders/${id}`)).data;
+    this.getCachedResource(
+      `orders:${id}`,
+      async () => (await this.client.get(`/orders/${id}`)).data,
+      5000,
+    );
   createOrder = async (payload: {
     user_id: string;
     items: OrderItemInput[];
@@ -1143,12 +1201,16 @@ class ApiService {
     delivery_method?: "delivery" | "pickup";
   }) => {
     try {
-
       const sanitized = this.stripBase64FromOrderPayload(
         payload as Record<string, unknown>,
       );
       const res = await this.client.post("/orders", sanitized);
       this.clearCache("orders");
+      this.clearRequestCacheByPrefix(
+        "orders:",
+        "orderReview:",
+        "orderValidation:",
+      );
       return res.data;
     } catch (error: unknown) {
       console.error("API.createOrder failed:", {
@@ -1163,6 +1225,11 @@ class ApiService {
   deleteOrder = async (id: string) => {
     const res = await this.client.delete(`/orders/${id}`);
     this.clearCache("orders");
+    this.clearRequestCacheByPrefix(
+      `orders:${id}`,
+      `orderReview:${id}`,
+      `orderValidation:${id}`,
+    );
     return res.data;
   };
 
@@ -1176,9 +1243,13 @@ class ApiService {
     try {
       const res = await this.client.put(`/orders/${id}/items`, { items });
       this.clearCache("orders");
+      this.clearRequestCacheByPrefix(
+        `orders:${id}`,
+        `orderReview:${id}`,
+        `orderValidation:${id}`,
+      );
       return res.data;
     } catch (error: unknown) {
-
       console.error("API.updateOrderItems failed", {
         id,
         items,
@@ -1215,6 +1286,11 @@ class ApiService {
     }
     const res = await this.client.put(`/orders/${id}/metadata`, payload);
     this.clearCache("orders");
+    this.clearRequestCacheByPrefix(
+      `orders:${id}`,
+      `orderReview:${id}`,
+      `orderValidation:${id}`,
+    );
     return res.data;
   };
 
@@ -1349,10 +1425,16 @@ class ApiService {
   getItemCustomizations = async (
     itemId: string,
   ): Promise<import("../types/customization").CustomizationConfigResponse> => {
-    const res = await this.client.get(`/items/${itemId}/customizations`, {
-      headers: { "ngrok-skip-browser-warning": "true" },
-    });
-    return res.data;
+    return this.getCachedResource(
+      `itemCustomizations:${itemId}`,
+      async () => {
+        const res = await this.client.get(`/items/${itemId}/customizations`, {
+          headers: { "ngrok-skip-browser-warning": "true" },
+        });
+        return res.data;
+      },
+      60000,
+    );
   };
 
   getCustomizationsByReference = async (
@@ -1386,10 +1468,16 @@ class ApiService {
   getLayoutById = async (
     layoutId: string,
   ): Promise<import("../types/personalization").LayoutBase> => {
-    const res = await this.client.get(`/layouts/dynamic/${layoutId}`, {
-      headers: { "ngrok-skip-browser-warning": "true" },
-    });
-    return res.data;
+    return this.getCachedResource(
+      `layouts:${layoutId}`,
+      async () => {
+        const res = await this.client.get(`/layouts/dynamic/${layoutId}`, {
+          headers: { "ngrok-skip-browser-warning": "true" },
+        });
+        return res.data;
+      },
+      300000,
+    );
   };
 
   private activePollers: Record<string, number> = {};
@@ -1405,9 +1493,7 @@ class ApiService {
       try {
         const res = await this.client.get(`/orders/${orderId}/customizations`);
         onUpdate(res.data);
-      } catch {
-
-      }
+      } catch {}
     }, interval);
     this.activePollers[orderId] = id;
     return () => {
@@ -1484,7 +1570,6 @@ class ApiService {
   private stripBase64FromCustomizationPayload(
     payload: import("../types/customization").SaveOrderItemCustomizationPayload,
   ) {
-
     const clone = JSON.parse(JSON.stringify(payload));
 
     function removeBase64(obj: unknown) {
@@ -1493,7 +1578,6 @@ class ApiService {
       for (const key of Object.keys(record)) {
         const val = record[key];
         if (typeof val === "string") {
-
           if (val.startsWith("data:") || val.startsWith("blob:")) {
             delete record[key];
             continue;
@@ -1542,7 +1626,6 @@ class ApiService {
 
         if (typeof val === "string") {
           if (val.startsWith("data:") || val.startsWith("blob:")) {
-
             delete record[key];
             continue;
           }
@@ -1570,7 +1653,6 @@ class ApiService {
         (item.customizations as unknown[]).forEach((c: unknown) => {
           const customization = c as Record<string, unknown>;
           try {
-
             if (typeof customization.value === "string") {
               const parsed = JSON.parse(customization.value as string);
               removeBase64(parsed);
@@ -1609,7 +1691,13 @@ class ApiService {
     created_at: string;
     updated_at: string;
   }> => {
-    const payloadSanitized = payload;
+    const payloadSanitized = {
+      ...payload,
+      data:
+        payload.data && typeof payload.data === "object"
+          ? { ...(payload.data as Record<string, unknown>) }
+          : payload.data,
+    };
 
     if (
       payloadSanitized.customizationType === "DYNAMIC_LAYOUT" &&
@@ -1625,14 +1713,17 @@ class ApiService {
             "selected_layout_title"
           ] = layout.title;
         }
-      } catch {
-
-      }
+      } catch {}
     }
 
     const res = await this.client.post(
       `/orders/${orderId}/items/${itemId}/customizations`,
       payloadSanitized,
+    );
+    this.clearRequestCacheByPrefix(
+      `orders:${orderId}`,
+      `orderReview:${orderId}`,
+      `orderValidation:${orderId}`,
     );
     return res.data;
   };
@@ -1686,7 +1777,6 @@ class ApiService {
   validateTempImageExists = async (imageUrl: string): Promise<boolean> => {
     if (!imageUrl) return false;
     try {
-
       await Promise.race([
         this.client.head(imageUrl),
         new Promise((_, reject) =>
@@ -1889,7 +1979,6 @@ class ApiService {
     issuer_id?: string;
     payment_method_id?: string;
   }) => {
-
     if (
       !payload.orderId ||
       payload.orderId === "null" ||
@@ -1911,7 +2000,6 @@ class ApiService {
       );
       return res.data;
     } catch (error: unknown) {
-
       if (axios.isAxiosError(error) && error.response?.data) {
         const responseData = error.response.data as {
           error?: string;
@@ -1969,7 +2057,6 @@ class ApiService {
       const res = await this.client.get(`/users/${userId}/orders/pending`);
       return res.data;
     } catch (error: unknown) {
-
       if (axios.isAxiosError(error) && error?.response?.status === 404) {
         return null;
       }
@@ -1982,6 +2069,11 @@ class ApiService {
    */
   cancelOrder = async (orderId: string) => {
     const res = await this.client.post(`/orders/${orderId}/cancel`);
+    this.clearRequestCacheByPrefix(
+      `orders:${orderId}`,
+      `orderReview:${orderId}`,
+      `orderValidation:${orderId}`,
+    );
     return res.data;
   };
 
@@ -2313,16 +2405,27 @@ class ApiService {
   };
 
   getOrderReviewData = async (orderId: string) => {
-    const res = await this.client.get(`/customization/review/${orderId}`);
-    return res.data;
+    return this.getCachedResource(
+      `orderReview:${orderId}`,
+      async () => {
+        const res = await this.client.get(`/customization/review/${orderId}`);
+        return res.data;
+      },
+      10000,
+    );
   };
 
   validateOrderCustomizationsFiles = async (orderId: string) => {
-
-    const res = await this.client.get(
-      `/orders/${orderId}/customizations/validate`,
+    return this.getCachedResource(
+      `orderValidation:${orderId}`,
+      async () => {
+        const res = await this.client.get(
+          `/orders/${orderId}/customizations/validate`,
+        );
+        return res.data;
+      },
+      5000,
     );
-    return res.data;
   };
 }
 

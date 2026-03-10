@@ -18,27 +18,28 @@ interface CartContextType {
     quantity?: number,
     additionals?: string[],
     additionalColors?: Record<string, string>,
-    customizations?: CartCustomization[]
+    customizations?: CartCustomization[],
   ) => Promise<void>;
   removeFromCart: (
     productId: string,
     additionals?: string[],
     customizations?: CartCustomization[],
-    additionalColors?: Record<string, string>
+    additionalColors?: Record<string, string>,
   ) => void;
   updateQuantity: (
     productId: string,
     quantity: number,
     additionals?: string[],
     customizations?: CartCustomization[],
-    additionalColors?: Record<string, string>
+    additionalColors?: Record<string, string>,
   ) => void;
   updateCustomizations: (
     productId: string,
     oldCustomizations: CartCustomization[],
     newCustomizations: CartCustomization[],
     additionals?: string[],
-    additionalColors?: Record<string, string>
+    additionalColors?: Record<string, string>,
+    syncWithBackend?: boolean,
   ) => void;
   clearCart: () => void;
   createOrder: (
@@ -56,7 +57,7 @@ interface CartContextType {
       complement?: string;
       deliveryMethod?: "delivery" | "pickup";
       discount?: number;
-    }
+    },
   ) => Promise<unknown>;
   createOrderWithTransparentCheckout: (
     userId: string,
@@ -69,7 +70,7 @@ interface CartContextType {
       deliveryCity?: string;
       deliveryState?: string;
       recipientPhone?: string;
-    }
+    },
   ) => Promise<{
     order: { id: number; status: string; total: number };
     checkoutUrl: string;
@@ -77,7 +78,7 @@ interface CartContextType {
   }>;
   createPaymentPreference: (
     userEmail: string,
-    orderId?: string
+    orderId?: string,
   ) => Promise<{
     init_point?: string;
     sandbox_init_point?: string;
@@ -99,7 +100,7 @@ interface CartContextType {
           number: string;
         };
       };
-    }
+    },
   ) => Promise<unknown>;
 
   getDeliveryWindows: () => {

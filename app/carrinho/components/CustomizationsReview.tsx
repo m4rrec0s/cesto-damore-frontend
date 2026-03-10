@@ -17,6 +17,11 @@ import type {
 import { toast } from "sonner";
 import { Card } from "@/app/components/ui/card";
 
+const API_BASE_URL = (process.env.NEXT_PUBLIC_API_URL || "").replace(
+  /\/api\/?$/,
+  "",
+);
+
 interface CartItemForReview {
   product_id: string;
   product: {
@@ -227,9 +232,123 @@ const buildPhotosFromPersonalizationData = (
     }));
 };
 
+const normalizeAssetUrl = (value: string | undefined): string | undefined => {
+  if (!value) return undefined;
+
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+
+  if (
+    trimmed.startsWith("http://") ||
+    trimmed.startsWith("https://") ||
+    trimmed.startsWith("data:") ||
+    trimmed.startsWith("blob:")
+  ) {
+    return trimmed;
+  }
+
+  if (trimmed.startsWith("/")) {
+    return API_BASE_URL ? `${API_BASE_URL}${trimmed}` : trimmed;
+  }
+
+  return trimmed;
+};
+
 const isPersistedImageUrl = (value: string | undefined): boolean => {
   if (!value) return false;
   return !value.startsWith("data:") && !value.startsWith("blob:");
+};
+
+const getImageEntryKey = (
+  photo: PhotoUploadData | Record<string, unknown>,
+  index: number,
+): string => {
+  const candidate = photo as Record<string, unknown>;
+  const tempFileId = candidate.temp_file_id;
+  const previewUrl = candidate.preview_url;
+  const url = candidate.url;
+
+  if (typeof tempFileId === "string" && tempFileId.trim().length > 0) {
+    return `temp:${tempFileId}`;
+  }
+  if (typeof previewUrl === "string" && previewUrl.trim().length > 0) {
+    return `preview:${previewUrl}`;
+  }
+  if (typeof url === "string" && url.trim().length > 0) {
+    return `url:${url}`;
+  }
+
+  return `index:${index}`;
+};
+
+const getUniqueImageEntries = (
+  custom: CartCustomization | undefined,
+): PhotoUploadData[] => {
+  if (!custom) return [];
+
+  const data = (custom.data as Record<string, unknown>) || {};
+  const photos = [
+    ...(Array.isArray(custom.photos) ? custom.photos : []),
+    ...(Array.isArray(data.photos) ? (data.photos as PhotoUploadData[]) : []),
+  ];
+
+  const seen = new Set<string>();
+
+  return photos.filter((photo, index) => {
+    const key = getImageEntryKey(photo, index);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+};
+
+const buildNormalizedImageData = (
+  source: PersonalizationData,
+  fallbackPhotos?: PhotoUploadData[],
+): PersonalizationData => {
+  const photosSource =
+    Array.isArray(source.photos) && source.photos.length > 0
+      ? source.photos
+      : Array.isArray(fallbackPhotos) && fallbackPhotos.length > 0
+        ? fallbackPhotos
+        : buildPhotosFromPersonalizationData(source);
+
+  const seen = new Set<string>();
+  const photos = photosSource
+    .map((photo, index) => ({
+      ...photo,
+      preview_url: normalizeAssetUrl(photo.preview_url),
+      url: normalizeAssetUrl((photo as { url?: string }).url),
+      position: typeof photo.position === "number" ? photo.position : index,
+    }))
+    .filter((photo, index) => {
+      const key = getImageEntryKey(photo, index);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+
+  const previews = Array.isArray(source.previews)
+    ? source.previews
+        .map((preview) => normalizeAssetUrl(preview))
+        .filter((preview): preview is string => Boolean(preview))
+    : photos
+        .map(
+          (photo) =>
+            photo.preview_url ||
+            normalizeAssetUrl((photo as { url?: string }).url),
+        )
+        .filter((preview): preview is string => Boolean(preview));
+
+  return {
+    ...source,
+    photos,
+    previews,
+    temp_file_ids: Array.isArray(source.temp_file_ids)
+      ? source.temp_file_ids
+      : photos.map((photo) => photo.temp_file_id),
+    count: photos.length,
+  };
 };
 
 const getUploadedImageCount = (
@@ -238,12 +357,7 @@ const getUploadedImageCount = (
   if (!custom) return 0;
 
   const data = (custom.data as Record<string, unknown>) || {};
-  const photos = [
-    ...(Array.isArray(custom.photos) ? custom.photos : []),
-    ...(Array.isArray(data.photos) ? (data.photos as PhotoUploadData[]) : []),
-  ];
-
-  const validPhotoUrls = photos.filter(
+  const validPhotoUrls = getUniqueImageEntries(custom).filter(
     (photo) =>
       !!photo?.temp_file_id ||
       isPersistedImageUrl(photo?.preview_url) ||
@@ -256,7 +370,7 @@ const getUploadedImageCount = (
       ).length
     : 0;
 
-  return Math.max(validPhotoUrls, previews);
+  return validPhotoUrls > 0 ? validPhotoUrls : previews;
 };
 
 const isCustomizationFilled = (
@@ -451,7 +565,10 @@ const getCustomizationImageUrls = (custom: CartCustomization): string[] => {
 
   const addIfUrl = (value: unknown) => {
     if (typeof value === "string" && value.trim().length > 0) {
-      urls.push(value);
+      const normalized = normalizeAssetUrl(value);
+      if (normalized) {
+        urls.push(normalized);
+      }
     }
   };
 
@@ -499,6 +616,17 @@ const getCustomizationImageUrls = (custom: CartCustomization): string[] => {
   }
 
   return [...new Set(urls)];
+};
+
+const shouldShowMissingFileFallback = (
+  customization: CartCustomization,
+  fileValidation: Record<string, boolean>,
+): boolean => {
+  if (!customization.id || fileValidation[customization.id] !== false) {
+    return false;
+  }
+
+  return getCustomizationImageUrls(customization).length === 0;
 };
 
 const isSameComponent = (
@@ -570,7 +698,6 @@ export function CustomizationsReview({
     getProduct,
     getItemCustomizations,
     saveOrderItemCustomization,
-    getOrder,
     getOrderReviewData,
     validateOrderCustomizationsFiles,
   } = useApi();
@@ -594,9 +721,13 @@ export function CustomizationsReview({
     Customization[]
   >([]);
   const [activeProductId, setActiveProductId] = useState<string | null>(null);
+  const [activeOrderItemId, setActiveOrderItemId] = useState<string | null>(
+    null,
+  );
   const [activeComponentId, setActiveComponentId] = useState<string | null>(
     null,
   );
+  const [refreshVersion, setRefreshVersion] = useState(0);
 
   const fetchFileValidation = useCallback(async () => {
     if (!orderId) return;
@@ -620,8 +751,10 @@ export function CustomizationsReview({
           invalidCustomizations: result.invalidCustomizations,
         });
       }
+      return result;
     } catch (error) {
       console.error("Erro ao validar arquivos:", error);
+      return null;
     }
   }, [orderId, validateOrderCustomizationsFiles]);
 
@@ -634,8 +767,10 @@ export function CustomizationsReview({
 
     if (orderId) {
       try {
-        await fetchFileValidation();
-        const reviewData = await getOrderReviewData(orderId);
+        const [, reviewData] = await Promise.all([
+          fetchFileValidation(),
+          getOrderReviewData(orderId),
+        ]);
 
         const results: ProductValidation[] = reviewData.map((data: any) => {
           const availableCustomizations = Array.isArray(
@@ -693,7 +828,7 @@ export function CustomizationsReview({
                   (val.text as string) ||
                   undefined,
                 componentId: (val.componentId as string) || rule?.componentId,
-                data: val,
+                data: buildNormalizedImageData(val),
               };
             },
           );
@@ -730,6 +865,36 @@ export function CustomizationsReview({
         return;
       } catch (error) {
         console.error("Erro ao buscar dados de revisão consolidados:", error);
+        setValidations([]);
+        setBackendValidationState({
+          valid: false,
+          recommendations: [
+            "Não foi possível validar as personalizações no servidor. Tente novamente antes de prosseguir para o pagamento.",
+          ],
+          missingRequired: [],
+          invalidCustomizations: [
+            {
+              reason:
+                "Falha ao carregar a validação das personalizações diretamente do pedido.",
+            },
+          ],
+        });
+        validationStatusChangeRef.current?.({
+          valid: false,
+          source: "backend",
+          recommendations: [
+            "Não foi possível validar as personalizações no servidor. Tente novamente antes de prosseguir para o pagamento.",
+          ],
+          missingRequired: [],
+          invalidCustomizations: [
+            {
+              reason:
+                "Falha ao carregar a validação das personalizações diretamente do pedido.",
+            },
+          ],
+        });
+        setIsLoading(false);
+        return;
       }
     }
 
@@ -887,13 +1052,26 @@ export function CustomizationsReview({
   ]);
 
   useEffect(() => {
+    if (!orderId) return;
+
     if (cartItems.length > 0) {
       fetchAvailableCustomizations();
     } else {
       setValidations([]);
       setIsLoading(false);
     }
-  }, [cartItems, fetchAvailableCustomizations]);
+  }, [orderId, refreshVersion, fetchAvailableCustomizations, cartItems.length]);
+
+  useEffect(() => {
+    if (orderId) return;
+
+    if (cartItems.length > 0) {
+      fetchAvailableCustomizations();
+    } else {
+      setValidations([]);
+      setIsLoading(false);
+    }
+  }, [orderId, cartItems, fetchAvailableCustomizations]);
 
   const deserializeCustomizationValue = (
     value: string | undefined,
@@ -913,6 +1091,7 @@ export function CustomizationsReview({
       itemId: string,
       itemName: string,
       componentId: string,
+      orderItemId?: string,
     ) => {
       try {
         const configResponse = await getItemCustomizations(itemId);
@@ -933,20 +1112,33 @@ export function CustomizationsReview({
         }));
 
         let filled: CartCustomization[] = [];
+        const modalRuleIds = new Set(modalCustoms.map((custom) => custom.id));
 
         if (orderId) {
-          const validation = validations.find((v) => v.productId === productId);
+          const validation =
+            validations.find((v) => v.orderItemId === orderItemId) ||
+            validations.find((v) => v.productId === productId);
           if (validation) {
-            filled = validation.filledCustomizations.filter(
-              (f) => f.componentId === componentId,
-            );
+            filled = validation.filledCustomizations.filter((f) => {
+              const ruleId = getCustomizationRuleId(f);
+              if (!ruleId || !modalRuleIds.has(ruleId)) {
+                return false;
+              }
+
+              return !f.componentId || f.componentId === componentId;
+            });
           }
         } else {
           const cartItem = cartItems.find((i) => i.product_id === productId);
           filled =
-            cartItem?.customizations?.filter(
-              (f) => f.componentId === componentId,
-            ) || [];
+            cartItem?.customizations?.filter((f) => {
+              const ruleId = getCustomizationRuleId(f);
+              if (!ruleId || !modalRuleIds.has(ruleId)) {
+                return false;
+              }
+
+              return !f.componentId || f.componentId === componentId;
+            }) || [];
         }
 
         const initialData: Record<string, unknown> = {};
@@ -962,7 +1154,13 @@ export function CustomizationsReview({
 
           if (typeof fc.value === "string") {
             const deserialized = deserializeCustomizationValue(fc.value);
-            initialData[ruleId] = deserialized;
+            initialData[ruleId] =
+              fc.customization_type === "IMAGES"
+                ? buildNormalizedImageData(
+                    deserialized as PersonalizationData,
+                    fc.photos,
+                  )
+                : deserialized;
             return;
           }
 
@@ -975,13 +1173,10 @@ export function CustomizationsReview({
               ? originalData
               : fc.selected_option;
           } else if (fc.customization_type === "IMAGES") {
-            initialData[ruleId] = {
-              ...originalData,
-              photos:
-                (originalData.photos as PhotoUploadData[] | undefined) ||
-                fc.photos ||
-                [],
-            };
+            initialData[ruleId] = buildNormalizedImageData(
+              originalData as PersonalizationData,
+              fc.photos,
+            );
           } else if (fc.customization_type === "DYNAMIC_LAYOUT") {
             initialData[ruleId] = Object.keys(originalData).length
               ? originalData
@@ -994,6 +1189,7 @@ export function CustomizationsReview({
         setActiveItemName(itemName);
         setActiveCustomizations(modalCustoms);
         setActiveProductId(productId);
+        setActiveOrderItemId(orderItemId || null);
         setActiveComponentId(componentId);
         setModalOpen(true);
       } catch (error) {
@@ -1012,29 +1208,9 @@ export function CustomizationsReview({
         return;
       }
 
-      if (orderId && activeProductId) {
+      if (orderId && activeOrderItemId) {
         setIsSaving(true);
         try {
-          const order = await getOrder(orderId);
-
-          const orderItem = order?.items?.find(
-            (item: { product_id: string }) =>
-              item.product_id === activeProductId,
-          );
-
-          if (!orderItem) {
-            console.error(
-              "❌ OrderItem não encontrado para o produto:",
-              activeProductId,
-            );
-            toast.error("Item do pedido não encontrado.");
-            setIsSaving(false);
-            setModalOpen(false);
-            return;
-          }
-
-          const orderItemId = orderItem.id;
-
           for (const customization of data) {
             const customData = customization.data as PersonalizationData;
             const highQualityUrl = (customData as any).highQualityUrl as
@@ -1112,11 +1288,16 @@ export function CustomizationsReview({
               delete sanitizedData.files;
             }
 
-            await saveOrderItemCustomization(orderId, orderItemId, payload);
+            await saveOrderItemCustomization(
+              orderId,
+              activeOrderItemId,
+              payload,
+            );
           }
 
           toast.success("Personalização salva no pedido!");
           onCustomizationSaved?.();
+          setRefreshVersion((value) => value + 1);
         } catch (error) {
           console.error(
             "❌ [CustomizationsReview] Erro ao salvar customização:",
@@ -1137,18 +1318,20 @@ export function CustomizationsReview({
       }
 
       setModalOpen(false);
-      fetchAvailableCustomizations();
+      if (!orderId) {
+        fetchAvailableCustomizations();
+      }
     },
     [
       activeItemId,
+      activeOrderItemId,
       activeProductId,
       activeComponentId,
+      fetchAvailableCustomizations,
       orderId,
       onCustomizationUpdate,
       onCustomizationSaved,
       saveOrderItemCustomization,
-      fetchAvailableCustomizations,
-      getOrder,
       setModalOpen,
     ],
   );
@@ -1338,11 +1521,11 @@ export function CustomizationsReview({
                             {filled.length > 0 && (
                               <div className="max-w-[60%] flex flex-col gap-2">
                                 {filled
-                                  .filter(
-                                    (f) =>
-                                      f.id &&
-                                      fileValidation &&
-                                      fileValidation[f.id] === false,
+                                  .filter((f) =>
+                                    shouldShowMissingFileFallback(
+                                      f,
+                                      fileValidation,
+                                    ),
                                   )
                                   .map((f, idx) => (
                                     <CustomizationFallback
@@ -1354,6 +1537,7 @@ export function CustomizationsReview({
                                           itemId,
                                           itemName || "Item",
                                           componentId,
+                                          validation.orderItemId,
                                         )
                                       }
                                     />
@@ -1363,9 +1547,10 @@ export function CustomizationsReview({
                                   {filled
                                     .filter(
                                       (f) =>
-                                        !fileValidation ||
-                                        (f.id &&
-                                          fileValidation[f.id] !== false),
+                                        !shouldShowMissingFileFallback(
+                                          f,
+                                          fileValidation,
+                                        ),
                                     )
                                     .map((f, idx) => {
                                       const summary =
@@ -1389,8 +1574,10 @@ export function CustomizationsReview({
                                 {filled
                                   .filter(
                                     (f) =>
-                                      !fileValidation ||
-                                      (f.id && fileValidation[f.id] !== false),
+                                      !shouldShowMissingFileFallback(
+                                        f,
+                                        fileValidation,
+                                      ),
                                   )
                                   .map((f, idx) => {
                                     const previewUrls =
@@ -1417,6 +1604,7 @@ export function CustomizationsReview({
                                                     itemId,
                                                     itemName || "Item",
                                                     componentId,
+                                                    validation.orderItemId,
                                                   )
                                                 }
                                                 className="rounded border border-gray-200 hover:border-gray-400"
@@ -1446,6 +1634,7 @@ export function CustomizationsReview({
                                 itemId,
                                 itemName || "Item",
                                 componentId,
+                                validation.orderItemId,
                               )
                             }
                             className={`h-8 px-2 font-medium text-xs ${
