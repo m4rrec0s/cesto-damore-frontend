@@ -682,6 +682,10 @@ export default function ClientFabricEditor({
         await loadLocalImageToFrame(fabricRef, frame, finalUrl);
       }
 
+      setCropDialogOpen(false);
+      setFileToCrop(null);
+      setCurrentFrameId(null);
+
       toast.success("Imagem aplicada!", { id: tid });
     } catch (err) {
       console.error("Erro no processamento da imagem:", err);
@@ -985,9 +989,11 @@ export default function ClientFabricEditor({
           onClose={() => {
             setCropDialogOpen(false);
             setFileToCrop(null);
+            setCurrentFrameId(null);
           }}
           onCropComplete={handleCropComplete}
           aspect={cropAspect}
+          isProcessing={isProcessingImage}
           title="Ajuste sua Foto"
           description="Posicione a foto para que ela preencha perfeitamente a moldura"
         />

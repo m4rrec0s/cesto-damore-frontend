@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -11,17 +11,18 @@ import {
 } from "@/app/components/ui/dialog";
 import { Button } from "@/app/components/ui/button";
 import { ImageCrop, ImageCropApply, ImageCropContent } from "./image-crop";
-import { CheckIcon, XIcon } from "lucide-react";
+import { CheckIcon, Loader2, XIcon } from "lucide-react";
 
 interface ImageCropDialogProps {
   file: File;
   isOpen: boolean;
   onClose: () => void;
-  onCropComplete: (croppedImage: string) => void;
+  onCropComplete: (croppedImage: string) => void | Promise<void>;
   aspect?: number;
   showAspectControls?: boolean;
   title?: string;
   description?: string;
+  isProcessing?: boolean;
 }
 
 export function ImageCropDialog({
@@ -33,26 +34,56 @@ export function ImageCropDialog({
   showAspectControls = false,
   title = "Ajustar imagem",
   description = "Recorte a imagem para o tamanho ideal",
+  isProcessing = false,
 }: ImageCropDialogProps) {
   const cropResultRef = useRef<string | null>(null);
+  const [isApplyingCrop, setIsApplyingCrop] = useState(false);
+
+  const isBusy = isProcessing || isApplyingCrop;
 
   const handleCropReady = (croppedImage: string) => {
     cropResultRef.current = croppedImage;
   };
 
   const handleCancel = () => {
+    if (isBusy) return;
     cropResultRef.current = null;
     onClose();
+  };
+
+  const handleApply = async () => {
+    const result = cropResultRef.current;
+    if (!result || isBusy) return;
+
+    cropResultRef.current = null;
+    setIsApplyingCrop(true);
+
+    try {
+      await onCropComplete(result);
+    } finally {
+      setIsApplyingCrop(false);
+    }
   };
 
   return (
     <Dialog
       open={isOpen}
       onOpenChange={(open) => {
-        if (!open) handleCancel();
+        if (!open && !isBusy) handleCancel();
       }}
     >
-      <DialogContent className="flex max-h-[calc(100dvh-1rem)] w-[calc(100vw-1rem)] max-w-4xl flex-col overflow-hidden p-0 sm:max-h-[90vh] sm:w-[90vw]">
+      <DialogContent
+        className="flex max-h-[calc(100dvh-1rem)] w-[calc(100vw-1rem)] max-w-4xl flex-col overflow-hidden p-0 sm:max-h-[90vh] sm:w-[90vw]"
+        onPointerDownOutside={(event) => {
+          if (isBusy) event.preventDefault();
+        }}
+        onInteractOutside={(event) => {
+          if (isBusy) event.preventDefault();
+        }}
+        onEscapeKeyDown={(event) => {
+          if (isBusy) event.preventDefault();
+        }}
+      >
         <DialogHeader>
           <div className="border-b border-neutral-200 px-4 py-4 sm:px-6">
             <DialogTitle>{title}</DialogTitle>
@@ -74,22 +105,30 @@ export function ImageCropDialog({
             </div>
 
             <DialogFooter className="mt-4 border-t border-neutral-200 pt-4 pb-[max(0.25rem,env(safe-area-inset-bottom))]">
-              <Button variant="outline" onClick={handleCancel}>
+              <Button
+                variant="outline"
+                onClick={handleCancel}
+                disabled={isBusy}
+              >
                 <XIcon className="h-4 w-4 mr-2" />
                 Cancelar
               </Button>
               <ImageCropApply
-                onClick={() => {
-                  const result = cropResultRef.current;
-                  if (result) {
-                    cropResultRef.current = null;
-                    onCropComplete(result);
-                  }
-                }}
+                onClick={handleApply}
+                disabled={isBusy}
                 className="bg-rose-500 hover:bg-rose-600 text-white h-9 px-4 rounded-md text-sm font-medium inline-flex items-center gap-2"
               >
-                <CheckIcon className="h-4 w-4" />
-                Confirmar
+                {isBusy ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Enviando...
+                  </>
+                ) : (
+                  <>
+                    <CheckIcon className="h-4 w-4" />
+                    Confirmar
+                  </>
+                )}
               </ImageCropApply>
             </DialogFooter>
           </ImageCrop>

@@ -52,6 +52,14 @@ interface PreviewImageEntry {
   temp_filename?: string;
 }
 
+const hasPersistentImageReference = (entry: PreviewImageEntry): boolean => {
+  if (entry.temp_filename) return true;
+  if (!entry.preview) return false;
+  return (
+    !entry.preview.startsWith("data:") && !entry.preview.startsWith("blob:")
+  );
+};
+
 interface Customization {
   id: string;
   name: string;
@@ -716,23 +724,23 @@ export function ItemCustomizationModal({
         const blob = dataURLtoBlob(croppedImageUrl);
         const file = new File([blob], originalFileName, { type: "image/png" });
 
-        let previewUrl = croppedImageUrl;
-        let tempFilename: string | undefined;
+        const formData = new FormData();
+        formData.append("image", file);
+        const response = await fetch(`${API_URL}/temp/upload`, {
+          method: "POST",
+          body: formData,
+        });
 
-        try {
-          const formData = new FormData();
-          formData.append("image", file);
-          const response = await fetch(`${API_URL}/temp/upload`, {
-            method: "POST",
-            body: formData,
-          });
-          if (response.ok) {
-            const result = await response.json();
-            previewUrl = result.url;
-            tempFilename = result.filename;
-          }
-        } catch {
-          console.warn("⚠️ Backend upload falhou, usando preview local");
+        if (!response.ok) {
+          throw new Error("Falha ao enviar imagem temporária");
+        }
+
+        const result = await response.json();
+        const previewUrl = result.url;
+        const tempFilename = result.filename;
+
+        if (!previewUrl || !tempFilename) {
+          throw new Error("Imagem enviada sem referência válida");
         }
 
         const newEntry: PreviewImageEntry = {
@@ -764,7 +772,7 @@ export function ItemCustomizationModal({
         });
       } catch (error) {
         console.error("❌ [Crop] Erro ao processar imagem:", error);
-        toast.error("Erro ao processar imagem");
+        toast.error("Erro ao enviar a imagem. Tente novamente.");
       } finally {
         setLoading(false);
       }
@@ -804,11 +812,35 @@ export function ItemCustomizationModal({
   const extractImageEntries = useCallback(
     (customizationId: string): PreviewImageEntry[] => {
       const fromState = customizationData[customizationId];
+      const extractSourceArray = (value: unknown): unknown[] => {
+        if (Array.isArray(value)) return value;
+        if (value && typeof value === "object") {
+          const candidate = value as Record<string, unknown>;
+          if (Array.isArray(candidate.photos))
+            return candidate.photos as unknown[];
+          if (Array.isArray(candidate.previews)) {
+            const previews = candidate.previews as unknown[];
+            const tempFileIds = Array.isArray(candidate.temp_file_ids)
+              ? (candidate.temp_file_ids as unknown[])
+              : [];
+
+            return previews.map((preview, index) => ({
+              preview,
+              temp_file_id:
+                typeof tempFileIds[index] === "string"
+                  ? tempFileIds[index]
+                  : undefined,
+            }));
+          }
+        }
+        return [];
+      };
+
       const sourceArray = Array.isArray(fromState)
         ? fromState
-        : Array.isArray(initialValues?.[customizationId])
-          ? (initialValues?.[customizationId] as unknown[])
-          : [];
+        : extractSourceArray(fromState).length > 0
+          ? extractSourceArray(fromState)
+          : extractSourceArray(initialValues?.[customizationId]);
 
       const entries = sourceArray
         .map((entry) => {
@@ -836,6 +868,10 @@ export function ItemCustomizationModal({
               original_name:
                 (obj.original_name as string) ||
                 (obj.file_name as string) ||
+                undefined,
+              temp_filename:
+                (obj.temp_filename as string) ||
+                (obj.temp_file_id as string) ||
                 undefined,
             } as PreviewImageEntry;
           }
@@ -1272,6 +1308,11 @@ export function ItemCustomizationModal({
     const maxImages =
       customization.customization_data.dynamic_layout?.max_images || 10;
     const hasImages = imageEntries.length > 0;
+    const hasRequiredImageCount = imageEntries.length === maxImages;
+    const uploadedImageCount = imageEntries.filter(
+      hasPersistentImageReference,
+    ).length;
+    const hasAllImagesUploaded = uploadedImageCount === imageEntries.length;
 
     return (
       <div className="space-y-4 pb-5">
@@ -1299,6 +1340,11 @@ export function ItemCustomizationModal({
           <p className="text-xs text-neutral-500 mt-2 ml-11">
             {imageEntries.length}/{maxImages} imagens
           </p>
+          {hasImages && !hasAllImagesUploaded && (
+            <p className="text-xs text-red-600 mt-1 ml-11">
+              Algumas imagens ainda precisam ser enviadas corretamente.
+            </p>
+          )}
         </div>
 
         {imageEntries.length > 0 && (
@@ -1341,7 +1387,11 @@ export function ItemCustomizationModal({
               <div key={`empty-slot-${globalIndex}`}>
                 <label
                   htmlFor={`file-${customization.id}-${globalIndex}`}
-                  className="flex flex-col items-start gap-3 border-2 border-dashed border-neutral-200 rounded-xl p-4 cursor-pointer hover:border-neutral-400 hover:bg-neutral-50 transition-all bg-neutral-50/30 group sm:flex-row sm:items-center sm:justify-between"
+                  className={`flex flex-col items-start gap-3 border-2 border-dashed border-neutral-200 rounded-xl p-4 cursor-pointer hover:border-neutral-400 hover:bg-neutral-50 transition-all bg-neutral-50/30 group sm:flex-row sm:items-center sm:justify-between ${
+                    loading || pendingFiles.length > 0
+                      ? "opacity-50 cursor-not-allowed hover:border-neutral-200 hover:bg-neutral-50/30"
+                      : ""
+                  }`}
                 >
                   <div className="flex items-center gap-3">
                     <div className="bg-neutral-100 p-2 rounded-full group-hover:bg-neutral-200 transition-colors">
@@ -1366,6 +1416,7 @@ export function ItemCustomizationModal({
                       handleFileUpload(customization.id, e.target.files);
                       e.target.value = "";
                     }}
+                    disabled={loading || pendingFiles.length > 0}
                   />
 
                   <div className="bg-white border border-neutral-200 px-3 py-1 rounded text-xs font-medium text-neutral-600">
@@ -1399,11 +1450,26 @@ export function ItemCustomizationModal({
                   clearCustomizationImages(itemId, customization.id);
                 }}
                 className="flex-1"
+                disabled={loading}
               >
                 Limpar
               </Button>
               <Button
                 onClick={() => {
+                  if (!hasRequiredImageCount) {
+                    toast.error(
+                      `Envie todas as ${maxImages} imagens para continuar.`,
+                    );
+                    return;
+                  }
+
+                  if (!hasAllImagesUploaded) {
+                    toast.error(
+                      "Finalize o envio de todas as imagens antes de confirmar.",
+                    );
+                    return;
+                  }
+
                   const result: CustomizationInput[] = [];
                   if (imageEntries.length > 0) {
                     result.push({
@@ -1417,7 +1483,20 @@ export function ItemCustomizationModal({
                         previews: imageEntries.map(
                           (item) => item.base64 || item.preview,
                         ),
+                        temp_file_ids: imageEntries.map(
+                          (item) => item.temp_filename,
+                        ),
+                        photos: imageEntries.map((item, index) => ({
+                          preview_url: item.preview,
+                          original_name:
+                            item.original_name || `image-${index + 1}`,
+                          position: index,
+                          temp_file_id: item.temp_filename,
+                          mime_type: item.mime_type,
+                          size: item.size,
+                        })),
                         count: imageEntries.length,
+                        required_count: maxImages,
                         _customizationName: customization.name,
                         _priceAdjustment: customization.price || 0,
                       } as unknown as Record<string, unknown>,
@@ -1427,6 +1506,9 @@ export function ItemCustomizationModal({
                   onComplete(result.length > 0, result);
                   toast.success("Imagens confirmadas!");
                 }}
+                disabled={
+                  loading || !hasRequiredImageCount || !hasAllImagesUploaded
+                }
                 className="flex-1 gap-2 bg-green-600 hover:bg-green-700"
               >
                 <CheckCircle2 className="h-4 w-4" />

@@ -165,6 +165,9 @@ const ClientProductPage = ({ id }: { id: string }) => {
   const [itemImagesCount, setItemImagesCount] = useState<
     Record<string, { current: number; max: number }>
   >({});
+  const [missingRequiredByComponent, setMissingRequiredByComponent] = useState<
+    Record<string, string[]>
+  >({});
   const [selectedAdditionalIds, setSelectedAdditionalIds] = useState<string[]>(
     [],
   );
@@ -209,6 +212,13 @@ const ClientProductPage = ({ id }: { id: string }) => {
       hasCustomizations: boolean,
       data: CustomizationInput[],
     ) => {
+      setMissingRequiredByComponent((prev) => {
+        if (!prev[itemId]) return prev;
+        const copy = { ...prev };
+        delete copy[itemId];
+        return copy;
+      });
+
       if (hasCustomizations) {
         setItemCustomizations((prev) => ({
           ...prev,
@@ -276,6 +286,99 @@ const ClientProductPage = ({ id }: { id: string }) => {
       setActiveAdditionalModal(null);
     },
     [],
+  );
+
+  const getMissingRequiredCustomizationIds = useCallback(
+    (component: ProductComponent): string[] => {
+      if (!component.item.allows_customization) return [];
+
+      const requiredCustomizations =
+        component.item.customizations?.filter((c) => c.isRequired) || [];
+      const componentData = itemCustomizations[component.id] || [];
+      const missingIds: string[] = [];
+
+      requiredCustomizations.forEach((reqCustom) => {
+        const customData = componentData.find((c) => c.ruleId === reqCustom.id);
+
+        if (!customData) {
+          missingIds.push(reqCustom.id);
+          return;
+        }
+
+        const data = customData.data as Record<string, unknown>;
+
+        if (reqCustom.type === "TEXT") {
+          const fields =
+            (
+              reqCustom.customization_data as {
+                fields?: Array<{ id: string }>;
+              }
+            )?.fields || [];
+
+          const fieldsData =
+            (data.fields as Record<string, string> | undefined) || data;
+
+          const hasEmptyField = fields.some((field) => {
+            const value = fieldsData[field.id];
+            return !value || (typeof value === "string" && value.trim() === "");
+          });
+
+          if (hasEmptyField) {
+            missingIds.push(reqCustom.id);
+          }
+        }
+
+        if (reqCustom.type === "IMAGES") {
+          const imagesData = data as {
+            files?: File[];
+            previews?: string[];
+            count?: number;
+          };
+          const maxImages =
+            (
+              reqCustom.customization_data as {
+                dynamic_layout?: { max_images?: number };
+              }
+            )?.dynamic_layout?.max_images || 0;
+          const imageCount =
+            imagesData.count ||
+            (Array.isArray(imagesData.previews)
+              ? imagesData.previews.length
+              : 0) ||
+            (Array.isArray(imagesData.files) ? imagesData.files.length : 0);
+
+          if (imageCount === 0 || (maxImages > 0 && imageCount < maxImages)) {
+            missingIds.push(reqCustom.id);
+          }
+        }
+
+        if (reqCustom.type === "MULTIPLE_CHOICE") {
+          const choice = data as
+            | { id?: string; selected_option?: string }
+            | undefined;
+
+          const hasOptionSelected =
+            choice && (choice.id || choice.selected_option);
+          if (!hasOptionSelected) {
+            missingIds.push(reqCustom.id);
+          }
+        }
+
+        if (reqCustom.type === "DYNAMIC_LAYOUT") {
+          const layout = data as
+            | { id?: string; layout_id?: string }
+            | undefined;
+
+          const hasLayoutSelected = layout && (layout.id || layout.layout_id);
+          if (!hasLayoutSelected) {
+            missingIds.push(reqCustom.id);
+          }
+        }
+      });
+
+      return missingIds;
+    },
+    [itemCustomizations],
   );
 
   const handleAddAdditionalToCart = useCallback(
@@ -508,6 +611,69 @@ const ClientProductPage = ({ id }: { id: string }) => {
     };
   }, [itemCustomizations, previewComponentId, selectedComponent, components]);
 
+  const uploadRequiredImages = useCallback(
+    async (
+      imagesData: {
+        files?: File[];
+        previews?: string[];
+        count?: number;
+        required_count?: number;
+      },
+      customizationName: string,
+    ) => {
+      const previews = Array.isArray(imagesData.previews)
+        ? imagesData.previews
+        : [];
+      const requiredCount = imagesData.required_count || imagesData.count || 0;
+
+      if (requiredCount > 0 && previews.length < requiredCount) {
+        throw new Error(
+          `${customizationName}: faltam ${requiredCount - previews.length} imagem(ns).`,
+        );
+      }
+
+      const photos = await Promise.all(
+        previews.map(async (preview, index) => {
+          const file = imagesData.files?.[index];
+          const fileName = file?.name || `photo-${index + 1}.jpg`;
+
+          if (!file) {
+            throw new Error(
+              `${customizationName}: a imagem ${index + 1} precisa ser reenviada.`,
+            );
+          }
+
+          const uploadResult = await uploadCustomizationImage(file);
+          if (!uploadResult.success || !uploadResult.imageUrl) {
+            throw new Error(
+              `${customizationName}: não foi possível enviar a imagem ${index + 1}.`,
+            );
+          }
+
+          return {
+            preview_url: uploadResult.imageUrl,
+            original_name: fileName,
+            temp_file_id:
+              uploadResult.filename || `temp-${Date.now()}-${index}`,
+            position: index,
+            base64: preview,
+            mime_type: file.type || "image/jpeg",
+            size: file.size || 0,
+          };
+        }),
+      );
+
+      if (requiredCount > 0 && photos.length < requiredCount) {
+        throw new Error(
+          `${customizationName}: nem todas as imagens obrigatórias foram processadas.`,
+        );
+      }
+
+      return photos;
+    },
+    [uploadCustomizationImage],
+  );
+
   const handleAddToCart = async () => {
     if (!product.id) return;
 
@@ -520,121 +686,23 @@ const ClientProductPage = ({ id }: { id: string }) => {
       return;
     }
 
-    const missingCustomizations: string[] = [];
-
-    components.forEach((component) => {
-      if (!component.item.allows_customization) return;
-
-      const requiredCustomizations =
-        component.item.customizations?.filter((c) => c.isRequired) || [];
-      const componentData = itemCustomizations[component.id] || [];
-
-      requiredCustomizations.forEach((reqCustom) => {
-        const hasData = componentData.some((c) => c.ruleId === reqCustom.id);
-
-        if (!hasData) {
-          missingCustomizations.push(
-            `${component.item.name} - ${reqCustom.name}`,
-          );
-        } else {
-          const customData = componentData.find(
-            (c) => c.ruleId === reqCustom.id,
-          );
-          if (customData) {
-            const data = customData.data as Record<string, unknown>;
-
-            if (reqCustom.type === "TEXT") {
-              const fields =
-                (
-                  reqCustom.customization_data as {
-                    fields?: Array<{ id: string }>;
-                  }
-                )?.fields || [];
-
-              const fieldsData =
-                (data.fields as Record<string, string> | undefined) || data;
-
-              const hasEmptyField = fields.some((field) => {
-                const value = fieldsData[field.id];
-                return (
-                  !value || (typeof value === "string" && value.trim() === "")
-                );
-              });
-
-              if (hasEmptyField) {
-                missingCustomizations.push(
-                  `${component.item.name} - ${reqCustom.name} (campo vazio)`,
-                );
-              }
-            }
-
-            if (reqCustom.type === "IMAGES") {
-              const imagesData = data as {
-                files?: File[];
-                previews?: string[];
-                count?: number;
-              };
-
-              const hasPhotos =
-                imagesData?.files &&
-                Array.isArray(imagesData.files) &&
-                imagesData.files.length > 0;
-
-              if (!hasPhotos) {
-                missingCustomizations.push(
-                  `${component.item.name} - ${reqCustom.name} (sem fotos)`,
-                );
-              }
-            }
-
-            if (reqCustom.type === "MULTIPLE_CHOICE") {
-              const choice = data as
-                | { id?: string; selected_option?: string }
-                | undefined;
-
-              const hasOptionSelected =
-                choice && (choice.id || choice.selected_option);
-              if (!hasOptionSelected) {
-                missingCustomizations.push(
-                  `${component.item.name} - ${reqCustom.name} (nenhuma opção selecionada)`,
-                );
-              }
-            }
-
-            if (reqCustom.type === "DYNAMIC_LAYOUT") {
-              const layout = data as
-                | { id?: string; layout_id?: string }
-                | undefined;
-
-              const hasLayoutSelected =
-                layout && (layout.id || layout.layout_id);
-              if (!hasLayoutSelected) {
-                missingCustomizations.push(
-                  `${component.item.name} - ${reqCustom.name} (nenhum layout selecionado)`,
-                );
-              }
-            }
-          }
+    const missingCustomizations = components.reduce<Record<string, string[]>>(
+      (accumulator, component) => {
+        const missingIds = getMissingRequiredCustomizationIds(component);
+        if (missingIds.length > 0) {
+          accumulator[component.id] = missingIds;
         }
-      });
-    });
+        return accumulator;
+      },
+      {},
+    );
 
-    if (missingCustomizations.length > 0) {
-      toast.error(
-        <div>
-          <p className="font-semibold">
-            Personalizações obrigatórias não preenchidas:
-          </p>
-          <ul className="list-disc list-inside mt-2 text-sm">
-            {missingCustomizations.map((missing, idx) => (
-              <li key={idx}>{missing}</li>
-            ))}
-          </ul>
-        </div>,
-        { duration: 5000 },
-      );
+    if (Object.keys(missingCustomizations).length > 0) {
+      setMissingRequiredByComponent(missingCustomizations);
       return;
     }
+
+    setMissingRequiredByComponent({});
 
     setAddingToCart(true);
 
@@ -694,50 +762,12 @@ const ClientProductPage = ({ id }: { id: string }) => {
               files?: File[];
               previews?: string[];
               count?: number;
+              required_count?: number;
             };
-
-            const photos =
-              imagesData.previews && imagesData.previews.length > 0
-                ? await Promise.all(
-                    imagesData.previews.map(async (preview, index) => {
-                      const file = imagesData.files?.[index];
-                      const fileName = file?.name || `photo-${index + 1}.jpg`;
-
-                      let tempFileUrl = preview;
-                      let uploadedFileName = "";
-                      try {
-                        if (file) {
-                          const uploadResult =
-                            await uploadCustomizationImage(file);
-                          if (uploadResult.success) {
-                            tempFileUrl = uploadResult.imageUrl;
-                            uploadedFileName = uploadResult.filename;
-                          } else {
-                            console.warn(
-                              `⚠️ [IMAGES-3] Upload falhou para ${fileName}, usando base64`,
-                            );
-                          }
-                        }
-                      } catch (err) {
-                        console.error(
-                          `❌ [IMAGES-3] Erro ao fazer upload de ${fileName}:`,
-                          err,
-                        );
-                      }
-
-                      return {
-                        preview_url: tempFileUrl,
-                        original_name: fileName,
-                        temp_file_id:
-                          uploadedFileName || `temp-${Date.now()}-${index}`,
-                        position: index,
-                        base64: preview,
-                        mime_type: file?.type || "image/jpeg",
-                        size: file?.size || 0,
-                      };
-                    }),
-                  )
-                : [];
+            const photos = await uploadRequiredImages(
+              imagesData,
+              customizationName,
+            );
 
             cartCustomizations.push({
               customization_id: input.ruleId
@@ -885,42 +915,12 @@ const ClientProductPage = ({ id }: { id: string }) => {
               files?: File[];
               previews?: string[];
               count?: number;
+              required_count?: number;
             };
-
-            const photos =
-              imagesData.previews && imagesData.previews.length > 0
-                ? await Promise.all(
-                    imagesData.previews.map(async (preview, index) => {
-                      const file = imagesData.files?.[index];
-                      const fileName = file?.name || `photo-${index + 1}.jpg`;
-                      let tempFileUrl = preview;
-                      let uploadedFileName = "";
-                      try {
-                        if (file) {
-                          const uploadResult =
-                            await uploadCustomizationImage(file);
-                          if (uploadResult.success) {
-                            tempFileUrl = uploadResult.imageUrl;
-                            uploadedFileName = uploadResult.filename;
-                          }
-                        }
-                      } catch (err) {
-                        console.error(err);
-                      }
-
-                      return {
-                        preview_url: tempFileUrl,
-                        original_name: fileName,
-                        temp_file_id:
-                          uploadedFileName || `temp-${Date.now()}-${index}`,
-                        position: index,
-                        base64: preview,
-                        mime_type: file?.type || "image/jpeg",
-                        size: file?.size || 0,
-                      };
-                    }),
-                  )
-                : [];
+            const photos = await uploadRequiredImages(
+              imagesData,
+              customizationName,
+            );
 
             cartCustomizations.push({
               customization_id: input.ruleId
@@ -1016,7 +1016,11 @@ const ClientProductPage = ({ id }: { id: string }) => {
       setSelectedAdditionalIds([]);
     } catch (error) {
       console.error("Erro ao adicionar ao carrinho:", error);
-      toast.error("Erro ao adicionar produto ao carrinho");
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Erro ao adicionar produto ao carrinho",
+      );
     } finally {
       setAddingToCart(false);
     }
@@ -1309,12 +1313,34 @@ const ClientProductPage = ({ id }: { id: string }) => {
 
             {components && components.length > 0 && (
               <div className="space-y-4">
+                {Object.keys(missingRequiredByComponent).length > 0 && (
+                  <div className="text-xs font-medium text-red-700">
+                    Complete as customizações
+                  </div>
+                )}
                 {components.map((component) => {
                   const layouts = availableLayoutsByComponent[component.id];
                   if (!layouts || layouts.length === 0) return null;
 
+                  const dynamicLayoutRule = component.item.customizations?.find(
+                    (c) => c.type === "DYNAMIC_LAYOUT" && c.isRequired,
+                  );
+                  const hasDynamicLayoutError = !!(
+                    dynamicLayoutRule &&
+                    missingRequiredByComponent[component.id]?.includes(
+                      dynamicLayoutRule.id,
+                    )
+                  );
+
                   return (
-                    <div key={`gallery-${component.id}`} className="space-y-3">
+                    <div
+                      key={`gallery-${component.id}`}
+                      className={cn(
+                        "space-y-3 rounded-xl p-3",
+                        hasDynamicLayoutError &&
+                          "border border-red-300 bg-red-50/60",
+                      )}
+                    >
                       <p className="text-xs font-medium text-gray-600 uppercase tracking-wide">
                         {component.item.name}
                       </p>
@@ -1400,13 +1426,15 @@ const ClientProductPage = ({ id }: { id: string }) => {
                     </div>
                   );
                 })}
-
                 <div className="space-y-2">
                   {components
                     .filter((c) => c.item.allows_customization)
                     .map((component) => {
                       const componentCustomizations =
                         itemCustomizations[component.id] || [];
+                      const hasMissingRequired =
+                        (missingRequiredByComponent[component.id]?.length ||
+                          0) > 0;
                       const hasCustomizations =
                         componentCustomizations.length > 0;
                       const requiredCount =
@@ -1426,7 +1454,11 @@ const ClientProductPage = ({ id }: { id: string }) => {
                             setActiveCustomizationModal(component.id);
                           }}
                           variant="outline"
-                          className="w-full justify-between h-auto py-3 px-4"
+                          className={cn(
+                            "w-full justify-between h-auto py-3 px-4",
+                            hasMissingRequired &&
+                              "border-red-400 text-red-950 hover:border-red-500 hover:text-red-700",
+                          )}
                         >
                           <div className="flex items-center gap-3">
                             <div className="w-10 h-10 relative rounded-lg overflow-hidden flex-shrink-0">

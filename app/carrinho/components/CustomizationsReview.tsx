@@ -23,7 +23,7 @@ interface CartItemForReview {
     name: string;
     image_url?: string | null;
   };
-  
+
   additionals?: {
     id: string;
     item_id?: string;
@@ -58,8 +58,9 @@ interface AvailableCustomization {
   isRequired: boolean;
   itemId: string;
   itemName: string;
-  componentId: string; 
-  isAdditional?: boolean; 
+  componentId: string;
+  isAdditional?: boolean;
+  customizationData?: Record<string, unknown>;
 }
 
 interface ProductValidation {
@@ -82,7 +83,6 @@ interface CheckoutValidationIssue {
   reason: string;
 }
 
-
 interface CustomizationPreview {
   preview_url?: string;
   url?: string;
@@ -95,6 +95,8 @@ interface PersonalizationData {
   is_required?: boolean | number;
   text?: string;
   photos?: PhotoUploadData[];
+  previews?: string[];
+  temp_file_ids?: Array<string | null | undefined>;
   selected_option?: string;
   selected_item_label?: string;
   selected_option_label?: string;
@@ -105,9 +107,10 @@ interface PersonalizationData {
   final_artworks?: CustomizationPreview[];
   previewUrl?: string;
   images?: Array<Record<string, unknown>>;
+  count?: number;
+  required_count?: number;
   [key: string]: unknown;
 }
-
 
 interface ModalCustomization {
   id: string;
@@ -121,8 +124,144 @@ interface ModalCustomization {
 
 type Customization = ModalCustomization;
 
+const getCustomizationRuleId = (
+  customization:
+    | Pick<CartCustomization, "customization_id" | "data">
+    | Record<string, unknown>
+    | undefined,
+): string | null => {
+  if (!customization) return null;
+
+  const directId =
+    "customization_id" in customization
+      ? customization.customization_id
+      : undefined;
+  if (typeof directId === "string" && directId.length > 0) {
+    return directId.split(":")[0];
+  }
+
+  const data =
+    (customization.data as Record<string, unknown> | undefined) ||
+    (customization as Record<string, unknown>);
+  const nestedId =
+    (data.customizationRuleId as string) ||
+    (data.ruleId as string) ||
+    (data.customization_rule_id as string) ||
+    null;
+
+  return nestedId;
+};
+
+const normalizeAvailableCustomization = (
+  customization: Record<string, unknown>,
+): AvailableCustomization => ({
+  id: (customization.id as string) || "",
+  name: (customization.name as string) || "Personalização",
+  type: mapCustomizationType((customization.type as string) || "TEXT"),
+  isRequired: Boolean(customization.isRequired),
+  itemId: (customization.itemId as string) || "",
+  itemName: (customization.itemName as string) || "Item",
+  componentId:
+    (customization.componentId as string) ||
+    (customization.itemId as string) ||
+    "",
+  isAdditional: Boolean(customization.isAdditional),
+  customizationData: (customization.customizationData as Record<
+    string,
+    unknown
+  >) ||
+    (customization.customization_data as Record<string, unknown>) || {
+      dynamic_layout: {
+        max_images:
+          (customization.max_images as number) ||
+          (customization.max_files as number) ||
+          (customization.max_items as number) ||
+          (customization.maxItems as number) ||
+          0,
+      },
+    },
+});
+
+const getRequiredImageCount = (
+  customization?: Pick<AvailableCustomization, "customizationData">,
+): number => {
+  const customizationData = customization?.customizationData;
+  const dynamicLayout = customizationData?.dynamic_layout as
+    | { max_images?: number }
+    | undefined;
+  return (
+    dynamicLayout?.max_images ||
+    (customizationData?.max_images as number) ||
+    (customizationData?.max_files as number) ||
+    (customizationData?.max_items as number) ||
+    (customizationData?.maxItems as number) ||
+    0
+  );
+};
+
+const buildPhotosFromPersonalizationData = (
+  data: PersonalizationData,
+): PhotoUploadData[] => {
+  if (Array.isArray(data.photos) && data.photos.length > 0) {
+    return data.photos;
+  }
+
+  const previews = Array.isArray(data.previews) ? data.previews : [];
+  const tempFileIds = Array.isArray(data.temp_file_ids)
+    ? data.temp_file_ids
+    : [];
+
+  return previews
+    .filter(
+      (preview): preview is string =>
+        typeof preview === "string" && preview.trim().length > 0,
+    )
+    .map((preview, index) => ({
+      preview_url: preview,
+      original_name: `image-${index + 1}`,
+      position: index,
+      temp_file_id:
+        typeof tempFileIds[index] === "string" && tempFileIds[index]
+          ? tempFileIds[index]
+          : `persisted-${index}`,
+    }));
+};
+
+const isPersistedImageUrl = (value: string | undefined): boolean => {
+  if (!value) return false;
+  return !value.startsWith("data:") && !value.startsWith("blob:");
+};
+
+const getUploadedImageCount = (
+  custom: CartCustomization | undefined,
+): number => {
+  if (!custom) return 0;
+
+  const data = (custom.data as Record<string, unknown>) || {};
+  const photos = [
+    ...(Array.isArray(custom.photos) ? custom.photos : []),
+    ...(Array.isArray(data.photos) ? (data.photos as PhotoUploadData[]) : []),
+  ];
+
+  const validPhotoUrls = photos.filter(
+    (photo) =>
+      !!photo?.temp_file_id ||
+      isPersistedImageUrl(photo?.preview_url) ||
+      isPersistedImageUrl((photo as unknown as { url?: string }).url),
+  ).length;
+
+  const previews = Array.isArray(data.previews)
+    ? (data.previews as string[]).filter((preview) =>
+        isPersistedImageUrl(preview),
+      ).length
+    : 0;
+
+  return Math.max(validPhotoUrls, previews);
+};
+
 const isCustomizationFilled = (
   custom: CartCustomization | undefined,
+  available?: AvailableCustomization,
 ): boolean => {
   if (!custom) return false;
 
@@ -134,7 +273,6 @@ const isCustomizationFilled = (
       return text.length >= 2;
     }
     case "MULTIPLE_CHOICE": {
-      
       const hasOption = !!(
         custom.selected_option ||
         data.id ||
@@ -150,12 +288,16 @@ const isCustomizationFilled = (
       return hasOption || hasLabel;
     }
     case "IMAGES": {
-      const photos = custom.photos || data.photos || data.files || [];
-      
-      return Array.isArray(photos) && photos.length > 0;
+      const requiredImageCount = getRequiredImageCount(available);
+      const uploadedImageCount = getUploadedImageCount(custom);
+
+      if (requiredImageCount > 0) {
+        return uploadedImageCount >= requiredImageCount;
+      }
+
+      return uploadedImageCount > 0;
     }
     case "DYNAMIC_LAYOUT": {
-      
       const fabricState = data.fabricState;
       const artworkUrl =
         custom.text ||
@@ -186,29 +328,38 @@ const isCustomizationFilled = (
   }
 };
 
-const getCustomizationHint = (type: string, name: string): string => {
+const getCustomizationHint = (
+  customization: AvailableCustomization,
+  filled?: CartCustomization,
+): string => {
+  const requiredImageCount = getRequiredImageCount(customization);
+  const uploadedImageCount = getUploadedImageCount(filled);
   const hints: Record<string, string> = {
     TEXT: `Digite um texto personalizado (mínimo 3 caracteres)`,
     MULTIPLE_CHOICE: `Selecione uma opção disponível`,
-    IMAGES: `Envie pelo menos 1 foto (clique para fazer upload)`,
+    IMAGES:
+      requiredImageCount > 0
+        ? `Envie ${requiredImageCount} foto(s). Atual: ${uploadedImageCount}/${requiredImageCount}`
+        : `Envie pelo menos 1 foto (clique para fazer upload)`,
     DYNAMIC_LAYOUT: `Escolha um design e personalize-o (não esqueça de salvar)`,
   };
 
-  return hints[type] || `Complete a personalização "${name}"`;
+  return (
+    hints[customization.type] ||
+    `Complete a personalização "${customization.name}"`
+  );
 };
-
 
 const extractCleanText = (text: string | undefined): string => {
   if (!text) return "";
 
   let cleaned = text;
 
-  
   if (cleaned.startsWith("field-")) {
     const colonIndex = cleaned.indexOf(":");
     if (colonIndex !== -1) {
       cleaned = cleaned.substring(colonIndex + 1).trim();
-      
+
       const commaIndex = cleaned.indexOf(",");
       if (commaIndex !== -1) {
         cleaned = cleaned.substring(0, commaIndex).trim();
@@ -216,7 +367,6 @@ const extractCleanText = (text: string | undefined): string => {
     }
   }
 
-  
   if (cleaned.includes(", text: ")) {
     const textMatch = cleaned.match(/,\s*text:\s*([^,]+)/);
     if (textMatch && textMatch[1]) {
@@ -224,36 +374,29 @@ const extractCleanText = (text: string | undefined): string => {
     }
   }
 
-  
   if (cleaned.startsWith('"text: ') && cleaned.endsWith('"')) {
-    
     cleaned = cleaned.slice(7, -1);
   } else if (cleaned.startsWith("text: ")) {
     cleaned = cleaned.substring(6);
   }
 
-  
   try {
     if (cleaned.startsWith("{")) {
       const obj = JSON.parse(cleaned);
       if (obj.text) return obj.text;
-      
+
       for (const key of Object.keys(obj)) {
         if (key.startsWith("field-")) {
           return obj[key];
         }
       }
     }
-  } catch {
-    
-  }
+  } catch {}
 
-  
   return cleaned;
 };
 
 const getCustomizationSummary = (custom: CartCustomization): string => {
-  if (!isCustomizationFilled(custom)) return "";
   const data = (custom.data as Record<string, unknown>) || {};
 
   const getTextFallback = () => {
@@ -286,8 +429,8 @@ const getCustomizationSummary = (custom: CartCustomization): string => {
         ""
       );
     case "IMAGES":
-      return getCustomizationImageUrls(custom).length > 0
-        ? `${getCustomizationImageUrls(custom).length} foto(s)`
+      return getUploadedImageCount(custom) > 0
+        ? `${getUploadedImageCount(custom)} foto(s)`
         : "";
     case "DYNAMIC_LAYOUT":
       return (
@@ -297,6 +440,7 @@ const getCustomizationSummary = (custom: CartCustomization): string => {
         "Design personalizado"
       );
     default:
+      if (!isCustomizationFilled(custom)) return "";
       return "";
   }
 };
@@ -377,10 +521,6 @@ const mapCustomizationType = (backendType: string): string => {
   return typeMap[backendType] || backendType;
 };
 
-
-
-
-
 const CustomizationFallback = ({
   customization,
   onEdit,
@@ -447,7 +587,6 @@ export function CustomizationsReview({
   } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  
   const [modalOpen, setModalOpen] = useState(false);
   const [activeItemId, setActiveItemId] = useState<string | null>(null);
   const [activeItemName, setActiveItemName] = useState<string>("");
@@ -459,7 +598,6 @@ export function CustomizationsReview({
     null,
   );
 
-  
   const fetchFileValidation = useCallback(async () => {
     if (!orderId) return;
     try {
@@ -496,18 +634,31 @@ export function CustomizationsReview({
 
     if (orderId) {
       try {
-        await fetchFileValidation(); 
+        await fetchFileValidation();
         const reviewData = await getOrderReviewData(orderId);
 
         const results: ProductValidation[] = reviewData.map((data: any) => {
+          const availableCustomizations = Array.isArray(
+            data.availableCustomizations,
+          )
+            ? data.availableCustomizations.map(
+                (avail: Record<string, unknown>): AvailableCustomization =>
+                  normalizeAvailableCustomization(avail),
+              )
+            : [];
+
           const filled: CartCustomization[] = data.filledCustomizations.map(
             (f: any) => {
               const val = (f.value || {}) as PersonalizationData;
 
-              const rule = data.availableCustomizations.find(
-                (avail: any) =>
-                  avail.id === f.customization_id ||
-                  f.customization_id?.split(":")[0] === avail.id ||
+              const normalizedRuleId = getCustomizationRuleId({
+                customization_id: f.customization_id,
+                data: val,
+              });
+
+              const rule = availableCustomizations.find(
+                (avail: AvailableCustomization) =>
+                  avail.id === normalizedRuleId ||
                   f.customization_id === avail.componentId ||
                   (val.title &&
                     val.title.toLowerCase() === avail.name.toLowerCase()),
@@ -547,19 +698,18 @@ export function CustomizationsReview({
             },
           );
 
-          const missingRequired = data.availableCustomizations.filter(
-            (avail: any) => {
+          const missingRequired = availableCustomizations.filter(
+            (avail: AvailableCustomization) => {
               const filledCustom = filled.find(
                 (f) =>
-                  (f.customization_id === avail.id ||
-                    f.customization_id?.split(":")[0] === avail.id ||
+                  (getCustomizationRuleId(f) === avail.id ||
                     f.title?.toLowerCase() === avail.name?.toLowerCase() ||
                     (f.data?.title as string)?.toLowerCase() ===
                       avail.name?.toLowerCase()) &&
                   isSameComponent(f, avail),
               );
 
-              const isFilled = isCustomizationFilled(filledCustom);
+              const isFilled = isCustomizationFilled(filledCustom, avail);
               return avail.isRequired && !isFilled;
             },
           );
@@ -568,7 +718,7 @@ export function CustomizationsReview({
             orderItemId: data.orderItemId,
             productId: data.productId,
             productName: data.productName,
-            availableCustomizations: data.availableCustomizations,
+            availableCustomizations,
             filledCustomizations: filled,
             missingRequired,
             isComplete: missingRequired.length === 0,
@@ -580,7 +730,6 @@ export function CustomizationsReview({
         return;
       } catch (error) {
         console.error("Erro ao buscar dados de revisão consolidados:", error);
-        
       }
     }
 
@@ -597,7 +746,6 @@ export function CustomizationsReview({
 
         if (product.components && product.components.length > 0) {
           for (const component of product.components) {
-            
             if (!component.item_id || !component.item?.id) {
               console.warn(`Componente sem item_id válido:`, component);
               continue;
@@ -617,8 +765,9 @@ export function CustomizationsReview({
                 itemId: component.item_id,
                 itemName:
                   configResponse?.item?.name || component.item?.name || "Item",
-                componentId: component.id, 
+                componentId: component.id,
                 isAdditional: false,
+                customizationData: c.customization_data,
               }));
 
               allAvailable.push(...mapped);
@@ -631,7 +780,6 @@ export function CustomizationsReview({
           }
         }
 
-        
         if (cartItem.additionals && cartItem.additionals.length > 0) {
           for (const additional of cartItem.additionals) {
             if (!additional.item_id && !additional.item?.id) continue;
@@ -654,8 +802,9 @@ export function CustomizationsReview({
                   additional.item?.name ||
                   configResponse?.item?.name ||
                   "Adicional",
-                componentId: additional.id, 
-                isAdditional: true, 
+                componentId: additional.id,
+                isAdditional: true,
+                customizationData: c.customization_data,
               }));
               allAvailable.push(...mapped);
             } catch (err) {
@@ -665,22 +814,21 @@ export function CustomizationsReview({
         }
 
         const filled = cartItem.customizations || [];
-        
+
         const missingRequired = allAvailable.filter((avail) => {
           const filledCustom = filled.find(
             (f) =>
               (f.customization_id === avail.id ||
                 f.customization_id?.includes(avail.id)) &&
-              
               (!f.componentId ||
                 f.componentId === avail.componentId ||
                 f.componentId === avail.itemId),
           );
-          
-          if (avail.isRequired && !isCustomizationFilled(filledCustom)) {
+
+          if (avail.isRequired && !isCustomizationFilled(filledCustom, avail)) {
             return true;
           }
-          
+
           return false;
         });
 
@@ -690,7 +838,7 @@ export function CustomizationsReview({
           availableCustomizations: allAvailable,
           filledCustomizations: filled,
           missingRequired,
-          
+
           isComplete: missingRequired.length === 0,
         });
       } catch (error) {
@@ -716,7 +864,7 @@ export function CustomizationsReview({
             isRequired: true,
             itemId: "",
             itemName: "",
-            componentId: "", 
+            componentId: "",
           })),
           isComplete: missingFromFilled.length === 0,
         });
@@ -784,12 +932,9 @@ export function CustomizationsReview({
           customization_data: c.customization_data,
         }));
 
-        
-        
         let filled: CartCustomization[] = [];
 
         if (orderId) {
-          
           const validation = validations.find((v) => v.productId === productId);
           if (validation) {
             filled = validation.filledCustomizations.filter(
@@ -797,7 +942,6 @@ export function CustomizationsReview({
             );
           }
         } else {
-          
           const cartItem = cartItems.find((i) => i.product_id === productId);
           filled =
             cartItem?.customizations?.filter(
@@ -808,8 +952,13 @@ export function CustomizationsReview({
         const initialData: Record<string, unknown> = {};
 
         filled.forEach((fc: CartCustomization) => {
-          const ruleId = fc.customization_id;
+          const ruleId = getCustomizationRuleId(fc);
           if (!ruleId) return;
+
+          const originalData =
+            typeof fc.data === "object" && fc.data !== null
+              ? { ...(fc.data as Record<string, unknown>) }
+              : {};
 
           if (typeof fc.value === "string") {
             const deserialized = deserializeCustomizationValue(fc.value);
@@ -818,13 +967,25 @@ export function CustomizationsReview({
           }
 
           if (fc.customization_type === "TEXT") {
-            initialData[ruleId] = fc.text || "";
+            initialData[ruleId] = Object.keys(originalData).length
+              ? originalData
+              : fc.text || "";
           } else if (fc.customization_type === "MULTIPLE_CHOICE") {
-            initialData[ruleId] = fc.selected_option;
+            initialData[ruleId] = Object.keys(originalData).length
+              ? originalData
+              : fc.selected_option;
           } else if (fc.customization_type === "IMAGES") {
-            initialData[ruleId] = fc.photos || [];
+            initialData[ruleId] = {
+              ...originalData,
+              photos:
+                (originalData.photos as PhotoUploadData[] | undefined) ||
+                fc.photos ||
+                [],
+            };
           } else if (fc.customization_type === "DYNAMIC_LAYOUT") {
-            initialData[ruleId] = fc.data || fc;
+            initialData[ruleId] = Object.keys(originalData).length
+              ? originalData
+              : fc;
           }
         });
 
@@ -918,7 +1079,10 @@ export function CustomizationsReview({
                 (customData?.previewUrl as string | undefined) ||
                 previewUrl;
 
-              if (fallbackPreviewUrl && fallbackPreviewUrl.startsWith("data:")) {
+              if (
+                fallbackPreviewUrl &&
+                fallbackPreviewUrl.startsWith("data:")
+              ) {
                 payload.finalArtwork = {
                   base64: fallbackPreviewUrl,
                   mimeType: "image/png",
@@ -939,6 +1103,13 @@ export function CustomizationsReview({
                   sanitizedData.text = fallbackPreviewUrl;
                 }
               }
+            }
+
+            if (customization.customizationType === "IMAGES") {
+              sanitizedData.photos =
+                buildPhotosFromPersonalizationData(customData);
+              sanitizedData.count = sanitizedData.photos.length;
+              delete sanitizedData.files;
             }
 
             await saveOrderItemCustomization(orderId, orderItemId, payload);
@@ -1065,7 +1236,6 @@ export function CustomizationsReview({
             validation.availableCustomizations.forEach((avail) => {
               if (!avail.itemId) return;
 
-              
               const componentIdKey = avail.componentId || avail.itemId;
 
               if (!itemsMap.has(componentIdKey)) {
@@ -1081,10 +1251,8 @@ export function CustomizationsReview({
               const entry = itemsMap.get(componentIdKey)!;
               entry.allCustomizations.push(avail);
 
-              
               const filledCustom = validation.filledCustomizations.find(
                 (f) =>
-                  
                   (f.customization_id === avail.id ||
                     f.customization_id?.split(":")[0] === avail.id ||
                     f.title?.toLowerCase() === avail.name?.toLowerCase() ||
@@ -1093,10 +1261,9 @@ export function CustomizationsReview({
                   isSameComponent(f, avail),
               );
 
-              const isFilled = isCustomizationFilled(filledCustom);
+              const isFilled = isCustomizationFilled(filledCustom, avail);
 
               if (filledCustom && isFilled) {
-                
                 if (
                   !entry.filled.some(
                     (f) =>
@@ -1108,7 +1275,6 @@ export function CustomizationsReview({
                   entry.filled.push(filledCustom);
                 }
               } else if (avail.isRequired) {
-                
                 entry.missing.push(avail);
               }
             });
@@ -1135,7 +1301,6 @@ export function CustomizationsReview({
                       currentItemData?.allCustomizations.some(
                         (c) => c.isAdditional,
                       ) || false;
-                    
 
                     return (
                       <div
@@ -1240,29 +1405,31 @@ export function CustomizationsReview({
                                           {f.title}
                                         </p>
                                         <div className="flex flex-wrap gap-1.5">
-                                          {previewUrls.slice(0, 4).map((url, pIdx) => (
-                                            <button
-                                              key={`img-${pIdx}`}
-                                              type="button"
-                                              onClick={() =>
-                                                handleEditItem(
-                                                  validation.productId,
-                                                  itemId,
-                                                  itemName || "Item",
-                                                  componentId,
-                                                )
-                                              }
-                                              className="rounded border border-gray-200 hover:border-gray-400"
-                                              title="Editar esta personalização"
-                                            >
-                                              {/* eslint-disable-next-line @next/next/no-img-element */}
-                                              <img
-                                                src={url}
-                                                alt={`${f.title} ${pIdx + 1}`}
-                                                className="h-10 w-10 rounded object-cover"
-                                              />
-                                            </button>
-                                          ))}
+                                          {previewUrls
+                                            .slice(0, 4)
+                                            .map((url, pIdx) => (
+                                              <button
+                                                key={`img-${pIdx}`}
+                                                type="button"
+                                                onClick={() =>
+                                                  handleEditItem(
+                                                    validation.productId,
+                                                    itemId,
+                                                    itemName || "Item",
+                                                    componentId,
+                                                  )
+                                                }
+                                                className="rounded border border-gray-200 hover:border-gray-400"
+                                                title="Editar esta personalização"
+                                              >
+                                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                                <img
+                                                  src={url}
+                                                  alt={`${f.title} ${pIdx + 1}`}
+                                                  className="h-10 w-10 rounded object-cover"
+                                                />
+                                              </button>
+                                            ))}
                                         </div>
                                       </div>
                                     );
@@ -1308,7 +1475,17 @@ export function CustomizationsReview({
                                       {m.name}
                                     </Badge>
                                     <span className="text-[10px] text-amber-700 italic">
-                                      {getCustomizationHint(m.type, m.name)}
+                                      {getCustomizationHint(
+                                        m,
+                                        validation.filledCustomizations.find(
+                                          (f) =>
+                                            (f.customization_id === m.id ||
+                                              f.customization_id?.split(
+                                                ":",
+                                              )[0] === m.id) &&
+                                            isSameComponent(f, m),
+                                        ),
+                                      )}
                                     </span>
                                   </div>
                                 </div>
@@ -1368,9 +1545,11 @@ export function CustomizationsReview({
                 Recomendações de validação:
               </p>
               <ul className="text-xs text-amber-700 list-disc pl-4 space-y-1">
-                {backendValidationState.recommendations.slice(0, 3).map((r, idx) => (
-                  <li key={`rec-${idx}`}>{r}</li>
-                ))}
+                {backendValidationState.recommendations
+                  .slice(0, 3)
+                  .map((r, idx) => (
+                    <li key={`rec-${idx}`}>{r}</li>
+                  ))}
               </ul>
             </div>
           )}
@@ -1390,7 +1569,6 @@ export function CustomizationsReview({
     </>
   );
 }
-
 
 export function validateCustomizations(
   cartItems: Array<{
