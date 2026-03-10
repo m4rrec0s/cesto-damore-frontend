@@ -30,6 +30,7 @@ import {
   validateCustomizations,
 } from "./CustomizationsReview";
 import type { CustomizationInput } from "@/app/types/customization";
+import { normalizeCustomizationData } from "@/app/lib/customization-serialization";
 
 const ACCEPTED_CITIES = [
   "Campina Grande",
@@ -171,6 +172,7 @@ export default function CarrinhoPageContent() {
     createTransparentPayment,
     getOrder,
     updateOrderMetadata,
+    getPaymentStatus,
   } = useApi();
   const {
     cart,
@@ -728,7 +730,6 @@ export default function CarrinhoPageContent() {
   }, [user]);
 
   const [checkingPendingOrder, setCheckingPendingOrder] = useState(true);
-  const [showPendingOrderBanner, setShowPendingOrderBanner] = useState(false);
   const [customizationsValidationStatus, setCustomizationsValidationStatus] =
     useState<CustomizationsValidationStatus | null>(null);
 
@@ -822,10 +823,7 @@ export default function CarrinhoPageContent() {
           }
 
           if (pendingOrder.payment?.status === "PENDING") {
-            setShowPendingOrderBanner(true);
             window.scrollTo({ top: 0, behavior: "smooth" });
-          } else {
-            setShowPendingOrderBanner(false);
           }
         }
       } catch {
@@ -898,6 +896,26 @@ export default function CarrinhoPageContent() {
     const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
     return Date.now() - createdMs > TWENTY_FOUR_HOURS_MS;
   }, [pendingOrder]);
+  const roundMoney = useCallback((value: number) => {
+    return Math.round(value * 100) / 100;
+  }, []);
+  const getOrderGrandTotal = useCallback(
+    (order: Order | null): number | null => {
+      if (!order) return null;
+      if (typeof order.grand_total === "number") {
+        return roundMoney(order.grand_total);
+      }
+      if (typeof order.total === "number") {
+        const shipping =
+          typeof order.shipping_price === "number" ? order.shipping_price : 0;
+        const discount =
+          typeof order.discount === "number" ? order.discount : 0;
+        return roundMoney(order.total + shipping - discount);
+      }
+      return null;
+    },
+    [roundMoney],
+  );
   const isDeliveryScheduleValid = useMemo(() => {
     if (!selectedDate || !selectedTime) return false;
     if (isDateDisabled(selectedDate)) return false;
@@ -932,61 +950,6 @@ export default function CarrinhoPageContent() {
       );
     });
   }, [selectedDate, selectedTime, isDateDisabled, generateTimeSlots]);
-  const checkoutReadyForPayment =
-    customizationsValid && isDeliveryScheduleValid;
-  const shouldShowPendingBanner = useMemo(
-    () =>
-      Boolean(showPendingOrderBanner) &&
-      currentStep !== 3 &&
-      pendingOrder?.payment?.status === "PENDING" &&
-      !isPendingPaymentExpired &&
-      !pixData,
-    [
-      showPendingOrderBanner,
-      currentStep,
-      pendingOrder?.payment?.status,
-      isPendingPaymentExpired,
-      pixData,
-    ],
-  );
-  const shouldShowExpiredPendingBanner = useMemo(
-    () =>
-      Boolean(showPendingOrderBanner) &&
-      currentStep !== 3 &&
-      pendingOrder?.payment?.status === "PENDING" &&
-      isPendingPaymentExpired,
-    [
-      showPendingOrderBanner,
-      currentStep,
-      pendingOrder?.payment?.status,
-      isPendingPaymentExpired,
-    ],
-  );
-
-  const handleRegenerateExpiredPix = useCallback(() => {
-    if (!customizationsValid) {
-      toast.error(
-        "Complete as personalizações pendentes antes de gerar um novo QR Code.",
-      );
-      return;
-    }
-    if (!isDeliveryScheduleValid) {
-      toast.error(
-        "A data/horário de entrega não está mais disponível. Ajuste o agendamento antes de gerar novo QR Code.",
-      );
-      updateStepUrl(2);
-      return;
-    }
-
-    setPaymentMethod("pix");
-    setPixData(null);
-    setPaymentStatus("");
-    setPaymentError(null);
-    pixGeneratedForOrderRef.current = null;
-
-    updateStepUrl(3);
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  }, [customizationsValid, isDeliveryScheduleValid, updateStepUrl]);
 
   const acceptedCities = useMemo(() => ACCEPTED_CITIES, []);
   const normalizedCity = useMemo(() => normalizeString(city), [city]);
@@ -1035,6 +998,62 @@ export default function CarrinhoPageContent() {
     [cartTotal, shippingCost, pickupDiscount],
   );
 
+  const verifyOrderTotals = useCallback(
+    async (options?: {
+      refreshMetadata?: boolean;
+      paymentMethod?: "pix" | "card";
+    }): Promise<boolean> => {
+      if (!currentOrderId) return false;
+      try {
+        if (options?.refreshMetadata && typeof shippingCost === "number") {
+          const discountToApply =
+            options.paymentMethod === "card" ? 0 : pickupDiscount;
+          await updateOrderMetadata(currentOrderId, {
+            payment_method: options.paymentMethod || undefined,
+            shipping_price: shippingCost,
+            discount: discountToApply,
+            delivery_method: optionSelected as "delivery" | "pickup",
+          });
+        }
+
+        const latestOrder = await getOrder(currentOrderId);
+        const orderTotal = getOrderGrandTotal(latestOrder);
+        if (orderTotal === null) {
+          toast.error(
+            "Não foi possível validar o valor atual do pedido. Tente novamente.",
+          );
+          return false;
+        }
+
+        const expectedTotal = roundMoney(grandTotal);
+        if (Math.abs(orderTotal - expectedTotal) > 0.01) {
+          toast.error(
+            "O valor do pedido foi atualizado. Revise o carrinho antes de pagar.",
+          );
+          return false;
+        }
+        return true;
+      } catch (err) {
+        console.error("Erro ao validar total do pedido:", err);
+        toast.error(
+          "Não foi possível validar o valor do pedido. Tente novamente.",
+        );
+        return false;
+      }
+    },
+    [
+      currentOrderId,
+      getOrder,
+      getOrderGrandTotal,
+      grandTotal,
+      roundMoney,
+      updateOrderMetadata,
+      shippingCost,
+      pickupDiscount,
+      optionSelected,
+    ],
+  );
+
   const discountAmount = useMemo(() => {
     const originalTotal = cartItems.reduce((sum, item) => {
       const baseTotal = (item.effectivePrice ?? item.price) * item.quantity;
@@ -1077,6 +1096,147 @@ export default function CarrinhoPageContent() {
     [cartItems],
   );
 
+  const buildPixDataFromStatus = useCallback(
+    (
+      statusData: Record<string, unknown>,
+      fallbackAmount: number,
+    ): PixData | null => {
+      const poi = statusData.point_of_interaction as
+        | Record<string, unknown>
+        | undefined;
+      const data = (poi?.transaction_data ||
+        poi?.transactionData ||
+        statusData.transaction_data ||
+        statusData.data ||
+        statusData) as Record<string, unknown>;
+
+      const getString = (
+        source: Record<string, unknown> | undefined,
+        key: string,
+      ): string | undefined => {
+        if (!source) return undefined;
+        const value = source[key];
+        return typeof value === "string" ? value : undefined;
+      };
+      const getNumber = (
+        source: Record<string, unknown> | undefined,
+        key: string,
+      ): number | undefined => {
+        if (!source) return undefined;
+        const value = source[key];
+        return typeof value === "number" ? value : undefined;
+      };
+
+      const qrCode =
+        getString(data, "qr_code") ||
+        getString(data, "qrCode") ||
+        getString(data, "qr_code_plain");
+      const qrBase64 =
+        getString(data, "qr_code_base64") || getString(data, "qrCodeBase64");
+      const ticketUrl =
+        getString(data, "ticket_url") || getString(data, "ticketUrl");
+
+      if (!qrCode && !qrBase64) return null;
+
+      const rawStatus =
+        getString(statusData, "status") ||
+        getString(data, "status") ||
+        pendingOrder?.payment?.status ||
+        "pending";
+
+      const amount = Number(
+        getNumber(data, "amount") ??
+          getNumber(data, "transaction_amount") ??
+          getNumber(statusData, "transaction_amount") ??
+          getNumber(statusData, "amount") ??
+          fallbackAmount,
+      );
+
+      return {
+        qr_code: qrCode || "",
+        qr_code_base64: qrBase64 || "",
+        ticket_url: ticketUrl || "",
+        amount: Number.isFinite(amount) ? amount : fallbackAmount,
+        expires_at:
+          getString(data, "expires_at") ||
+          getString(data, "expiration_date") ||
+          getString(data, "expiration_time") ||
+          getString(statusData, "date_of_expiration") ||
+          new Date(Date.now() + 30 * 60 * 1000).toISOString(),
+        payment_id:
+          getString(statusData, "id") ||
+          getString(data, "payment_id") ||
+          pendingOrder?.payment?.id ||
+          currentOrderId ||
+          "",
+        mercado_pago_id:
+          getString(statusData, "mercado_pago_id") ||
+          getString(statusData, "mercadoPagoId") ||
+          pendingOrder?.payment?.mercado_pago_id ||
+          "",
+        status: rawStatus,
+        status_detail:
+          getString(data, "status_detail") ||
+          getString(statusData, "status_detail") ||
+          "",
+        payer_info:
+          (data?.payer_info as PixData["payer_info"]) ||
+          ({
+            id: "",
+            email: user?.email || "",
+            first_name: user?.name || "",
+          } as PixData["payer_info"]),
+      };
+    },
+    [
+      pendingOrder?.payment?.id,
+      pendingOrder?.payment?.mercado_pago_id,
+      pendingOrder?.payment?.status,
+      currentOrderId,
+      user?.email,
+      user?.name,
+    ],
+  );
+
+  const tryReuseExistingPixPayment = useCallback(async (): Promise<boolean> => {
+    if (!pendingOrder?.payment?.id && !pendingOrder?.payment?.mercado_pago_id) {
+      return false;
+    }
+    if (pendingOrder?.payment?.status !== "PENDING") return false;
+    if (isPendingPaymentExpired) return false;
+
+    try {
+      const paymentId =
+        pendingOrder?.payment?.id || pendingOrder?.payment?.mercado_pago_id;
+      if (!paymentId) return false;
+      const statusResponse = await getPaymentStatus(paymentId);
+      const pix = buildPixDataFromStatus(
+        (statusResponse || {}) as Record<string, unknown>,
+        cartTotal + (shippingCost ?? 0),
+      );
+      if (!pix) return false;
+
+      setPixData(pix);
+      setPaymentStatus(mapPaymentStatus(pix.status) || "pending");
+      pixGeneratedForOrderRef.current = currentOrderId;
+      return true;
+    } catch (err) {
+      console.error("Erro ao recuperar pagamento PIX pendente:", err);
+      return false;
+    }
+  }, [
+    pendingOrder?.payment?.id,
+    pendingOrder?.payment?.mercado_pago_id,
+    pendingOrder?.payment?.status,
+    isPendingPaymentExpired,
+    getPaymentStatus,
+    buildPixDataFromStatus,
+    cartTotal,
+    shippingCost,
+    mapPaymentStatus,
+    currentOrderId,
+  ]);
+
   const generatePixPayment = useCallback(async () => {
     if (
       paymentMethod === "pix" &&
@@ -1087,6 +1247,39 @@ export default function CarrinhoPageContent() {
       currentStep === 3 &&
       pixGeneratedForOrderRef.current !== currentOrderId
     ) {
+      if (!customizationsValid) {
+        toast.error(
+          "Complete as personalizações pendentes antes de gerar o pagamento.",
+        );
+        return;
+      }
+      if (!isDeliveryScheduleValid) {
+        toast.error(
+          "A data/horário de entrega não está mais disponível. Ajuste o agendamento.",
+        );
+        updateStepUrl(2);
+        return;
+      }
+      const hasPendingPix =
+        pendingOrder?.payment?.status === "PENDING" && !isPendingPaymentExpired;
+      if (hasPendingPix) {
+        const totalsOk = await verifyOrderTotals();
+        if (!totalsOk) return;
+        const reused = await tryReuseExistingPixPayment();
+        if (!reused) {
+          toast.error(
+            "Não foi possível recuperar o PIX pendente. Tente novamente mais tarde.",
+          );
+        }
+        return;
+      }
+
+      const totalsOk = await verifyOrderTotals({
+        refreshMetadata: true,
+        paymentMethod: "pix",
+      });
+      if (!totalsOk) return;
+
       setIsProcessing(true);
       setIsGeneratingPix(true);
 
@@ -1222,6 +1415,13 @@ export default function CarrinhoPageContent() {
     router,
     optionSelected,
     cart,
+    customizationsValid,
+    isDeliveryScheduleValid,
+    updateStepUrl,
+    verifyOrderTotals,
+    tryReuseExistingPixPayment,
+    pendingOrder?.payment?.status,
+    isPendingPaymentExpired,
   ]);
 
   useEffect(() => {
@@ -1245,6 +1445,25 @@ export default function CarrinhoPageContent() {
         toast.error("Pedido não encontrado. Tente recarregar a página.");
         return;
       }
+      if (!customizationsValid) {
+        toast.error(
+          "Complete as personalizações pendentes antes de prosseguir com o pagamento.",
+        );
+        return;
+      }
+      if (!isDeliveryScheduleValid) {
+        toast.error(
+          "A data/horário de entrega não está mais disponível. Ajuste o agendamento.",
+        );
+        updateStepUrl(2);
+        return;
+      }
+
+      const totalsOk = await verifyOrderTotals({
+        refreshMetadata: true,
+        paymentMethod: "card",
+      });
+      if (!totalsOk) return;
 
       setIsProcessing(true);
       setPaymentError(null);
@@ -1357,6 +1576,10 @@ export default function CarrinhoPageContent() {
       clearCart,
       router,
       mapPaymentStatus,
+      customizationsValid,
+      isDeliveryScheduleValid,
+      updateStepUrl,
+      verifyOrderTotals,
     ],
   );
 
@@ -1424,8 +1647,9 @@ export default function CarrinhoPageContent() {
 
       const mappedCustomizations: CartCustomization[] = customizations.map(
         (customization) => {
-          const data =
+          const rawData =
             (customization.data as Record<string, unknown> | undefined) || {};
+          const data = normalizeCustomizationData(rawData);
           const title =
             (data._customizationName as string) ||
             customization.customizationType;
@@ -1481,7 +1705,10 @@ export default function CarrinhoPageContent() {
               photos: Array.isArray(data.photos)
                 ? (data.photos as CartCustomization["photos"])
                 : [],
-              data,
+              data: normalizeCustomizationData({
+                ...data,
+                count: Array.isArray(data.photos) ? data.photos.length : 0,
+              }),
             };
           }
 
@@ -1507,7 +1734,7 @@ export default function CarrinhoPageContent() {
                 ?.preview_url as string | undefined),
             additional_time: Number(data.additional_time || 0),
             fabricState: data.fabricState as string | undefined,
-            data,
+            data: normalizeCustomizationData(data),
           };
         },
       );
@@ -2022,116 +2249,6 @@ export default function CarrinhoPageContent() {
       ) : (
         <div className="min-h-screen bg-[#f5f5f5] relative">
           <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 lg:py-12">
-            {shouldShowPendingBanner && (
-              <motion.div
-                initial={{ opacity: 0, y: -10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                className="mb-6 p-4 lg:p-6 bg-gradient-to-r from-amber-50 to-orange-50 border-l-4 border-amber-500 rounded-lg shadow-sm"
-              >
-                <div className="flex items-start gap-3 lg:gap-4 justify-between flex-col lg:flex-row lg:items-center">
-                  <div className="flex items-start gap-3">
-                    <div className="mt-0.5 text-amber-600 flex-shrink-0">
-                      <svg
-                        className="w-5 h-5 lg:w-6 lg:h-6"
-                        fill="currentColor"
-                        viewBox="0 0 20 20"
-                      >
-                        <path
-                          fillRule="evenodd"
-                          d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
-                          clipRule="evenodd"
-                        />
-                      </svg>
-                    </div>
-                    <div>
-                      <h3 className="font-semibold text-amber-900 text-sm lg:text-base">
-                        Pagamento Pendente
-                      </h3>
-                      <p className="text-amber-700 text-xs lg:text-sm mt-1">
-                        Você tem um pedido com pagamento pendente. Complete o
-                        pagamento para finalizar sua compra.
-                        {!customizationsValid &&
-                          " Antes, complete as personalizações pendentes."}
-                        {!isDeliveryScheduleValid &&
-                          " A data/horário da entrega não está mais disponível e precisa ser atualizado."}
-                      </p>
-                    </div>
-                  </div>
-                  <Button
-                    onClick={() => {
-                      if (!customizationsValid) {
-                        toast.error(
-                          "Complete as personalizações pendentes antes de ir para o pagamento.",
-                        );
-                        return;
-                      }
-                      if (!isDeliveryScheduleValid) {
-                        toast.error(
-                          "A data/horário de entrega não está mais disponível. Ajuste o agendamento para continuar.",
-                        );
-                        updateStepUrl(2);
-                        return;
-                      }
-                      updateStepUrl(3);
-                      window.scrollTo({ top: 0, behavior: "smooth" });
-                    }}
-                    disabled={!checkoutReadyForPayment}
-                    className="bg-amber-600 hover:bg-amber-700 disabled:bg-amber-300 text-white text-xs lg:text-sm px-4 py-2 lg:px-6 lg:py-2 whitespace-nowrap flex-shrink-0"
-                  >
-                    Ir para Pagamento
-                  </Button>
-                </div>
-              </motion.div>
-            )}
-
-            {shouldShowExpiredPendingBanner && (
-              <motion.div
-                initial={{ opacity: 0, y: -10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                className="mb-6 p-4 lg:p-6 bg-gradient-to-r from-blue-50 to-cyan-50 border-l-4 border-blue-500 rounded-lg shadow-sm"
-              >
-                <div className="flex items-start gap-3 lg:gap-4 justify-between flex-col lg:flex-row lg:items-center">
-                  <div className="flex items-start gap-3">
-                    <div className="mt-0.5 text-blue-600 flex-shrink-0">
-                      <svg
-                        className="w-5 h-5 lg:w-6 lg:h-6"
-                        fill="currentColor"
-                        viewBox="0 0 20 20"
-                      >
-                        <path
-                          fillRule="evenodd"
-                          d="M18 10A8 8 0 11 2 10a8 8 0 0116 0zm-8-4a1 1 0 00-.993.883L9 7v3a1 1 0 001.993.117L11 10V7a1 1 0 00-1-1zm0 8a1.25 1.25 0 100-2.5A1.25 1.25 0 0010 14z"
-                          clipRule="evenodd"
-                        />
-                      </svg>
-                    </div>
-                    <div>
-                      <h3 className="font-semibold text-blue-900 text-sm lg:text-base">
-                        QR Code Expirado
-                      </h3>
-                      <p className="text-blue-700 text-xs lg:text-sm mt-1">
-                        Seu QR Code PIX anterior expirou (validade de 24h). Gere
-                        um novo para concluir o pagamento.
-                        {!customizationsValid &&
-                          " Antes, complete as personalizações pendentes."}
-                        {!isDeliveryScheduleValid &&
-                          " A data/horário da entrega não está mais disponível e precisa ser atualizado."}
-                      </p>
-                    </div>
-                  </div>
-                  <Button
-                    onClick={handleRegenerateExpiredPix}
-                    disabled={!checkoutReadyForPayment}
-                    className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white text-xs lg:text-sm px-4 py-2 lg:px-6 lg:py-2 whitespace-nowrap flex-shrink-0"
-                  >
-                    Gerar Novo QR Code
-                  </Button>
-                </div>
-              </motion.div>
-            )}
-
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
               <div className="lg:col-span-2 space-y-6">
                 <AnimatePresence mode="wait">

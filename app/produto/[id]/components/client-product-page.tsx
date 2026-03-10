@@ -40,9 +40,33 @@ import type { SlotDef } from "@/app/types/personalization";
 import { ItemCustomizationModal } from "./itemCustomizationsModal";
 import { getInternalImageUrl } from "@/lib/image-helper";
 import { useLoginPrompt } from "@/app/components/layout/app-wrapper";
+import { normalizeCustomizationData } from "@/app/lib/customization-serialization";
 
 const formatCurrency = (value: number) =>
   value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+
+const mergeCustomizationInputs = (
+  previous: CustomizationInput[],
+  incoming: CustomizationInput[],
+): CustomizationInput[] => {
+  const merged = new Map<string, CustomizationInput>();
+
+  previous.forEach((input) => {
+    const key = input.ruleId || input.customizationRuleId;
+    if (key) {
+      merged.set(key, input);
+    }
+  });
+
+  incoming.forEach((input) => {
+    const key = input.ruleId || input.customizationRuleId;
+    if (key) {
+      merged.set(key, input);
+    }
+  });
+
+  return Array.from(merged.values());
+};
 
 const getCustomizationPreviewUrls = (input: CustomizationInput): string[] => {
   const data = (input.data as Record<string, unknown>) || {};
@@ -134,6 +158,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
     getAdditionalsByProduct,
     getItemsByProduct,
     uploadCustomizationImage,
+    validateCustomizationsV2,
   } = useApi();
   const { addToCart, cart } = useCartContext();
   const { user } = useAuth();
@@ -220,16 +245,21 @@ const ClientProductPage = ({ id }: { id: string }) => {
       });
 
       if (hasCustomizations) {
-        setItemCustomizations((prev) => ({
-          ...prev,
-          [itemId]: data,
-        }));
+        let shouldPreview = false;
 
-        const hasBaseLayout = data.some(
-          (c) => c.customizationType === CustomizationType.DYNAMIC_LAYOUT,
-        );
+        setItemCustomizations((prev) => {
+          const mergedData = mergeCustomizationInputs(prev[itemId] || [], data);
+          shouldPreview = mergedData.some(
+            (c) => c.customizationType === CustomizationType.DYNAMIC_LAYOUT,
+          );
 
-        if (hasBaseLayout) {
+          return {
+            ...prev,
+            [itemId]: mergedData,
+          };
+        });
+
+        if (shouldPreview) {
           setPreviewComponentId(itemId);
         }
 
@@ -263,7 +293,10 @@ const ClientProductPage = ({ id }: { id: string }) => {
         setAdditionalCustomizations((prev) => {
           const updated = {
             ...prev,
-            [additionalId]: data,
+            [additionalId]: mergeCustomizationInputs(
+              prev[additionalId] || [],
+              data,
+            ),
           };
           return updated;
         });
@@ -285,6 +318,17 @@ const ClientProductPage = ({ id }: { id: string }) => {
 
       setActiveAdditionalModal(null);
     },
+    [],
+  );
+
+  const normalizeInputsForValidation = useCallback(
+    (inputs: CustomizationInput[]): CustomizationInput[] =>
+      inputs
+        .map((input) => ({
+          ...input,
+          data: normalizeCustomizationData(input.data),
+        }))
+        .filter((input) => Boolean(input.ruleId || input.customizationRuleId)),
     [],
   );
 
@@ -379,6 +423,101 @@ const ClientProductPage = ({ id }: { id: string }) => {
       return missingIds;
     },
     [itemCustomizations],
+  );
+
+  const getMissingRequiredAdditionalCustomizationIds = useCallback(
+    (additional: Additional): string[] => {
+      if (!additional.allows_customization) return [];
+
+      const requiredCustomizations =
+        additional.customizations?.filter((c) => c.isRequired) || [];
+      const additionalData = additionalCustomizations[additional.id] || [];
+      const missingIds: string[] = [];
+
+      requiredCustomizations.forEach((reqCustom) => {
+        const customData = additionalData.find(
+          (c) => c.ruleId === reqCustom.id,
+        );
+
+        if (!customData) {
+          missingIds.push(reqCustom.id);
+          return;
+        }
+
+        const data = customData.data as Record<string, unknown>;
+
+        if (reqCustom.type === "TEXT") {
+          const fields =
+            (
+              reqCustom.customization_data as {
+                fields?: Array<{ id: string }>;
+              }
+            )?.fields || [];
+
+          const fieldsData =
+            (data.fields as Record<string, string> | undefined) || data;
+
+          const hasEmptyField = fields.some((field) => {
+            const value = fieldsData[field.id];
+            return !value || (typeof value === "string" && value.trim() === "");
+          });
+
+          if (hasEmptyField) {
+            missingIds.push(reqCustom.id);
+          }
+        }
+
+        if (reqCustom.type === "IMAGES") {
+          const imagesData = data as {
+            files?: File[];
+            previews?: string[];
+            count?: number;
+          };
+          const maxImages =
+            (
+              reqCustom.customization_data as {
+                dynamic_layout?: { max_images?: number };
+              }
+            )?.dynamic_layout?.max_images || 0;
+          const imageCount =
+            imagesData.count ||
+            (Array.isArray(imagesData.previews)
+              ? imagesData.previews.length
+              : 0) ||
+            (Array.isArray(imagesData.files) ? imagesData.files.length : 0);
+
+          if (imageCount === 0 || (maxImages > 0 && imageCount < maxImages)) {
+            missingIds.push(reqCustom.id);
+          }
+        }
+
+        if (reqCustom.type === "MULTIPLE_CHOICE") {
+          const choice = data as
+            | { id?: string; selected_option?: string }
+            | undefined;
+
+          const hasOptionSelected =
+            choice && (choice.id || choice.selected_option);
+          if (!hasOptionSelected) {
+            missingIds.push(reqCustom.id);
+          }
+        }
+
+        if (reqCustom.type === "DYNAMIC_LAYOUT") {
+          const layout = data as
+            | { id?: string; layout_id?: string }
+            | undefined;
+
+          const hasLayoutSelected = layout && (layout.id || layout.layout_id);
+          if (!hasLayoutSelected) {
+            missingIds.push(reqCustom.id);
+          }
+        }
+      });
+
+      return missingIds;
+    },
+    [additionalCustomizations],
   );
 
   const handleAddAdditionalToCart = useCallback(
@@ -616,6 +755,14 @@ const ClientProductPage = ({ id }: { id: string }) => {
       imagesData: {
         files?: File[];
         previews?: string[];
+        photos?: Array<{
+          preview_url?: string;
+          original_name?: string;
+          position?: number;
+          temp_file_id?: string;
+          mime_type?: string;
+          size?: number;
+        }>;
         count?: number;
         required_count?: number;
       },
@@ -624,20 +771,39 @@ const ClientProductPage = ({ id }: { id: string }) => {
       const previews = Array.isArray(imagesData.previews)
         ? imagesData.previews
         : [];
-      const requiredCount = imagesData.required_count || imagesData.count || 0;
+      const existingPhotos = Array.isArray(imagesData.photos)
+        ? imagesData.photos
+        : [];
+      const availableCount = Math.max(previews.length, existingPhotos.length);
+      const requiredCount =
+        imagesData.required_count || imagesData.count || availableCount;
 
-      if (requiredCount > 0 && previews.length < requiredCount) {
+      if (requiredCount > 0 && availableCount < requiredCount) {
         throw new Error(
-          `${customizationName}: faltam ${requiredCount - previews.length} imagem(ns).`,
+          `${customizationName}: faltam ${requiredCount - availableCount} imagem(ns).`,
         );
       }
 
       const photos = await Promise.all(
-        previews.map(async (preview, index) => {
+        Array.from({ length: availableCount }).map(async (_, index) => {
           const file = imagesData.files?.[index];
+          const existingPhoto = existingPhotos[index];
           const fileName = file?.name || `photo-${index + 1}.jpg`;
 
           if (!file) {
+            if (existingPhoto?.preview_url || existingPhoto?.temp_file_id) {
+              return {
+                preview_url: existingPhoto.preview_url || "",
+                original_name: existingPhoto.original_name || fileName,
+                temp_file_id:
+                  existingPhoto.temp_file_id ||
+                  `persisted-${Date.now()}-${index}`,
+                position: existingPhoto.position ?? index,
+                mime_type: existingPhoto.mime_type || "image/jpeg",
+                size: existingPhoto.size || 0,
+              };
+            }
+
             throw new Error(
               `${customizationName}: a imagem ${index + 1} precisa ser reenviada.`,
             );
@@ -656,7 +822,6 @@ const ClientProductPage = ({ id }: { id: string }) => {
             temp_file_id:
               uploadResult.filename || `temp-${Date.now()}-${index}`,
             position: index,
-            base64: preview,
             mime_type: file.type || "image/jpeg",
             size: file.size || 0,
           };
@@ -704,9 +869,106 @@ const ClientProductPage = ({ id }: { id: string }) => {
 
     setMissingRequiredByComponent({});
 
+    const missingAdditionals = selectedAdditionalIds.reduce<string[]>(
+      (acc, additionalId) => {
+        const additional = additionals.find((a) => a.id === additionalId);
+        if (!additional) return acc;
+        const missingIds =
+          getMissingRequiredAdditionalCustomizationIds(additional);
+        if (missingIds.length > 0) {
+          acc.push(additional.name || "Adicional");
+        }
+        return acc;
+      },
+      [],
+    );
+
+    if (missingAdditionals.length > 0) {
+      toast.error(
+        `Complete as personalizações obrigatórias dos adicionais: ${missingAdditionals.join(
+          ", ",
+        )}`,
+      );
+      return;
+    }
+
+    const validateServerSide = async (): Promise<boolean> => {
+      const errors: string[] = [];
+
+      for (const component of components) {
+        if (!component.item.allows_customization) continue;
+        const inputs = normalizeInputsForValidation(
+          itemCustomizations[component.id] || [],
+        );
+        const hasRequired =
+          component.item.customizations?.some((c) => c.isRequired) || false;
+        if (inputs.length === 0 && !hasRequired) continue;
+        if (inputs.length === 0) continue;
+
+        try {
+          const response = await validateCustomizationsV2({
+            itemId: component.item.id,
+            inputs,
+          });
+          if (!response.valid) {
+            errors.push(...(response.errors || []));
+          }
+        } catch (error) {
+          errors.push(
+            error instanceof Error
+              ? error.message
+              : "Erro ao validar personalização no servidor.",
+          );
+        }
+      }
+
+      for (const additionalId of selectedAdditionalIds) {
+        const additional = additionals.find((a) => a.id === additionalId);
+        if (!additional || !additional.allows_customization) continue;
+        const inputs = normalizeInputsForValidation(
+          additionalCustomizations[additionalId] || [],
+        );
+        const hasRequired =
+          additional.customizations?.some((c) => c.isRequired) || false;
+        if (inputs.length === 0 && !hasRequired) continue;
+        if (inputs.length === 0) continue;
+
+        try {
+          const response = await validateCustomizationsV2({
+            itemId: additional.id,
+            inputs,
+          });
+          if (!response.valid) {
+            errors.push(...(response.errors || []));
+          }
+        } catch (error) {
+          errors.push(
+            error instanceof Error
+              ? error.message
+              : "Erro ao validar personalização do adicional.",
+          );
+        }
+      }
+
+      if (errors.length > 0) {
+        toast.error(errors[0]);
+        if (errors.length > 1) {
+          console.warn("Erros adicionais de validação:", errors);
+        }
+        return false;
+      }
+
+      return true;
+    };
+
     setAddingToCart(true);
 
     try {
+      const serverValid = await validateServerSide();
+      if (!serverValid) {
+        return;
+      }
+
       const cartCustomizations: CartCustomization[] = [];
 
       for (const [itemId, customizationInputs] of Object.entries(
@@ -715,9 +977,26 @@ const ClientProductPage = ({ id }: { id: string }) => {
         const componentId = itemId;
 
         for (const input of customizationInputs) {
-          const data = input.data as Record<string, unknown>;
+          const rawData = input.data as Record<string, unknown>;
+          const data = normalizeCustomizationData(rawData);
+          const ruleId =
+            input.ruleId ||
+            input.customizationRuleId ||
+            (rawData.ruleId as string) ||
+            (rawData.customizationRuleId as string) ||
+            null;
+          const component = components.find((c) => c.id === componentId);
+          const rule = component?.item.customizations?.find(
+            (c) => c.id === ruleId,
+          );
           const customizationName =
-            (data._customizationName as string) || "Personalização";
+            (data._customizationName as string) ||
+            rule?.name ||
+            "Personalização";
+          const isRequired = Boolean(rule?.isRequired);
+          const priceAdjustment = Number(
+            (data._priceAdjustment as number) || rule?.price || 0,
+          );
 
           if (input.customizationType === "TEXT") {
             const textFields = Object.entries(data)
@@ -732,17 +1011,26 @@ const ClientProductPage = ({ id }: { id: string }) => {
               componentId,
               title: customizationName,
               customization_type: "TEXT",
-              is_required: false,
-              price_adjustment: 0,
+              is_required: isRequired,
+              price_adjustment: priceAdjustment,
               text: textFields || String(data || ""),
               data: data,
             });
           } else if (input.customizationType === "MULTIPLE_CHOICE") {
-            const choice = data as { id?: string; label?: string } | string;
+            const choice =
+              (rawData as { id?: string; label?: string } | string) || data;
             const optionId =
-              typeof choice === "string" ? choice : choice.id || "";
+              typeof choice === "string"
+                ? choice
+                : typeof choice.id === "string"
+                  ? choice.id
+                  : "";
             const optionLabel =
-              typeof choice === "string" ? choice : choice.label || "";
+              typeof choice === "string"
+                ? choice
+                : typeof choice.label === "string"
+                  ? choice.label
+                  : "";
 
             cartCustomizations.push({
               customization_id: input.ruleId
@@ -751,14 +1039,14 @@ const ClientProductPage = ({ id }: { id: string }) => {
               componentId,
               title: customizationName,
               customization_type: "MULTIPLE_CHOICE",
-              is_required: false,
-              price_adjustment: 0,
+              is_required: isRequired,
+              price_adjustment: priceAdjustment,
               selected_option: optionId,
               selected_option_label: optionLabel,
               data: data,
             });
           } else if (input.customizationType === "IMAGES") {
-            const imagesData = data as {
+            const imagesData = rawData as {
               files?: File[];
               previews?: string[];
               count?: number;
@@ -776,13 +1064,18 @@ const ClientProductPage = ({ id }: { id: string }) => {
               componentId,
               title: customizationName,
               customization_type: "IMAGES",
-              is_required: false,
-              price_adjustment: 0,
+              is_required: isRequired,
+              price_adjustment: priceAdjustment,
               photos: photos,
-              data: data,
+              data: normalizeCustomizationData({
+                ...data,
+                photos,
+                previews: photos.map((photo) => photo.preview_url),
+                count: photos.length,
+              }),
             });
           } else if (input.customizationType === "DYNAMIC_LAYOUT") {
-            const layoutData = data as {
+            const layoutData = rawData as {
               id?: string;
               name?: string;
               model_url?: string;
@@ -804,8 +1097,8 @@ const ClientProductPage = ({ id }: { id: string }) => {
               componentId,
               title: customizationName,
               customization_type: "DYNAMIC_LAYOUT",
-              is_required: false,
-              price_adjustment: 0,
+              is_required: isRequired,
+              price_adjustment: priceAdjustment,
               selected_item: {
                 original_item: "Design Dinâmico",
                 selected_item: layoutData.name || "Personalizado",
@@ -822,7 +1115,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
               additional_time:
                 layoutData.productionTime ?? layoutData.additional_time ?? 0,
               fabricState: layoutData.fabricState,
-              data: layoutData,
+              data: normalizeCustomizationData(layoutData),
             };
 
             const finalImageToUpload =
@@ -857,6 +1150,11 @@ const ClientProductPage = ({ id }: { id: string }) => {
               }
             }
             cartCustomization.text = finalPreviewUrl;
+            cartCustomization.data = normalizeCustomizationData({
+              ...layoutData,
+              previewUrl: finalPreviewUrl,
+              text: finalPreviewUrl,
+            });
 
             cartCustomizations.push(cartCustomization);
           }
@@ -868,9 +1166,24 @@ const ClientProductPage = ({ id }: { id: string }) => {
         if (!additionalCustoms) continue;
 
         for (const input of additionalCustoms) {
-          const data = input.data as Record<string, unknown>;
+          const rawData = input.data as Record<string, unknown>;
+          const data = normalizeCustomizationData(rawData);
+          const ruleId =
+            input.ruleId ||
+            input.customizationRuleId ||
+            (rawData.ruleId as string) ||
+            (rawData.customizationRuleId as string) ||
+            null;
+          const additional = additionals.find((a) => a.id === additionalId);
+          const rule = additional?.customizations?.find((c) => c.id === ruleId);
           const customizationName =
-            (data._customizationName as string) || "Personalização";
+            (data._customizationName as string) ||
+            rule?.name ||
+            "Personalização";
+          const isRequired = Boolean(rule?.isRequired);
+          const priceAdjustment = Number(
+            (data._priceAdjustment as number) || rule?.price || 0,
+          );
 
           if (input.customizationType === "TEXT") {
             const textFields = Object.entries(data)
@@ -885,17 +1198,26 @@ const ClientProductPage = ({ id }: { id: string }) => {
               componentId: additionalId,
               title: customizationName,
               customization_type: "TEXT",
-              is_required: false,
-              price_adjustment: 0,
+              is_required: isRequired,
+              price_adjustment: priceAdjustment,
               text: textFields || String(data || ""),
               data: data,
             });
           } else if (input.customizationType === "MULTIPLE_CHOICE") {
-            const choice = data as { id?: string; label?: string } | string;
+            const choice =
+              (rawData as { id?: string; label?: string } | string) || data;
             const optionId =
-              typeof choice === "string" ? choice : choice.id || "";
+              typeof choice === "string"
+                ? choice
+                : typeof choice.id === "string"
+                  ? choice.id
+                  : "";
             const optionLabel =
-              typeof choice === "string" ? choice : choice.label || "";
+              typeof choice === "string"
+                ? choice
+                : typeof choice.label === "string"
+                  ? choice.label
+                  : "";
 
             cartCustomizations.push({
               customization_id: input.ruleId
@@ -904,14 +1226,14 @@ const ClientProductPage = ({ id }: { id: string }) => {
               componentId: additionalId,
               title: customizationName,
               customization_type: "MULTIPLE_CHOICE",
-              is_required: false,
-              price_adjustment: 0,
+              is_required: isRequired,
+              price_adjustment: priceAdjustment,
               selected_option: optionId,
               selected_option_label: optionLabel,
               data: data,
             });
           } else if (input.customizationType === "IMAGES") {
-            const imagesData = data as {
+            const imagesData = rawData as {
               files?: File[];
               previews?: string[];
               count?: number;
@@ -929,13 +1251,18 @@ const ClientProductPage = ({ id }: { id: string }) => {
               componentId: additionalId,
               title: customizationName,
               customization_type: "IMAGES",
-              is_required: false,
-              price_adjustment: 0,
+              is_required: isRequired,
+              price_adjustment: priceAdjustment,
               photos: photos,
-              data: data,
+              data: normalizeCustomizationData({
+                ...data,
+                photos,
+                previews: photos.map((photo) => photo.preview_url),
+                count: photos.length,
+              }),
             });
           } else if (input.customizationType === "DYNAMIC_LAYOUT") {
-            const layoutData = data as {
+            const layoutData = rawData as {
               id?: string;
               name?: string;
               previewUrl?: string;
@@ -951,8 +1278,8 @@ const ClientProductPage = ({ id }: { id: string }) => {
               componentId: additionalId,
               title: customizationName,
               customization_type: "DYNAMIC_LAYOUT",
-              is_required: false,
-              price_adjustment: 0,
+              is_required: isRequired,
+              price_adjustment: priceAdjustment,
               selected_item: {
                 original_item: "Design Dinâmico",
                 selected_item: layoutData.name || "Personalizado",
@@ -962,7 +1289,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
               text: undefined,
               additional_time: layoutData.productionTime ?? 0,
               fabricState: layoutData.fabricState,
-              data: layoutData,
+              data: normalizeCustomizationData(layoutData),
             };
 
             const finalImageToUpload =
@@ -998,6 +1325,11 @@ const ClientProductPage = ({ id }: { id: string }) => {
             }
 
             cartCustomization.text = finalPreviewUrl;
+            cartCustomization.data = normalizeCustomizationData({
+              ...layoutData,
+              previewUrl: finalPreviewUrl,
+              text: finalPreviewUrl,
+            });
 
             cartCustomizations.push(cartCustomization);
           }

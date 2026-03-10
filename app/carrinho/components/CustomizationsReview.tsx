@@ -16,6 +16,10 @@ import type {
 } from "@/app/types/customization";
 import { toast } from "sonner";
 import { Card } from "@/app/components/ui/card";
+import {
+  normalizeCustomizationData,
+  safeParseCustomizationJson,
+} from "@/app/lib/customization-serialization";
 
 const API_BASE_URL = (process.env.NEXT_PUBLIC_API_URL || "").replace(
   /\/api\/?$/,
@@ -784,7 +788,9 @@ export function CustomizationsReview({
 
           const filled: CartCustomization[] = data.filledCustomizations.map(
             (f: any) => {
-              const val = (f.value || {}) as PersonalizationData;
+              const val = safeParseCustomizationJson(
+                f.value || {},
+              ) as PersonalizationData;
 
               const normalizedRuleId = getCustomizationRuleId({
                 customization_id: f.customization_id,
@@ -1074,15 +1080,13 @@ export function CustomizationsReview({
   }, [orderId, cartItems, fetchAvailableCustomizations]);
 
   const deserializeCustomizationValue = (
-    value: string | undefined,
+    value: unknown,
+    fallback?: Record<string, unknown>,
   ): Record<string, unknown> => {
-    if (!value) return {};
-    try {
-      return JSON.parse(value);
-    } catch (e) {
-      console.warn("Erro ao desserializar valor de customização:", e);
-      return {};
-    }
+    const parsed = safeParseCustomizationJson(value);
+    if (Object.keys(parsed).length > 0) return parsed;
+    if (fallback) return normalizeCustomizationData(fallback);
+    return {};
   };
 
   const handleEditItem = useCallback(
@@ -1149,11 +1153,14 @@ export function CustomizationsReview({
 
           const originalData =
             typeof fc.data === "object" && fc.data !== null
-              ? { ...(fc.data as Record<string, unknown>) }
+              ? normalizeCustomizationData(fc.data as Record<string, unknown>)
               : {};
 
-          if (typeof fc.value === "string") {
-            const deserialized = deserializeCustomizationValue(fc.value);
+          if (fc.value !== undefined) {
+            const deserialized = deserializeCustomizationValue(
+              fc.value,
+              originalData,
+            );
             initialData[ruleId] =
               fc.customization_type === "IMAGES"
                 ? buildNormalizedImageData(
@@ -1243,7 +1250,7 @@ export function CustomizationsReview({
                 (customData?._customizationName as string) ||
                 customization.customizationType,
               selectedLayoutId: customization.selectedLayoutId || null,
-              data: sanitizedData || {},
+              data: {},
             };
 
             if (customization.customizationType === "DYNAMIC_LAYOUT") {
@@ -1288,6 +1295,8 @@ export function CustomizationsReview({
               delete sanitizedData.files;
             }
 
+            payload.data = normalizeCustomizationData(sanitizedData);
+
             await saveOrderItemCustomization(
               orderId,
               activeOrderItemId,
@@ -1303,7 +1312,21 @@ export function CustomizationsReview({
             "❌ [CustomizationsReview] Erro ao salvar customização:",
             error,
           );
-          toast.error("Erro ao salvar personalização. Tente novamente.");
+          const message =
+            typeof error === "object" &&
+            error !== null &&
+            "response" in error &&
+            typeof error.response === "object" &&
+            error.response !== null &&
+            "data" in error.response &&
+            typeof error.response.data === "object" &&
+            error.response.data !== null &&
+            "details" in error.response.data &&
+            typeof error.response.data.details === "string"
+              ? error.response.data.details
+              : "Erro ao salvar personalização. Tente novamente.";
+
+          toast.error(message);
         } finally {
           setIsSaving(false);
         }

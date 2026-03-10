@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import axios from "axios";
+import type { CustomizationInput } from "../types/customization";
 
 export enum FeedSectionType {
   RECOMMENDED_PRODUCTS = "RECOMMENDED_PRODUCTS",
@@ -60,6 +61,153 @@ export interface FeedSectionItem {
   created_at: string;
   updated_at: string;
 }
+
+type ValidationCustomizationInputPayload = {
+  customization_id: string;
+  customization_type: import("../types/customization").CustomizationType;
+  data: Record<string, unknown>;
+};
+
+const getCustomizationInputId = (input: CustomizationInput): string | null =>
+  input.ruleId || input.customizationRuleId || null;
+
+const getCustomizationInputData = (
+  input: CustomizationInput,
+): Record<string, unknown> => (input.data || {}) as Record<string, unknown>;
+
+const getSelectedLayoutIdForValidation = (
+  input: CustomizationInput,
+  inputs: CustomizationInput[],
+): string | null => {
+  const data = getCustomizationInputData(input);
+  const directLayoutId =
+    input.selectedLayoutId ||
+    (typeof data.layout_id === "string" ? data.layout_id : null) ||
+    (typeof data.selected_layout_id === "string"
+      ? data.selected_layout_id
+      : null) ||
+    (typeof data.DYNAMIC_LAYOUT_id === "string"
+      ? data.DYNAMIC_LAYOUT_id
+      : null) ||
+    (typeof data.dynamic_layout_id === "string"
+      ? data.dynamic_layout_id
+      : null) ||
+    (typeof data.id === "string" ? data.id : null);
+
+  if (directLayoutId) {
+    return directLayoutId;
+  }
+
+  const dynamicLayoutInput = inputs.find(
+    (candidate) => candidate.customizationType === "DYNAMIC_LAYOUT",
+  );
+
+  if (!dynamicLayoutInput) {
+    return null;
+  }
+
+  const dynamicData = getCustomizationInputData(dynamicLayoutInput);
+  return (
+    dynamicLayoutInput.selectedLayoutId ||
+    (typeof dynamicData.layout_id === "string"
+      ? dynamicData.layout_id
+      : null) ||
+    (typeof dynamicData.selected_layout_id === "string"
+      ? dynamicData.selected_layout_id
+      : null) ||
+    (typeof dynamicData.DYNAMIC_LAYOUT_id === "string"
+      ? dynamicData.DYNAMIC_LAYOUT_id
+      : null) ||
+    (typeof dynamicData.id === "string" ? dynamicData.id : null)
+  );
+};
+
+const normalizeValidationData = (
+  input: CustomizationInput,
+  inputs: CustomizationInput[],
+): Record<string, unknown> => {
+  const data = getCustomizationInputData(input);
+
+  if (input.customizationType === "MULTIPLE_CHOICE") {
+    const selectedOption =
+      (typeof data.selected_option === "string"
+        ? data.selected_option
+        : null) ||
+      (typeof data.id === "string" ? data.id : null) ||
+      (typeof data.value === "string" ? data.value : null);
+
+    return {
+      ...data,
+      selected_option: selectedOption,
+      selected_options: selectedOption ? [selectedOption] : [],
+    };
+  }
+
+  if (input.customizationType === "IMAGES") {
+    const layoutId = getSelectedLayoutIdForValidation(input, inputs);
+    const photos = Array.isArray(data.photos) ? data.photos : [];
+    const previews = Array.isArray(data.previews) ? data.previews : [];
+    const images =
+      photos.length > 0
+        ? photos.map((photo, index) => {
+            if (typeof photo === "string") {
+              return {
+                source: photo,
+                slot: index,
+              };
+            }
+
+            const photoData = photo as Record<string, unknown>;
+            return {
+              source:
+                (typeof photoData.preview_url === "string"
+                  ? photoData.preview_url
+                  : null) ||
+                (typeof photoData.url === "string" ? photoData.url : null) ||
+                (typeof photoData.source === "string"
+                  ? photoData.source
+                  : null) ||
+                "",
+              slot:
+                typeof photoData.slot === "number"
+                  ? photoData.slot
+                  : typeof photoData.position === "number"
+                    ? photoData.position
+                    : index,
+            };
+          })
+        : previews.map((preview, index) => ({
+            source: typeof preview === "string" ? preview : "",
+            slot: index,
+          }));
+
+    return {
+      ...data,
+      layout_id: layoutId,
+      DYNAMIC_LAYOUT_id: layoutId,
+      images: images.filter((image) => Boolean(image.source)),
+    };
+  }
+
+  return data;
+};
+
+const mapCustomizationInputForValidation = (
+  input: CustomizationInput,
+  inputs: CustomizationInput[],
+): ValidationCustomizationInputPayload | null => {
+  const customizationId = getCustomizationInputId(input);
+
+  if (!customizationId) {
+    return null;
+  }
+
+  return {
+    customization_id: customizationId,
+    customization_type: input.customizationType,
+    data: normalizeValidationData(input, inputs),
+  };
+};
 
 export interface CreateFeedConfigurationInput {
   name: string;
@@ -1453,7 +1601,17 @@ class ApiService {
     itemId: string;
     inputs: import("../types/customization").CustomizationInput[];
   }): Promise<import("../types/customization").ValidationResponse> => {
-    const res = await this.client.post("/customizations/validate", payload);
+    const res = await this.client.post("/customizations/validate", {
+      itemId: payload.itemId,
+      inputs: payload.inputs
+        .map((input) =>
+          mapCustomizationInputForValidation(input, payload.inputs),
+        )
+        .filter(
+          (input): input is ValidationCustomizationInputPayload =>
+            input !== null,
+        ),
+    });
     return res.data;
   };
 
