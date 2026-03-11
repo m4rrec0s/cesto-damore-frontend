@@ -6,6 +6,16 @@ import { Loader2, AlertCircle, RefreshCw, CreditCard } from "lucide-react";
 import { initializeMercadoPago } from "../lib/mercadopago";
 
 const MP_PUBLIC_KEY = process.env.NEXT_PUBLIC_MERCADO_PAGO_PUBLIC_KEY;
+const BRICK_AUTO_RECOVERY_LIMIT = 1;
+const BRICK_AUTO_RECOVERY_DELAY_MS = 250;
+
+type CardPaymentBrickController = {
+  unmount: () => void;
+};
+
+type CardPaymentWindow = Window & {
+  cardPaymentBrickController?: CardPaymentBrickController;
+};
 
 interface MPCardPaymentFormProps {
   amount: number;
@@ -74,6 +84,15 @@ export function MPCardPaymentForm({
   const [isDelayedReady, setIsDelayedReady] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
   const mountedRef = useRef(true);
+  const retryCountRef = useRef(0);
+
+  const getCardPaymentWindow = useCallback(() => {
+    if (typeof window === "undefined") {
+      return null;
+    }
+
+    return window as CardPaymentWindow;
+  }, []);
 
   const emitStateChange = useCallback(
     (state: { ready: boolean; hasError: boolean; retryCount: number }) => {
@@ -83,22 +102,22 @@ export function MPCardPaymentForm({
   );
 
   const unmountCardBrick = useCallback(() => {
-    if (typeof window === "undefined") return;
+    const cardPaymentWindow = getCardPaymentWindow();
+
+    if (!cardPaymentWindow) return;
 
     try {
-      const controller = (
-        window as unknown as {
-          cardPaymentBrickController?: { unmount: () => void };
-        }
-      ).cardPaymentBrickController;
+      const controller = cardPaymentWindow.cardPaymentBrickController;
 
       if (controller?.unmount) {
         controller.unmount();
       }
+
+      cardPaymentWindow.cardPaymentBrickController = undefined;
     } catch (error) {
       console.warn("Falha ao desmontar CardPayment Brick:", error);
     }
-  }, []);
+  }, [getCardPaymentWindow]);
 
   const recreateCardBrick = useCallback(() => {
     if (!mountedRef.current) return;
@@ -114,6 +133,10 @@ export function MPCardPaymentForm({
     });
     setBrickKey(Date.now());
   }, [emitStateChange, unmountCardBrick]);
+
+  useEffect(() => {
+    retryCountRef.current = retryCount;
+  }, [retryCount]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -134,6 +157,26 @@ export function MPCardPaymentForm({
       unmountCardBrick();
     };
   }, [brickKey, unmountCardBrick]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const handlePageShow = (event: PageTransitionEvent) => {
+      if (!event.persisted || !mountedRef.current || cardPaymentReady) {
+        return;
+      }
+
+      recreateCardBrick();
+    };
+
+    window.addEventListener("pageshow", handlePageShow);
+
+    return () => {
+      window.removeEventListener("pageshow", handlePageShow);
+    };
+  }, [cardPaymentReady, recreateCardBrick]);
 
   useEffect(() => {
     emitStateChange({
@@ -226,28 +269,41 @@ export function MPCardPaymentForm({
     [amount, orderId, payerEmail, payerName, onSubmit, unmountCardBrick],
   );
 
-  const handleOnError = useCallback((error: CardPaymentError) => {
-    console.error("❌ Erro no CardPayment Brick:", error);
+  const handleOnError = useCallback(
+    (error: CardPaymentError) => {
+      console.error("❌ Erro no CardPayment Brick:", error);
 
-    if (!mountedRef.current) return;
+      if (!mountedRef.current) return;
 
-    let errorMessage = "Erro no formulário de pagamento";
+      let errorMessage = "Erro no formulário de pagamento";
 
-    if (typeof error === "string") {
-      errorMessage = error;
-    } else if (error?.cause === "fields_setup_failed_after_3_tries") {
-      errorMessage =
-        "Não foi possível carregar o formulário. Clique em 'Tentar novamente' ou atualize a página.";
-    } else if (error?.message) {
-      errorMessage = error.message;
-    } else if (error?.type === "critical") {
-      errorMessage =
-        "Erro crítico no formulário. Recarregue a página e tente novamente.";
-    }
+      if (typeof error === "string") {
+        errorMessage = error;
+      } else if (error?.cause === "fields_setup_failed_after_3_tries") {
+        errorMessage =
+          "Não foi possível carregar o formulário. Clique em 'Tentar novamente' ou atualize a página.";
 
-    setLocalError(errorMessage);
-    setCardPaymentReady(false);
-  }, []);
+        if (retryCountRef.current < BRICK_AUTO_RECOVERY_LIMIT) {
+          window.setTimeout(() => {
+            if (!mountedRef.current) {
+              return;
+            }
+
+            recreateCardBrick();
+          }, BRICK_AUTO_RECOVERY_DELAY_MS);
+        }
+      } else if (error?.message) {
+        errorMessage = error.message;
+      } else if (error?.type === "critical") {
+        errorMessage =
+          "Erro crítico no formulário. Recarregue a página e tente novamente.";
+      }
+
+      setLocalError(errorMessage);
+      setCardPaymentReady(false);
+    },
+    [recreateCardBrick],
+  );
 
   const handleOnReady = useCallback(() => {
     if (mountedRef.current) {
@@ -317,6 +373,7 @@ export function MPCardPaymentForm({
           <div id={`card-container-${brickKey}`}>
             <CardPayment
               key={`card-${orderId}-${brickKey}`}
+              id={`cardPaymentBrick_container_${orderId}_${brickKey}`}
               initialization={{
                 amount: amount,
                 payer: {
