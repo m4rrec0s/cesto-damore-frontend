@@ -632,7 +632,9 @@ export function ItemCustomizationModal({
       });
 
       onComplete(result.length > 0, result);
-      toast.success("Design aplicado! (Será salvo ao adicionar ao carrinho)");
+      toast.success("Design aplicado! (Será salvo ao adicionar ao carrinho)", {
+        id: "product-customization-design",
+      });
 
       setStep("selection");
       setFullLayoutBase(null);
@@ -781,7 +783,9 @@ export function ItemCustomizationModal({
         });
       } catch (error) {
         console.error("❌ [Crop] Erro ao processar imagem:", error);
-        toast.error("Erro ao enviar a imagem. Tente novamente.");
+        toast.error("Erro ao enviar a imagem. Tente novamente.", {
+          id: "product-customization-upload",
+        });
       } finally {
         setLoading(false);
       }
@@ -789,8 +793,8 @@ export function ItemCustomizationModal({
     [currentCustomizationId, customizations, fileToCrop, itemId],
   );
 
-  const handleDetailsConfirm = (croppedImageUrl: string) => {
-    handleCropComplete(croppedImageUrl);
+  const handleDetailsConfirm = async (croppedImageUrl: string) => {
+    await handleCropComplete(croppedImageUrl);
     setPendingFiles((prev) => prev.slice(1));
     setCropDialogOpen(false);
     setFileToCrop(null);
@@ -1521,7 +1525,9 @@ export function ItemCustomizationModal({
                   }
 
                   onComplete(result.length > 0, result);
-                  toast.success("Imagens confirmadas!");
+                  toast.success("Imagens confirmadas!", {
+                    id: "product-customization-images",
+                  });
                 }}
                 disabled={
                   loading || !hasRequiredImageCount || !hasAllImagesUploaded

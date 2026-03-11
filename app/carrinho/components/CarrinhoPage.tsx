@@ -55,6 +55,9 @@ const STEP_PATH_MAP = {
 } as const;
 
 const CHECKOUT_FORM_STORAGE_KEY = "checkout_form_state_v1";
+const CHECKOUT_PAYMENT_TOAST_ID = "checkout-payment-status";
+const CHECKOUT_FLOW_TOAST_ID = "checkout-flow-status";
+const CHECKOUT_PIX_TOAST_ID = "checkout-pix-status";
 
 const getStepFromPath = (pathname: string): 1 | 2 | 3 => {
   if (pathname.startsWith("/carrinho/pagamento")) return 3;
@@ -270,6 +273,39 @@ export default function CarrinhoPageContent() {
   >("none");
   const [confirmedOrder, setConfirmedOrder] = useState<Order | null>(null);
 
+  const showPaymentToast = useCallback(
+    (
+      type: "success" | "error" | "info" | "warning",
+      message: string,
+      options?: Parameters<(typeof toast)["success"]>[1],
+    ) => {
+      toast[type](message, { id: CHECKOUT_PAYMENT_TOAST_ID, ...options });
+    },
+    [],
+  );
+
+  const showFlowToast = useCallback(
+    (
+      type: "success" | "error" | "info" | "warning",
+      message: string,
+      options?: Parameters<(typeof toast)["success"]>[1],
+    ) => {
+      toast[type](message, { id: CHECKOUT_FLOW_TOAST_ID, ...options });
+    },
+    [],
+  );
+
+  const showPixToast = useCallback(
+    (
+      type: "success" | "error" | "info" | "warning",
+      message: string,
+      options?: Parameters<(typeof toast)["success"]>[1],
+    ) => {
+      toast[type](message, { id: CHECKOUT_PIX_TOAST_ID, ...options });
+    },
+    [],
+  );
+
   useEffect(() => {
     if (confirmationState === "animating") {
       const t = setTimeout(() => {
@@ -425,9 +461,12 @@ export default function CarrinhoPageContent() {
       setConfirmedOrder(order);
       setConfirmationState("animating");
 
-      toast.success("Pagamento confirmado! Pedido realizado com sucesso.");
+      showPaymentToast(
+        "success",
+        "Pagamento confirmado! Pedido realizado com sucesso.",
+      );
     },
-    [clearPendingOrder, clearCart],
+    [clearPendingOrder, clearCart, showPaymentToast],
   );
 
   const { startPolling } = usePaymentPolling({
@@ -441,7 +480,10 @@ export default function CarrinhoPageContent() {
       setPaymentError(
         "Pagamento recusado. Por favor, verifique os dados e tente novamente.",
       );
-      toast.error("Pagamento recusado. Verifique os dados do pagamento.");
+      showPaymentToast(
+        "error",
+        "Pagamento recusado. Verifique os dados do pagamento.",
+      );
     },
     onTimeout: () => {
       setPaymentStatus("");
@@ -449,7 +491,8 @@ export default function CarrinhoPageContent() {
       setPaymentError(
         "O tempo de espera expirou. Verifique o status do seu pedido na página 'Meus Pedidos'.",
       );
-      toast.warning(
+      showPaymentToast(
+        "warning",
         "Ainda não recebemos a confirmação do pagamento. Você pode acompanhar o status na página de pedidos.",
         { duration: 8000 },
       );
@@ -535,7 +578,8 @@ export default function CarrinhoPageContent() {
 
             setPaymentStatus("success");
 
-            toast.success(
+            showPaymentToast(
+              "success",
               "Pagamento confirmado! Pedido realizado com sucesso.",
             );
             return;
@@ -560,36 +604,44 @@ export default function CarrinhoPageContent() {
       clearPendingOrder();
       clearCart();
 
-      toast.success("Pagamento confirmado! 🎉", {
+      showPaymentToast("success", "Pagamento confirmado! 🎉", {
         description: "Recebemos a confirmação do seu pagamento em tempo real!",
         duration: 5000,
       });
     },
-    [clearCart, clearPendingOrder, getOrder],
+    [clearCart, clearPendingOrder, getOrder, showPaymentToast],
   );
 
-  const sseOnPaymentRejected = useCallback((data: unknown) => {
-    console.error("❌ Pagamento rejeitado via webhook SSE", data);
-    setPaymentStatus("failure");
-    setPaymentError("Pagamento rejeitado pelo Mercado Pago");
-    toast.error("Pagamento rejeitado", {
-      description: "Seu pagamento não foi aprovado. Tente novamente.",
-    });
-  }, []);
-
-  const sseOnPaymentPending = useCallback((data: unknown) => {
-    const status = ((data as { status?: string })?.status || "").toLowerCase();
-    if (status && lastRealtimeStatusRef.current !== status) {
-      lastRealtimeStatusRef.current = status;
-      toast.info("Pagamento em processamento", {
-        description:
-          status === "in_process"
-            ? "Seu pagamento foi recebido e está em análise."
-            : "Aguardando confirmação do pagamento.",
+  const sseOnPaymentRejected = useCallback(
+    (data: unknown) => {
+      console.error("❌ Pagamento rejeitado via webhook SSE", data);
+      setPaymentStatus("failure");
+      setPaymentError("Pagamento rejeitado pelo Mercado Pago");
+      showPaymentToast("error", "Pagamento rejeitado", {
+        description: "Seu pagamento não foi aprovado. Tente novamente.",
       });
-    }
-    setPaymentStatus("pending");
-  }, []);
+    },
+    [showPaymentToast],
+  );
+
+  const sseOnPaymentPending = useCallback(
+    (data: unknown) => {
+      const status = (
+        (data as { status?: string })?.status || ""
+      ).toLowerCase();
+      if (status && lastRealtimeStatusRef.current !== status) {
+        lastRealtimeStatusRef.current = status;
+        showPaymentToast("info", "Pagamento em processamento", {
+          description:
+            status === "in_process"
+              ? "Seu pagamento foi recebido e está em análise."
+              : "Aguardando confirmação do pagamento.",
+        });
+      }
+      setPaymentStatus("pending");
+    },
+    [showPaymentToast],
+  );
 
   const sseOnPaymentUpdate = useCallback(
     (data: unknown) => {
@@ -1385,12 +1437,12 @@ export default function CarrinhoPageContent() {
         setPaymentStatus(normalizedStatus);
         pixGeneratedForOrderRef.current = currentOrderId;
 
-        toast.success("QR Code PIX gerado! Escaneie para pagar.");
+        showPixToast("success", "QR Code PIX gerado! Escaneie para pagar.");
       } catch (error) {
         const errorMessage =
           error instanceof Error ? error.message : "Erro desconhecido";
         setPaymentError(errorMessage);
-        toast.error(`Erro ao gerar PIX: ${errorMessage}`);
+        showPixToast("error", `Erro ao gerar PIX: ${errorMessage}`);
       } finally {
         setIsProcessing(false);
         setIsGeneratingPix(false);
@@ -1422,6 +1474,7 @@ export default function CarrinhoPageContent() {
     tryReuseExistingPixPayment,
     pendingOrder?.payment?.status,
     isPendingPaymentExpired,
+    showPixToast,
   ]);
 
   useEffect(() => {
@@ -1526,14 +1579,26 @@ export default function CarrinhoPageContent() {
         const normalizedStatus = mapPaymentStatus(rawStatus) || "pending";
 
         if (normalizedStatus === "success") {
-          setPaymentStatus("success");
-          clearCart();
-          toast.success("Pagamento aprovado!");
+          const freshOrder = await getOrder(currentOrderId);
+
+          if (freshOrder) {
+            await handlePaymentSuccess(freshOrder);
+          } else {
+            paymentApprovedRef.current = true;
+            setPaymentStatus("success");
+            clearPendingOrder();
+            clearCart();
+            localStorage.removeItem(CHECKOUT_FORM_STORAGE_KEY);
+            showPaymentToast("success", "Pagamento aprovado!");
+          }
         } else if (normalizedStatus === "failure") {
           throw new Error(paymentResponse.message || "Pagamento recusado");
         } else {
           setPaymentStatus("pending");
-          toast.info("Pagamento em análise ou aguardando confirmação.");
+          showPaymentToast(
+            "info",
+            "Pagamento em análise ou aguardando confirmação.",
+          );
         }
       } catch (error) {
         console.error("❌ Erro no pagamento com cartão:", error);
@@ -1560,7 +1625,7 @@ export default function CarrinhoPageContent() {
         }
 
         setPaymentError(friendlyError);
-        toast.error(friendlyError);
+        showPaymentToast("error", friendlyError);
       } finally {
         setIsProcessing(false);
       }
@@ -1574,12 +1639,16 @@ export default function CarrinhoPageContent() {
       shippingCost,
       optionSelected,
       clearCart,
+      clearPendingOrder,
       router,
       mapPaymentStatus,
       customizationsValid,
       isDeliveryScheduleValid,
       updateStepUrl,
       verifyOrderTotals,
+      getOrder,
+      handlePaymentSuccess,
+      showPaymentToast,
     ],
   );
 
@@ -1930,10 +1999,11 @@ export default function CarrinhoPageContent() {
             document: userDocument.replace(/\D/g, "") || undefined,
           });
 
-          toast.success("Dados salvos com sucesso!");
+          showFlowToast("success", "Dados salvos com sucesso!");
         } catch (error) {
           console.error("Erro ao salvar dados do usuário:", error);
-          toast.warning(
+          showFlowToast(
+            "warning",
             "Não foi possível salvar seus dados, mas você pode continuar.",
           );
         }
@@ -1948,11 +2018,12 @@ export default function CarrinhoPageContent() {
         }
 
         if (optionSelected === "delivery" && !recipientPhone.trim()) {
-          toast.error("Por favor, informe o número do destinatário");
+          showFlowToast("error", "Por favor, informe o número do destinatário");
           return;
         }
         if (optionSelected === "delivery" && !isValidPhone(recipientPhone)) {
-          toast.error(
+          showFlowToast(
+            "error",
             "Por favor, informe um número de telefone válido para o destinatário",
           );
           return;
@@ -2012,12 +2083,15 @@ export default function CarrinhoPageContent() {
 
           setCurrentOrderId(createdOrderId);
 
-          toast.success("Pedido criado! Selecione a forma de pagamento.");
+          showFlowToast(
+            "success",
+            "Pedido criado! Selecione a forma de pagamento.",
+          );
         } catch (error) {
           console.error("Erro ao criar pedido:", error);
           const errorMessage =
             error instanceof Error ? error.message : "Erro desconhecido";
-          toast.error(`Erro ao criar pedido: ${errorMessage}`);
+          showFlowToast("error", `Erro ao criar pedido: ${errorMessage}`);
           setIsProcessing(false);
           return;
         } finally {

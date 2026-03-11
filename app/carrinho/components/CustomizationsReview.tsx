@@ -1334,7 +1334,9 @@ export function CustomizationsReview({
             );
           }
 
-          toast.success("Personalização salva no pedido!");
+          toast.success("Personalização salva no pedido!", {
+            id: "order-customization-save",
+          });
           onCustomizationSaved?.();
           setRefreshVersion((value) => value + 1);
         } catch (error) {
@@ -1356,7 +1358,7 @@ export function CustomizationsReview({
               ? error.response.data.details
               : "Erro ao salvar personalização. Tente novamente.";
 
-          toast.error(message);
+          toast.error(message, { id: "order-customization-save" });
         } finally {
           setIsSaving(false);
         }

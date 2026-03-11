@@ -326,6 +326,17 @@ export const ImageCropApply = ({
   const handleClick = async (e: MouseEvent<HTMLButtonElement>) => {
     setIsApplying(true);
     try {
+      await new Promise<void>((resolve) => {
+        if (typeof window === "undefined") {
+          resolve();
+          return;
+        }
+
+        window.requestAnimationFrame(() => {
+          window.requestAnimationFrame(() => resolve());
+        });
+      });
+
       await applyCrop();
       onClick?.(e);
     } finally {
