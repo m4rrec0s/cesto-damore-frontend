@@ -414,6 +414,7 @@ interface CartContextType {
   formatDate: (date: Date) => string;
   orderMetadata: Record<string, unknown>;
   setOrderMetadata: (metadata: Record<string, unknown>) => void;
+  clearPendingOrderId: () => void;
 }
 
 export function useCart(): CartContextType {
@@ -427,6 +428,19 @@ export function useCart(): CartContextType {
   });
 
   const [pendingOrderId, setPendingOrderId] = useState<string | null>(null);
+
+  const clearPendingOrderId = useCallback(() => {
+    setPendingOrderId(null);
+    getOrderAttemptedRef.current.clear();
+    _setOrderMetadata({});
+  }, []);
+
+  const isAutoDeletableDraftOrder = useCallback((order: Order | null) => {
+    if (!order) return false;
+    if ((order.status || "").toUpperCase() !== "PENDING") return false;
+    if (order.payment?.id || order.payment?.mercado_pago_id) return false;
+    return true;
+  }, []);
 
   const isInitializedRef = useRef<boolean>(false);
   const getOrderAttemptedRef = useRef<Set<string>>(new Set());
@@ -859,33 +873,17 @@ export function useCart(): CartContextType {
         const itemsPayload = cartItemsToOrderItems(currentCart.items);
 
         if (itemsPayload.length === 0) {
-          if (
-            pendingOrderId &&
-            getOrderAttemptedRef.current.has(pendingOrderId)
-          ) {
-            try {
-              await api.deleteOrder(pendingOrderId);
-              setPendingOrderId(null);
-              setOrderMetadata({
-                send_anonymously: false,
-                complement: undefined,
-              });
-            } catch (error) {
-              console.error("Erro ao deletar pedido pendente:", error);
-            }
-          } else if (pendingOrderId) {
+          if (pendingOrderId) {
             try {
               const serverOrder = await api.getOrder(pendingOrderId);
               getOrderAttemptedRef.current.add(pendingOrderId);
-              const status = serverOrder?.status;
-              if (status && (status === "PENDING" || status === "pending")) {
+              if (isAutoDeletableDraftOrder(serverOrder)) {
                 await api.deleteOrder(pendingOrderId);
-                setPendingOrderId(null);
+                clearPendingOrderId();
                 setOrderMetadata({
                   send_anonymously: false,
                   complement: undefined,
                 });
-              } else {
               }
             } catch (error) {
               console.error(
@@ -995,6 +993,8 @@ export function useCart(): CartContextType {
       user,
       orderMetadata,
       setOrderMetadata,
+      clearPendingOrderId,
+      isAutoDeletableDraftOrder,
     ],
   );
 
@@ -1302,8 +1302,7 @@ export function useCart(): CartContextType {
             if (updatedCart.items.length === 0 && pendingOrderId) {
               try {
                 const serverOrder = await api.getOrder(pendingOrderId);
-                const status = serverOrder?.status;
-                if (status && (status === "PENDING" || status === "pending")) {
+                if (isAutoDeletableDraftOrder(serverOrder)) {
                   try {
                     await api.deleteOrder(pendingOrderId);
                   } catch (deleteErr) {
@@ -1312,7 +1311,7 @@ export function useCart(): CartContextType {
                       deleteErr,
                     );
                   }
-                  setPendingOrderId(null);
+                  clearPendingOrderId();
                   setOrderMetadata({
                     send_anonymously: false,
                     complement: undefined,
@@ -1345,8 +1344,9 @@ export function useCart(): CartContextType {
       syncCartToBackend,
       api,
       pendingOrderId,
-      setPendingOrderId,
+      clearPendingOrderId,
       setOrderMetadata,
+      isAutoDeletableDraftOrder,
     ],
   );
 
@@ -2302,5 +2302,6 @@ export function useCart(): CartContextType {
     formatDate,
     orderMetadata,
     setOrderMetadata,
+    clearPendingOrderId,
   };
 }

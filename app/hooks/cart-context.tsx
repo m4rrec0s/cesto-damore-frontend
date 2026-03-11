@@ -116,6 +116,7 @@ interface CartContextType {
   formatDate: (date: Date) => string;
   orderMetadata: Record<string, unknown>;
   setOrderMetadata: (metadata: Record<string, unknown>) => void;
+  clearPendingOrderId: () => void;
   getMaxProductionTime: () => number;
   isDateDisabledInCalendar: (date: Date) => boolean;
   getProductionTimeline: () => {

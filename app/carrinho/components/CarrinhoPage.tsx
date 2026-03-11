@@ -183,6 +183,7 @@ export default function CarrinhoPageContent() {
     removeFromCart,
     updateCustomizations,
     clearCart,
+    clearPendingOrderId,
     createOrder,
     getMaxProductionTime,
     generateTimeSlots,
@@ -455,6 +456,7 @@ export default function CarrinhoPageContent() {
 
       setPaymentStatus("success");
       clearPendingOrder();
+      clearPendingOrderId();
       clearCart();
       localStorage.removeItem(CHECKOUT_FORM_STORAGE_KEY);
 
@@ -466,7 +468,7 @@ export default function CarrinhoPageContent() {
         "Pagamento confirmado! Pedido realizado com sucesso.",
       );
     },
-    [clearPendingOrder, clearCart, showPaymentToast],
+    [clearPendingOrder, clearPendingOrderId, clearCart, showPaymentToast],
   );
 
   const { startPolling } = usePaymentPolling({
@@ -574,6 +576,7 @@ export default function CarrinhoPageContent() {
             localStorage.removeItem("pendingOrderId");
             localStorage.removeItem(CHECKOUT_FORM_STORAGE_KEY);
             clearPendingOrder();
+            clearPendingOrderId();
             clearCart();
 
             setPaymentStatus("success");
@@ -602,6 +605,7 @@ export default function CarrinhoPageContent() {
       localStorage.removeItem("pendingOrderId");
       localStorage.removeItem(CHECKOUT_FORM_STORAGE_KEY);
       clearPendingOrder();
+      clearPendingOrderId();
       clearCart();
 
       showPaymentToast("success", "Pagamento confirmado! 🎉", {
@@ -609,7 +613,13 @@ export default function CarrinhoPageContent() {
         duration: 5000,
       });
     },
-    [clearCart, clearPendingOrder, getOrder, showPaymentToast],
+    [
+      clearCart,
+      clearPendingOrder,
+      clearPendingOrderId,
+      getOrder,
+      showPaymentToast,
+    ],
   );
 
   const sseOnPaymentRejected = useCallback(
