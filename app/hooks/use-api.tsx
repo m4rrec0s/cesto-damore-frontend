@@ -767,6 +767,11 @@ class ApiService {
         ApiService.requestCache.delete(cacheKey);
       }
     }
+    for (const inFlightKey of ApiService.inFlightRequests.keys()) {
+      if (inFlightKey === key || inFlightKey.startsWith(`${key}:`)) {
+        ApiService.inFlightRequests.delete(inFlightKey);
+      }
+    }
   }
 
   private clearRequestCacheByPrefix(...prefixes: string[]) {
@@ -775,6 +780,12 @@ class ApiService {
     for (const cacheKey of ApiService.requestCache.keys()) {
       if (prefixes.some((prefix) => cacheKey.startsWith(prefix))) {
         ApiService.requestCache.delete(cacheKey);
+      }
+    }
+
+    for (const inFlightKey of ApiService.inFlightRequests.keys()) {
+      if (prefixes.some((prefix) => inFlightKey.startsWith(prefix))) {
+        ApiService.inFlightRequests.delete(inFlightKey);
       }
     }
   }
@@ -1736,14 +1747,10 @@ class ApiService {
       for (const key of Object.keys(record)) {
         const val = record[key];
         if (typeof val === "string") {
-          if (val.startsWith("data:") || val.startsWith("blob:")) {
+          if (val.startsWith("blob:")) {
             delete record[key];
             continue;
           }
-        }
-        if (key === "base64" || key === "base64Data") {
-          delete record[key];
-          continue;
         }
         if (Array.isArray(val)) {
           val.forEach((v) => removeBase64(v));
@@ -1777,13 +1784,8 @@ class ApiService {
           continue;
         }
 
-        if (key === "base64" || key === "base64Data") {
-          delete record[key];
-          continue;
-        }
-
         if (typeof val === "string") {
-          if (val.startsWith("data:") || val.startsWith("blob:")) {
+          if (val.startsWith("blob:")) {
             delete record[key];
             continue;
           }

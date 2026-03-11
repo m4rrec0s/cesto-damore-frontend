@@ -866,6 +866,36 @@ export function CustomizationsReview({
           };
         });
 
+        const reviewDataIsComplete =
+          results.length > 0 && results.every((entry) => entry.isComplete);
+
+        if (reviewDataIsComplete) {
+          setBackendValidationState((prev) => {
+            const hasOnlyMissingRequired =
+              (prev?.missingRequired?.length || 0) > 0 &&
+              (prev?.invalidCustomizations?.length || 0) === 0;
+
+            if (!hasOnlyMissingRequired && prev?.valid !== false) {
+              return prev;
+            }
+
+            return {
+              valid: true,
+              recommendations: [],
+              missingRequired: [],
+              invalidCustomizations: prev?.invalidCustomizations || [],
+            };
+          });
+
+          validationStatusChangeRef.current?.({
+            valid: true,
+            source: "backend",
+            recommendations: [],
+            missingRequired: [],
+            invalidCustomizations: [],
+          });
+        }
+
         setValidations(results);
         setIsLoading(false);
         return;

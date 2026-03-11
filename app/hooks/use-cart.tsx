@@ -270,69 +270,6 @@ const mergeCustomizationEntries = (
   return merged;
 };
 
-const buildCartItemIdentity = (item: CartItem): string => {
-  const additionsKey = serializeAdditionals(item.additional_ids);
-  const colorsKey = serializeAdditionalColors(item.additional_colors);
-  const customizationsKey = serializeCustomizations(item.customizations);
-  return `${item.product_id}|${additionsKey}|${colorsKey}|${customizationsKey}`;
-};
-
-const mergeCartItemLists = (
-  primary: CartItem[],
-  secondary: CartItem[],
-): CartItem[] => {
-  const mergedMap = new Map<string, CartItem>();
-
-  const upsert = (item: CartItem) => {
-    const key = buildCartItemIdentity(item);
-    const existing = mergedMap.get(key);
-
-    if (!existing) {
-      mergedMap.set(key, {
-        ...item,
-        customizations: item.customizations
-          ? cloneCustomizations(item.customizations)
-          : undefined,
-      });
-      return;
-    }
-
-    const mergedCustomizations = mergeCustomizationEntries(
-      existing.customizations || [],
-      item.customizations || [],
-    );
-
-    const mergedItem: CartItem = {
-      ...existing,
-      ...item,
-      quantity: existing.quantity + item.quantity,
-      customizations:
-        mergedCustomizations.length > 0 ? mergedCustomizations : undefined,
-    };
-
-    const mergedCustomizationTotal = calculateCustomizationTotal(
-      mergedItem.customizations,
-    );
-    mergedItem.customization_total =
-      mergedItem.customizations && mergedItem.customizations.length > 0
-        ? mergedCustomizationTotal
-        : undefined;
-
-    const baseEffective =
-      mergedItem.price * (1 - (mergedItem.discount || 0) / 100);
-    mergedItem.effectivePrice = Number(
-      (baseEffective + mergedCustomizationTotal).toFixed(2),
-    );
-
-    mergedMap.set(key, mergedItem);
-  };
-
-  primary.forEach(upsert);
-  secondary.forEach(upsert);
-
-  return Array.from(mergedMap.values());
-};
-
 const calculateCustomizationTotal = (
   customizations?: CartCustomization[],
 ): number => {
@@ -844,8 +781,7 @@ export function useCart(): CartContextType {
             });
           }
 
-          const mergedItems = mergeCartItemLists(cart.items, serverCartItems);
-          const updatedCart = calculateTotals(mergedItems);
+          const updatedCart = calculateTotals(serverCartItems);
           setCart(updatedCart);
           setPendingOrderId(pendingOrder.id);
 
