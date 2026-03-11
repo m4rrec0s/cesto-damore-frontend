@@ -15,6 +15,11 @@ interface MPCardPaymentFormProps {
   onSubmit: (formData: MPCardFormData) => Promise<void>;
   isProcessing?: boolean;
   onReady?: () => void;
+  onStateChange?: (state: {
+    ready: boolean;
+    hasError: boolean;
+    retryCount: number;
+  }) => void;
 }
 
 export interface MPCardFormData {
@@ -60,6 +65,7 @@ export function MPCardPaymentForm({
   onSubmit,
   isProcessing = false,
   onReady,
+  onStateChange,
 }: MPCardPaymentFormProps) {
   const [localError, setLocalError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -69,15 +75,45 @@ export function MPCardPaymentForm({
   const [retryCount, setRetryCount] = useState(0);
   const mountedRef = useRef(true);
 
+  const emitStateChange = useCallback(
+    (state: { ready: boolean; hasError: boolean; retryCount: number }) => {
+      onStateChange?.(state);
+    },
+    [onStateChange],
+  );
+
+  const unmountCardBrick = useCallback(() => {
+    if (typeof window === "undefined") return;
+
+    try {
+      const controller = (
+        window as unknown as {
+          cardPaymentBrickController?: { unmount: () => void };
+        }
+      ).cardPaymentBrickController;
+
+      if (controller?.unmount) {
+        controller.unmount();
+      }
+    } catch (error) {
+      console.warn("Falha ao desmontar CardPayment Brick:", error);
+    }
+  }, []);
+
   const recreateCardBrick = useCallback(() => {
     if (!mountedRef.current) return;
 
+    unmountCardBrick();
     setLocalError(null);
     setCardPaymentReady(false);
     setIsDelayedReady(false);
-    setRetryCount((prev) => prev + 1);
+    setRetryCount((prev) => {
+      const nextRetry = prev + 1;
+      emitStateChange({ ready: false, hasError: false, retryCount: nextRetry });
+      return nextRetry;
+    });
     setBrickKey(Date.now());
-  }, []);
+  }, [emitStateChange, unmountCardBrick]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -95,8 +131,17 @@ export function MPCardPaymentForm({
     return () => {
       mountedRef.current = false;
       clearTimeout(timer);
+      unmountCardBrick();
     };
-  }, [brickKey]);
+  }, [brickKey, unmountCardBrick]);
+
+  useEffect(() => {
+    emitStateChange({
+      ready: cardPaymentReady,
+      hasError: Boolean(localError),
+      retryCount,
+    });
+  }, [cardPaymentReady, emitStateChange, localError, retryCount]);
 
   const handleRetry = useCallback(() => {
     recreateCardBrick();
@@ -161,6 +206,16 @@ export function MPCardPaymentForm({
               ? err.message
               : "Erro ao processar o pagamento";
           setLocalError(errorMessage);
+          setCardPaymentReady(false);
+
+          if (
+            /token do cartao|token do cartão|card token|chave publica|chave pública|mercado pago/i.test(
+              errorMessage,
+            )
+          ) {
+            unmountCardBrick();
+            setBrickKey(Date.now());
+          }
         }
       } finally {
         if (mountedRef.current) {
@@ -168,7 +223,7 @@ export function MPCardPaymentForm({
         }
       }
     },
-    [amount, orderId, payerEmail, payerName, onSubmit],
+    [amount, orderId, payerEmail, payerName, onSubmit, unmountCardBrick],
   );
 
   const handleOnError = useCallback((error: CardPaymentError) => {

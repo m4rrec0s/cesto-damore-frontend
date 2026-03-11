@@ -39,6 +39,22 @@ export const StepPayment = ({
 }: StepPaymentProps) => {
   const [isBrickLoading, setIsBrickLoading] = useState(false);
 
+  const handleCardFormStateChange = ({
+    ready,
+    hasError,
+  }: {
+    ready: boolean;
+    hasError: boolean;
+    retryCount: number;
+  }) => {
+    if (ready || hasError) {
+      setIsBrickLoading(false);
+      return;
+    }
+
+    setIsBrickLoading(true);
+  };
+
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -173,6 +189,7 @@ export const StepPayment = ({
                   onSubmit={handleCardSubmit}
                   isProcessing={isProcessing}
                   onReady={() => setIsBrickLoading(false)}
+                  onStateChange={handleCardFormStateChange}
                 />
               </div>
             )}
