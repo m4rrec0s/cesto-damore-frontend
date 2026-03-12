@@ -1562,6 +1562,8 @@ export default function CarrinhoPageContent() {
           issuer_id: String(formData.issuer_id || ""),
           payment_method_id: formData.payment_method_id,
           cardholderName: user.name || "",
+          frontendPublicKeyFingerprint: formData.frontendPublicKeyFingerprint,
+          frontendPublicKeyPrefix: formData.frontendPublicKeyPrefix,
         };
 
         console.log("💾 Payload de pagamento:", {
@@ -1574,6 +1576,7 @@ export default function CarrinhoPageContent() {
           payment_method_id: payload.payment_method_id,
           issuer_id: payload.issuer_id,
           installments: payload.installments,
+          frontendPublicKeyPrefix: payload.frontendPublicKeyPrefix,
         });
 
         const paymentResponse = await createTransparentPayment(payload);

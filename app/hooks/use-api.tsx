@@ -2138,6 +2138,8 @@ class ApiService {
     installments?: number;
     issuer_id?: string;
     payment_method_id?: string;
+    frontendPublicKeyFingerprint?: string;
+    frontendPublicKeyPrefix?: string;
   }) => {
     if (
       !payload.orderId ||

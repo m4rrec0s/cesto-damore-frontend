@@ -3,9 +3,11 @@
 import { CardPayment } from "@mercadopago/sdk-react";
 import { useEffect, useState, useCallback, useRef } from "react";
 import { Loader2, AlertCircle, RefreshCw, CreditCard } from "lucide-react";
-import { initializeMercadoPago } from "../lib/mercadopago";
-
-const MP_PUBLIC_KEY = process.env.NEXT_PUBLIC_MERCADO_PAGO_PUBLIC_KEY;
+import {
+  getMercadoPagoPublicConfig,
+  initializeMercadoPago,
+  type MercadoPagoPublicConfig,
+} from "../lib/mercadopago";
 const BRICK_AUTO_RECOVERY_LIMIT = 1;
 const BRICK_AUTO_RECOVERY_DELAY_MS = 250;
 
@@ -45,6 +47,8 @@ export interface MPCardFormData {
       number: string;
     };
   };
+  frontendPublicKeyFingerprint?: string;
+  frontendPublicKeyPrefix?: string;
 }
 
 interface CardPaymentFormData {
@@ -83,6 +87,8 @@ export function MPCardPaymentForm({
   const [brickKey, setBrickKey] = useState(() => Date.now());
   const [isDelayedReady, setIsDelayedReady] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
+  const [publicConfig, setPublicConfig] =
+    useState<MercadoPagoPublicConfig | null>(null);
   const mountedRef = useRef(true);
   const retryCountRef = useRef(0);
 
@@ -141,19 +147,50 @@ export function MPCardPaymentForm({
   useEffect(() => {
     mountedRef.current = true;
 
-    if (MP_PUBLIC_KEY) {
-      initializeMercadoPago(MP_PUBLIC_KEY);
-    }
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
 
-    const timer = setTimeout(() => {
-      if (mountedRef.current) {
-        setIsDelayedReady(true);
+    const prepareBrick = async () => {
+      try {
+        const config = await getMercadoPagoPublicConfig();
+
+        if (cancelled || !mountedRef.current) {
+          return;
+        }
+
+        initializeMercadoPago(config.publicKey);
+        setPublicConfig(config);
+        setLocalError(null);
+
+        timer = setTimeout(() => {
+          if (mountedRef.current && !cancelled) {
+            setIsDelayedReady(true);
+          }
+        }, 800);
+      } catch (error) {
+        console.error(
+          "❌ Falha ao carregar configuração do Mercado Pago:",
+          error,
+        );
+
+        if (!cancelled && mountedRef.current) {
+          setPublicConfig(null);
+          setLocalError(
+            "Não foi possível carregar a configuração do Mercado Pago. Recarregue a página e tente novamente.",
+          );
+          setCardPaymentReady(false);
+        }
       }
-    }, 800);
+    };
+
+    prepareBrick();
 
     return () => {
+      cancelled = true;
       mountedRef.current = false;
-      clearTimeout(timer);
+      if (timer) {
+        clearTimeout(timer);
+      }
       unmountCardBrick();
     };
   }, [brickKey, unmountCardBrick]);
@@ -238,6 +275,8 @@ export function MPCardPaymentForm({
               number: formData.payer?.identification?.number || "",
             },
           },
+          frontendPublicKeyFingerprint: publicConfig?.publicKeyFingerprint,
+          frontendPublicKeyPrefix: publicConfig?.publicKeyPrefix,
         };
 
         await onSubmit(paymentData);
@@ -266,7 +305,16 @@ export function MPCardPaymentForm({
         }
       }
     },
-    [amount, orderId, payerEmail, payerName, onSubmit, unmountCardBrick],
+    [
+      amount,
+      orderId,
+      payerEmail,
+      payerName,
+      publicConfig?.publicKeyFingerprint,
+      publicConfig?.publicKeyPrefix,
+      onSubmit,
+      unmountCardBrick,
+    ],
   );
 
   const handleOnError = useCallback(
@@ -313,14 +361,12 @@ export function MPCardPaymentForm({
     }
   }, [onReady]);
 
-  if (!MP_PUBLIC_KEY) {
+  if (!publicConfig && localError) {
     return (
       <div className="p-6 border-red-200 bg-red-50">
         <div className="flex items-center gap-3">
           <AlertCircle className="h-5 w-5 text-red-600" />
-          <p className="text-red-600">
-            Chave pública do Mercado Pago não configurada
-          </p>
+          <p className="text-red-600">{localError}</p>
         </div>
       </div>
     );
@@ -420,7 +466,7 @@ export function MPCardPaymentForm({
 
       {process.env.NODE_ENV === "development" && (
         <div className="p-2 bg-gray-100 text-xs text-gray-500 border-t">
-          <p>🔑 PK: {MP_PUBLIC_KEY?.substring(0, 15)}...</p>
+          <p>🔑 PK: {publicConfig?.publicKeyPrefix || "indisponível"}...</p>
           <p>💰 Amount: R$ {amount?.toFixed(2)}</p>
           <p>📦 Order: {orderId}</p>
           <p>
