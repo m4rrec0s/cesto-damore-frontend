@@ -913,6 +913,27 @@ export default function CarrinhoPageContent() {
     () => (Array.isArray(cart?.items) ? cart.items : []),
     [cart?.items],
   );
+  const shouldRedirectEmptyCheckout = useMemo(
+    () =>
+      !checkingPendingOrder &&
+      !isLoading &&
+      Boolean(user) &&
+      !currentOrderId &&
+      !hasPendingOrder &&
+      cartItems.length === 0 &&
+      confirmationState === "none" &&
+      !isProcessing,
+    [
+      checkingPendingOrder,
+      isLoading,
+      user,
+      currentOrderId,
+      hasPendingOrder,
+      cartItems.length,
+      confirmationState,
+      isProcessing,
+    ],
+  );
   const localCustomizationsValid = useMemo(
     () => validateCustomizations(cartItems),
     [cartItems],
@@ -1837,6 +1858,20 @@ export default function CarrinhoPageContent() {
     await checkPendingOrder();
   }, [checkPendingOrder]);
 
+  useEffect(() => {
+    if (!shouldRedirectEmptyCheckout) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      router.replace("/");
+    }, 1800);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [router, shouldRedirectEmptyCheckout]);
+
   const handleCepSearch = async (cep: string) => {
     if (!cep || cep.length !== 8) {
       return;
@@ -1895,6 +1930,22 @@ export default function CarrinhoPageContent() {
           <Button asChild className="mt-6 bg-rose-600 hover:bg-rose-700">
             <Link href="/login">Fazer Login</Link>
           </Button>
+        </Card>
+      </div>
+    );
+  }
+
+  if (shouldRedirectEmptyCheckout) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <Card className="max-w-lg w-full p-8 text-center">
+          <Loader2 className="h-10 w-10 animate-spin text-rose-600 mx-auto mb-5" />
+          <h1 className="text-2xl font-bold text-gray-900">
+            Nenhum pedido em andamento
+          </h1>
+          <h2 className="text-base text-gray-600 mt-3">
+            Redirecionando para Início
+          </h2>
         </Card>
       </div>
     );
