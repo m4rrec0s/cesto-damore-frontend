@@ -1835,7 +1835,9 @@ export default function CarrinhoPageContent() {
               (data.previewUrl as string) ||
               ((data.final_artwork as { preview_url?: string } | undefined)
                 ?.preview_url as string | undefined),
-            additional_time: Number(data.additional_time || 0),
+            additional_time: Number(
+              data.additional_time || data.productionTime || 0,
+            ),
             fabricState: data.fabricState as string | undefined,
             data: normalizeCustomizationData(data),
           };

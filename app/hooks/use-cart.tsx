@@ -660,6 +660,12 @@ export function useCart(): CartContextType {
                         : JSON.stringify(customization.value),
                   });
                 } else if (customizationType === "DYNAMIC_LAYOUT") {
+                  const dynamicAdditionalTime = Number(
+                    (data.additional_time as number) ||
+                      (data.productionTime as number) ||
+                      0,
+                  );
+
                   customizations.push({
                     id: customization.id,
                     componentId,
@@ -678,7 +684,7 @@ export function useCart(): CartContextType {
                       (data.selected_item_label as string) ||
                       (data.selected_option_label as string) ||
                       (data.text as string),
-                    additional_time: (data.additional_time as number) || 0,
+                    additional_time: dynamicAdditionalTime,
                     data: data,
                     fabricState: (data.fabricState as string) || undefined,
                     value:
@@ -1780,7 +1786,12 @@ export function useCart(): CartContextType {
       if (item.customizations) {
         item.customizations.forEach((custom) => {
           if (custom.customization_type === "DYNAMIC_LAYOUT") {
-            const dynamicLayoutTime = custom.additional_time || 0;
+            const dynamicLayoutTime = Number(
+              custom.additional_time ||
+                ((custom.data?.additional_time as number) ??
+                  (custom.data?.productionTime as number) ??
+                  0),
+            );
             if (dynamicLayoutTime > 0) {
               itemMaxTime = Math.max(itemMaxTime, dynamicLayoutTime);
             }

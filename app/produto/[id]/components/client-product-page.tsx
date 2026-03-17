@@ -1267,6 +1267,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
               name?: string;
               previewUrl?: string;
               productionTime?: number;
+              additional_time?: number;
               fabricState?: string;
               highQualityUrl?: string;
             };
@@ -1287,7 +1288,8 @@ const ClientProductPage = ({ id }: { id: string }) => {
               },
               selected_item_label: layoutData.name || "Design Personalizado",
               text: undefined,
-              additional_time: layoutData.productionTime ?? 0,
+              additional_time:
+                layoutData.productionTime ?? layoutData.additional_time ?? 0,
               fabricState: layoutData.fabricState,
               data: normalizeCustomizationData(layoutData),
             };
@@ -1327,6 +1329,8 @@ const ClientProductPage = ({ id }: { id: string }) => {
             cartCustomization.text = finalPreviewUrl;
             cartCustomization.data = normalizeCustomizationData({
               ...layoutData,
+              additional_time:
+                layoutData.productionTime ?? layoutData.additional_time ?? 0,
               previewUrl: finalPreviewUrl,
               text: finalPreviewUrl,
             });

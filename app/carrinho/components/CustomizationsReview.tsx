@@ -74,6 +74,8 @@ interface AvailableCustomization {
 
 interface ProductValidation {
   orderItemId?: string;
+  cartItemIndex?: number;
+  cartItemKey?: string;
   productId: string;
   productName: string;
   availableCustomizations: AvailableCustomization[];
@@ -653,6 +655,18 @@ const mapCustomizationType = (backendType: string): string => {
   return typeMap[backendType] || backendType;
 };
 
+const getFallbackItemName = (filled: CartCustomization): string => {
+  if (filled.componentId) {
+    return filled.componentId;
+  }
+
+  if (filled.selected_item_label) {
+    return filled.selected_item_label;
+  }
+
+  return "Item";
+};
+
 const CustomizationFallback = ({
   customization,
   onEdit,
@@ -934,12 +948,16 @@ export function CustomizationsReview({
       }
     }
 
-    const productIds = [...new Set(cartItems.map((item) => item.product_id))];
     const results: ProductValidation[] = [];
 
-    for (const productId of productIds) {
-      const cartItem = cartItems.find((i) => i.product_id === productId);
-      if (!cartItem) continue;
+    for (
+      let cartItemIndex = 0;
+      cartItemIndex < cartItems.length;
+      cartItemIndex += 1
+    ) {
+      const cartItem = cartItems[cartItemIndex];
+      const productId = cartItem.product_id;
+      const cartItemKey = `${productId}-${cartItemIndex}`;
 
       try {
         const product = await getProduct(productId);
@@ -1034,6 +1052,8 @@ export function CustomizationsReview({
         });
 
         results.push({
+          cartItemIndex,
+          cartItemKey,
           productId,
           productName: cartItem.product.name,
           availableCustomizations: allAvailable,
@@ -1054,6 +1074,8 @@ export function CustomizationsReview({
         );
 
         results.push({
+          cartItemIndex,
+          cartItemKey,
           productId,
           productName: cartItem.product.name,
           availableCustomizations: [],
@@ -1126,6 +1148,7 @@ export function CustomizationsReview({
       itemName: string,
       componentId: string,
       orderItemId?: string,
+      cartItemIndex?: number,
     ) => {
       try {
         const configResponse = await getItemCustomizations(itemId);
@@ -1163,7 +1186,10 @@ export function CustomizationsReview({
             });
           }
         } else {
-          const cartItem = cartItems.find((i) => i.product_id === productId);
+          const cartItem =
+            typeof cartItemIndex === "number"
+              ? cartItems[cartItemIndex]
+              : cartItems.find((i) => i.product_id === productId);
           filled =
             cartItem?.customizations?.filter((f) => {
               const ruleId = getCustomizationRuleId(f);
@@ -1468,6 +1494,7 @@ export function CustomizationsReview({
                 missing: AvailableCustomization[];
                 filled: CartCustomization[];
                 itemId: string;
+                isAdditional: boolean;
               }
             >();
 
@@ -1483,11 +1510,14 @@ export function CustomizationsReview({
                   missing: [],
                   filled: [],
                   itemId: avail.itemId,
+                  isAdditional: Boolean(avail.isAdditional),
                 });
               }
 
               const entry = itemsMap.get(componentIdKey)!;
               entry.allCustomizations.push(avail);
+              entry.isAdditional =
+                entry.isAdditional || Boolean(avail.isAdditional);
 
               const filledCustom = validation.filledCustomizations.find(
                 (f) =>
@@ -1517,28 +1547,76 @@ export function CustomizationsReview({
               }
             });
 
+            validation.filledCustomizations.forEach((filled) => {
+              const componentIdKey = filled.componentId || "default";
+
+              if (!itemsMap.has(componentIdKey)) {
+                const relatedAvailable =
+                  validation.availableCustomizations.find(
+                    (avail) =>
+                      avail.componentId === componentIdKey ||
+                      avail.itemId === componentIdKey,
+                  );
+
+                itemsMap.set(componentIdKey, {
+                  itemName:
+                    relatedAvailable?.itemName || getFallbackItemName(filled),
+                  allCustomizations: relatedAvailable ? [relatedAvailable] : [],
+                  missing: [],
+                  filled: [],
+                  itemId: relatedAvailable?.itemId || componentIdKey,
+                  isAdditional:
+                    Boolean(relatedAvailable?.isAdditional) ||
+                    filled.customization_id?.startsWith("add_") ||
+                    false,
+                });
+              }
+
+              const entry = itemsMap.get(componentIdKey)!;
+              if (
+                !entry.filled.some(
+                  (current) =>
+                    current.id === filled.id ||
+                    (current.customization_id === filled.customization_id &&
+                      current.title === filled.title),
+                )
+              ) {
+                entry.filled.push(filled);
+              }
+            });
+
             if (itemsMap.size === 0) {
               return null;
             }
 
+            const groupedItems = Array.from(itemsMap.entries()).sort(
+              (a, b) => Number(a[1].isAdditional) - Number(b[1].isAdditional),
+            );
+
             return (
               <div
                 key={
-                  validation.orderItemId || `${validation.productId}-${vIdx}`
+                  validation.orderItemId ||
+                  validation.cartItemKey ||
+                  `${validation.productId}-${vIdx}`
                 }
-                className="space-y-3"
+                className="border border-gray-200 rounded-md bg-white p-3 space-y-3"
               >
-                {Array.from(itemsMap.entries()).map(
+                <div className="pb-2 border-b border-gray-100">
+                  <h3 className="font-semibold text-xs text-gray-900">
+                    {validation.productName}
+                  </h3>
+                </div>
+
+                {groupedItems.map(
                   (
-                    [componentId, { itemName, missing, filled, itemId }],
+                    [
+                      componentId,
+                      { itemName, missing, filled, itemId, isAdditional },
+                    ],
                     cIdx,
                   ) => {
                     const isIncomplete = missing.length > 0;
-                    const currentItemData = itemsMap.get(componentId);
-                    const isAdditionalContext =
-                      currentItemData?.allCustomizations.some(
-                        (c) => c.isAdditional,
-                      ) || false;
 
                     return (
                       <div
@@ -1552,11 +1630,6 @@ export function CustomizationsReview({
                         <div className="flex items-start justify-between mb-2">
                           <div className="flex items-start gap-3 flex-1">
                             <div className="flex-1">
-                              <div className="">
-                                <h3 className="font-semibold text-xs text-gray-900">
-                                  {validation.productName}
-                                </h3>
-                              </div>
                               {itemName && (
                                 <div className="mt-0.5 flex items-center gap-1.5">
                                   <p className="text-[11px] text-gray-500 leading-tight">
@@ -1566,9 +1639,7 @@ export function CustomizationsReview({
                                     variant="outline"
                                     className="text-[9px] px-1.5 py-0 h-4 border-gray-200 text-gray-600"
                                   >
-                                    {isAdditionalContext
-                                      ? "Adicional"
-                                      : "Produto"}
+                                    {isAdditional ? "Adicional" : "Produto"}
                                   </Badge>
                                 </div>
                               )}
@@ -1593,6 +1664,7 @@ export function CustomizationsReview({
                                           itemName || "Item",
                                           componentId,
                                           validation.orderItemId,
+                                          validation.cartItemIndex,
                                         )
                                       }
                                     />
@@ -1660,6 +1732,7 @@ export function CustomizationsReview({
                                                     itemName || "Item",
                                                     componentId,
                                                     validation.orderItemId,
+                                                    validation.cartItemIndex,
                                                   )
                                                 }
                                                 className="rounded border border-gray-200 hover:border-gray-400"
@@ -1690,6 +1763,7 @@ export function CustomizationsReview({
                                 itemName || "Item",
                                 componentId,
                                 validation.orderItemId,
+                                validation.cartItemIndex,
                               )
                             }
                             className={`h-8 px-2 font-medium text-xs ${
