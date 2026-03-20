@@ -126,6 +126,7 @@ interface CartContextType {
     formattedProductionEnds: string;
     formattedPickup: string;
   };
+  refreshCart: () => Promise<void>;
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined);

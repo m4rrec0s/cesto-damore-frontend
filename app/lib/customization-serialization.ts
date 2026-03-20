@@ -20,6 +20,14 @@ const isFileLike = (value: unknown): boolean => {
 const shouldStripString = (key: string, value: string): boolean => {
   const trimmed = value.trim();
   if (!trimmed) return false;
+  
+  // Only strip if it's actually a base64/blob data URL
+  // Don't strip HTTP/HTTPS URLs even if key matches the pattern
+  if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
+    return false;
+  }
+  
+  // Only strip data: and blob: URLs from URL-like keys
   if (!URL_LIKE_KEY.test(key)) return false;
   return trimmed.startsWith("data:") || trimmed.startsWith("blob:");
 };

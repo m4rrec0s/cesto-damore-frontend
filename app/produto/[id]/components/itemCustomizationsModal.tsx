@@ -464,7 +464,7 @@ export function ItemCustomizationModal({
     } finally {
       setLoadingLayout(false);
     }
-  }, []);
+  }, [getLayoutById]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -615,12 +615,16 @@ export function ItemCustomizationModal({
                 id: layoutData.layout_id,
                 layout_id: layoutData.layout_id,
                 name: layoutData.layout_name || "",
+                layout_name: layoutData.layout_name || "",
                 model_url: layoutData.model_url,
                 item_type: layoutData.item_type,
                 images: layoutData.images || [],
                 fabricState: layoutData.fabricState,
                 previewUrl: layoutData.previewUrl,
                 highQualityUrl: layoutData.highQualityUrl,
+                selected_item_label: layoutData.layout_name || custom.name,
+                label_selected: layoutData.layout_name || custom.name,
+                customization_name: custom.name,
                 additional_time:
                   layoutData.additional_time || apiProductionTime || 0,
                 _customizationName: custom.name,
@@ -1292,6 +1296,8 @@ export function ItemCustomizationModal({
                     customizationType: CustomizationType.TEXT,
                     data: {
                       text: textParts,
+                      customization_name: customization.name,
+                      _customizationName: customization.name,
                     } as unknown as Record<string, unknown>,
                   });
                 }
@@ -1518,6 +1524,7 @@ export function ItemCustomizationModal({
                         })),
                         count: imageEntries.length,
                         required_count: maxImages,
+                        customization_name: customization.name,
                         _customizationName: customization.name,
                         _priceAdjustment: customization.price || 0,
                       } as unknown as Record<string, unknown>,
@@ -1748,6 +1755,7 @@ export function ItemCustomizationModal({
                             id: choiceData.id,
                             selected_option: choiceData.id,
                             selected_option_label: choiceData.label || "",
+                            customization_name: custom.name,
                             _customizationName: custom.name,
                             _priceAdjustment: priceAdjustment,
                           } as unknown as Record<string, unknown>,

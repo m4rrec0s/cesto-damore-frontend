@@ -26,6 +26,27 @@ const API_BASE_URL = (process.env.NEXT_PUBLIC_API_URL || "").replace(
   "",
 );
 
+const runWithTimeout = <T,>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  timeoutMessage: string,
+): Promise<T> =>
+  new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error(timeoutMessage));
+    }, timeoutMs);
+
+    promise
+      .then((result) => {
+        clearTimeout(timer);
+        resolve(result);
+      })
+      .catch((error) => {
+        clearTimeout(timer);
+        reject(error);
+      });
+  });
+
 interface CartItemForReview {
   product_id: string;
   product: {
@@ -51,9 +72,16 @@ interface CustomizationsReviewProps {
     componentId?: string,
   ) => void;
   onCustomizationSaved?: () => void;
+  onSavingStateChange?: (isSaving: boolean) => void;
   onValidationStatusChange?: (status: {
     valid: boolean;
     source: "backend" | "local";
+    isRunning?: boolean;
+    progress?: {
+      completed: number;
+      total: number;
+      currentLabel?: string;
+    };
     recommendations?: string[];
     missingRequired?: CheckoutValidationIssue[];
     invalidCustomizations?: CheckoutValidationIssue[];
@@ -705,6 +733,7 @@ export function CustomizationsReview({
   orderId,
   onCustomizationUpdate,
   onCustomizationSaved,
+  onSavingStateChange,
   onValidationStatusChange,
 }: CustomizationsReviewProps) {
   const validationStatusChangeRef = useRef(onValidationStatusChange);
@@ -718,6 +747,7 @@ export function CustomizationsReview({
     saveOrderItemCustomization,
     getOrderReviewData,
     validateOrderCustomizationsFiles,
+    clearSpecificCache,
   } = useApi();
 
   const [validations, setValidations] = useState<ProductValidation[]>([]);
@@ -726,6 +756,8 @@ export function CustomizationsReview({
   );
   const [backendValidationState, setBackendValidationState] = useState<{
     valid?: boolean;
+    isRunning?: boolean;
+    progress?: { completed: number; total: number; currentLabel?: string };
     recommendations?: string[];
     missingRequired?: CheckoutValidationIssue[];
     invalidCustomizations?: CheckoutValidationIssue[];
@@ -747,9 +779,27 @@ export function CustomizationsReview({
   );
   const [refreshVersion, setRefreshVersion] = useState(0);
 
+  useEffect(() => {
+    setActiveItemId(null);
+    setActiveProductId(null);
+    setActiveOrderItemId(null);
+    setActiveComponentId(null);
+    setActiveInitialValues({});
+    setModalOpen(false);
+    setIsSaving(false);
+  }, [orderId]);
+
+  useEffect(() => {
+    if (!orderId) return;
+
+    clearSpecificCache(`orderReview:${orderId}`);
+    clearSpecificCache(`orderValidation:${orderId}`);
+  }, [clearSpecificCache, orderId]);
+
   const fetchFileValidation = useCallback(async () => {
     if (!orderId) return;
     try {
+      clearSpecificCache(`orderValidation:${orderId}`);
       const result = await validateOrderCustomizationsFiles(orderId);
       if (result && result.files) {
         setFileValidation(result.files);
@@ -757,6 +807,8 @@ export function CustomizationsReview({
       if (result && typeof result.valid === "boolean") {
         setBackendValidationState({
           valid: result.valid,
+          isRunning: false,
+          progress: undefined,
           recommendations: result.recommendations,
           missingRequired: result.missingRequired,
           invalidCustomizations: result.invalidCustomizations,
@@ -764,6 +816,8 @@ export function CustomizationsReview({
         validationStatusChangeRef.current?.({
           valid: result.valid,
           source: "backend",
+          isRunning: false,
+          progress: undefined,
           recommendations: result.recommendations,
           missingRequired: result.missingRequired,
           invalidCustomizations: result.invalidCustomizations,
@@ -774,21 +828,32 @@ export function CustomizationsReview({
       console.error("Erro ao validar arquivos:", error);
       return null;
     }
-  }, [orderId, validateOrderCustomizationsFiles]);
+  }, [clearSpecificCache, orderId, validateOrderCustomizationsFiles]);
 
   const [activeInitialValues, setActiveInitialValues] = useState<
     Record<string, unknown>
   >({});
 
   const fetchAvailableCustomizations = useCallback(async () => {
+    console.log('🔄 [REFRESH DEBUG] fetchAvailableCustomizations iniciado, orderId:', orderId, 'cartItems:', cartItems.length);
     setIsLoading(true);
+    
+    // Reportar que está carregando
+    validationStatusChangeRef.current?.({
+      valid: false,
+      source: "backend",
+      isRunning: true,
+      progress: undefined,
+    });
 
     if (orderId) {
       try {
-        const [, reviewData] = await Promise.all([
-          fetchFileValidation(),
-          getOrderReviewData(orderId),
-        ]);
+        clearSpecificCache(`orderReview:${orderId}`);
+        const [fileValidationResult, reviewData] = await runWithTimeout(
+          Promise.all([fetchFileValidation(), getOrderReviewData(orderId)]),
+          15000,
+          "Tempo esgotado ao verificar o review das personalizações.",
+        );
 
         const results: ProductValidation[] = reviewData.map((data: any) => {
           const availableCustomizations = Array.isArray(
@@ -876,39 +941,121 @@ export function CustomizationsReview({
             availableCustomizations,
             filledCustomizations: filled,
             missingRequired,
-            isComplete: missingRequired.length === 0,
-          };
+          isComplete: missingRequired.length === 0,
+        };
         });
+
+        const totalReviewCustomizations = results.reduce(
+          (acc, entry) => acc + entry.availableCustomizations.length,
+          0,
+        );
+        let reviewedCustomizations = 0;
+        if (totalReviewCustomizations > 0) {
+          for (const entry of results) {
+            const productLabel = entry.productName || "Produto";
+            for (const custom of entry.availableCustomizations) {
+              reviewedCustomizations += 1;
+              setBackendValidationState((prev) => ({
+                valid: prev?.valid,
+                isRunning: true,
+                progress: {
+                  completed: reviewedCustomizations,
+                  total: totalReviewCustomizations,
+                  currentLabel: `${productLabel} > ${
+                    custom.itemName || "Item"
+                  } > ${custom.name}`,
+                },
+                recommendations: prev?.recommendations,
+                missingRequired: prev?.missingRequired,
+                invalidCustomizations: prev?.invalidCustomizations,
+              }));
+              validationStatusChangeRef.current?.({
+                valid: false,
+                source: "backend",
+                isRunning: true,
+                progress: {
+                  completed: reviewedCustomizations,
+                  total: totalReviewCustomizations,
+                  currentLabel: `${productLabel} > ${
+                    custom.itemName || "Item"
+                  } > ${custom.name}`,
+                },
+              });
+            }
+          }
+        }
 
         const reviewDataIsComplete =
           results.length > 0 && results.every((entry) => entry.isComplete);
+        const hasBackendValidation =
+          typeof fileValidationResult?.valid === "boolean";
+        const backendValid = hasBackendValidation
+          ? Boolean(fileValidationResult?.valid)
+          : true;
+        const combinedValid = backendValid && reviewDataIsComplete;
+        const backendMissingRequired =
+          fileValidationResult?.missingRequired ||
+          results.flatMap((entry) =>
+            entry.isComplete
+              ? []
+              : entry.missingRequired.map((missing) => ({
+                  orderItemId: entry.orderItemId,
+                  productName: entry.productName,
+                  itemName: missing.itemName,
+                  componentId: missing.componentId,
+                  customizationId: missing.id,
+                  customizationName: missing.name,
+                  reason: `Customização obrigatória pendente: ${missing.name}`,
+                })),
+          );
+        const backendInvalidCustomizations =
+          fileValidationResult?.invalidCustomizations ||
+          (combinedValid
+            ? []
+            : [
+                {
+                  reason:
+                    "O review das personalizações não foi concluído com sucesso.",
+                },
+              ]);
+        const backendRecommendations =
+          fileValidationResult?.recommendations ||
+          (combinedValid
+            ? []
+            : [
+                "Ainda existem inconsistências no review das personalizações.",
+              ]);
 
-        if (reviewDataIsComplete) {
-          setBackendValidationState((prev) => {
-            const hasOnlyMissingRequired =
-              (prev?.missingRequired?.length || 0) > 0 &&
-              (prev?.invalidCustomizations?.length || 0) === 0;
+        setBackendValidationState({
+          valid: combinedValid,
+          isRunning: false,
+          progress:
+            totalReviewCustomizations > 0
+              ? {
+                  completed: totalReviewCustomizations,
+                  total: totalReviewCustomizations,
+                }
+              : undefined,
+          recommendations: backendRecommendations,
+          missingRequired: backendMissingRequired,
+          invalidCustomizations: backendInvalidCustomizations,
+        });
 
-            if (!hasOnlyMissingRequired && prev?.valid !== false) {
-              return prev;
-            }
-
-            return {
-              valid: true,
-              recommendations: [],
-              missingRequired: [],
-              invalidCustomizations: prev?.invalidCustomizations || [],
-            };
-          });
-
-          validationStatusChangeRef.current?.({
-            valid: true,
-            source: "backend",
-            recommendations: [],
-            missingRequired: [],
-            invalidCustomizations: [],
-          });
-        }
+        validationStatusChangeRef.current?.({
+          valid: combinedValid,
+          source: "backend",
+          isRunning: false,
+          progress:
+            totalReviewCustomizations > 0
+              ? {
+                  completed: totalReviewCustomizations,
+                  total: totalReviewCustomizations,
+                }
+              : undefined,
+          recommendations: backendRecommendations,
+          missingRequired: backendMissingRequired,
+          invalidCustomizations: backendInvalidCustomizations,
+        });
 
         setValidations(results);
         setIsLoading(false);
@@ -918,6 +1065,8 @@ export function CustomizationsReview({
         setValidations([]);
         setBackendValidationState({
           valid: false,
+          isRunning: false,
+          progress: undefined,
           recommendations: [
             "Não foi possível validar as personalizações no servidor. Tente novamente antes de prosseguir para o pagamento.",
           ],
@@ -932,6 +1081,8 @@ export function CustomizationsReview({
         validationStatusChangeRef.current?.({
           valid: false,
           source: "backend",
+          isRunning: false,
+          progress: undefined,
           recommendations: [
             "Não foi possível validar as personalizações no servidor. Tente novamente antes de prosseguir para o pagamento.",
           ],
@@ -1101,6 +1252,7 @@ export function CustomizationsReview({
     });
     setIsLoading(false);
   }, [
+    clearSpecificCache,
     cartItems,
     orderId,
     getProduct,
@@ -1110,8 +1262,8 @@ export function CustomizationsReview({
   ]);
 
   useEffect(() => {
-    if (!orderId) return;
-
+    console.log('🔄 [REFRESH DEBUG] useEffect disparado - orderId:', orderId, 'refreshVersion:', refreshVersion, 'cartItems:', cartItems.length);
+    // Consolidado: valida tanto com orderId quanto sem
     if (cartItems.length > 0) {
       fetchAvailableCustomizations();
     } else {
@@ -1120,16 +1272,8 @@ export function CustomizationsReview({
     }
   }, [orderId, refreshVersion, fetchAvailableCustomizations, cartItems.length]);
 
-  useEffect(() => {
-    if (orderId) return;
-
-    if (cartItems.length > 0) {
-      fetchAvailableCustomizations();
-    } else {
-      setValidations([]);
-      setIsLoading(false);
-    }
-  }, [orderId, cartItems, fetchAvailableCustomizations]);
+  // REMOVIDO: useEffect duplicado que causava race condition
+  // useEffect anterior (linha 1262) já cobre tanto orderId presente quanto ausente
 
   const deserializeCustomizationValue = (
     value: unknown,
@@ -1211,11 +1355,15 @@ export function CustomizationsReview({
             typeof fc.data === "object" && fc.data !== null
               ? normalizeCustomizationData(fc.data as Record<string, unknown>)
               : {};
+          const originalDataWithTitle = {
+            ...originalData,
+            customization_name: fc.title,
+          };
 
           if (fc.value !== undefined) {
             const deserialized = deserializeCustomizationValue(
               fc.value,
-              originalData,
+              originalDataWithTitle,
             );
             initialData[ruleId] =
               fc.customization_type === "IMAGES"
@@ -1229,20 +1377,26 @@ export function CustomizationsReview({
 
           if (fc.customization_type === "TEXT") {
             initialData[ruleId] = Object.keys(originalData).length
-              ? originalData
+              ? originalDataWithTitle
               : fc.text || "";
           } else if (fc.customization_type === "MULTIPLE_CHOICE") {
             initialData[ruleId] = Object.keys(originalData).length
-              ? originalData
+              ? originalDataWithTitle
               : fc.selected_option;
           } else if (fc.customization_type === "IMAGES") {
             initialData[ruleId] = buildNormalizedImageData(
-              originalData as PersonalizationData,
+              originalDataWithTitle as PersonalizationData,
               fc.photos,
             );
           } else if (fc.customization_type === "DYNAMIC_LAYOUT") {
             initialData[ruleId] = Object.keys(originalData).length
-              ? originalData
+              ? {
+                  ...originalDataWithTitle,
+                  selected_item_label:
+                    (originalData.selected_item_label as string) || fc.title,
+                  label_selected:
+                    (originalData.label_selected as string) || fc.title,
+                }
               : fc;
           }
         });
@@ -1264,6 +1418,10 @@ export function CustomizationsReview({
 
   const [isSaving, setIsSaving] = useState(false);
 
+  useEffect(() => {
+    onSavingStateChange?.(isSaving);
+  }, [isSaving, onSavingStateChange]);
+
   const handleCustomizationComplete = useCallback(
     async (hasCustomizations: boolean, data: CustomizationInput[]) => {
       if (!hasCustomizations || !activeItemId) {
@@ -1274,6 +1432,46 @@ export function CustomizationsReview({
       if (orderId && activeOrderItemId) {
         setIsSaving(true);
         try {
+          let candidateOrderItemId = activeOrderItemId;
+          console.log('🔍 [SAVE DEBUG] Iniciando save:', {
+            orderId,
+            activeOrderItemId,
+            activeProductId,
+            activeComponentId,
+          });
+          
+          if (orderId) {
+            try {
+              const latestReviewData = await getOrderReviewData(orderId);
+              console.log('🔍 [SAVE DEBUG] Review data recebido:', latestReviewData);
+              
+              const resolvedOrderItem = latestReviewData.find(
+                (entry: any) => entry.orderItemId === activeOrderItemId,
+              );
+              console.log('🔍 [SAVE DEBUG] Resolved order item:', resolvedOrderItem);
+              
+              if (
+                resolvedOrderItem?.orderItemId &&
+                typeof resolvedOrderItem.orderItemId === "string"
+              ) {
+                candidateOrderItemId = resolvedOrderItem.orderItemId;
+                console.log('✅ [SAVE DEBUG] OrderItemId resolvido:', candidateOrderItemId);
+                console.log('⚠️ [SAVE DEBUG] Comparação de IDs:', {
+                  activeOrderItemId,
+                  resolvedOrderItemId: candidateOrderItemId,
+                  idsMatch: activeOrderItemId === candidateOrderItemId,
+                });
+              } else {
+                console.warn('⚠️ [SAVE DEBUG] Não encontrou orderItemId no review, mantendo:', candidateOrderItemId);
+              }
+            } catch (resolveError) {
+              console.error(
+                "❌ [SAVE DEBUG] Erro ao resolver orderItemId:",
+                resolveError,
+              );
+            }
+          }
+
           for (const customization of data) {
             const customData = customization.data as PersonalizationData;
             const highQualityUrl = (customData as any).highQualityUrl as
@@ -1303,6 +1501,7 @@ export function CustomizationsReview({
               customizationType:
                 customization.customizationType as CustomizationType,
               title:
+                (customData?.customization_name as string) ||
                 (customData?._customizationName as string) ||
                 customization.customizationType,
               selectedLayoutId: customization.selectedLayoutId || null,
@@ -1311,11 +1510,16 @@ export function CustomizationsReview({
 
             if (customization.customizationType === "DYNAMIC_LAYOUT") {
               const fallbackPreviewUrl =
+                (customData as any)?.highQualityUrl ||
+                (customData?.previewUrl as string | undefined) ||
+                (customData as any)?.finalArtwork?.preview_url ||
                 (customData?.final_artwork as CustomizationPreview)
                   ?.preview_url ||
-                (customData as any)?.finalArtwork?.preview_url ||
                 (customData?.image as CustomizationPreview)?.preview_url ||
-                (customData?.previewUrl as string | undefined) ||
+                ((customData?.images as CustomizationPreview[] | undefined)?.[0]
+                  ?.preview_url as string | undefined) ||
+                ((customData?.images as CustomizationPreview[] | undefined)?.[0]
+                  ?.url as string | undefined) ||
                 previewUrl;
 
               if (
@@ -1353,9 +1557,41 @@ export function CustomizationsReview({
 
             payload.data = normalizeCustomizationData(sanitizedData);
 
+            console.log('📤 [SAVE DEBUG] Antes da normalização:', {
+              hasImage: !!sanitizedData.image,
+              hasFinalArtwork: !!sanitizedData.final_artwork,
+              hasText: !!sanitizedData.text,
+              imagePreviewUrl: sanitizedData.image?.preview_url,
+              finalArtworkPreviewUrl: sanitizedData.final_artwork?.preview_url,
+            });
+            
+            console.log('📤 [SAVE DEBUG] Após normalização - payload.data:', {
+              hasImage: !!(payload.data as any).image,
+              hasFinalArtwork: !!(payload.data as any).final_artwork,
+              hasText: !!(payload.data as any).text,
+              imagePreviewUrl: (payload.data as any).image?.preview_url,
+              finalArtworkPreviewUrl: (payload.data as any).final_artwork?.preview_url,
+            });
+
+            console.log('📤 [SAVE DEBUG] Enviando para backend:', {
+              orderId,
+              orderItemId: candidateOrderItemId,
+              customizationType: payload.customizationType,
+              hasFinalArtwork: !!payload.finalArtwork,
+              finalArtworkKeys: payload.finalArtwork ? Object.keys(payload.finalArtwork) : [],
+              dataKeys: Object.keys(payload.data),
+              sanitizedDataPreview: {
+                hasImage: !!sanitizedData.image,
+                hasFinalArtwork: !!sanitizedData.final_artwork,
+                hasText: !!sanitizedData.text,
+                imagePreviewUrl: sanitizedData.image?.preview_url,
+                finalArtworkPreviewUrl: sanitizedData.final_artwork?.preview_url,
+              }
+            });
+
             await saveOrderItemCustomization(
               orderId,
-              activeOrderItemId,
+              candidateOrderItemId,
               payload,
             );
           }
@@ -1364,7 +1600,22 @@ export function CustomizationsReview({
             id: "order-customization-save",
           });
           onCustomizationSaved?.();
-          setRefreshVersion((value) => value + 1);
+          
+          console.log('🔄 [REFRESH DEBUG] Incrementando refreshVersion em 500ms...');
+          // Aguardar um pouco para backend processar, então atualizar Review
+          setTimeout(() => {
+            console.log('🔄 [REFRESH DEBUG] Incrementando refreshVersion AGORA');
+            setRefreshVersion((value) => {
+              console.log('🔄 [REFRESH DEBUG] refreshVersion mudou de', value, 'para', value + 1);
+              return value + 1;
+            });
+          }, 500);
+
+          // ❌ REMOVIDO: onCustomizationUpdate causava recriação dos items e mudança de IDs
+          // O Review já busca os dados atualizados via fetchAvailableCustomizations
+
+          setModalOpen(false);
+          return;
         } catch (error) {
           console.error(
             "❌ [CustomizationsReview] Erro ao salvar customização:",
@@ -1385,12 +1636,13 @@ export function CustomizationsReview({
               : "Erro ao salvar personalização. Tente novamente.";
 
           toast.error(message, { id: "order-customization-save" });
+          return;
         } finally {
           setIsSaving(false);
         }
       }
 
-      if (activeProductId && onCustomizationUpdate) {
+      if (!orderId && activeProductId && onCustomizationUpdate) {
         onCustomizationUpdate(
           activeProductId,
           data,
@@ -1409,6 +1661,7 @@ export function CustomizationsReview({
       activeProductId,
       activeComponentId,
       fetchAvailableCustomizations,
+      getOrderReviewData,
       orderId,
       onCustomizationUpdate,
       onCustomizationSaved,
@@ -1438,7 +1691,8 @@ export function CustomizationsReview({
       ? totalMissingBackend
       : totalMissingLocal;
   const allComplete =
-    typeof backendValidationState?.valid === "boolean"
+    typeof backendValidationState?.valid === "boolean" &&
+    !backendValidationState?.isRunning
       ? backendValidationState.valid
       : validations.length > 0 && validations.every((v) => v.isComplete);
 
@@ -1819,6 +2073,22 @@ export function CustomizationsReview({
             );
           })}
         </div>
+
+        {backendValidationState?.isRunning &&
+          backendValidationState.progress &&
+          backendValidationState.progress.total > 0 && (
+            <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+              <p className="text-xs font-semibold text-blue-800">
+                Validando personalizações ({backendValidationState.progress.completed}
+                /{backendValidationState.progress.total})
+              </p>
+              {backendValidationState.progress.currentLabel && (
+                <p className="text-xs text-blue-700 mt-1">
+                  {backendValidationState.progress.currentLabel}
+                </p>
+              )}
+            </div>
+          )}
 
         {allComplete && validations.length > 0 && (
           <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-lg flex items-center gap-2">

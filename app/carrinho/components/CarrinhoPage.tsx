@@ -83,6 +83,12 @@ type CheckoutValidationIssue = {
 type CustomizationsValidationStatus = {
   valid: boolean;
   source: "backend" | "local";
+  isRunning?: boolean;
+  progress?: {
+    completed: number;
+    total: number;
+    currentLabel?: string;
+  };
   recommendations?: string[];
   missingRequired?: CheckoutValidationIssue[];
   invalidCustomizations?: CheckoutValidationIssue[];
@@ -179,23 +185,23 @@ export default function CarrinhoPageContent() {
   } = useApi();
   const {
     cart,
-    updateQuantity,
     removeFromCart,
+    updateQuantity,
     updateCustomizations,
     clearCart,
-    clearPendingOrderId,
     createOrder,
-    getMaxProductionTime,
     generateTimeSlots,
     getDeliveryDateBounds,
+    clearPendingOrderId,
+    getMaxProductionTime,
     isDateDisabledInCalendar,
+    refreshCart,
   } = useCartContext();
 
   const {
     pendingOrder,
     hasPendingOrder,
     clearPendingOrder,
-    checkPendingOrder,
   } = usePaymentManager();
 
   const [currentStep, setCurrentStep] = useState<1 | 2 | 3>(1);
@@ -794,6 +800,7 @@ export default function CarrinhoPageContent() {
   const [checkingPendingOrder, setCheckingPendingOrder] = useState(true);
   const [customizationsValidationStatus, setCustomizationsValidationStatus] =
     useState<CustomizationsValidationStatus | null>(null);
+  const [isSavingCustomization, setIsSavingCustomization] = useState(false);
 
   useEffect(() => {
     const detect = async () => {
@@ -911,7 +918,7 @@ export default function CarrinhoPageContent() {
 
   const cartItems = useMemo(
     () => (Array.isArray(cart?.items) ? cart.items : []),
-    [cart?.items],
+    [cart?.items], // cartItemsVersion removido - useMemo deve depender apenas de cart.items
   );
   const shouldRedirectEmptyCheckout = useMemo(
     () =>
@@ -939,19 +946,41 @@ export default function CarrinhoPageContent() {
     [cartItems],
   );
   const customizationsValid = useMemo(() => {
-    const hasBackendValidation =
-      Boolean(currentOrderId) &&
-      customizationsValidationStatus?.source === "backend";
+    const hasServerReviewContext = Boolean(currentOrderId || hasPendingOrder);
 
-    if (hasBackendValidation) {
-      return Boolean(customizationsValidationStatus?.valid);
+    // Se está carregando validação backend, bloquear
+    if (customizationsValidationStatus?.isRunning) {
+      return false;
+    }
+
+    if (hasServerReviewContext) {
+      if (customizationsValidationStatus?.source === "backend") {
+        // Validação dupla: local AND backend
+        return (
+          Boolean(customizationsValidationStatus?.valid) &&
+          localCustomizationsValid
+        );
+      }
+
+      // Se ainda não tem validação backend, usar validação local como fallback
+      return localCustomizationsValid;
+    }
+
+    if (customizationsValidationStatus?.source === "backend") {
+      // Validação dupla: local AND backend
+      return (
+        Boolean(customizationsValidationStatus?.valid) &&
+        localCustomizationsValid
+      );
     }
 
     return localCustomizationsValid;
   }, [
     currentOrderId,
+    hasPendingOrder,
     customizationsValidationStatus?.source,
     customizationsValidationStatus?.valid,
+    customizationsValidationStatus?.isRunning,
     localCustomizationsValid,
   ]);
 
@@ -1754,6 +1783,7 @@ export default function CarrinhoPageContent() {
             (customization.data as Record<string, unknown> | undefined) || {};
           const data = normalizeCustomizationData(rawData);
           const title =
+            (data.customization_name as string) ||
             (data._customizationName as string) ||
             customization.customizationType;
 
@@ -1824,11 +1854,13 @@ export default function CarrinhoPageContent() {
             price_adjustment: Number(data._priceAdjustment || 0),
             selected_item_label:
               (data.selected_item_label as string) ||
+              (data.layout_name as string) ||
               (data.label_selected as string) ||
               title,
             label_selected:
               (data.label_selected as string) ||
               (data.selected_item_label as string) ||
+              (data.layout_name as string) ||
               title,
             text:
               (data.text as string) ||
@@ -1839,7 +1871,8 @@ export default function CarrinhoPageContent() {
               data.additional_time || data.productionTime || 0,
             ),
             fabricState: data.fabricState as string | undefined,
-            data: normalizeCustomizationData(data),
+            // Para DYNAMIC_LAYOUT, preservar rawData para não perder arte final
+            data: rawData,
           };
         },
       );
@@ -1857,8 +1890,9 @@ export default function CarrinhoPageContent() {
   );
 
   const handleCustomizationSaved = useCallback(async () => {
-    await checkPendingOrder();
-  }, [checkPendingOrder]);
+    // Atualiza o carrinho usando dados do backend (evitando duplicação)
+    await refreshCart();
+  }, [refreshCart]);
 
   useEffect(() => {
     if (!shouldRedirectEmptyCheckout) {
@@ -2220,6 +2254,10 @@ export default function CarrinhoPageContent() {
     setCustomizationsValidationStatus((prev) => {
       const sameSource = prev?.source === status.source;
       const sameValid = prev?.valid === status.valid;
+      const sameRunning = prev?.isRunning === status.isRunning;
+      const sameProgress =
+        JSON.stringify(prev?.progress || null) ===
+        JSON.stringify(status.progress || null);
       const sameRecommendations =
         JSON.stringify(prev?.recommendations || []) ===
         JSON.stringify(status.recommendations || []);
@@ -2233,6 +2271,8 @@ export default function CarrinhoPageContent() {
       if (
         sameSource &&
         sameValid &&
+        sameRunning &&
+        sameProgress &&
         sameRecommendations &&
         sameMissing &&
         sameInvalid
@@ -2311,11 +2351,12 @@ export default function CarrinhoPageContent() {
           {currentStep < 3 && (
             <>
               {currentStep === 1 &&
+                !customizationsValidationStatus?.isRunning &&
                 !canProceedToStep2 &&
                 cartItems.length > 0 && (
                   <div className="mb-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
                     <p className="text-sm text-amber-800 font-medium">
-                      ⚠️ Complete todas as personalizações obrigatórias antes de
+                      Complete todas as personalizações obrigatórias antes de
                       continuar
                     </p>
                   </div>
@@ -2347,6 +2388,7 @@ export default function CarrinhoPageContent() {
                   onClick={handleNextStep}
                   disabled={
                     isProcessing ||
+                    isSavingCustomization ||
                     (currentStep === 1 && !canProceedToStep2) ||
                     (currentStep === 2 && !canProceedToStep3)
                   }
@@ -2356,6 +2398,11 @@ export default function CarrinhoPageContent() {
                     <>
                       <Loader2 className="mr-2 h-5 w-5 animate-spin" />
                       Processando...
+                    </>
+                  ) : isSavingCustomization ? (
+                    <>
+                      <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                      Salvando personalização...
                     </>
                   ) : (
                     "Continuar a compra"
@@ -2409,6 +2456,7 @@ export default function CarrinhoPageContent() {
                             orderId={currentOrderId}
                             onCustomizationUpdate={handleCustomizationUpdate}
                             onCustomizationSaved={handleCustomizationSaved}
+                            onSavingStateChange={setIsSavingCustomization}
                             onValidationStatusChange={
                               handleValidationStatusChange
                             }

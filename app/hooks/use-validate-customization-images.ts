@@ -55,35 +55,37 @@ export function useValidateCustomizationImages() {
         if (customizationType === "IMAGES" && custom.photos) {
           custom.photos.forEach((photo) => {
             if (photo.preview_url) {
-
-              if (
-                photo.preview_url.includes("/uploads/temp/") ||
-                photo.preview_url.includes("https://api")
-              ) {
-                urlsToValidate.push({
-                  url: photo.preview_url,
-                  customizationType: "IMAGES",
-                  customizationTitle,
-                });
-              }
+              urlsToValidate.push({
+                url: photo.preview_url,
+                customizationType: "IMAGES",
+                customizationTitle,
+              });
             }
           });
+
+          if (
+            custom.is_required &&
+            custom.photos.length > 0 &&
+            !custom.photos.some((photo) => photo.preview_url)
+          ) {
+            missingImages.push(
+              `${customizationTitle} - Imagem obrigatória não foi enviada`,
+            );
+          }
+        } else if (customizationType === "IMAGES" && custom.is_required) {
+          missingImages.push(
+            `${customizationTitle} - Imagem obrigatória não foi enviada`,
+          );
         }
 
         if (customizationType === "DYNAMIC_LAYOUT") {
           if (custom.image?.preview_url) {
-            if (
-              custom.image.preview_url.includes("/uploads/temp/") ||
-              custom.image.preview_url.includes("https://api")
-            ) {
-              urlsToValidate.push({
-                url: custom.image.preview_url,
-                customizationType: "DYNAMIC_LAYOUT",
-                customizationTitle,
-              });
-            }
+            urlsToValidate.push({
+              url: custom.image.preview_url,
+              customizationType: "DYNAMIC_LAYOUT",
+              customizationTitle,
+            });
           } else if (custom.is_required) {
-
             missingImages.push(
               `${customizationTitle} - Imagem obrigatória não foi enviada`,
             );

@@ -182,6 +182,10 @@ const serializeCustomizations = (customizations?: CartCustomization[]) => {
       "customization_type",
       "customization_id",
       "title",
+      "customization_name",
+      "layout_name",
+      "selected_item_label",
+      "label_selected",
       "price_adjustment",
       "componentId",
     ];
@@ -244,6 +248,40 @@ const cloneCustomizations = (
   }));
 };
 
+const getCustomizationMergeId = (
+  customization: Partial<
+    Pick<CartCustomization, "customization_id" | "id" | "componentId" | "data">
+  >,
+): string => {
+  const data = (customization.data || {}) as Record<string, unknown>;
+  const candidates = [
+    data.customizationRuleId,
+    data.customization_rule_id,
+    data.ruleId,
+    data.customization_id,
+    customization.customization_id,
+    customization.id,
+  ];
+
+  const rawBaseId = candidates.find(
+    (value): value is string =>
+      typeof value === "string" && value.trim().length > 0,
+  );
+
+  if (!rawBaseId) {
+    return "";
+  }
+
+  const baseId = rawBaseId.split(":")[0];
+  const componentId =
+    customization.componentId ||
+    (data.componentId as string | undefined) ||
+    (data.component_id as string | undefined) ||
+    "";
+
+  return componentId ? `${baseId}:${componentId}` : baseId;
+};
+
 const mergeCustomizationEntries = (
   existing: CartCustomization[] = [],
   incoming: CartCustomization[] = [],
@@ -251,12 +289,16 @@ const mergeCustomizationEntries = (
   if (existing.length === 0) return cloneCustomizations(incoming);
   if (incoming.length === 0) return cloneCustomizations(existing);
 
+  const getStableKey = (customization: CartCustomization): string => {
+    return getCustomizationMergeId(customization);
+  };
+
   const merged = cloneCustomizations(existing);
 
   for (const next of incoming) {
-    const nextId = next.id || next.customization_id;
+    const nextId = getStableKey(next);
     const index = merged.findIndex((current) => {
-      const currentId = current.id || current.customization_id;
+      const currentId = getStableKey(current);
       return currentId === nextId;
     });
 
@@ -415,6 +457,7 @@ interface CartContextType {
   orderMetadata: Record<string, unknown>;
   setOrderMetadata: (metadata: Record<string, unknown>) => void;
   clearPendingOrderId: () => void;
+  refreshCart: () => Promise<void>;
 }
 
 export function useCart(): CartContextType {
@@ -445,6 +488,7 @@ export function useCart(): CartContextType {
   const isInitializedRef = useRef<boolean>(false);
   const getOrderAttemptedRef = useRef<Set<string>>(new Set());
   const previousUserIdRef = useRef<string | null>(null);
+  const isRemoteUpdateRef = useRef<boolean>(false);
 
   const calculateTotals = useCallback((items: CartItem[]): CartState => {
     const safeItems = Array.isArray(items) ? items : [];
@@ -569,10 +613,14 @@ export function useCart(): CartContextType {
                 }
 
                 const componentId = (data.componentId as string) || undefined;
-                const customizationId = (customization.customization_id ||
-                  data.customization_id ||
-                  data.customizationRuleId ||
-                  "") as string;
+                const customizationId = getCustomizationMergeId({
+                  customization_id:
+                    (customization.customization_id as string | undefined) ||
+                    undefined,
+                  id: customization.id,
+                  componentId,
+                  data,
+                });
 
                 const baseRuleId = customizationId.includes(":")
                   ? customizationId.split(":")[0]
@@ -1025,7 +1073,110 @@ export function useCart(): CartContextType {
     dateDisabledCacheRef.current.clear();
   }, [cart]);
 
+  const refreshCart = useCallback(async () => {
+    if (!user || !pendingOrderId) return;
+
+    try {
+      const serverOrder = await api.getOrder(pendingOrderId);
+      if (serverOrder?.items && serverOrder.items.length > 0) {
+        const transformedCart = calculateTotals(
+          (() => {
+            type ServerAdditional = {
+              additional_id: string;
+              price: number;
+              additional?: { name?: string };
+            };
+            type ServerCustomization = {
+              customization_id?: string;
+              value?: string;
+            };
+            type ServerOrderItem = {
+              product_id: string;
+              quantity: number;
+              price: number;
+              effectivePrice?: number;
+              customization_total?: number;
+              additionals?: ServerAdditional[];
+              customizations?: ServerCustomization[];
+              product?: Product;
+            };
+
+            return serverOrder.items.map((it: ServerOrderItem) => {
+              const item = it;
+
+              const additionals =
+                item.additionals?.map((a) => ({
+                  id: a.additional_id,
+                  price: a.price,
+                  name: a.additional?.name,
+                })) || [];
+
+              const customizations = item.customizations
+                ? item.customizations.map((c) => {
+                    const parsed = (() => {
+                      try {
+                        return JSON.parse(c.value || "{}") as Record<
+                          string,
+                          unknown
+                        >;
+                      } catch {
+                        return {};
+                      }
+                    })();
+
+                    return {
+                      ...parsed,
+                      customization_id: c.customization_id,
+                      title: (parsed.title as string) || undefined,
+                    };
+                  })
+                : undefined;
+
+              return {
+                product_id: item.product_id,
+                quantity: item.quantity,
+                price: item.price,
+
+                effectivePrice:
+                  item.effectivePrice !== undefined
+                    ? item.effectivePrice
+                    : Number(
+                        (item.price + (item.customization_total || 0)).toFixed(
+                          2,
+                        ),
+                      ),
+                additionals,
+                customizations,
+                product: item.product,
+              };
+            });
+          })(),
+        );
+
+        // Mark as remote update to prevent immediate sync back
+        isRemoteUpdateRef.current = true;
+        setCart(transformedCart);
+
+        if (
+          typeof serverOrder.send_anonymously !== "undefined" ||
+          serverOrder.complement
+        ) {
+          setOrderMetadata({
+            send_anonymously: !!serverOrder.send_anonymously,
+            complement: serverOrder.complement || undefined,
+          });
+        }
+      }
+    } catch (error) {
+      console.error("Erro ao atualizar carrinho do servidor:", error);
+    }
+  }, [user, pendingOrderId, api, calculateTotals, setOrderMetadata]);
+
   useEffect(() => {
+    if (isRemoteUpdateRef.current) {
+      isRemoteUpdateRef.current = false;
+      return;
+    }
     const init = async () => {
       if (!user) return;
 
@@ -1125,7 +1276,7 @@ export function useCart(): CartContextType {
               });
             }
           }
-        } else if (cart.items.length > 0) {
+        } else if (!pendingOrderId && cart.items.length > 0) {
           await syncCartToBackend(cart);
         }
       } catch (error) {
@@ -2309,10 +2460,11 @@ export function useCart(): CartContextType {
     getAvailableDates,
     isDateDisabledInCalendar,
     getDeliveryDateBounds,
-    getProductionTimeline,
     formatDate,
     orderMetadata,
     setOrderMetadata,
     clearPendingOrderId,
+    getProductionTimeline,
+    refreshCart,
   };
 }
