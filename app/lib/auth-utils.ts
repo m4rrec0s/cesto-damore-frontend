@@ -1,4 +1,5 @@
 import { toast } from "sonner";
+import logger from "@/app/utils/logger";
 
 /**
  * Obtém o token JWT do localStorage de forma segura
@@ -13,7 +14,7 @@ export const getAuthToken = (): string | null => {
     localStorage.getItem("appToken") || localStorage.getItem("token");
 
   if (!token || token === "null" || token === "undefined") {
-    console.error("Token JWT não encontrado ou inválido");
+    logger.warn("Token JWT não encontrado ou inválido");
     toast.error("Sessão expirada. Faça login novamente.");
     return null;
   }

@@ -899,14 +899,34 @@ class ApiService {
     return res.data;
   };
   login = async (credentials: LoginCredentials) => {
-    const res = await this.client.post("/auth/login", credentials);
-    if (typeof window !== "undefined" && res.data?.appToken) {
-      localStorage.setItem("appToken", res.data.appToken);
+    try {
+      const res = await this.client.post("/auth/login", credentials);
+      if (typeof window !== "undefined" && res.data?.appToken) {
+        localStorage.setItem("appToken", res.data.appToken);
+      }
+      if (typeof window !== "undefined" && res.data?.user?.id) {
+        localStorage.setItem("userId", res.data.user.id);
+      }
+      return res.data;
+    } catch (error) {
+      if (axios.isAxiosError(error)) {
+        const responseData = error.response?.data as {
+          error?: string;
+          message?: string;
+        } | undefined;
+        const status = error.response?.status ?? 0;
+        if (status >= 500) {
+          throw new Error("Não foi possível fazer login.");
+        }
+        throw new Error(
+          responseData?.error ||
+            responseData?.message ||
+            "Não foi possível fazer login.",
+        );
+      }
+
+      throw error;
     }
-    if (typeof window !== "undefined" && res.data?.user?.id) {
-      localStorage.setItem("userId", res.data.user.id);
-    }
-    return res.data;
   };
   google = async (
     googleToken: string,

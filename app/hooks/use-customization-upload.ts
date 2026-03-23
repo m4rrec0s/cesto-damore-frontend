@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from "react";
 import { useApi } from "./use-api";
+import logger from "@/app/utils/logger";
 
 interface UploadedImage {
   filename: string;
@@ -72,7 +73,7 @@ export function useCustomizationUpload(): UseCustomizationUploadReturn {
       } catch (err: unknown) {
         const errorMsg =
           (err as Error).message || "Erro ao fazer upload da imagem";
-        console.error(`❌ Erro no upload:`, err);
+        logger.error("Erro no upload de imagem", err);
         setError(errorMsg);
         return null;
       } finally {
@@ -94,7 +95,7 @@ export function useCustomizationUpload(): UseCustomizationUploadReturn {
         return true;
       } catch (err: unknown) {
         const errorMsg = (err as Error).message || "Erro ao deletar imagem";
-        console.error(`❌ Erro ao deletar:`, err);
+        logger.error("Erro ao deletar imagem", err);
         setError(errorMsg);
         return false;
       }
@@ -116,11 +117,11 @@ export function useCustomizationUpload(): UseCustomizationUploadReturn {
       if (failed === 0) {
         return true;
       } else {
-        console.warn(`⚠️ ${failed} imagem(ns) não puderam ser deletadas`);
+        logger.warn(`${failed} imagem(ns) não puderam ser deletadas`);
         return false;
       }
     } catch (err: unknown) {
-      console.error(`❌ Erro ao deletar todas as imagens:`, err);
+      logger.error("Erro ao deletar todas as imagens", err);
       return false;
     }
   }, [uploadedImages, deleteImage]);
