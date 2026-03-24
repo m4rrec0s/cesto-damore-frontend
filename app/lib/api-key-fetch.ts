@@ -10,12 +10,13 @@ const shouldAttachApiKey = (url: string) => {
   if (!API_BASE_URL || !API_KEY) return false;
 
   try {
+    const apiBase = new URL(API_BASE_URL);
     const resolvedUrl = new URL(
       url,
-      typeof window !== "undefined" ? window.location.origin : API_BASE_URL,
+      typeof window !== "undefined" ? window.location.origin : apiBase.origin,
     );
 
-    return resolvedUrl.href.startsWith(API_BASE_URL);
+    return resolvedUrl.origin === apiBase.origin;
   } catch {
     return false;
   }
