@@ -2,6 +2,7 @@
 
 import { useEffect, useCallback, useRef, useState } from "react";
 import { useApi } from "./use-api";
+import logger from "../utils/logger";
 
 interface PaymentUpdateData {
   type: "payment_update" | "payment_error" | "connected";
@@ -114,7 +115,7 @@ export function useWebhookNotification({
         onPaymentPending?.(paymentData);
       }
     } catch (error) {
-      console.error("❌ Erro ao fazer polling de status:", error);
+      logger.debug("❌ Erro ao fazer polling de status:", error);
 
     }
   }, [
@@ -177,7 +178,7 @@ export function useWebhookNotification({
             break;
 
           case "payment_error":
-            console.error("❌ Payment error:", data.error);
+            logger.debug("❌ Payment error:", data.error);
             if (data.error) {
               onError?.(data.error);
             }
@@ -185,7 +186,7 @@ export function useWebhookNotification({
           default:
         }
       } catch (error) {
-        console.error("Error parsing SSE message:", error);
+        logger.debug("Error parsing SSE message:", error);
       }
     },
     [
@@ -200,7 +201,7 @@ export function useWebhookNotification({
 
   const handleError = useCallback(
     (event: Event) => {
-      console.error("❌ SSE Error:", event);
+      logger.debug("❌ SSE Error:", event);
       if (eventSourceRef.current?.readyState === EventSource.CLOSED) {
         setIsConnected(false);
         onDisconnected?.();
@@ -209,7 +210,7 @@ export function useWebhookNotification({
           enablePollingFallback &&
           reconnectAttemptsRef.current >= MAX_RECONNECT_ATTEMPTS
         ) {
-          console.warn(
+          logger.debug(
             `⚠️ SSE failed after ${MAX_RECONNECT_ATTEMPTS} attempts. Switching to polling fallback.`,
           );
           startPolling();
@@ -238,12 +239,12 @@ export function useWebhookNotification({
               connectRef.current?.();
             }
           } catch (err) {
-            console.error("Erro na tentativa de reconexão SSE:", err);
+            logger.debug("Erro na tentativa de reconexão SSE:", err);
           }
         }, backoffMs);
       } else if (enablePollingFallback) {
 
-        console.warn(
+        logger.debug(
           `⚠️ SSE reconnection limit reached. Switching to polling fallback.`,
         );
         startPolling();
@@ -262,10 +263,18 @@ export function useWebhookNotification({
     }
 
     const apiUrl = process.env.NEXT_PUBLIC_API_URL;
-    const url = `${apiUrl}/webhooks/notifications/${orderId}`;
+    const apiKey =
+      process.env.NEXT_PUBLIC_API_KEY ||
+      process.env.NEXT_PUBLIC_AI_AGENT_API_KEY ||
+      "";
+    const url = new URL(`${apiUrl}/webhooks/notifications/${orderId}`);
+
+    if (apiKey) {
+      url.searchParams.set("api_key", apiKey);
+    }
 
     try {
-      const eventSource = new EventSource(url);
+      const eventSource = new EventSource(url.toString());
 
       eventSource.onopen = () => {
         setIsConnected(true);
@@ -289,7 +298,7 @@ export function useWebhookNotification({
         reconnectTimeoutRef.current = null;
       }
     } catch (error) {
-      console.error("Error creating EventSource:", error);
+      logger.debug("Error creating EventSource:", error);
       onError?.({
         message: "Falha ao conectar ao servidor de notificações",
       });

@@ -5,6 +5,7 @@ import { useAuth } from "@/app/hooks/use-auth";
 import { useCartContext } from "@/app/hooks/cart-context";
 import { motion, AnimatePresence } from "framer-motion";
 import { type Order, useApi } from "@/app/hooks/use-api";
+import logger from "@/app/utils/logger";
 import { usePaymentManager } from "@/app/hooks/use-payment-manager";
 import type { CartCustomization } from "@/app/hooks/use-cart";
 import { Card } from "@/app/components/ui/card";
@@ -372,7 +373,7 @@ export default function CarrinhoPageContent() {
       if (persisted.selectedTime) setSelectedTime(persisted.selectedTime);
       if (persisted.paymentMethod) setPaymentMethod(persisted.paymentMethod);
     } catch (error) {
-      console.error("Erro ao restaurar estado do checkout:", error);
+      logger.debug("Erro ao restaurar estado do checkout:", error);
     }
   }, []);
 
@@ -541,7 +542,7 @@ export default function CarrinhoPageContent() {
   const sseOnError = useCallback(
     (error: unknown) => {
       sseDisconnectCountRef.current += 1;
-      console.error(
+      logger.debug(
         `❌ SSE Error (${sseDisconnectCountRef.current}/3):`,
         error,
       );
@@ -562,7 +563,7 @@ export default function CarrinhoPageContent() {
   const sseOnPaymentApproved = useCallback(
     async (data: unknown) => {
       if (paymentApprovedRef.current) {
-        console.warn("⚠️ Payment already approved, returning");
+        logger.debug("⚠️ Payment already approved, returning");
         return;
       }
       paymentApprovedRef.current = true;
@@ -594,7 +595,7 @@ export default function CarrinhoPageContent() {
             return;
           }
         } catch (err) {
-          console.warn(
+          logger.debug(
             "Não foi possível buscar pedido para exibir ticket, abrindo conceito padrão.",
             err,
           );
@@ -630,7 +631,7 @@ export default function CarrinhoPageContent() {
 
   const sseOnPaymentRejected = useCallback(
     (data: unknown) => {
-      console.error("❌ Pagamento rejeitado via webhook SSE", data);
+      logger.debug("❌ Pagamento rejeitado via webhook SSE", data);
       setPaymentStatus("failure");
       setPaymentError("Pagamento rejeitado pelo Mercado Pago");
       showPaymentToast("error", "Pagamento rejeitado", {
@@ -704,7 +705,7 @@ export default function CarrinhoPageContent() {
           }
         }
       } catch (error) {
-        console.error("Erro ao recarregar dados do usuário:", error);
+        logger.debug("Erro ao recarregar dados do usuário:", error);
         toast.error(
           "Erro ao recarregar dados do usuário. Faça login novamente.",
           {
@@ -911,7 +912,7 @@ export default function CarrinhoPageContent() {
         localStorage.removeItem("pendingOrderId");
         setCurrentOrderId(null);
       } catch (error) {
-        console.error("Erro ao limpar pedido pendente:", error);
+        logger.debug("Erro ao limpar pedido pendente:", error);
       }
     }
   }, [hasPendingOrder, disconnectSSE]);
@@ -1146,7 +1147,7 @@ export default function CarrinhoPageContent() {
         }
         return true;
       } catch (err) {
-        console.error("Erro ao validar total do pedido:", err);
+        logger.debug("Erro ao validar total do pedido:", err);
         toast.error(
           "Não foi possível validar o valor do pedido. Tente novamente.",
         );
@@ -1333,7 +1334,7 @@ export default function CarrinhoPageContent() {
       pixGeneratedForOrderRef.current = currentOrderId;
       return true;
     } catch (err) {
-      console.error("Erro ao recuperar pagamento PIX pendente:", err);
+      logger.debug("Erro ao recuperar pagamento PIX pendente:", err);
       return false;
     }
   }, [
@@ -1450,7 +1451,7 @@ export default function CarrinhoPageContent() {
           paymentResponse.data || paymentResponse.point_of_interaction;
 
         if (!responseData?.qr_code) {
-          console.error(
+          logger.debug(
             "[v0] ❌ Resposta inesperada do pagamento PIX:",
             paymentResponse,
           );
@@ -1616,7 +1617,7 @@ export default function CarrinhoPageContent() {
           frontendPublicKeyPrefix: formData.frontendPublicKeyPrefix,
         };
 
-        console.log("💾 Payload de pagamento:", {
+        logger.debug("💾 Payload de pagamento:", {
           orderId: payload.orderId,
           paymentMethodId: payload.paymentMethodId,
           hasCardToken: !!payload.cardToken,
@@ -1664,7 +1665,7 @@ export default function CarrinhoPageContent() {
           );
         }
       } catch (error) {
-        console.error("❌ Erro no pagamento com cartão:", error);
+        logger.debug("❌ Erro no pagamento com cartão:", error);
         const errorMessage =
           error instanceof Error ? error.message : "Erro desconhecido";
 
@@ -1921,7 +1922,7 @@ export default function CarrinhoPageContent() {
       setCity(cepData.city);
       setState(cepData.state);
     } catch (error) {
-      console.error("Erro ao buscar CEP:", error);
+      logger.debug("Erro ao buscar CEP:", error);
       setAddress("");
       setNeighborhood("");
       setCity("");
@@ -2057,7 +2058,7 @@ export default function CarrinhoPageContent() {
 
   const handleNextStep = async () => {
     if (isProcessing) {
-      console.warn("Requisição em progresso, ignorando clique duplicado");
+      logger.debug("Requisição em progresso, ignorando clique duplicado");
       return;
     }
 
@@ -2101,7 +2102,7 @@ export default function CarrinhoPageContent() {
 
           showFlowToast("success", "Dados salvos com sucesso!");
         } catch (error) {
-          console.error("Erro ao salvar dados do usuário:", error);
+          logger.debug("Erro ao salvar dados do usuário:", error);
           showFlowToast(
             "warning",
             "Não foi possível salvar seus dados, mas você pode continuar.",
@@ -2111,7 +2112,7 @@ export default function CarrinhoPageContent() {
 
       if (!currentOrderId && !hasPendingOrder) {
         if (creatingOrderRef.current) {
-          console.warn(
+          logger.debug(
             "⚠️ Criação de pedido já em progresso, ignorando requisição duplicada",
           );
           return;
@@ -2188,7 +2189,7 @@ export default function CarrinhoPageContent() {
             "Pedido criado! Selecione a forma de pagamento.",
           );
         } catch (error) {
-          console.error("Erro ao criar pedido:", error);
+          logger.debug("Erro ao criar pedido:", error);
           const errorMessage =
             error instanceof Error ? error.message : "Erro desconhecido";
           showFlowToast("error", `Erro ao criar pedido: ${errorMessage}`);
@@ -2202,7 +2203,7 @@ export default function CarrinhoPageContent() {
 
       if (currentOrderId) {
         if (updatingOrderMetadataRef.current) {
-          console.warn(
+          logger.debug(
             "Já há uma atualização em progresso, ignorando requisição duplicada",
           );
           return;
@@ -2231,7 +2232,7 @@ export default function CarrinhoPageContent() {
             delivery_method: optionSelected as "delivery" | "pickup",
           });
         } catch (err) {
-          console.error("Erro ao atualizar metadata do pedido pendente:", err);
+          logger.debug("Erro ao atualizar metadata do pedido pendente:", err);
 
           try {
             localStorage.removeItem("pendingOrderId");

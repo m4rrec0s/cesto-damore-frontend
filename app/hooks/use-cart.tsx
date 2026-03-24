@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { toast } from "sonner";
+import logger from "../utils/logger";
 import {
   useApi,
   Product,
@@ -542,7 +543,7 @@ export function useCart(): CartContextType {
           complement: orderMetadata.complement,
         });
       } catch (error) {
-        console.error("❌ Erro ao sincronizar metadata:", error);
+        logger.debug("❌ Erro ao sincronizar metadata:", error);
       }
     };
 
@@ -758,7 +759,7 @@ export function useCart(): CartContextType {
                   });
                 }
               } catch (error) {
-                console.error("Erro ao parsear customização:", error);
+                logger.debug("Erro ao parsear customização:", error);
               }
             }
           }
@@ -792,7 +793,7 @@ export function useCart(): CartContextType {
             product: toCartProductSnapshot(product),
           });
         } catch (err) {
-          console.error(`Erro ao transformar item ${orderItem.id}:`, err);
+          logger.debug(`Erro ao transformar item ${orderItem.id}:`, err);
         }
       }
 
@@ -858,7 +859,7 @@ export function useCart(): CartContextType {
           isInitializedRef.current = true;
         }
       } catch (error) {
-        console.error("Erro ao carregar pedido pendente:", error);
+        logger.debug("Erro ao carregar pedido pendente:", error);
 
         isInitializedRef.current = true;
       }
@@ -940,7 +941,7 @@ export function useCart(): CartContextType {
                 });
               }
             } catch (error) {
-              console.error(
+              logger.debug(
                 "Erro ao verificar/deletar pedido pendente:",
                 error,
               );
@@ -963,7 +964,7 @@ export function useCart(): CartContextType {
               return;
             }
           } catch (error) {
-            console.error(
+            logger.debug(
               "Erro ao verificar pedido pendente existente:",
               error,
             );
@@ -988,12 +989,12 @@ export function useCart(): CartContextType {
           try {
             await api.updateOrderItems(pendingOrderId, itemsPayload);
           } catch (updateError: unknown) {
-            console.error("Erro ao atualizar pedido:", updateError);
+            logger.debug("Erro ao atualizar pedido:", updateError);
             const maybe = updateError as { response?: { status: number } };
             const status = maybe?.response?.status;
 
             if (status === 403 || status === 404) {
-              console.warn("⚠️ Pedido inválido, criando novo...");
+              logger.debug("⚠️ Pedido inválido, criando novo...");
               setPendingOrderId(null);
 
               const payload: {
@@ -1017,7 +1018,7 @@ export function useCart(): CartContextType {
           }
         }
       } catch (error: unknown) {
-        console.error("Erro ao sincronizar carrinho com backend:", error);
+        logger.debug("Erro ao sincronizar carrinho com backend:", error);
 
         try {
           const maybe = error as { response?: { status: number } };
@@ -1168,7 +1169,7 @@ export function useCart(): CartContextType {
         }
       }
     } catch (error) {
-      console.error("Erro ao atualizar carrinho do servidor:", error);
+      logger.debug("Erro ao atualizar carrinho do servidor:", error);
     }
   }, [user, pendingOrderId, api, calculateTotals, setOrderMetadata]);
 
@@ -1280,7 +1281,7 @@ export function useCart(): CartContextType {
           await syncCartToBackend(cart);
         }
       } catch (error) {
-        console.error("Erro ao inicializar sincronização de carrinho:", error);
+        logger.debug("Erro ao inicializar sincronização de carrinho:", error);
       }
     };
 
@@ -1402,7 +1403,7 @@ export function useCart(): CartContextType {
           return updatedCart;
         });
       } catch (error) {
-        console.error("❌ [addToCart] Erro:", error);
+        logger.debug("❌ [addToCart] Erro:", error);
 
         throw error;
       }
@@ -1463,7 +1464,7 @@ export function useCart(): CartContextType {
                   try {
                     await api.deleteOrder(pendingOrderId);
                   } catch (deleteErr) {
-                    console.error(
+                    logger.debug(
                       `❌ [removeFromCart] Erro ao deletar pedido rascunho ${pendingOrderId}:`,
                       deleteErr,
                     );
@@ -1475,14 +1476,14 @@ export function useCart(): CartContextType {
                   });
                 }
               } catch (err) {
-                console.error(
+                logger.debug(
                   "Erro ao verificar pedido pendente ao remover item do carrinho:",
                   err,
                 );
               }
             }
           } catch (err) {
-            console.error("Erro ao sincronizar remoção com backend:", err);
+            logger.debug("Erro ao sincronizar remoção com backend:", err);
             if (removedItem) {
               setCart((prev) => {
                 const restoredItems = [...prev.items, removedItem!];
@@ -1587,7 +1588,7 @@ export function useCart(): CartContextType {
         );
 
         if (itemIndex === -1) {
-          console.error("Item não encontrado no carrinho para atualização");
+          logger.debug("Item não encontrado no carrinho para atualização");
           return prevCart;
         }
 
@@ -1646,7 +1647,7 @@ export function useCart(): CartContextType {
       try {
         localStorage.removeItem("cart");
       } catch (error) {
-        console.error("Erro ao limpar carrinho do localStorage:", error);
+        logger.debug("Erro ao limpar carrinho do localStorage:", error);
       }
     }
     debouncedSync(emptyCart);
@@ -1826,7 +1827,7 @@ export function useCart(): CartContextType {
         const preference = await response.json();
         return preference;
       } catch (error) {
-        console.error("Erro ao criar preferência de pagamento:", error);
+        logger.debug("Erro ao criar preferência de pagamento:", error);
         throw error;
       }
     },
@@ -2425,7 +2426,7 @@ export function useCart(): CartContextType {
 
         return response;
       } catch (error) {
-        console.error("Erro ao processar pagamento transparente:", error);
+        logger.debug("Erro ao processar pagamento transparente:", error);
         throw error;
       }
     },
