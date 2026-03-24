@@ -7,6 +7,9 @@ import ClientLayout from "./components/layout/client-layout";
 import { Toaster } from "./components/ui/sonner";
 import AppWrapper from "./components/layout/app-wrapper";
 import { CookieBanner } from "./components/layout/cookie-banner";
+import { installApiKeyFetchInterceptor } from "./lib/api-key-fetch";
+
+installApiKeyFetchInterceptor();
 
 const geistSans = Geist({
   variable: "--font-geist-sans",

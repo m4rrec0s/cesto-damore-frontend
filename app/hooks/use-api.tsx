@@ -830,6 +830,12 @@ class ApiService {
       config.headers = config.headers || {};
 
       config.headers["ngrok-skip-browser-warning"] = "true";
+      const apiKey =
+        process.env.NEXT_PUBLIC_API_KEY ||
+        process.env.NEXT_PUBLIC_AI_AGENT_API_KEY;
+      if (apiKey) {
+        config.headers["x-api-key"] = apiKey;
+      }
 
       let token =
         typeof window !== "undefined" ? localStorage.getItem("appToken") : null;
