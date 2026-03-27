@@ -3,7 +3,6 @@ import { Badge } from "@/app/components/ui/badge";
 import { Additional } from "@/app/hooks/use-api";
 import { useCartContext } from "@/app/hooks/cart-context";
 import { ShoppingCart, Check, Palette } from "lucide-react";
-import Image from "next/image";
 import { toast } from "sonner";
 import { useState } from "react";
 import { getInternalImageUrl } from "@/lib/image-helper";
@@ -114,11 +113,12 @@ const AdditionalCard = ({
       </div>
 
       <div className="relative aspect-square overflow-hidden bg-gradient-to-br from-gray-50 to-gray-100 w-full max-w-[200px] mx-auto">
-        <Image
+        <img
           src={getInternalImageUrl(additional.image_url) || "/placeholder.png"}
           alt={additional.name}
-          fill
-          className="object-cover"
+          className="absolute inset-0 h-full w-full object-cover object-center p-2 bg-white rounded-sm"
+          loading="lazy"
+          decoding="async"
         />
       </div>
       <div className="px-2 flex flex-col py-5">
@@ -156,7 +156,6 @@ const AdditionalCard = ({
               {hasCustomizations ? "Editar" : "Personalizar"}
             </Button>
           ) : (
-
             <Button
               onClick={handleDirectAddToCartClick}
               disabled={isInCart || isAddingToCart}

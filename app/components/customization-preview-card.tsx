@@ -1,10 +1,17 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import React from "react";
 import { Card, CardContent } from "./ui/card";
 import { Badge } from "./ui/badge";
 import { Check, Sparkles } from "lucide-react";
-import { Model3DViewer } from "../produto/[id]/components/Model3DViewer";
+
+const Model3DViewer = dynamic(
+  () => import("../produto/[id]/components/Model3DViewer").then((mod) => mod.Model3DViewer),
+  {
+    ssr: false,
+  },
+);
 
 interface CustomizationPreviewCardProps {
   previewUrl: string;

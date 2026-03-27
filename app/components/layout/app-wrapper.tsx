@@ -1,14 +1,18 @@
 "use client";
 
 import React, { ReactNode, useState, useCallback, useEffect } from "react";
+import dynamic from "next/dynamic";
 import { CartProvider } from "@/app/hooks/cart-context";
 import TokenMonitor from "../auth/token-monitor";
 import ServerActionRecovery from "../runtime/server-action-recovery";
-import LoginPopUp from "../login-pop-up";
 import { useAuth } from "@/app/hooks/use-auth";
 import { usePathname } from "next/navigation";
 
 const LOGIN_POPUP_SESSION_KEY = "cesto_login_popup_dismissed";
+const LoginPopUp = dynamic(() => import("../login-pop-up"), {
+  ssr: false,
+  loading: () => null,
+});
 
 export default function AppWrapper({ children }: { children: ReactNode }) {
   const [isCartOpen, setIsCartOpen] = useState(false);
@@ -79,11 +83,13 @@ export default function AppWrapper({ children }: { children: ReactNode }) {
             closePrompt={closeLoginPrompt}
           >
             {children}
-            <LoginPopUp
-              isVisible={isLoginPromptOpen}
-              onClose={() => closeLoginPrompt()}
-              onSuccess={() => closeLoginPrompt({ persistDismiss: false })}
-            />
+            {isLoginPromptOpen ? (
+              <LoginPopUp
+                isVisible={isLoginPromptOpen}
+                onClose={() => closeLoginPrompt()}
+                onSuccess={() => closeLoginPrompt({ persistDismiss: false })}
+              />
+            ) : null}
           </LoginPromptProvider>
         </CartSheetProvider>
       </TokenMonitor>

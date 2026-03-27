@@ -523,7 +523,7 @@ export function UnifiedCustomizationForm({
                                   src={getInternalImageUrl(imageUrl)}
                                   alt={option.label}
                                   fill
-                                  className="object-cover"
+                                  className="object-cover object-center"
                                   priority
                                 />
                               </div>
@@ -562,11 +562,10 @@ function PhotoPreviewGrid({ photos }: { photos: Array<{ preview: string }> }) {
     <div className="grid grid-cols-3 gap-2">
       {photos.map((photo, index) => (
         <div key={index} className="relative aspect-square">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={photo.preview}
             alt={`Preview ${index + 1}`}
-            className="h-full w-full rounded-lg object-contain bg-neutral-50 border-2"
+            className="h-full w-full rounded-lg object-cover object-center bg-neutral-50 border-2"
           />
         </div>
       ))}

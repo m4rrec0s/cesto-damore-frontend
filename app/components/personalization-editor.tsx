@@ -145,7 +145,6 @@ export default function PersonalizationEditor({
 
         {hasImage ? (
           <div className="space-y-2">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={
                 (imageData as ImageData & { previewUrl?: string }).previewUrl ||
@@ -229,7 +228,6 @@ export default function PersonalizationEditor({
             </div>
           ) : previewUrl ? (
             <div className="space-y-4">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={previewUrl}
                 alt="Preview"

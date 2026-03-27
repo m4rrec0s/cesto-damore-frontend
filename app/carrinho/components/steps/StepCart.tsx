@@ -2,7 +2,6 @@
 
 import { motion } from "framer-motion";
 import { Minus, Plus } from "lucide-react";
-import Image from "next/image";
 import { Card } from "@/app/components/ui/card";
 import { getInternalImageUrl } from "@/lib/image-helper";
 import type { CartCustomization } from "@/app/hooks/use-cart";
@@ -114,13 +113,12 @@ const ProductCard = ({
   return (
     <div className="flex gap-4 py-6 border-b border-gray-200 last:border-0">
       <div className="relative w-20 h-20 flex-shrink-0 rounded-lg overflow-hidden bg-gray-50 border border-gray-100">
-        <Image
+        <img
           src={
             getInternalImageUrl(item.product.image_url) || "/placeholder.png"
           }
           alt={item.product.name}
-          fill
-          className="object-cover"
+          className="w-full h-full object-cover object-center"
         />
       </div>
 

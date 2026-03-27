@@ -170,7 +170,7 @@ export default function FeedSection({ section }: FeedSectionProps) {
         className="group relative flex h-60 min-w-[240px] flex-col justify-end overflow-hidden rounded-2xl bg-neutral-900 text-white shadow-lg transition-transform duration-300 hover:-translate-y-1"
       >
         <div className="absolute inset-0">
-          <Image
+          <img
             src={
               getInternalImageUrl(
                 product.image_url,
@@ -178,9 +178,7 @@ export default function FeedSection({ section }: FeedSectionProps) {
               ) || "/placeholder.png"
             }
             alt={product.name}
-            fill
-            className="object-cover opacity-90 transition-transform duration-500 group-hover:scale-105"
-            priority={rank <= 2}
+            className="h-full w-full object-cover opacity-90 transition-transform duration-500 group-hover:scale-105"
             loading={rank <= 2 ? "eager" : "lazy"}
             fetchPriority={rank <= 2 ? "high" : "auto"}
             sizes="(max-width: 640px) 80vw, (max-width: 1024px) 35vw, 25vw"
@@ -191,7 +189,9 @@ export default function FeedSection({ section }: FeedSectionProps) {
         <div className="relative z-10 flex items-end gap-3 p-4">
           <span className="text-5xl font-black text-white/70">{rank}</span>
           <div className="space-y-1">
-            <p className="text-sm font-semibold leading-tight">{product.name}</p>
+            <p className="text-sm font-semibold leading-tight">
+              {product.name}
+            </p>
             <p className="text-xs text-white/70">
               {new Intl.NumberFormat("pt-BR", {
                 style: "currency",
@@ -206,10 +206,10 @@ export default function FeedSection({ section }: FeedSectionProps) {
 
   if (section.section_type === "BEST_SELLERS") {
     return (
-    <section
-      className="w-full py-6"
-      style={{ contentVisibility: "auto", containIntrinsicSize: "720px" }}
-    >
+      <section
+        className="w-full py-6"
+        style={{ contentVisibility: "auto", containIntrinsicSize: "720px" }}
+      >
         <div className="mx-auto max-w-none sm:max-w-[90%] px-4">
           <header className="mb-4 flex items-center justify-between">
             <div>
@@ -223,14 +223,13 @@ export default function FeedSection({ section }: FeedSectionProps) {
           </header>
 
           <div className="flex gap-4 overflow-x-auto pb-2 pr-4 snap-x snap-mandatory">
-            {section.items.slice(0, 4).map((item: PublicFeedItem, index: number) => (
-              <div
-                key={item.id}
-                className="snap-start"
-              >
-                {renderBestSellerCard(item, index + 1)}
-              </div>
-            ))}
+            {section.items
+              .slice(0, 4)
+              .map((item: PublicFeedItem, index: number) => (
+                <div key={item.id} className="snap-start">
+                  {renderBestSellerCard(item, index + 1)}
+                </div>
+              ))}
           </div>
         </div>
       </section>

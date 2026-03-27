@@ -313,11 +313,10 @@ function CustomizationRuleStep({
               <div className="grid grid-cols-3 gap-4">
                 {data.photos.map((photo, index) => (
                   <div key={index} className="relative aspect-square">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       src={photo.preview}
                       alt={`Preview ${index + 1}`}
-                      className="h-full w-full rounded-lg object-cover"
+                      className="h-full w-full rounded-lg object-cover object-center"
                     />
                   </div>
                 ))}
@@ -369,11 +368,10 @@ function CustomizationRuleStep({
                     }
                   >
                     {imageUrl && (
-                      // eslint-disable-next-line @next/next/no-img-element
                       <img
                         src={imageUrl}
                         alt={option.label}
-                        className="h-32 w-full rounded-t-lg object-cover"
+                        className="h-32 w-full rounded-t-lg object-cover object-center"
                       />
                     )}
                     <CardContent className="p-4">

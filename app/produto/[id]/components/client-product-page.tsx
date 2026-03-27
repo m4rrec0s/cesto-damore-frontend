@@ -1,7 +1,7 @@
 "use client";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import Image from "next/image";
+import dynamic from "next/dynamic";
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { toast } from "sonner";
 import {
@@ -25,7 +25,6 @@ import { useCartContext } from "@/app/hooks/cart-context";
 import type { CartCustomization } from "@/app/hooks/use-cart";
 import { useLayoutApi } from "@/app/hooks/use-layout-api";
 import { sanitizeProductDescription } from "@/app/utils/descriptionSanitizer";
-import { Model3DViewer } from "./Model3DViewer";
 import { MockupGallery } from "./MockupGallery";
 import AdditionalCard from "./additional-card";
 import Link from "next/link";
@@ -41,6 +40,13 @@ import { ItemCustomizationModal } from "./itemCustomizationsModal";
 import { getInternalImageUrl } from "@/lib/image-helper";
 import { useLoginPrompt } from "@/app/components/layout/app-wrapper";
 import { normalizeCustomizationData } from "@/app/lib/customization-serialization";
+
+const Model3DViewer = dynamic(
+  () => import("./Model3DViewer").then((mod) => mod.Model3DViewer),
+  {
+    ssr: false,
+  },
+);
 
 const formatCurrency = (value: number) =>
   value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -1368,12 +1374,12 @@ const ClientProductPage = ({ id }: { id: string }) => {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="animate-pulse flex flex-col items-center">
-          <Image
+          <img
             src="/logocestodamore.png"
             alt="Cesto d'Amore"
             className="w-14 h-14"
-            width={56}
-            height={56}
+            loading="eager"
+            decoding="async"
           />
         </div>
       </div>
@@ -1428,14 +1434,14 @@ const ClientProductPage = ({ id }: { id: string }) => {
                 <ChevronLeft className="w-5 h-5" />
               </Button>
 
-              <Image
+              <img
                 src={getInternalImageUrl(
                   product.image_url || "/placeholder.png",
                 )}
                 alt={product.name}
-                fill
-                className="object-cover"
-                priority
+                className="absolute inset-0 h-full w-full object-cover object-center"
+                loading="eager"
+                decoding="async"
               />
 
               {hasDiscount && (
@@ -1500,11 +1506,12 @@ const ClientProductPage = ({ id }: { id: string }) => {
                   ) : (
                     <div className="flex items-center justify-center h-full w-full p-6">
                       <div className="relative w-full h-full">
-                        <Image
+                        <img
                           src={textureUrl}
                           alt="Preview Personalizado"
-                          fill
-                          className="object-contain"
+                          className="absolute inset-0 h-full w-full object-contain object-center"
+                          loading="lazy"
+                          decoding="async"
                         />
                       </div>
                     </div>
@@ -1532,15 +1539,15 @@ const ClientProductPage = ({ id }: { id: string }) => {
                     )}
                     onClick={() => setSelectedComponent(null)}
                   >
-                    <Image
+                    <img
                       src={
                         getInternalImageUrl(product.image_url) ||
                         "/placeholder.png"
                       }
                       alt={product.name || "Produto"}
-                      fill
-                      className="object-cover rounded-xl"
-                      priority
+                      className="absolute inset-0 h-full w-full object-cover object-center rounded-xl p-1 bg-white"
+                      loading="lazy"
+                      decoding="async"
                     />
                   </div>
 
@@ -1555,15 +1562,15 @@ const ClientProductPage = ({ id }: { id: string }) => {
                       )}
                       onClick={() => setSelectedComponent(component)}
                     >
-                      <Image
+                      <img
                         src={
                           getInternalImageUrl(component.item.image_url) ||
                           "/placeholder.png"
                         }
                         alt={component.item.name}
-                        fill
-                        className="object-cover rounded-xl"
-                        priority
+                        className="absolute inset-0 h-full w-full object-cover object-center rounded-xl p-1 bg-white"
+                        loading="lazy"
+                        decoding="async"
                       />
                     </div>
                   ))}
@@ -1744,11 +1751,12 @@ const ClientProductPage = ({ id }: { id: string }) => {
                                   : "border-gray-200 hover:border-gray-400",
                               )}
                             >
-                              <Image
+                              <img
                                 src={getInternalImageUrl(layout.image_url)}
                                 alt={layout.name}
-                                fill
-                                className="object-cover"
+                                className="absolute inset-0 h-full w-full object-cover object-center p-1 bg-white"
+                                loading="lazy"
+                                decoding="async"
                               />
                               {isSelected && (
                                 <div className="absolute top-2 right-2 bg-gray-900 text-white rounded-full p-1">
@@ -1797,16 +1805,17 @@ const ClientProductPage = ({ id }: { id: string }) => {
                           )}
                         >
                           <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 relative rounded-lg overflow-hidden flex-shrink-0">
-                              <Image
+                            <div className="w-10 h-10 relative overflow-hidden flex-shrink-0">
+                              <img
                                 src={
                                   getInternalImageUrl(
                                     component.item.image_url,
                                   ) || "/placeholder.png"
                                 }
                                 alt={component.item.name}
-                                fill
-                                className="object-cover"
+                                className="absolute inset-0 rounded-lg h-full w-full object-cover object-center bg-white"
+                                loading="lazy"
+                                decoding="async"
                               />
                             </div>
                             <div className="text-left">
@@ -1844,12 +1853,11 @@ const ClientProductPage = ({ id }: { id: string }) => {
                                               {previews
                                                 .slice(0, 3)
                                                 .map((url, previewIdx) => (
-                                                  // eslint-disable-next-line @next/next/no-img-element
                                                   <img
                                                     key={`${component.id}-preview-${previewIdx}`}
                                                     src={url}
                                                     alt={`${component.item.name} preview ${previewIdx + 1}`}
-                                                    className="h-8 w-8 rounded border border-gray-200 object-cover"
+                                                    className="h-8 w-8 rounded border border-gray-200 object-contain object-center bg-white p-0.5"
                                                   />
                                                 ))}
                                             </div>

@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   Card,
@@ -11,7 +12,6 @@ import { Button } from "../components/ui/button";
 import { Label } from "../components/ui/label";
 import { Input } from "../components/ui/input";
 import { Trash2, Upload, DownloadIcon } from "lucide-react";
-import { Model3DViewer } from "../produto/[id]/components/Model3DViewer";
 import { toast } from "sonner";
 import { usePersonalization } from "../hooks/use-personalization";
 import type { LayoutBase, ImageData, SlotDef } from "../types/personalization";
@@ -19,6 +19,16 @@ import {
   getDirectImageUrl,
   normalizeGoogleDriveUrl,
 } from "../helpers/drive-normalize";
+
+const Model3DViewer = dynamic(
+  () =>
+    import("../produto/[id]/components/Model3DViewer").then(
+      (mod) => mod.Model3DViewer,
+    ),
+  {
+    ssr: false,
+  },
+);
 
 interface AdvancedPersonalizationEditorProps {
   layoutBase: LayoutBase;
@@ -504,11 +514,10 @@ export default function AdvancedPersonalizationEditor({
 
         {hasImage ? (
           <div className="space-y-2">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={imageData.previewUrl || ""}
               alt={imageData.originalName}
-              className="object-cover rounded w-[150px] h-[150px]"
+              className="object-cover object-center rounded w-[150px] h-[150px]"
             />
             <p className="text-sm text-muted-foreground truncate">
               {imageData.originalName}
@@ -547,7 +556,6 @@ export default function AdvancedPersonalizationEditor({
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-      
       <Card>
         <CardHeader>
           <CardTitle>Personalize seu item</CardTitle>
@@ -614,7 +622,6 @@ export default function AdvancedPersonalizationEditor({
                 style={{ display: baseImageLoaded ? "block" : "none" }}
               />
             ) : (
-
               <div className="w-full h-full min-h-[400px]">
                 {previewTextureUrl ? (
                   <Model3DViewer
@@ -627,7 +634,6 @@ export default function AdvancedPersonalizationEditor({
                     textures={
                       layoutBase.item_type?.toLowerCase() === "caneca"
                         ? (() => {
-
                             const CYLINDER_RADIUS = 0.46;
                             const CYLINDER_SEGMENTS = 200;
                             const CYLINDER_HANDLE_GAP = Math.PI / 8;
@@ -663,7 +669,6 @@ export default function AdvancedPersonalizationEditor({
                                   radius: CYLINDER_RADIUS,
                                   height: PRINT_AREA_HEIGHT,
                                   segments: CYLINDER_SEGMENTS,
-
                                 },
                               },
                             ];
@@ -687,7 +692,6 @@ export default function AdvancedPersonalizationEditor({
                       Gerando textura 3D...
                     </p>
                     {previewTextureUrl && (
-                      // eslint-disable-next-line @next/next/no-img-element
                       <img
                         src={previewTextureUrl}
                         alt="Preview textura 3D"
@@ -718,7 +722,6 @@ export default function AdvancedPersonalizationEditor({
               </div>
             )}
 
-            
             <div className="mt-4">
               <Label>Associar a Item (opcional)</Label>
               {items.length === 0 ? (
@@ -742,7 +745,6 @@ export default function AdvancedPersonalizationEditor({
               )}
             </div>
 
-            
             <div className="mt-4 border-t pt-4">
               <div className="flex items-center justify-between">
                 <Label>Opções (Multiple Choice)</Label>
@@ -798,7 +800,6 @@ export default function AdvancedPersonalizationEditor({
                     />
 
                     {opt.imageUrl && (
-                      // eslint-disable-next-line @next/next/no-img-element
                       <img
                         src={opt.imageUrl}
                         alt={opt.label}

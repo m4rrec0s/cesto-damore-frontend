@@ -297,7 +297,6 @@ export const ImageCropContent = ({
       {...reactCropProps}
     >
       {imgSrc && (
-        /* eslint-disable-next-line @next/next/no-img-element */
         <img
           alt="crop"
           className="max-w-full h-auto"

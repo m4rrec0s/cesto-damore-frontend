@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import React, { useState, useCallback, useEffect, useRef } from "react";
 import {
   Dialog,
@@ -36,11 +37,17 @@ import type {
   SlotDef,
 } from "@/app/types/personalization";
 import { getDirectImageUrl } from "@/app/helpers/drive-normalize";
-import ClientFabricEditor from "@/app/components/client-fabric-editor";
 import useApi from "@/app/hooks/use-api";
 import { ImageCropDialog } from "@/app/components/ui/image-crop-dialog";
 import Image from "next/image";
 import { getInternalImageUrl } from "@/lib/image-helper";
+
+const ClientFabricEditor = dynamic(
+  () => import("@/app/components/client-fabric-editor"),
+  {
+    ssr: false,
+  },
+);
 
 interface PreviewImageEntry {
   preview: string;
@@ -383,88 +390,91 @@ export function ItemCustomizationModal({
     fetchLayouts();
   }, [isOpen, customizations, getLayoutById]);
 
-  const handleLayoutSelect = useCallback(async (layoutId: string) => {
-    setSelectedLayoutId(layoutId);
-    setLoadingLayout(true);
+  const handleLayoutSelect = useCallback(
+    async (layoutId: string) => {
+      setSelectedLayoutId(layoutId);
+      setLoadingLayout(true);
 
-    const baseLayoutCustom = customizationsRef.current.find(
-      (c) => c.type === "DYNAMIC_LAYOUT",
-    );
-    if (!baseLayoutCustom) return;
+      const baseLayoutCustom = customizationsRef.current.find(
+        (c) => c.type === "DYNAMIC_LAYOUT",
+      );
+      if (!baseLayoutCustom) return;
 
-    const layout = baseLayoutCustom.customization_data.layouts?.find(
-      (l) => l.id === layoutId,
-    );
-    if (!layout) return;
+      const layout = baseLayoutCustom.customization_data.layouts?.find(
+        (l) => l.id === layoutId,
+      );
+      if (!layout) return;
 
-    setLoading(true);
-    setCustomizationData((prev) => ({
-      ...prev,
-      [baseLayoutCustom.id]: {
-        layout_id: layoutId,
-        layout_name: layout.name,
-      },
-    }));
-
-    setLoading(false);
-
-    try {
-      let layoutData: LayoutBase | undefined = layoutCacheRef.current[
-        layoutId
-      ] as LayoutBase | undefined;
-
-      if (!layoutData) {
-        const rawData = (await getLayoutById(layoutId)) as LayoutBase & {
-          baseImageUrl?: string;
-        };
-
-        if (rawData && !rawData.previewImageUrl && rawData.baseImageUrl) {
-          rawData.previewImageUrl = rawData.baseImageUrl;
-        }
-
-        layoutData = rawData;
-
-        if (layoutData) layoutCacheRef.current[layoutId] = layoutData;
-      }
-
-      if (!layoutData) throw new Error("Layout não encontrado");
-
-      setFullLayoutBase(layoutData as LayoutBase);
-
-      const apiType = (layoutData as unknown as { type?: string }).type;
-      const normalizedType = apiType?.toLowerCase();
-      const modelUrl =
-        normalizedType === "mug" || normalizedType === "caneca"
-          ? "/3DModels/caneca.glb"
-          : normalizedType === "frame" || normalizedType === "quadro"
-            ? "/3DModels/quadro.glb"
-            : undefined;
-
-      const standardType =
-        normalizedType === "caneca"
-          ? "mug"
-          : normalizedType === "quadro"
-            ? "frame"
-            : normalizedType;
-
+      setLoading(true);
       setCustomizationData((prev) => ({
         ...prev,
         [baseLayoutCustom.id]: {
-          ...((prev[baseLayoutCustom.id] as Record<string, unknown>) || {}),
-          model_url: modelUrl,
-          item_type: standardType,
+          layout_id: layoutId,
+          layout_name: layout.name,
         },
       }));
 
-      setStep("editing");
-    } catch (err) {
-      console.error("Erro ao carregar layout:", err);
-      toast.error("Erro ao carregar detalhes do layout");
-      setFullLayoutBase(null);
-    } finally {
-      setLoadingLayout(false);
-    }
-  }, [getLayoutById]);
+      setLoading(false);
+
+      try {
+        let layoutData: LayoutBase | undefined = layoutCacheRef.current[
+          layoutId
+        ] as LayoutBase | undefined;
+
+        if (!layoutData) {
+          const rawData = (await getLayoutById(layoutId)) as LayoutBase & {
+            baseImageUrl?: string;
+          };
+
+          if (rawData && !rawData.previewImageUrl && rawData.baseImageUrl) {
+            rawData.previewImageUrl = rawData.baseImageUrl;
+          }
+
+          layoutData = rawData;
+
+          if (layoutData) layoutCacheRef.current[layoutId] = layoutData;
+        }
+
+        if (!layoutData) throw new Error("Layout não encontrado");
+
+        setFullLayoutBase(layoutData as LayoutBase);
+
+        const apiType = (layoutData as unknown as { type?: string }).type;
+        const normalizedType = apiType?.toLowerCase();
+        const modelUrl =
+          normalizedType === "mug" || normalizedType === "caneca"
+            ? "/3DModels/caneca.glb"
+            : normalizedType === "frame" || normalizedType === "quadro"
+              ? "/3DModels/quadro.glb"
+              : undefined;
+
+        const standardType =
+          normalizedType === "caneca"
+            ? "mug"
+            : normalizedType === "quadro"
+              ? "frame"
+              : normalizedType;
+
+        setCustomizationData((prev) => ({
+          ...prev,
+          [baseLayoutCustom.id]: {
+            ...((prev[baseLayoutCustom.id] as Record<string, unknown>) || {}),
+            model_url: modelUrl,
+            item_type: standardType,
+          },
+        }));
+
+        setStep("editing");
+      } catch (err) {
+        console.error("Erro ao carregar layout:", err);
+        toast.error("Erro ao carregar detalhes do layout");
+        setFullLayoutBase(null);
+      } finally {
+        setLoadingLayout(false);
+      }
+    },
+    [getLayoutById],
+  );
 
   useEffect(() => {
     if (!isOpen) return;
@@ -1000,11 +1010,10 @@ export function ItemCustomizationModal({
             </p>
             <div className="flex items-center gap-3">
               {currentPreview ? (
-                // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={currentPreview}
                   alt={currentLayoutName || "Arte final"}
-                  className="h-16 w-16 rounded-md object-cover border border-neutral-200"
+                  className="h-16 w-16 rounded-md object-cover object-center border border-neutral-200"
                 />
               ) : null}
               <div className="min-w-0">
@@ -1092,18 +1101,17 @@ export function ItemCustomizationModal({
 
                     {imageUrl ? (
                       <div
-                        className={`relative w-full h-full ${
+                        className={`relative w-full aspect-square ${
                           isQuadro ? "p-1" : ""
                         }`}
                       >
                         <Image
                           src={imageUrl}
                           alt={fullLayout.name}
-                          className={`w-full h-full transition-all duration-300 object-contain ${
+                          fill
+                          className={`transition-all duration-300 object-cover ${
                             imageLoaded ? "opacity-100" : "opacity-0"
-                          } ${isQuadro ? "" : ""}`}
-                          width={400}
-                          height={200}
+                          }`}
                           onLoad={() => {
                             setImageLoadStates((prev) => ({
                               ...prev,
@@ -1383,11 +1391,10 @@ export function ItemCustomizationModal({
                 animate={{ opacity: 1, scale: 1 }}
                 className="relative group aspect-square rounded-lg overflow-hidden border border-neutral-200 shadow-sm hover:shadow-md transition-shadow"
               >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={entry.preview}
                   alt={`Upload ${index + 1}`}
-                  className="w-full h-full object-cover"
+                  className="w-full h-full object-cover object-center"
                 />
                 <Button
                   size="sm"
@@ -1669,15 +1676,13 @@ export function ItemCustomizationModal({
                       {isSelected && <Check className="h-3 w-3 text-white" />}
                     </motion.div>
                     <div className="relative w-16 h-16 flex-shrink-0 rounded-md overflow-hidden border border-neutral-100">
-                      <Image
+                      <img
                         src={
                           getInternalImageUrl(option.image_url) ||
                           "/placeholder.png"
                         }
                         alt={option.label}
-                        fill
-                        quality={90}
-                        className="object-cover bg-neutral-50"
+                        className="w-full h-full object-cover object-center bg-neutral-50"
                       />
                     </div>
                     <div className="flex-1">

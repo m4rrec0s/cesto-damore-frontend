@@ -346,7 +346,6 @@ export default function ClientPersonalizationEditor({
       <div key={slot.id} className="group relative">
         {hasImage ? (
           <div className="relative aspect-square rounded-xl overflow-hidden border-2 border-purple-200 shadow-md">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={imageData.previewUrl || ""}
               alt={`Foto ${index + 1}`}

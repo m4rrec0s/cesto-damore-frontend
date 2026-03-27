@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useEffect, useState, useMemo, useRef } from "react";
 import {
   useApi,
@@ -11,7 +12,6 @@ import { RefreshCw } from "lucide-react";
 import { DatabaseErrorFallback } from "./components/database-error-fallback";
 import FeedBannerCarousel from "./components/feed/FeedBannerCarousel";
 import FeedSection from "./components/feed/FeedSection";
-import InfiniteScroll from "react-infinite-scroll-component";
 
 interface GridProduct {
   id: string;
@@ -24,6 +24,13 @@ interface GridProduct {
 }
 
 import HomeSkeleton from "./components/feed/HomeSkeleton";
+
+const InfiniteScroll = dynamic(
+  () => import("react-infinite-scroll-component"),
+  {
+    ssr: false,
+  },
+);
 
 export default function Home() {
   const api = useApi();

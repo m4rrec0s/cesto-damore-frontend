@@ -43,7 +43,7 @@ export default function SobreNosPage() {
                 src="/paulo.png"
                 alt="Foto da equipe Cesto d'Amore"
                 fill
-                className="object-cover aspect-square"
+                className="object-cover aspect-square object-center"
               />
             </div>
             <p className="mt-1 text-sm text-gray-500">

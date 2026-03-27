@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import "./animations.css";
 import { AuthProvider } from "./hooks/use-auth";
@@ -10,16 +9,6 @@ import { CookieBanner } from "./components/layout/cookie-banner";
 import { installApiKeyFetchInterceptor } from "./lib/api-key-fetch";
 
 installApiKeyFetchInterceptor();
-
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
 
 export const metadata: Metadata = {
   title: "Cesto d'Amore | Cestas e Presentes Personalizados em Campina Grande",
@@ -44,9 +33,7 @@ export default function RootLayout({
         <link rel="dns-prefetch" href="https://drive.google.com" />
         <link rel="preconnect" href="https://drive.google.com" crossOrigin="" />
       </head>
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased bg-gray-50 text-gray-900`}
-      >
+      <body className="antialiased bg-gray-50 text-gray-900 font-sans">
         <AuthProvider>
           <AppWrapper>
             <ClientLayout>{children}</ClientLayout>

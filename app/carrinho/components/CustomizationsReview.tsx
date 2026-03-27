@@ -1992,11 +1992,10 @@ export function CustomizationsReview({
                                                 className="rounded border border-gray-200 hover:border-gray-400"
                                                 title="Editar esta personalização"
                                               >
-                                                {/* eslint-disable-next-line @next/next/no-img-element */}
                                                 <img
                                                   src={url}
                                                   alt={`${f.title} ${pIdx + 1}`}
-                                                  className="h-10 w-10 rounded object-cover"
+                                                  className="h-10 w-10 rounded object-cover object-center"
                                                 />
                                               </button>
                                             ))}

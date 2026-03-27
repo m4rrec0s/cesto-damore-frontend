@@ -82,7 +82,7 @@ export function Cart({ onClose }: { onClose?: () => void }) {
                 )}
                 alt={item.product.name}
                 fill
-                className="object-cover"
+                className="object-cover object-center"
               />
             </div>
 

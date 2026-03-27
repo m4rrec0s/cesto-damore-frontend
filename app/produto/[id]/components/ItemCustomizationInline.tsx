@@ -433,7 +433,7 @@ export function ItemCustomizationInline({
                           src={layout.image_url}
                           alt={layout.name}
                           fill
-                          className="object-cover"
+                          className="object-cover object-center"
                         />
                       ) : (
                         <div className="flex items-center justify-center h-full text-gray-400">
@@ -576,11 +576,10 @@ export function ItemCustomizationInline({
                 key={index}
                 className="relative group aspect-square rounded-lg overflow-hidden border"
               >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={URL.createObjectURL(file)}
                   alt={`Preview ${index + 1}`}
-                  className="w-full h-full object-cover"
+                  className="w-full h-full object-cover object-center"
                 />
                 <button
                   onClick={() => handleRemoveFile(customization.id, index)}
@@ -646,11 +645,10 @@ export function ItemCustomizationInline({
               >
                 <div className="flex items-center gap-3">
                   {imageUrl && (
-                    /* eslint-disable-next-line @next/next/no-img-element */
                     <img
                       src={imageUrl}
                       alt={option.label}
-                      className="w-10 h-10 rounded object-cover border"
+                      className="w-10 h-10 rounded object-cover object-center border"
                     />
                   )}
                   <div

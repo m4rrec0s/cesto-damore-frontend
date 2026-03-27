@@ -1,9 +1,7 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { cn } from "@/app/lib/utils";
-import { getInternalImageUrl } from "@/lib/image-helper";
 import { Badge } from "../ui/badge";
 
 interface ProductCardProps {
@@ -43,23 +41,16 @@ export function ProductCard({
       href={`/produto/${props.id}`}
       className={cn(
         "group flex flex-col gap-3 h-full rounded-2xl border border-gray-100 bg-white p-3 shadow-sm transition-all hover:-translate-y-1 hover:shadow-md",
-        className
+        className,
       )}
     >
       <div className="relative aspect-square w-full overflow-hidden rounded-xl bg-gray-100">
-        <Image
-          src={
-            getInternalImageUrl(props.image_url, imagePriority ? "w800" : "w500") ||
-            "/placeholder.png"
-          }
+        <img
+          src={props.image_url || "/placeholder.png"}
           alt={props.name}
-          fill
-          className="object-cover transition-transform duration-300 group-hover:scale-105"
-          quality={70}
-          priority={imagePriority}
+          className="h-full w-full object-cover object-center transition-transform duration-300 group-hover:scale-105"
           loading={imagePriority ? "eager" : "lazy"}
           fetchPriority={imagePriority ? "high" : "auto"}
-          sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 16vw"
         />
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/10 via-transparent to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
         {categories.length > 0 ? (
@@ -76,9 +67,7 @@ export function ProductCard({
         ) : null}
       </div>
       <div className="flex flex-col gap-1 px-1">
-        <h3 className="text-sm text-gray-900">
-          {props.name}
-        </h3>
+        <h3 className="text-sm text-gray-900">{props.name}</h3>
         <div className="flex items-end gap-2">
           <p className="text-xl font-semibold text-gray-900">
             {new Intl.NumberFormat("pt-BR", {

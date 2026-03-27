@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   Card,
@@ -15,8 +16,14 @@ import { toast } from "sonner";
 import { dataURLtoBlob } from "@/app/lib/utils";
 import type { LayoutBase, ImageData } from "@/app/types/personalization";
 import { getDirectImageUrl } from "@/app/helpers/drive-normalize";
-import { Model3DViewer } from "./Model3DViewer";
 import { ImageCropDialog } from "@/app/components/ui/image-crop-dialog";
+
+const Model3DViewer = dynamic(
+  () => import("./Model3DViewer").then((mod) => mod.Model3DViewer),
+  {
+    ssr: false,
+  },
+);
 
 interface LayoutSlotEditorProps {
   layoutBase: LayoutBase;
@@ -483,7 +490,6 @@ export function LayoutSlotEditor({
 
                     {hasImage ? (
                       <div className="space-y-2">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
                           src={slotImages[slot.id].preview}
                           alt={slotImages[slot.id].file.name}
