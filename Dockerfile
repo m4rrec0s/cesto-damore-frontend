@@ -16,4 +16,5 @@ RUN npm run build
 
 EXPOSE 3001
 
-CMD ["npm", "start"]
+# Usar node diretamente em vez de npm para melhor handling de sinais
+CMD ["node", "node_modules/vinext/dist/cli.js", "start", "-p", "3001"]
