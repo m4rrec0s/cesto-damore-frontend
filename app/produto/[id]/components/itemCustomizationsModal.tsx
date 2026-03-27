@@ -315,7 +315,7 @@ export function ItemCustomizationModal({
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [isCropping, setIsCropping] = useState(false);
 
-  const { getLayoutById } = useApi();
+  const { getLayoutById, uploadTempImage } = useApi();
 
   useEffect(() => {
     if (!isOpen) return;
@@ -749,18 +749,13 @@ export function ItemCustomizationModal({
         const blob = dataURLtoBlob(croppedImageUrl);
         const file = new File([blob], originalFileName, { type: "image/png" });
 
-        const formData = new FormData();
-        formData.append("image", file);
-        const response = await fetch(`${API_URL}/temp/upload`, {
-          method: "POST",
-          body: formData,
-        });
+        // Usar o método da API em vez de fetch direto
+        const result = await uploadTempImage(file);
 
-        if (!response.ok) {
+        if (!result.success || !result.url) {
           throw new Error("Falha ao enviar imagem temporária");
         }
 
-        const result = await response.json();
         const previewUrl = result.url;
         const tempFilename = result.filename;
 
@@ -804,7 +799,7 @@ export function ItemCustomizationModal({
         setLoading(false);
       }
     },
-    [currentCustomizationId, customizations, fileToCrop, itemId],
+    [currentCustomizationId, customizations, fileToCrop, itemId, uploadTempImage],
   );
 
   const handleDetailsConfirm = async (croppedImageUrl: string) => {
