@@ -82,3 +82,9 @@
     border-radius: 9999px;
     animation: categoryCarousel 20s cubic-bezier(0.2, 0.6, 0.2, 1) forwards;
 }
+
+@keyframes shimmer {
+    100% {
+        transform: translateX(200%) skewX(-20deg);
+    }
+}

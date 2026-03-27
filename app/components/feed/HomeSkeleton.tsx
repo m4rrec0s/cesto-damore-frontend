@@ -32,14 +32,6 @@ export default function HomeSkeleton() {
                     </div>
                 </section>
             ))}
-
-            <style jsx global>{`
-                @keyframes shimmer {
-                    100% {
-                        transform: translateX(200%) skewX(-20deg);
-                    }
-                }
-            `}</style>
         </div>
     );
 }
