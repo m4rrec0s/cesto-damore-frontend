@@ -6,6 +6,26 @@ export function getInternalImageUrl(
 
   // Keep src stable across SSR/client hydration to avoid re-request flicker.
   const normalized = url.trim();
+  const sanitized = normalized.split(/[?#]/)[0].toLowerCase();
+
+  // Backward compatibility for legacy placeholder paths stored in DB.
+  if (
+    sanitized === "placeholder.png" ||
+    sanitized.endsWith("/placeholder.png") ||
+    sanitized === "placeholder-v2.png" ||
+    sanitized.endsWith("/placeholder-v2.png")
+  ) {
+    return getPublicAssetUrl("placeholder-v2.png");
+  }
+
+  if (
+    sanitized === "placeholder_design.png" ||
+    sanitized.endsWith("/placeholder_design.png") ||
+    sanitized === "placeholder_design-v2.png" ||
+    sanitized.endsWith("/placeholder_design-v2.png")
+  ) {
+    return getPublicAssetUrl("placeholder_design-v2.png");
+  }
 
   if (
     normalized.includes("drive.google.com") ||

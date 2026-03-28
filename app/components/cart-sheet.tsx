@@ -15,7 +15,7 @@ import type { CartCustomization } from "@/app/hooks/use-cart";
 import { useAuth } from "@/app/hooks/use-auth";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { getPublicAssetUrl } from "@/lib/image-helper";
+import { getInternalImageUrl, getPublicAssetUrl } from "@/lib/image-helper";
 
 interface CartSheetProps {
   isOpen: boolean;
@@ -133,7 +133,10 @@ export function CartSheet({ isOpen, onClose, onCheckout }: CartSheetProps) {
                   >
                     <div className="relative w-16 h-16 flex-shrink-0">
                       <Image
-                        src={item.product.image_url || getPublicAssetUrl("placeholder-v2.png")}
+                        src={
+                          getInternalImageUrl(item.product.image_url) ||
+                          getPublicAssetUrl("placeholder-v2.png")
+                        }
                         alt={item.product.name}
                         fill
                         className="object-cover object-center rounded-md w-16 h-16"
