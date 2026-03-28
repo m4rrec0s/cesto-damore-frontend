@@ -10,6 +10,7 @@ import { useRestoreGuestCart } from "@/app/hooks/use-restore-guest-cart";
 import { AlertCircle, Mail, Lock, User as UserIcon } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
+import { getPublicAssetUrl } from "@/lib/image-helper";
 
 function RegisterForm() {
   const [name, setName] = useState("");
@@ -95,7 +96,7 @@ function RegisterForm() {
     <div className="min-h-screen grid grid-cols-1 md:grid-cols-10">
       <div className="relative hidden md:block md:col-span-7 overflow-hidden rounded-r-2xl">
         <Image
-          src="/login_page.webp"
+          src={getPublicAssetUrl("login_page.webp")}
           alt="Cesto d'Amore - Presentes e Cestas"
           fill
           className="object-cover transition-transform duration-500 hover:scale-105"
@@ -120,7 +121,7 @@ function RegisterForm() {
           <div className="text-center mb-8">
             <div className="flex items-center justify-center mx-auto mb-4">
               <Image
-                src="/logocestodamore.png"
+                src={getPublicAssetUrl("logocestodamore.png")}
                 alt="Logo"
                 width={64}
                 height={64}

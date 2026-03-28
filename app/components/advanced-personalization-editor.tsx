@@ -12,6 +12,7 @@ import { Button } from "../components/ui/button";
 import { Label } from "../components/ui/label";
 import { Input } from "../components/ui/input";
 import { Trash2, Upload, DownloadIcon } from "lucide-react";
+import { getPublicAssetUrl } from "@/lib/image-helper";
 import { toast } from "sonner";
 import { usePersonalization } from "../hooks/use-personalization";
 import type { LayoutBase, ImageData, SlotDef } from "../types/personalization";
@@ -627,8 +628,8 @@ export default function AdvancedPersonalizationEditor({
                   <Model3DViewer
                     modelUrl={
                       layoutBase.item_type?.toLowerCase() === "caneca"
-                        ? "/3DModels/caneca.glb"
-                        : "/3DModels/quadro.glb"
+                        ? getPublicAssetUrl("3DModels/caneca.glb")
+                        : getPublicAssetUrl("3DModels/quadro.glb")
                     }
                     materialColor="#ffffff"
                     textures={

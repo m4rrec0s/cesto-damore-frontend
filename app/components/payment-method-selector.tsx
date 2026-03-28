@@ -3,13 +3,14 @@
 import { Card } from "@/app/components/ui/card";
 import { motion } from "framer-motion";
 import Image from "next/image";
+import { getPublicAssetUrl } from "@/lib/image-helper";
 
 interface PaymentMethodSelectorProps {
   selectedMethod: "pix" | "card" | undefined;
   onMethodChange: (method: "pix" | "card") => void;
 }
 
-const PixIcon = () => <Image src="/pix.svg" alt="PIX" width={24} height={24} />;
+const PixIcon = () => <Image src={getPublicAssetUrl("pix.svg")} alt="PIX" width={24} height={24} />;
 
 const CardIcon = () => (
   <svg

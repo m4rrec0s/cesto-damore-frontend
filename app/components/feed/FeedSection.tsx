@@ -15,7 +15,7 @@ interface Product {
   categoryName?: string;
 }
 
-import { getInternalImageUrl } from "@/lib/image-helper";
+import { getInternalImageUrl, getPublicAssetUrl } from "@/lib/image-helper";
 
 interface FeedSectionProps {
   section: PublicFeedSection;
@@ -175,7 +175,7 @@ export default function FeedSection({ section }: FeedSectionProps) {
               getInternalImageUrl(
                 product.image_url,
                 rank <= 2 ? "w1200" : "w800",
-              ) || "/placeholder-v2.png"
+              ) || getPublicAssetUrl("placeholder-v2.png")
             }
             alt={product.name}
             className="h-full w-full object-cover opacity-90 transition-transform duration-500 group-hover:scale-105"

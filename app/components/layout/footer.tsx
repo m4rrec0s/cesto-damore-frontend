@@ -1,4 +1,5 @@
 import Image from "next/image";
+import { getPublicAssetUrl } from "@/lib/image-helper";
 import Link from "next/link";
 import {
   Phone,
@@ -23,7 +24,7 @@ export function SiteFooter() {
             <div className="flex items-center gap-3">
               <div className="relative w-12 h-12">
                 <Image
-                  src="/logo.png"
+                  src={getPublicAssetUrl("logo.png")}
                   alt="Cesto d'Amore"
                   fill
                   className="object-contain invert"

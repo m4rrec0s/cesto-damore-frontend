@@ -4,6 +4,7 @@ import type React from "react";
 
 import { useState, useEffect, useCallback } from "react";
 import Image from "next/image";
+import { getPublicAssetUrl } from "@/lib/image-helper";
 import { Card } from "@/app/components/ui/card";
 import { Input } from "@/app/components/ui/input";
 import {
@@ -158,22 +159,22 @@ const cardBrandIcons: Record<
 > = {
   visa: {
     label: "Visa",
-    svgPath: "/visa.svg",
+    svgPath: getPublicAssetUrl("visa.svg"),
     gradient: "from-blue-600 to-blue-500",
   },
   mastercard: {
     label: "Mastercard",
-    svgPath: "/mastercard.svg",
+    svgPath: getPublicAssetUrl("mastercard.svg"),
     gradient: "from-red-600 to-orange-500",
   },
   amex: {
     label: "American Express",
-    svgPath: "/american-express.svg",
+    svgPath: getPublicAssetUrl("american-express.svg"),
     gradient: "from-cyan-600 to-blue-500",
   },
   elo: {
     label: "Elo",
-    svgPath: "/elo.svg",
+    svgPath: getPublicAssetUrl("elo.svg"),
     gradient: "from-purple-600 to-pink-500",
   },
   unknown: { label: "Cartão", gradient: "from-gray-500 to-gray-400" },

@@ -7,7 +7,7 @@ import { Trash2, Plus, Minus, ShoppingBag } from "lucide-react";
 import { useCart } from "@/app/hooks/use-cart";
 import type { CartCustomization } from "@/app/hooks/use-cart";
 import Image from "next/image";
-import { getInternalImageUrl } from "@/lib/image-helper";
+import { getInternalImageUrl, getPublicAssetUrl } from "@/lib/image-helper";
 import { useRouter } from "next/navigation";
 
 export function Cart({ onClose }: { onClose?: () => void }) {
@@ -78,7 +78,7 @@ export function Cart({ onClose }: { onClose?: () => void }) {
             <div className="relative w-20 h-20 rounded-lg overflow-hidden flex-shrink-0 bg-gray-50">
               <Image
                 src={getInternalImageUrl(
-                  item.product.image_url || "/placeholder-v2.png",
+                  item.product.image_url || getPublicAssetUrl("placeholder-v2.png"),
                 )}
                 alt={item.product.name}
                 fill

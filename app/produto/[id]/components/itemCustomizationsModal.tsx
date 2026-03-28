@@ -40,7 +40,7 @@ import { getDirectImageUrl } from "@/app/helpers/drive-normalize";
 import useApi from "@/app/hooks/use-api";
 import { ImageCropDialog } from "@/app/components/ui/image-crop-dialog";
 import Image from "next/image";
-import { getInternalImageUrl } from "@/lib/image-helper";
+import { getInternalImageUrl, getPublicAssetUrl } from "@/lib/image-helper";
 
 const ClientFabricEditor = dynamic(
   () => import("@/app/components/client-fabric-editor"),
@@ -443,9 +443,9 @@ export function ItemCustomizationModal({
         const normalizedType = apiType?.toLowerCase();
         const modelUrl =
           normalizedType === "mug" || normalizedType === "caneca"
-            ? "/3DModels/caneca.glb"
+            ? getPublicAssetUrl("3DModels/caneca.glb")
             : normalizedType === "frame" || normalizedType === "quadro"
-              ? "/3DModels/quadro.glb"
+              ? getPublicAssetUrl("3DModels/quadro.glb")
               : undefined;
 
         const standardType =
@@ -1674,7 +1674,7 @@ export function ItemCustomizationModal({
                       <img
                         src={
                           getInternalImageUrl(option.image_url) ||
-                          "/placeholder-v2.png"
+                          getPublicAssetUrl("placeholder-v2.png")
                         }
                         alt={option.label}
                         className="w-full h-full object-cover object-center bg-neutral-50"

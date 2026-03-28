@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/app/components/ui/button";
 import Image from "next/image";
+import { getPublicAssetUrl } from "@/lib/image-helper";
 import { Input } from "../ui/input";
 import { useCartContext } from "../../hooks/cart-context";
 import { useAuth } from "../../hooks/use-auth";
@@ -178,7 +179,7 @@ export function SiteHeader() {
                 className="absolute left-1/2 -translate-x-1/2 w-[120px] h-10"
               >
                 <Image
-                  src="/logo.png"
+                  src={getPublicAssetUrl("logo.png")}
                   alt="Logo"
                   fill
                   className="object-contain"
@@ -227,7 +228,7 @@ export function SiteHeader() {
               className="flex items-center flex-shrink-0 relative w-[140px] h-12"
             >
               <Image
-                src="/logo.png"
+                src={getPublicAssetUrl("logo.png")}
                 alt="Logo"
                 fill
                 priority

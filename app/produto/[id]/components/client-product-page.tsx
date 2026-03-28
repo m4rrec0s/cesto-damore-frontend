@@ -38,7 +38,7 @@ import {
 } from "@/app/types/customization";
 import type { SlotDef } from "@/app/types/personalization";
 import { ItemCustomizationModal } from "./itemCustomizationsModal";
-import { getInternalImageUrl } from "@/lib/image-helper";
+import { getInternalImageUrl, getPublicAssetUrl } from "@/lib/image-helper";
 import { useLoginPrompt } from "@/app/components/layout/app-wrapper";
 import { normalizeCustomizationData } from "@/app/lib/customization-serialization";
 
@@ -1429,7 +1429,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
 
               <img
                 src={getInternalImageUrl(
-                  product.image_url || "/placeholder-v2.png",
+                  product.image_url || getPublicAssetUrl("placeholder-v2.png"),
                 )}
                 alt={product.name}
                 className="absolute inset-0 h-full w-full object-cover object-center"
@@ -1535,7 +1535,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
                     <img
                       src={
                         getInternalImageUrl(product.image_url) ||
-                        "/placeholder-v2.png"
+                        getPublicAssetUrl("placeholder-v2.png")
                       }
                       alt={product.name || "Produto"}
                       className="absolute inset-0 h-full w-full object-cover object-center rounded-xl p-1 bg-white"
@@ -1558,7 +1558,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
                       <img
                         src={
                           getInternalImageUrl(component.item.image_url) ||
-                          "/placeholder-v2.png"
+                          getPublicAssetUrl("placeholder-v2.png")
                         }
                         alt={component.item.name}
                         className="absolute inset-0 h-full w-full object-cover object-center rounded-xl p-1 bg-white"
@@ -1803,7 +1803,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
                                 src={
                                   getInternalImageUrl(
                                     component.item.image_url,
-                                  ) || "/placeholder-v2.png"
+                                  ) || getPublicAssetUrl("placeholder-v2.png")
                                 }
                                 alt={component.item.name}
                                 className="absolute inset-0 rounded-lg h-full w-full object-cover object-center bg-white"
@@ -2042,7 +2042,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
                   props={{
                     id: relatedProduct.id,
                     name: relatedProduct.name,
-                    image_url: relatedProduct.image_url || "/placeholder-v2.png",
+                    image_url: relatedProduct.image_url || getPublicAssetUrl("placeholder-v2.png"),
                     price: relatedProduct.price,
                     discount: relatedProduct.discount,
                   }}

@@ -23,6 +23,7 @@ import type { LayoutBase, ImageData } from "../types/personalization";
 import { ImageCropDialog } from "./ui/image-crop-dialog";
 import Image from "next/image";
 import { dataURLtoBlob } from "@/app/lib/utils";
+import { getPublicAssetUrl } from "@/lib/image-helper";
 
 const INTERNAL_DPI_MULTIPLIER = 2;
 
@@ -198,7 +199,7 @@ export default function ClientFabricEditor({
 
     try {
       const placeholderImg = await FabricImage.fromURL(
-        "/placeholder_design-v2.png",
+        getPublicAssetUrl("placeholder_design-v2.png"),
         { crossOrigin: "anonymous" },
       );
 

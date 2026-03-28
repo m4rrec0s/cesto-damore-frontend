@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import Image from "next/image";
+import { getPublicAssetUrl } from "@/lib/image-helper";
 import { cn } from "@/app/lib/utils";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/app/components/ui/button";
@@ -15,7 +16,7 @@ interface MockupGalleryProps {
 const FRAME_MOCKUPS = [
   {
     id: 1,
-    src: "/mockups/frame/mockup1.jpg",
+    src: getPublicAssetUrl("mockups/frame/mockup1.jpg"),
     name: "Ambiente 1",
     artPos: {
       top: "50%",
@@ -27,7 +28,7 @@ const FRAME_MOCKUPS = [
   },
   {
     id: 2,
-    src: "/mockups/frame/mockup2.jpg",
+    src: getPublicAssetUrl("mockups/frame/mockup2.jpg"),
     name: "Ambiente 2",
     artPos: {
       top: "48%",
@@ -39,7 +40,7 @@ const FRAME_MOCKUPS = [
   },
   {
     id: 3,
-    src: "/mockups/frame/mockup3.jpg",
+    src: getPublicAssetUrl("mockups/frame/mockup3.jpg"),
     name: "Ambiente 3",
     artPos: {
       top: "50%",
@@ -51,7 +52,7 @@ const FRAME_MOCKUPS = [
   },
   {
     id: 4,
-    src: "/mockups/frame/mockup4.jpg",
+    src: getPublicAssetUrl("mockups/frame/mockup4.jpg"),
     name: "Ambiente 4",
     artPos: {
       top: "45%",
@@ -63,7 +64,7 @@ const FRAME_MOCKUPS = [
   },
   {
     id: 5,
-    src: "/mockups/frame/mockup5.jpg",
+    src: getPublicAssetUrl("mockups/frame/mockup5.jpg"),
     name: "Ambiente 5",
     artPos: {
       top: "47.5%",

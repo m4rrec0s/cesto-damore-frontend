@@ -1,5 +1,6 @@
 import Link from "next/link";
 import Image from "next/image";
+import { getPublicAssetUrl } from "@/lib/image-helper";
 
 export default function SobreNosPage() {
   return (
@@ -40,7 +41,7 @@ export default function SobreNosPage() {
           <div>
             <div className="relative w-full h-[320px] rounded-2xl overflow-hidden border border-rose-200 bg-rose-50">
               <Image
-                src="/paulo.png"
+                src={getPublicAssetUrl("paulo.png")}
                 alt="Foto da equipe Cesto d'Amore"
                 fill
                 className="object-cover aspect-square object-center"

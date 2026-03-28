@@ -5,6 +5,7 @@ import React from "react";
 import { Card, CardContent } from "./ui/card";
 import { Badge } from "./ui/badge";
 import { Check, Sparkles } from "lucide-react";
+import { getPublicAssetUrl } from "@/lib/image-helper";
 
 const Model3DViewer = dynamic(
   () => import("../produto/[id]/components/Model3DViewer").then((mod) => mod.Model3DViewer),
@@ -34,8 +35,8 @@ export default function CustomizationPreviewCard({
 }: CustomizationPreviewCardProps) {
   const defaultModelUrl =
     itemType.toLowerCase() === "caneca"
-      ? "/3DModels/caneca.glb"
-      : "/3DModels/quadro.glb";
+      ? getPublicAssetUrl("3DModels/caneca.glb")
+      : getPublicAssetUrl("3DModels/quadro.glb");
 
   const finalModelUrl = modelUrl || defaultModelUrl;
 
