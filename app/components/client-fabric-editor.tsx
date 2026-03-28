@@ -196,12 +196,44 @@ export default function ClientFabricEditor({
     const center = frame.getCenterPoint();
     const frameWidth = frame.width * frame.scaleX;
     const frameHeight = frame.height * frame.scaleY;
+    const generatedFallbackPlaceholder = `data:image/svg+xml;utf8,${encodeURIComponent(
+      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 800">
+        <defs>
+          <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="#f8fafc"/>
+            <stop offset="100%" stop-color="#e5e7eb"/>
+          </linearGradient>
+        </defs>
+        <rect width="1200" height="800" fill="url(#bg)"/>
+        <rect x="220" y="140" width="760" height="520" rx="40" fill="#d1d5db"/>
+        <circle cx="430" cy="340" r="70" fill="#9ca3af"/>
+        <path d="M260 600l210-170 120 100 150-130 240 200z" fill="#9ca3af"/>
+      </svg>`,
+    )}`;
 
     try {
-      const placeholderImg = await FabricImage.fromURL(
+      const placeholderSources = [
         getPublicAssetUrl("placeholder_design-v2.png"),
-        { crossOrigin: "anonymous" },
-      );
+        getPublicAssetUrl("placeholder-v2.png"),
+        generatedFallbackPlaceholder,
+      ];
+
+      let placeholderImg: any = null;
+      for (const source of placeholderSources) {
+        try {
+          placeholderImg = await FabricImage.fromURL(source, {
+            crossOrigin: "anonymous",
+          });
+          if (placeholderImg) break;
+        } catch {
+          // Try next source.
+        }
+      }
+
+      if (!placeholderImg) {
+        console.warn("Placeholder não pôde ser carregado em nenhuma origem.");
+        return;
+      }
 
       const scale = Math.max(
         frameWidth / placeholderImg.width!,
