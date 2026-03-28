@@ -4,8 +4,7 @@ import { ProductCard } from "@/app/components/layout/product-card";
 import { Button } from "@/app/components/ui/button";
 import { Separator } from "@/app/components/ui/separator";
 import useApi, { Product, Category } from "@/app/hooks/use-api";
-import { ChevronLeftIcon } from "lucide-react";
-import Image from "next/image";
+import { ChevronLeftIcon, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
@@ -67,14 +66,8 @@ const NamedCategoryPage = ({ categoryName }: NamedCategoryPageProps) => {
   if (loading) {
     return (
       <div className="fixed z-50 bg-white/55 flex justify-center items-center inset-0 h-[100vh]">
-        <div className="animate-pulse flex flex-col items-center">
-          <Image
-            src="/logocestodamore.png"
-            alt="Cesto d'Amore"
-            className="w-14 h-14"
-            width={56}
-            height={56}
-          />
+        <div className="flex flex-col items-center">
+          <Loader2 className="w-10 h-10 text-rose-600 animate-spin mb-2" />
           <span className="text-xs text-gray-500">Buscando categoria...</span>
         </div>
       </div>

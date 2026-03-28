@@ -11,6 +11,7 @@ import {
   ChevronLeft,
   Clock,
   CheckCircle2,
+  Loader2,
 } from "lucide-react";
 
 import { Button } from "@/app/components/ui/button";
@@ -1373,15 +1374,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
   if (loadingProduct) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="animate-pulse flex flex-col items-center">
-          <img
-            src="/logocestodamore.png"
-            alt="Cesto d'Amore"
-            className="w-14 h-14"
-            loading="eager"
-            decoding="async"
-          />
-        </div>
+        <Loader2 className="w-10 h-10 text-rose-600 animate-spin" />
       </div>
     );
   }
@@ -1436,7 +1429,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
 
               <img
                 src={getInternalImageUrl(
-                  product.image_url || "/placeholder.png",
+                  product.image_url || "/placeholder-v2.png",
                 )}
                 alt={product.name}
                 className="absolute inset-0 h-full w-full object-cover object-center"
@@ -1542,7 +1535,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
                     <img
                       src={
                         getInternalImageUrl(product.image_url) ||
-                        "/placeholder.png"
+                        "/placeholder-v2.png"
                       }
                       alt={product.name || "Produto"}
                       className="absolute inset-0 h-full w-full object-cover object-center rounded-xl p-1 bg-white"
@@ -1565,7 +1558,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
                       <img
                         src={
                           getInternalImageUrl(component.item.image_url) ||
-                          "/placeholder.png"
+                          "/placeholder-v2.png"
                         }
                         alt={component.item.name}
                         className="absolute inset-0 h-full w-full object-cover object-center rounded-xl p-1 bg-white"
@@ -1810,7 +1803,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
                                 src={
                                   getInternalImageUrl(
                                     component.item.image_url,
-                                  ) || "/placeholder.png"
+                                  ) || "/placeholder-v2.png"
                                 }
                                 alt={component.item.name}
                                 className="absolute inset-0 rounded-lg h-full w-full object-cover object-center bg-white"
@@ -2049,7 +2042,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
                   props={{
                     id: relatedProduct.id,
                     name: relatedProduct.name,
-                    image_url: relatedProduct.image_url || "/placeholder.png",
+                    image_url: relatedProduct.image_url || "/placeholder-v2.png",
                     price: relatedProduct.price,
                     discount: relatedProduct.discount,
                   }}

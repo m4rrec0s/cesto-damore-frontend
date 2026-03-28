@@ -198,7 +198,7 @@ export default function ClientFabricEditor({
 
     try {
       const placeholderImg = await FabricImage.fromURL(
-        "/placeholder_design.png",
+        "/placeholder_design-v2.png",
         { crossOrigin: "anonymous" },
       );
 

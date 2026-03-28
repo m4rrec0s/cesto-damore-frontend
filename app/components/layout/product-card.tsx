@@ -46,7 +46,7 @@ export function ProductCard({
     >
       <div className="relative aspect-square w-full overflow-hidden rounded-xl bg-gray-100">
         <img
-          src={props.image_url || "/placeholder.png"}
+          src={props.image_url || "/placeholder-v2.png"}
           alt={props.name}
           className="h-full w-full object-cover object-center transition-transform duration-300 group-hover:scale-105"
           loading={imagePriority ? "eager" : "lazy"}

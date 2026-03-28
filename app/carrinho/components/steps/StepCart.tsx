@@ -115,7 +115,7 @@ const ProductCard = ({
       <div className="relative w-20 h-20 flex-shrink-0 rounded-lg overflow-hidden bg-gray-50 border border-gray-100">
         <img
           src={
-            getInternalImageUrl(item.product.image_url) || "/placeholder.png"
+            getInternalImageUrl(item.product.image_url) || "/placeholder-v2.png"
           }
           alt={item.product.name}
           className="w-full h-full object-cover object-center"

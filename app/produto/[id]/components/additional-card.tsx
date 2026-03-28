@@ -114,7 +114,7 @@ const AdditionalCard = ({
 
       <div className="relative aspect-square overflow-hidden bg-gradient-to-br from-gray-50 to-gray-100 w-full max-w-[200px] mx-auto">
         <img
-          src={getInternalImageUrl(additional.image_url) || "/placeholder.png"}
+          src={getInternalImageUrl(additional.image_url) || "/placeholder-v2.png"}
           alt={additional.name}
           className="absolute inset-0 h-full w-full object-cover object-center p-2 bg-white rounded-sm"
           loading="lazy"

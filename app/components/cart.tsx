@@ -78,7 +78,7 @@ export function Cart({ onClose }: { onClose?: () => void }) {
             <div className="relative w-20 h-20 rounded-lg overflow-hidden flex-shrink-0 bg-gray-50">
               <Image
                 src={getInternalImageUrl(
-                  item.product.image_url || "/placeholder.png",
+                  item.product.image_url || "/placeholder-v2.png",
                 )}
                 alt={item.product.name}
                 fill

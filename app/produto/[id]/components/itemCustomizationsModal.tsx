@@ -1674,7 +1674,7 @@ export function ItemCustomizationModal({
                       <img
                         src={
                           getInternalImageUrl(option.image_url) ||
-                          "/placeholder.png"
+                          "/placeholder-v2.png"
                         }
                         alt={option.label}
                         className="w-full h-full object-cover object-center bg-neutral-50"

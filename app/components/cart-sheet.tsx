@@ -132,7 +132,7 @@ export function CartSheet({ isOpen, onClose, onCheckout }: CartSheetProps) {
                   >
                     <div className="relative w-16 h-16 flex-shrink-0">
                       <Image
-                        src={item.product.image_url || "/placeholder.png"}
+                        src={item.product.image_url || "/placeholder-v2.png"}
                         alt={item.product.name}
                         fill
                         className="object-cover object-center rounded-md w-16 h-16"
