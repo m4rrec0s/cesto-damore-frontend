@@ -267,10 +267,17 @@ export function useWebhookNotification({
       process.env.NEXT_PUBLIC_API_KEY ||
       process.env.NEXT_PUBLIC_AI_AGENT_API_KEY ||
       "";
+    const authToken =
+      (typeof window !== "undefined" &&
+        (localStorage.getItem("appToken") || localStorage.getItem("token"))) ||
+      "";
     const url = new URL(`${apiUrl}/webhooks/notifications/${orderId}`);
 
     if (apiKey) {
       url.searchParams.set("api_key", apiKey);
+    }
+    if (authToken) {
+      url.searchParams.set("token", authToken);
     }
 
     try {

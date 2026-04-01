@@ -481,7 +481,7 @@ export default function CarrinhoPageContent() {
   const { startPolling } = usePaymentPolling({
     orderId: currentOrderId,
     enabled: Boolean(currentOrderId && paymentStatus === "pending"),
-    maxAttempts: 3,
+    maxAttempts: 120,
     intervalMs: 5000,
     onSuccess: handlePaymentSuccess,
     onFailure: () => {

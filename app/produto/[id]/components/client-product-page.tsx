@@ -210,6 +210,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
   const [loadingLayouts, setLoadingLayouts] = useState(false);
   const isUploading = false;
   const mainProductImageRef = useRef<HTMLImageElement | null>(null);
+  const addToCartButtonRef = useRef<HTMLButtonElement | null>(null);
 
   const ensureAuthenticated = useCallback(() => {
     if (user) {
@@ -1376,24 +1377,98 @@ const ClientProductPage = ({ id }: { id: string }) => {
     if (typeof window === "undefined") return;
 
     const sourceImage = mainProductImageRef.current;
+    const addToCartButton = addToCartButtonRef.current;
     const cartButtons = Array.from(
       document.querySelectorAll("[data-cart-button='true']"),
     ) as HTMLElement[];
-    const cartButton =
+    const visibleCartButton =
       cartButtons.find((button) => {
         const rect = button.getBoundingClientRect();
-        return rect.width > 0 && rect.height > 0;
+        return (
+          rect.width > 0 &&
+          rect.height > 0 &&
+          rect.bottom > 0 &&
+          rect.right > 0 &&
+          rect.top < window.innerHeight &&
+          rect.left < window.innerWidth
+        );
       }) || null;
 
-    if (!sourceImage || !cartButton) return;
+    const isRectInViewport = (rect: DOMRect) =>
+      rect.bottom > 0 &&
+      rect.right > 0 &&
+      rect.top < window.innerHeight &&
+      rect.left < window.innerWidth;
 
-    const sourceRect = sourceImage.getBoundingClientRect();
-    const targetRect = cartButton.getBoundingClientRect();
+    const sourceImageRect = sourceImage?.getBoundingClientRect();
+    const addButtonRect = addToCartButton?.getBoundingClientRect();
 
-    if (sourceRect.width === 0 || sourceRect.height === 0) return;
+    let sourceRect:
+      | { left: number; top: number; width: number; height: number }
+      | null = null;
+
+    if (
+      sourceImageRect &&
+      sourceImageRect.width > 0 &&
+      sourceImageRect.height > 0 &&
+      isRectInViewport(sourceImageRect)
+    ) {
+      sourceRect = {
+        left: sourceImageRect.left,
+        top: sourceImageRect.top,
+        width: sourceImageRect.width,
+        height: sourceImageRect.height,
+      };
+    } else if (
+      addButtonRect &&
+      addButtonRect.width > 0 &&
+      addButtonRect.height > 0 &&
+      isRectInViewport(addButtonRect)
+    ) {
+      const size = 72;
+      sourceRect = {
+        left: addButtonRect.left + addButtonRect.width / 2 - size / 2,
+        top: addButtonRect.top + addButtonRect.height / 2 - size / 2,
+        width: size,
+        height: size,
+      };
+    } else {
+      sourceRect = {
+        left: window.innerWidth / 2 - 36,
+        top: window.innerHeight - 120,
+        width: 72,
+        height: 72,
+      };
+    }
+
+    let targetCenterX = window.innerWidth - 28;
+    let targetCenterY = 28;
+    let temporaryTarget: HTMLDivElement | null = null;
+
+    if (visibleCartButton) {
+      const rect = visibleCartButton.getBoundingClientRect();
+      targetCenterX = rect.left + rect.width / 2;
+      targetCenterY = rect.top + rect.height / 2;
+    } else {
+      temporaryTarget = document.createElement("div");
+      temporaryTarget.style.position = "fixed";
+      temporaryTarget.style.top = "16px";
+      temporaryTarget.style.right = "16px";
+      temporaryTarget.style.width = "24px";
+      temporaryTarget.style.height = "24px";
+      temporaryTarget.style.borderRadius = "9999px";
+      temporaryTarget.style.border = "2px solid #f43f5e";
+      temporaryTarget.style.background = "rgba(251, 113, 133, 0.18)";
+      temporaryTarget.style.zIndex = "9998";
+      temporaryTarget.style.pointerEvents = "none";
+      temporaryTarget.style.animation = "pulse 1s ease-in-out infinite";
+      document.body.appendChild(temporaryTarget);
+    }
 
     const flyingImage = document.createElement("img");
-    flyingImage.src = sourceImage.currentSrc || sourceImage.src;
+    flyingImage.src =
+      (sourceImage?.currentSrc || sourceImage?.src) ??
+      getPublicAssetUrl("placeholder-v2.png");
     flyingImage.alt = "";
     flyingImage.style.position = "fixed";
     flyingImage.style.left = `${sourceRect.left}px`;
@@ -1412,30 +1487,38 @@ const ClientProductPage = ({ id }: { id: string }) => {
     document.body.appendChild(flyingImage);
 
     const deltaX =
-      targetRect.left +
-      targetRect.width / 2 -
-      (sourceRect.left + sourceRect.width / 2);
+      targetCenterX - (sourceRect.left + sourceRect.width / 2);
     const deltaY =
-      targetRect.top +
-      targetRect.height / 2 -
-      (sourceRect.top + sourceRect.height / 2);
+      targetCenterY - (sourceRect.top + sourceRect.height / 2);
 
     requestAnimationFrame(() => {
       flyingImage.style.transform = `translate(${deltaX}px, ${deltaY}px) scale(0.2)`;
       flyingImage.style.opacity = "0.15";
     });
 
-    cartButton.animate(
-      [
-        { transform: "scale(1)" },
-        { transform: "scale(1.08)" },
-        { transform: "scale(1)" },
-      ],
-      { duration: 380, easing: "ease-out", delay: 420 },
-    );
+    if (visibleCartButton) {
+      visibleCartButton.animate(
+        [
+          { transform: "scale(1)" },
+          { transform: "scale(1.08)" },
+          { transform: "scale(1)" },
+        ],
+        { duration: 380, easing: "ease-out", delay: 420 },
+      );
+    } else if (temporaryTarget) {
+      temporaryTarget.animate(
+        [
+          { transform: "scale(1)" },
+          { transform: "scale(1.18)" },
+          { transform: "scale(1)" },
+        ],
+        { duration: 380, easing: "ease-out", delay: 420 },
+      );
+    }
 
     await new Promise((resolve) => setTimeout(resolve, 700));
     flyingImage.remove();
+    temporaryTarget?.remove();
   }, []);
 
   const hasDiscount = product.discount && product.discount > 0;
@@ -1975,6 +2058,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
             </div>
 
             <Button
+              ref={addToCartButtonRef}
               onClick={handleAddToCart}
               disabled={addingToCart || isUploading}
               className="w-full bg-gray-900 hover:bg-gray-800 text-white h-12 text-base font-medium"
