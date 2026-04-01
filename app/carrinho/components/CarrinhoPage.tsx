@@ -1243,11 +1243,16 @@ export default function CarrinhoPageContent() {
       const qrCode =
         getString(data, "qr_code") ||
         getString(data, "qrCode") ||
-        getString(data, "qr_code_plain");
+        getString(data, "qr_code_plain") ||
+        getString(statusData?.mercado_pago_data?.point_of_interaction?.transaction_data, "qr_code");
       const qrBase64 =
-        getString(data, "qr_code_base64") || getString(data, "qrCodeBase64");
+        getString(data, "qr_code_base64") || 
+        getString(data, "qrCodeBase64") ||
+        getString(statusData?.mercado_pago_data?.point_of_interaction?.transaction_data, "qr_code_base64");
       const ticketUrl =
-        getString(data, "ticket_url") || getString(data, "ticketUrl");
+        getString(data, "ticket_url") || 
+        getString(data, "ticketUrl") ||
+        getString(statusData?.mercado_pago_data?.point_of_interaction?.transaction_data, "ticket_url");
 
       if (!qrCode && !qrBase64) return null;
 
@@ -1319,8 +1324,9 @@ export default function CarrinhoPageContent() {
     if (isPendingPaymentExpired) return false;
 
     try {
+      // Usa mercado_pago_id se disponível, senão usa o id interno
       const paymentId =
-        pendingOrder?.payment?.id || pendingOrder?.payment?.mercado_pago_id;
+        pendingOrder?.payment?.mercado_pago_id || pendingOrder?.payment?.id;
       if (!paymentId) return false;
       const statusResponse = await getPaymentStatus(paymentId);
       const pix = buildPixDataFromStatus(
