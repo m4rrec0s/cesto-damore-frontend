@@ -26,8 +26,7 @@ import { useAuth } from "../../hooks/use-auth";
 import { useApi } from "../../hooks/use-api";
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { CartSheet } from "../cart-sheet";
-import { useCartSheet, useLoginPrompt } from "./app-wrapper";
+import { useLoginPrompt } from "./app-wrapper";
 import {
   Dialog,
   DialogHeader,
@@ -48,7 +47,6 @@ import {
 } from "../ui/dropdown-menu";
 
 export function SiteHeader() {
-  const { isOpen: isCartOpen, setIsOpen: setIsCartOpen } = useCartSheet();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isClient, setIsClient] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
@@ -70,7 +68,7 @@ export function SiteHeader() {
   }, []);
 
   const handleOpenCart = () => {
-    setIsCartOpen(true);
+    router.push("/carrinho/rapido");
   };
 
   const mobileSearchInputRef = useRef<HTMLInputElement | null>(null);
@@ -191,6 +189,7 @@ export function SiteHeader() {
                 type="button"
                 className="relative text-gray-900 bg-gray-50 p-3 rounded-full shadow-sm"
                 onClick={handleOpenCart}
+                data-cart-button="true"
               >
                 <ShoppingCart className="h-5 w-5" />
                 {isClient && cart.itemCount > 0 && (
@@ -417,6 +416,7 @@ export function SiteHeader() {
               <button
                 onClick={handleOpenCart}
                 className="flex items-center gap-3 bg-gray-900 hover:bg-black text-white px-5 py-3 rounded-2xl transition-all shadow-md active:scale-95"
+                data-cart-button="true"
               >
                 <div className="relative">
                   <ShoppingCart className="h-5 w-5" />
@@ -450,8 +450,6 @@ export function SiteHeader() {
           })}
         </nav>
       </div>
-
-      <CartSheet isOpen={isCartOpen} onClose={() => setIsCartOpen(false)} />
 
       <Sheet open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
         <SheetContent side="left" className="w-[280px] sm:w-[320px] p-0">

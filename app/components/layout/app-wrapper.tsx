@@ -1,6 +1,13 @@
 "use client";
 
-import React, { ReactNode, useState, useCallback, useEffect } from "react";
+import React, {
+  ReactNode,
+  useState,
+  useCallback,
+  useEffect,
+  createContext,
+  useContext,
+} from "react";
 import dynamic from "next/dynamic";
 import { CartProvider } from "@/app/hooks/cart-context";
 import TokenMonitor from "../auth/token-monitor";
@@ -15,15 +22,10 @@ const LoginPopUp = dynamic(() => import("../login-pop-up"), {
 });
 
 export default function AppWrapper({ children }: { children: ReactNode }) {
-  const [isCartOpen, setIsCartOpen] = useState(false);
   const [isLoginPromptOpen, setIsLoginPromptOpen] = useState(false);
   const [isLoginPromptDismissed, setIsLoginPromptDismissed] = useState(false);
   const { user, isLoading } = useAuth();
   const pathname = usePathname();
-
-  const handleCartItemAdded = useCallback(() => {
-    setIsCartOpen(true);
-  }, []);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -73,35 +75,26 @@ export default function AppWrapper({ children }: { children: ReactNode }) {
   }, [user]);
 
   return (
-    <CartProvider onCartItemAdded={handleCartItemAdded}>
+    <CartProvider>
       <ServerActionRecovery />
       <TokenMonitor>
-        <CartSheetProvider isOpen={isCartOpen} setIsOpen={setIsCartOpen}>
-          <LoginPromptProvider
-            isOpen={isLoginPromptOpen}
-            openPrompt={openLoginPrompt}
-            closePrompt={closeLoginPrompt}
-          >
-            {children}
-            {isLoginPromptOpen ? (
-              <LoginPopUp
-                isVisible={isLoginPromptOpen}
-                onClose={() => closeLoginPrompt()}
-                onSuccess={() => closeLoginPrompt({ persistDismiss: false })}
-              />
-            ) : null}
-          </LoginPromptProvider>
-        </CartSheetProvider>
+        <LoginPromptProvider
+          isOpen={isLoginPromptOpen}
+          openPrompt={openLoginPrompt}
+          closePrompt={closeLoginPrompt}
+        >
+          {children}
+          {isLoginPromptOpen ? (
+            <LoginPopUp
+              isVisible={isLoginPromptOpen}
+              onClose={() => closeLoginPrompt()}
+              onSuccess={() => closeLoginPrompt({ persistDismiss: false })}
+            />
+          ) : null}
+        </LoginPromptProvider>
       </TokenMonitor>
     </CartProvider>
   );
-}
-
-import { createContext, useContext } from "react";
-
-interface CartSheetContextType {
-  isOpen: boolean;
-  setIsOpen: (open: boolean) => void;
 }
 
 interface LoginPromptContextType {
@@ -110,29 +103,9 @@ interface LoginPromptContextType {
   closePrompt: (options?: { persistDismiss?: boolean }) => void;
 }
 
-const CartSheetContext = createContext<CartSheetContextType | undefined>(
-  undefined,
-);
-
 const LoginPromptContext = createContext<LoginPromptContextType | undefined>(
   undefined,
 );
-
-function CartSheetProvider({
-  children,
-  isOpen,
-  setIsOpen,
-}: {
-  children: ReactNode;
-  isOpen: boolean;
-  setIsOpen: (open: boolean) => void;
-}) {
-  return (
-    <CartSheetContext.Provider value={{ isOpen, setIsOpen }}>
-      {children}
-    </CartSheetContext.Provider>
-  );
-}
 
 function LoginPromptProvider({
   children,
@@ -150,14 +123,6 @@ function LoginPromptProvider({
       {children}
     </LoginPromptContext.Provider>
   );
-}
-
-export function useCartSheet() {
-  const context = useContext(CartSheetContext);
-  if (context === undefined) {
-    throw new Error("useCartSheet deve ser usado dentro de CartSheetProvider");
-  }
-  return context;
 }
 
 export function useLoginPrompt() {

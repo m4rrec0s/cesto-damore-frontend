@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { ChevronLeft, Package } from "lucide-react";
@@ -44,16 +44,19 @@ export default function ItensPersonalizadosPage() {
   const [loading, setLoading] = useState(true);
   const [loadingDetails, setLoadingDetails] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const apiKey =
+    process.env.NEXT_PUBLIC_API_KEY ||
+    process.env.NEXT_PUBLIC_AI_AGENT_API_KEY ||
+    "";
 
-  useEffect(() => {
-    fetchComponents();
-  }, []);
-
-  const fetchComponents = async () => {
+  const fetchComponents = useCallback(async () => {
     try {
       setLoading(true);
       const response = await fetch(
         `${process.env.NEXT_PUBLIC_API_URL}/items/components`,
+        {
+          headers: apiKey ? { "x-api-key": apiKey } : undefined,
+        },
       );
       if (!response.ok) throw new Error("Erro ao carregar componentes");
       const data = await response.json();
@@ -67,13 +70,20 @@ export default function ItensPersonalizadosPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [apiKey]);
+
+  useEffect(() => {
+    fetchComponents();
+  }, [fetchComponents]);
 
   const fetchComponentDetails = async (id: string) => {
     try {
       setLoadingDetails(true);
       const response = await fetch(
         `${process.env.NEXT_PUBLIC_API_URL}/items/components/${id}/products`,
+        {
+          headers: apiKey ? { "x-api-key": apiKey } : undefined,
+        },
       );
       if (!response.ok) throw new Error("Erro ao carregar produtos");
       const data = await response.json();
@@ -172,12 +182,10 @@ export default function ItensPersonalizadosPage() {
                     >
                       <div className="relative h-56 bg-gray-200">
                         {product.image_url ? (
-                          <Image
+                          <img
                             src={product.image_url}
                             alt={product.name}
-                            fill
-                            className="object-cover"
-                            sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                            className="object-cover w-full h-full"
                           />
                         ) : (
                           <div className="w-full h-full flex items-center justify-center">
@@ -254,12 +262,10 @@ export default function ItensPersonalizadosPage() {
                 >
                   <div className="relative h-48 bg-gray-100">
                     {component.image_url ? (
-                      <Image
+                      <img
                         src={component.image_url}
                         alt={component.name}
-                        fill
-                        className="object-cover"
-                        sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 25vw"
+                        className="object-cover w-full h-full"
                       />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center">

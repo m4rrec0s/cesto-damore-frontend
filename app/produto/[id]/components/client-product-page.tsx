@@ -2,7 +2,7 @@
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import dynamic from "next/dynamic";
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { toast } from "sonner";
 import {
   ShoppingCart,
@@ -209,6 +209,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [loadingLayouts, setLoadingLayouts] = useState(false);
   const isUploading = false;
+  const mainProductImageRef = useRef<HTMLImageElement | null>(null);
 
   const ensureAuthenticated = useCallback(() => {
     if (user) {
@@ -1355,6 +1356,8 @@ const ClientProductPage = ({ id }: { id: string }) => {
         cartCustomizations,
       );
       toast.success("Produto adicionado ao carrinho!");
+      await animateAddToCartToHeader();
+      router.push("/carrinho/rapido");
 
       setSelectedAdditionalIds([]);
     } catch (error) {
@@ -1368,6 +1371,72 @@ const ClientProductPage = ({ id }: { id: string }) => {
       setAddingToCart(false);
     }
   };
+
+  const animateAddToCartToHeader = useCallback(async () => {
+    if (typeof window === "undefined") return;
+
+    const sourceImage = mainProductImageRef.current;
+    const cartButtons = Array.from(
+      document.querySelectorAll("[data-cart-button='true']"),
+    ) as HTMLElement[];
+    const cartButton =
+      cartButtons.find((button) => {
+        const rect = button.getBoundingClientRect();
+        return rect.width > 0 && rect.height > 0;
+      }) || null;
+
+    if (!sourceImage || !cartButton) return;
+
+    const sourceRect = sourceImage.getBoundingClientRect();
+    const targetRect = cartButton.getBoundingClientRect();
+
+    if (sourceRect.width === 0 || sourceRect.height === 0) return;
+
+    const flyingImage = document.createElement("img");
+    flyingImage.src = sourceImage.currentSrc || sourceImage.src;
+    flyingImage.alt = "";
+    flyingImage.style.position = "fixed";
+    flyingImage.style.left = `${sourceRect.left}px`;
+    flyingImage.style.top = `${sourceRect.top}px`;
+    flyingImage.style.width = `${sourceRect.width}px`;
+    flyingImage.style.height = `${sourceRect.height}px`;
+    flyingImage.style.borderRadius = "16px";
+    flyingImage.style.objectFit = "cover";
+    flyingImage.style.zIndex = "9999";
+    flyingImage.style.pointerEvents = "none";
+    flyingImage.style.transition =
+      "transform 650ms cubic-bezier(0.22, 1, 0.36, 1), opacity 650ms ease";
+    flyingImage.style.transform = "translate(0, 0) scale(1)";
+    flyingImage.style.opacity = "0.95";
+
+    document.body.appendChild(flyingImage);
+
+    const deltaX =
+      targetRect.left +
+      targetRect.width / 2 -
+      (sourceRect.left + sourceRect.width / 2);
+    const deltaY =
+      targetRect.top +
+      targetRect.height / 2 -
+      (sourceRect.top + sourceRect.height / 2);
+
+    requestAnimationFrame(() => {
+      flyingImage.style.transform = `translate(${deltaX}px, ${deltaY}px) scale(0.2)`;
+      flyingImage.style.opacity = "0.15";
+    });
+
+    cartButton.animate(
+      [
+        { transform: "scale(1)" },
+        { transform: "scale(1.08)" },
+        { transform: "scale(1)" },
+      ],
+      { duration: 380, easing: "ease-out", delay: 420 },
+    );
+
+    await new Promise((resolve) => setTimeout(resolve, 700));
+    flyingImage.remove();
+  }, []);
 
   const hasDiscount = product.discount && product.discount > 0;
 
@@ -1428,6 +1497,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
               </Button>
 
               <img
+                ref={mainProductImageRef}
                 src={getInternalImageUrl(
                   product.image_url || getPublicAssetUrl("placeholder-v2.png"),
                 )}
