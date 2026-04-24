@@ -695,7 +695,18 @@ export default function ClientFabricEditor({
         },
       });
 
-      if (!uploadRes.ok) throw new Error("Falha no upload");
+      if (!uploadRes.ok) {
+        let errorDetails = `HTTP ${uploadRes.status}`;
+        try {
+          const errorBody = await uploadRes.json();
+          errorDetails =
+            errorBody?.error ||
+            errorBody?.details ||
+            errorBody?.message ||
+            errorDetails;
+        } catch {}
+        throw new Error(`Falha no upload: ${errorDetails}`);
+      }
 
       const uploadData = await uploadRes.json();
       let finalUrl = uploadData.data?.url || uploadData.url || uploadData.path;
