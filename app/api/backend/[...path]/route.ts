@@ -99,6 +99,28 @@ function resolveApiKey(): string {
   return "";
 }
 
+function buildTargetUrl(
+  baseUrl: string,
+  path: string,
+  query: string,
+  mode: "default" | "force-api-prefix" | "remove-api-prefix" = "default",
+): string {
+  const parsed = new URL(baseUrl);
+  const basePath = parsed.pathname.replace(/\/+$/, "");
+  let normalizedPath = path.replace(/^\/+/, "");
+
+  if (mode === "force-api-prefix" && !normalizedPath.startsWith("api/")) {
+    normalizedPath = `api/${normalizedPath}`;
+  }
+
+  if (mode === "remove-api-prefix" && normalizedPath.startsWith("api/")) {
+    normalizedPath = normalizedPath.slice(4);
+  }
+
+  const fullPath = [basePath, normalizedPath].filter(Boolean).join("/");
+  return `${parsed.origin}/${fullPath}${query}`;
+}
+
 const hopByHopHeaders = new Set([
   "connection",
   "keep-alive",
@@ -132,7 +154,16 @@ async function proxyRequest(
   const { path = [] } = context.params;
   const query = request.nextUrl.search || "";
   const normalizedPath = path.join("/");
-  const targetUrl = `${apiBaseUrl}/${normalizedPath}${query}`;
+  const targetUrl = buildTargetUrl(apiBaseUrl, normalizedPath, query);
+  const basePath = new URL(apiBaseUrl).pathname.replace(/\/+$/, "");
+  const shouldRemoveApiPrefix =
+    basePath === "/api" || basePath.endsWith("/api");
+  const fallbackTargetUrl = buildTargetUrl(
+    apiBaseUrl,
+    normalizedPath,
+    query,
+    shouldRemoveApiPrefix ? "remove-api-prefix" : "force-api-prefix",
+  );
 
   const headers = new Headers(request.headers);
   for (const header of hopByHopHeaders) {
@@ -165,6 +196,29 @@ async function proxyRequest(
       },
       { status: 502 },
     );
+  }
+
+  // Fallback de compatibilidade para ambientes com/sem prefixo "/api"
+  // no gateway upstream. Evita 404 em produção por divergência de path base.
+  if (
+    upstream.status === 404 &&
+    (method === "GET" || method === "HEAD") &&
+    fallbackTargetUrl !== targetUrl
+  ) {
+    try {
+      const fallbackUpstream = await fetch(fallbackTargetUrl, {
+        method,
+        headers,
+        redirect: "manual",
+        cache: "no-store",
+      });
+
+      if (fallbackUpstream.status !== 404) {
+        upstream = fallbackUpstream;
+      }
+    } catch {
+      // Mantém resposta original se fallback falhar.
+    }
   }
 
   const responseHeaders = new Headers(upstream.headers);
