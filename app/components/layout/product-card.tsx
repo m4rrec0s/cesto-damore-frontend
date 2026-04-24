@@ -40,6 +40,7 @@ export function ProductCard({
   return (
     <Link
       href={`/produto/${props.id}`}
+      prefetch={false}
       className={cn(
         "group flex flex-col gap-3 h-full rounded-2xl border border-gray-100 bg-white p-3 shadow-sm transition-all hover:-translate-y-1 hover:shadow-md",
         className,

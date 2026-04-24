@@ -60,7 +60,7 @@ function FeedItemCard({ item, imagePriority = false }: FeedItemCardProps) {
   );
 
   const renderCategoryCard = () => (
-    <Link href={`/categorias/${categoryData.id}`}>
+    <Link href={`/categorias/${categoryData.id}`} prefetch={false}>
       <div className="group bg-white rounded-xl border border-gray-200 overflow-hidden hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-pointer p-6 h-full">
         <div className="text-center flex flex-col items-center justify-center h-full">
           <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform shadow-lg">
@@ -167,6 +167,7 @@ export default function FeedSection({ section }: FeedSectionProps) {
     return (
       <Link
         href={`/produto/${product.id}`}
+        prefetch={false}
         className="group relative flex h-60 min-w-[240px] flex-col justify-end overflow-hidden rounded-2xl bg-neutral-900 text-white shadow-lg transition-transform duration-300 hover:-translate-y-1"
       >
         <div className="absolute inset-0">
