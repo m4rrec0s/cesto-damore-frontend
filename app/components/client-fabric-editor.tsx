@@ -26,6 +26,28 @@ import { dataURLtoBlob } from "@/app/lib/utils";
 import { getPublicAssetUrl } from "@/lib/image-helper";
 
 const INTERNAL_DPI_MULTIPLIER = 2;
+const BACKEND_PROXY_BASE = "/api/backend";
+
+const toBackendAssetUrl = (value: string): string => {
+  if (!value) return value;
+  if (value.startsWith(`${BACKEND_PROXY_BASE}/`)) return value;
+  if (value.startsWith("/")) return `${BACKEND_PROXY_BASE}${value}`;
+
+  try {
+    const parsed = new URL(value);
+    const isLocalhostSource =
+      parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1";
+    const isBackendAssetPath = parsed.pathname.startsWith("/uploads/");
+
+    if (isLocalhostSource || isBackendAssetPath) {
+      return `${BACKEND_PROXY_BASE}${parsed.pathname}${parsed.search}`;
+    }
+  } catch {
+    return value;
+  }
+
+  return value;
+};
 
 const loadGoogleFont = (fontFamily: string) => {
   if (
@@ -312,14 +334,7 @@ export default function ClientFabricEditor({
     placeholders.forEach((p: any) => canvas.remove(p));
 
     try {
-      let finalUrl = url;
-      if (finalUrl.startsWith("/")) {
-        const apiBase = (process.env.NEXT_PUBLIC_API_URL || "").replace(
-          /\/api$/,
-          "",
-        );
-        finalUrl = `${apiBase}${finalUrl}`;
-      }
+      const finalUrl = toBackendAssetUrl(url);
 
       const img = await FabricImage.fromURL(finalUrl, {
         crossOrigin: "anonymous",
@@ -491,11 +506,6 @@ export default function ClientFabricEditor({
                 return;
               }
 
-              const apiBase = (process.env.NEXT_PUBLIC_API_URL || "").replace(
-                /\/api$/,
-                "",
-              );
-
               state.objects = state.objects.map((obj: any) => {
                 if (obj.type === "i-text" || obj.type === "IText") {
                   obj.type = "textbox";
@@ -503,14 +513,7 @@ export default function ClientFabricEditor({
 
                 if (obj.type === "Image" || obj.type === "image") {
                   let src = obj.src || "";
-                  if (src.startsWith("/")) {
-                    src = `${apiBase}${src}`;
-                  } else if (
-                    src.includes("localhost") &&
-                    !apiBase.includes("localhost")
-                  ) {
-                    src = src.replace(/https?:\/\/localhost:\d+/, apiBase);
-                  }
+                  src = toBackendAssetUrl(src);
                   obj.src = src;
                 }
 
@@ -682,11 +685,10 @@ export default function ClientFabricEditor({
       const formData = new FormData();
       formData.append("file", file);
 
-      const API_URL = process.env.NEXT_PUBLIC_API_URL as string;
       const token =
         localStorage.getItem("token") || localStorage.getItem("appToken") || "";
 
-      const uploadRes = await fetch(`${API_URL}/uploads/temp`, {
+      const uploadRes = await fetch(`${BACKEND_PROXY_BASE}/uploads/temp`, {
         method: "POST",
         body: formData,
         headers: {
@@ -712,10 +714,7 @@ export default function ClientFabricEditor({
       let finalUrl = uploadData.data?.url || uploadData.url || uploadData.path;
 
       if (!finalUrl) throw new Error("URL não retornada");
-
-      if (finalUrl.startsWith("/")) {
-        finalUrl = `${API_URL.replace(/\/api$/, "")}${finalUrl}`;
-      }
+      finalUrl = toBackendAssetUrl(finalUrl);
 
       setLocalImages((prev) => ({ ...prev, [currentFrameId]: finalUrl }));
 
@@ -937,11 +936,8 @@ export default function ClientFabricEditor({
                       const label = fieldLabels[id] || `Foto ${index + 1}`;
                       let imageUrl = localImages[id];
 
-                      if (imageUrl?.startsWith("/")) {
-                        const apiBase = (
-                          process.env.NEXT_PUBLIC_API_URL || ""
-                        ).replace(/\/api$/, "");
-                        imageUrl = `${apiBase}${imageUrl}`;
+                      if (imageUrl) {
+                        imageUrl = toBackendAssetUrl(imageUrl);
                       }
 
                       const hasImage = !!imageUrl;
