@@ -174,13 +174,13 @@ export default function FeedSection({ section }: FeedSectionProps) {
             src={
               getInternalImageUrl(
                 product.image_url,
-                rank <= 2 ? "w1200" : "w800",
+                "w800",
               ) || getPublicAssetUrl("placeholder-v2.png")
             }
             alt={product.name}
             className="h-full w-full object-cover opacity-90 transition-transform duration-500 group-hover:scale-105"
-            loading={rank <= 2 ? "eager" : "lazy"}
-            fetchPriority={rank <= 2 ? "high" : "auto"}
+            loading="lazy"
+            fetchPriority="auto"
             sizes="(max-width: 640px) 80vw, (max-width: 1024px) 35vw, 25vw"
           />
           <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
@@ -264,9 +264,9 @@ export default function FeedSection({ section }: FeedSectionProps) {
         )}
 
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 md:gap-6">
-          {displayItems.map((item: PublicFeedItem, index: number) => (
+          {displayItems.map((item: PublicFeedItem) => (
             <div key={item.id}>
-              <FeedItemCard item={item} imagePriority={index < 4} />
+              <FeedItemCard item={item} imagePriority={false} />
             </div>
           ))}
         </div>
