@@ -17,7 +17,8 @@ function isPlaceholder(value?: string | null): boolean {
 function normalizeBaseUrl(raw: string): string {
   const parsed = new URL(raw);
   const path = parsed.pathname.replace(/\/+$/, "");
-  return `${parsed.origin}${path}`;
+  const safePath = path === "/api" ? "/api" : "";
+  return `${parsed.origin}${safePath}`;
 }
 
 function isFrontendProxyLoop(baseUrl: string, request: NextRequest): boolean {
