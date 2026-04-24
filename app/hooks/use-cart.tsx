@@ -1751,15 +1751,6 @@ export function useCart(): CartContextType {
         grandTotal?: number;
       },
     ) => {
-      if (
-        !process.env.NEXT_PUBLIC_MERCADOPAGO_ACCESS_TOKEN ||
-        process.env.NEXT_PUBLIC_MERCADOPAGO_ACCESS_TOKEN === "SEU_TOKEN_AQUI"
-      ) {
-        throw new Error(
-          "Token do Mercado Pago não configurado. Configure NEXT_PUBLIC_MERCADOPAGO_ACCESS_TOKEN no arquivo .env.local",
-        );
-      }
-
       const items = cart.items.map((item) => ({
         title: item.product.name,
         quantity: item.quantity,
@@ -1805,17 +1796,13 @@ export function useCart(): CartContextType {
           },
         };
 
-        const response = await fetch(
-          "https://api.mercadopago.com/checkout/preferences",
-          {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${process.env.NEXT_PUBLIC_MERCADOPAGO_ACCESS_TOKEN}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify(requestBody),
+        const response = await fetch("/api/mercadopago/preferences", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
           },
-        );
+          body: JSON.stringify(requestBody),
+        });
 
         if (!response.ok) {
           const errorText = await response.text();

@@ -8,8 +8,8 @@ RUN npm ci
 
 COPY . .
 
-# Build argument para variável de ambiente pública
-ARG NEXT_PUBLIC_API_URL=https://api.cestodamore.com.br
+# Build argument para variável pública (será embutida no bundle do navegador)
+ARG NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
 
 RUN npm run build

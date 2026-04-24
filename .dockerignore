@@ -1,0 +1,18 @@
+node_modules
+.next
+dist
+coverage
+npm-debug.log
+yarn-error.log
+.git
+.gitignore
+.vscode
+.idea
+.DS_Store
+*.log
+*.md
+!README.md
+
+# Nunca enviar segredos para o contexto de build
+.env
+.env.*

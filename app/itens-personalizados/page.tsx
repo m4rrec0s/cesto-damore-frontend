@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import Image from "next/image";
 import Link from "next/link";
 import { ChevronLeft, Package } from "lucide-react";
 
@@ -44,20 +43,12 @@ export default function ItensPersonalizadosPage() {
   const [loading, setLoading] = useState(true);
   const [loadingDetails, setLoadingDetails] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const apiKey =
-    process.env.NEXT_PUBLIC_API_KEY ||
-    process.env.NEXT_PUBLIC_AI_AGENT_API_KEY ||
-    "";
+  const apiBaseUrl = "/api/backend";
 
   const fetchComponents = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/items/components`,
-        {
-          headers: apiKey ? { "x-api-key": apiKey } : undefined,
-        },
-      );
+      const response = await fetch(`${apiBaseUrl}/items/components`);
       if (!response.ok) throw new Error("Erro ao carregar componentes");
       const data = await response.json();
       setComponents(data);
@@ -70,7 +61,7 @@ export default function ItensPersonalizadosPage() {
     } finally {
       setLoading(false);
     }
-  }, [apiKey]);
+  }, [apiBaseUrl]);
 
   useEffect(() => {
     fetchComponents();
@@ -80,10 +71,7 @@ export default function ItensPersonalizadosPage() {
     try {
       setLoadingDetails(true);
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/items/components/${id}/products`,
-        {
-          headers: apiKey ? { "x-api-key": apiKey } : undefined,
-        },
+        `${apiBaseUrl}/items/components/${id}/products`,
       );
       if (!response.ok) throw new Error("Erro ao carregar produtos");
       const data = await response.json();
