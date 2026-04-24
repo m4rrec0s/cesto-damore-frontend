@@ -99,25 +99,43 @@ function resolveApiKey(): string {
   return "";
 }
 
-function buildTargetUrl(
+function buildTargetUrl(baseUrl: string, path: string, query: string): string {
+  const parsed = new URL(baseUrl);
+  const basePath = parsed.pathname.replace(/\/+$/, "").replace(/^\/+/, "");
+  const normalizedPath = path.replace(/^\/+/, "");
+  const fullPath = [basePath, normalizedPath].filter(Boolean).join("/");
+  return `${parsed.origin}/${fullPath}${query}`;
+}
+
+function buildApiPrefixFallbackUrl(
   baseUrl: string,
   path: string,
   query: string,
-  mode: "default" | "force-api-prefix" | "remove-api-prefix" = "default",
 ): string {
   const parsed = new URL(baseUrl);
-  const basePath = parsed.pathname.replace(/\/+$/, "");
-  let normalizedPath = path.replace(/^\/+/, "");
+  const baseSegments = parsed.pathname
+    .replace(/\/+$/, "")
+    .split("/")
+    .filter(Boolean);
+  const pathSegments = path
+    .replace(/^\/+/, "")
+    .split("/")
+    .filter(Boolean);
 
-  if (mode === "force-api-prefix" && !normalizedPath.startsWith("api/")) {
-    normalizedPath = `api/${normalizedPath}`;
+  let fallbackBaseSegments = [...baseSegments];
+  let fallbackPathSegments = [...pathSegments];
+
+  if (fallbackBaseSegments[fallbackBaseSegments.length - 1] === "api") {
+    fallbackBaseSegments = fallbackBaseSegments.slice(0, -1);
+  } else if (fallbackPathSegments[0] === "api") {
+    fallbackPathSegments = fallbackPathSegments.slice(1);
+  } else {
+    fallbackPathSegments = ["api", ...fallbackPathSegments];
   }
 
-  if (mode === "remove-api-prefix" && normalizedPath.startsWith("api/")) {
-    normalizedPath = normalizedPath.slice(4);
-  }
-
-  const fullPath = [basePath, normalizedPath].filter(Boolean).join("/");
+  const fallbackBase = fallbackBaseSegments.join("/");
+  const fallbackPath = fallbackPathSegments.join("/");
+  const fullPath = [fallbackBase, fallbackPath].filter(Boolean).join("/");
   return `${parsed.origin}/${fullPath}${query}`;
 }
 
@@ -155,14 +173,10 @@ async function proxyRequest(
   const query = request.nextUrl.search || "";
   const normalizedPath = path.join("/");
   const targetUrl = buildTargetUrl(apiBaseUrl, normalizedPath, query);
-  const basePath = new URL(apiBaseUrl).pathname.replace(/\/+$/, "");
-  const shouldRemoveApiPrefix =
-    basePath === "/api" || basePath.endsWith("/api");
-  const fallbackTargetUrl = buildTargetUrl(
+  const fallbackTargetUrl = buildApiPrefixFallbackUrl(
     apiBaseUrl,
     normalizedPath,
     query,
-    shouldRemoveApiPrefix ? "remove-api-prefix" : "force-api-prefix",
   );
 
   const headers = new Headers(request.headers);
