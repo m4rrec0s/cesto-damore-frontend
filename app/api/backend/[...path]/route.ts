@@ -42,11 +42,11 @@ function isFrontendProxyLoop(baseUrl: string, request: NextRequest): boolean {
 
 function resolveApiBaseUrl(request: NextRequest): string {
   const candidates = [
+    process.env.API_URL,
+    process.env.NEXT_PUBLIC_API_URL,
     process.env.BACKEND_API_URL,
     process.env.BACKEND_URL,
     process.env.NEXT_PUBLIC_BACKEND_API_URL,
-    process.env.API_URL,
-    process.env.NEXT_PUBLIC_API_URL,
     process.env.NODE_ENV !== "production" ? "http://localhost:3333" : undefined,
   ];
 
@@ -191,8 +191,11 @@ async function proxyRequest(
   const method = request.method.toUpperCase();
   const hasBody = method !== "GET" && method !== "HEAD";
   const body = hasBody ? await request.arrayBuffer() : undefined;
+  const debugProxy = request.nextUrl.searchParams.get("__debug_proxy") === "1";
 
   let upstream: Response;
+  let fallbackStatus: number | null = null;
+  let fallbackUsed = false;
   try {
     upstream = await fetch(targetUrl, {
       method,
@@ -226,9 +229,11 @@ async function proxyRequest(
         redirect: "manual",
         cache: "no-store",
       });
+      fallbackStatus = fallbackUpstream.status;
 
       if (fallbackUpstream.status !== 404) {
         upstream = fallbackUpstream;
+        fallbackUsed = true;
       }
     } catch {
       // Mantém resposta original se fallback falhar.
@@ -238,6 +243,12 @@ async function proxyRequest(
   const responseHeaders = new Headers(upstream.headers);
   for (const header of hopByHopHeaders) {
     responseHeaders.delete(header);
+  }
+  if (debugProxy) {
+    responseHeaders.set("x-proxy-target-url", targetUrl);
+    responseHeaders.set("x-proxy-fallback-url", fallbackTargetUrl);
+    responseHeaders.set("x-proxy-fallback-status", String(fallbackStatus ?? ""));
+    responseHeaders.set("x-proxy-fallback-used", String(fallbackUsed));
   }
 
   return new Response(upstream.body, {
