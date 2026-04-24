@@ -40,7 +40,7 @@ export default function Home() {
   const [products, setProducts] = useState<GridProduct[]>([]);
   const [feedData, setFeedData] = useState<PublicFeedResponse | null>(null);
   const [page, setPage] = useState<number>(1);
-  const [perPage] = useState<number>(3);
+  const [perPage] = useState<number>(1);
   const [sections, setSections] = useState<PublicFeedResponse["sections"]>([]);
   const [pagination, setPagination] = useState<{
     totalSections?: number;
