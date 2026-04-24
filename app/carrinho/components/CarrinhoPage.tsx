@@ -517,6 +517,29 @@ export default function CarrinhoPageContent() {
     onPending: () => {},
   });
 
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+
+    const triggerPollingOnResume = () => {
+      if (
+        currentOrderId &&
+        paymentStatus === "pending" &&
+        !pollingStartedRef.current
+      ) {
+        pollingStartedRef.current = true;
+        startPolling();
+      }
+    };
+
+    document.addEventListener("visibilitychange", triggerPollingOnResume);
+    window.addEventListener("focus", triggerPollingOnResume);
+
+    return () => {
+      document.removeEventListener("visibilitychange", triggerPollingOnResume);
+      window.removeEventListener("focus", triggerPollingOnResume);
+    };
+  }, [currentOrderId, paymentStatus, startPolling]);
+
   const handleTrackOrder = () => {
     router.push("/pedidos");
   };
