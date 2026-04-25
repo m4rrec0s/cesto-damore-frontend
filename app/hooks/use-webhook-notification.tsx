@@ -310,9 +310,10 @@ export function useWebhookNotification({
     connectRef.current = connect;
   }, [connect]);
 
-  const disconnect = useCallback(() => {
+  const disconnect = useCallback((force = false) => {
     if (eventSourceRef.current) {
       if (
+        !force &&
         lastConnectTimeRef.current &&
         Date.now() - lastConnectTimeRef.current < 500
       ) {
@@ -344,12 +345,50 @@ export function useWebhookNotification({
     };
   }, [orderId, enabled, connect, disconnect]);
 
+  useEffect(() => {
+    if (!enabled || !orderId) {
+      return;
+    }
+
+    const recoverRealtimeConnection = () => {
+      if (!enabled || !orderId) return;
+
+      void pollOrderStatus();
+
+      const readyState = eventSourceRef.current?.readyState;
+      if (!eventSourceRef.current || readyState !== EventSource.OPEN) {
+        disconnect(true);
+        setTimeout(() => {
+          connectRef.current?.();
+        }, 100);
+      }
+    };
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        recoverRealtimeConnection();
+      }
+    };
+
+    window.addEventListener("focus", recoverRealtimeConnection);
+    window.addEventListener("pageshow", recoverRealtimeConnection);
+    window.addEventListener("online", recoverRealtimeConnection);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+
+    return () => {
+      window.removeEventListener("focus", recoverRealtimeConnection);
+      window.removeEventListener("pageshow", recoverRealtimeConnection);
+      window.removeEventListener("online", recoverRealtimeConnection);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, [enabled, orderId, pollOrderStatus, disconnect]);
+
   return {
     isConnected,
     isPolling,
     disconnect,
     reconnect: () => {
-      disconnect();
+      disconnect(true);
       setTimeout(connect, 100);
     },
   };
