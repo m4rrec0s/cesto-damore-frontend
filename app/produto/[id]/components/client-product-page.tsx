@@ -26,7 +26,7 @@ import { useCartContext } from "@/app/hooks/cart-context";
 import type { CartCustomization } from "@/app/hooks/use-cart";
 import { useLayoutApi } from "@/app/hooks/use-layout-api";
 import { sanitizeProductDescription } from "@/app/utils/descriptionSanitizer";
-import { MockupGallery } from "./MockupGallery";
+import { MockupGallery, type MockupRule } from "./MockupGallery";
 import AdditionalCard from "./additional-card";
 import Link from "next/link";
 import { ProductCard } from "@/app/components/layout/product-card";
@@ -41,6 +41,11 @@ import { ItemCustomizationModal } from "./itemCustomizationsModal";
 import { getInternalImageUrl, getPublicAssetUrl } from "@/lib/image-helper";
 import { useLoginPrompt } from "@/app/components/layout/app-wrapper";
 import { normalizeCustomizationData } from "@/app/lib/customization-serialization";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/app/components/ui/collapsible";
 
 const Model3DViewer = dynamic(
   () => import("./Model3DViewer").then((mod) => mod.Model3DViewer),
@@ -159,6 +164,76 @@ const getCustomizationPreviewLabel = (input: CustomizationInput): string => {
   return name;
 };
 
+type NormalizedMockupVertex = {
+  x: number;
+  y: number;
+};
+
+const normalizeMockupVertex = (
+  value: unknown,
+): NormalizedMockupVertex | null => {
+  if (!value || typeof value !== "object") return null;
+  const record = value as Record<string, unknown>;
+  const rawX = Number(record.x);
+  const rawY = Number(record.y);
+  if (!Number.isFinite(rawX) || !Number.isFinite(rawY)) return null;
+  const x = rawX > 1 ? rawX / 100 : rawX;
+  const y = rawY > 1 ? rawY / 100 : rawY;
+  if (x < 0 || x > 1 || y < 0 || y > 1) return null;
+  return { x, y };
+};
+
+const extractMockupRules = (
+  layoutData: Record<string, unknown>,
+): MockupRule[] => {
+  const possibleSources = [
+    layoutData.mockupRules,
+    layoutData.mockup_rules,
+    layoutData.mockups,
+  ];
+
+  const source = possibleSources.find((entry) => Array.isArray(entry));
+  if (!Array.isArray(source)) return [];
+
+  return source
+    .map((entry, index) => {
+      if (!entry || typeof entry !== "object") return null;
+      const rule = entry as Record<string, unknown>;
+      const rawVertices = (rule.vertices ||
+        rule.vertexes ||
+        rule.quad) as unknown;
+      if (!Array.isArray(rawVertices) || rawVertices.length !== 4) return null;
+
+      const vertices = rawVertices
+        .map((vertex) => normalizeMockupVertex(vertex))
+        .filter(Boolean) as [
+        NormalizedMockupVertex,
+        NormalizedMockupVertex,
+        NormalizedMockupVertex,
+        NormalizedMockupVertex,
+      ];
+
+      if (vertices.length !== 4) return null;
+
+      const id = Number(rule.id);
+      const srcRaw =
+        (rule.src as string) ||
+        (rule.image_url as string) ||
+        (rule.imageUrl as string);
+      const nameRaw = (rule.name as string) || `Mockup ${index + 1}`;
+
+      if (!srcRaw || typeof srcRaw !== "string") return null;
+
+      return {
+        id: Number.isFinite(id) ? id : index + 1,
+        src: getInternalImageUrl(srcRaw),
+        name: nameRaw,
+        vertices,
+      };
+    })
+    .filter(Boolean) as MockupRule[];
+};
+
 const ClientProductPage = ({ id }: { id: string }) => {
   const {
     getProduct,
@@ -270,7 +345,6 @@ const ClientProductPage = ({ id }: { id: string }) => {
         if (shouldPreview) {
           setPreviewComponentId(itemId);
         }
-
       } else {
         setItemCustomizations((prev) => {
           const copy = { ...prev };
@@ -281,7 +355,6 @@ const ClientProductPage = ({ id }: { id: string }) => {
         if (previewComponentId === itemId) {
           setPreviewComponentId(null);
         }
-
       }
 
       setActiveCustomizationModal(null);
@@ -310,7 +383,6 @@ const ClientProductPage = ({ id }: { id: string }) => {
         setSelectedAdditionalIds((prev) =>
           prev.includes(additionalId) ? prev : [...prev, additionalId],
         );
-
       } else {
         setAdditionalCustomizations((prev) => {
           const copy = { ...prev };
@@ -534,7 +606,6 @@ const ClientProductPage = ({ id }: { id: string }) => {
           ? prev.filter((id) => id !== additionalId)
           : [...prev, additionalId],
       );
-
     },
     [ensureAuthenticated],
   );
@@ -707,7 +778,14 @@ const ClientProductPage = ({ id }: { id: string }) => {
     return cart.items.some((item) => item.product_id === product.id);
   }, [cart.items, product.id]);
 
-  const { shouldShow3D, modelUrl, textureUrl, itemType } = useMemo(() => {
+  const {
+    shouldShow3D,
+    modelUrl,
+    textureUrl,
+    itemType,
+    previewAspect,
+    mockupRules,
+  } = useMemo(() => {
     const componentsToSearch = [
       ...(previewComponentId
         ? [components.find((c) => c.id === previewComponentId)]
@@ -723,17 +801,39 @@ const ClientProductPage = ({ id }: { id: string }) => {
       );
 
       if (layoutCustomization) {
-        const layoutData = layoutCustomization.data as any;
-        if (layoutData?.previewUrl) {
-          const detectedItemType = layoutData.item_type?.toLowerCase();
+        const layoutData = (layoutCustomization.data || {}) as Record<
+          string,
+          unknown
+        >;
+        const previewUrl =
+          (layoutData.previewUrl as string) || (layoutData.text as string);
+
+        if (previewUrl) {
+          const detectedItemType = String(
+            layoutData.item_type || "",
+          ).toLowerCase();
           const isMug =
             detectedItemType === "mug" || detectedItemType === "caneca";
+          const width = Number(layoutData.layout_width ?? layoutData.width);
+          const height = Number(layoutData.layout_height ?? layoutData.height);
+
+          const aspect =
+            Number.isFinite(width) &&
+            Number.isFinite(height) &&
+            width > 0 &&
+            height > 0
+              ? width / height
+              : detectedItemType === "frame" || detectedItemType === "quadro"
+                ? 3 / 4
+                : 1;
 
           return {
             shouldShow3D: isMug,
-            modelUrl: layoutData.model_url,
-            textureUrl: layoutData.previewUrl,
+            modelUrl: layoutData.model_url as string | undefined,
+            textureUrl: previewUrl,
             itemType: detectedItemType,
+            previewAspect: aspect,
+            mockupRules: extractMockupRules(layoutData),
           };
         }
       }
@@ -744,6 +844,8 @@ const ClientProductPage = ({ id }: { id: string }) => {
       modelUrl: undefined,
       textureUrl: undefined,
       itemType: undefined,
+      previewAspect: 1,
+      mockupRules: [] as MockupRule[],
     };
   }, [itemCustomizations, previewComponentId, selectedComponent, components]);
 
@@ -1389,9 +1491,12 @@ const ClientProductPage = ({ id }: { id: string }) => {
     const sourceImageRect = sourceImage?.getBoundingClientRect();
     const addButtonRect = addToCartButton?.getBoundingClientRect();
 
-    let sourceRect:
-      | { left: number; top: number; width: number; height: number }
-      | null = null;
+    let sourceRect: {
+      left: number;
+      top: number;
+      width: number;
+      height: number;
+    } | null = null;
 
     if (
       sourceImageRect &&
@@ -1472,10 +1577,8 @@ const ClientProductPage = ({ id }: { id: string }) => {
 
     document.body.appendChild(flyingImage);
 
-    const deltaX =
-      targetCenterX - (sourceRect.left + sourceRect.width / 2);
-    const deltaY =
-      targetCenterY - (sourceRect.top + sourceRect.height / 2);
+    const deltaX = targetCenterX - (sourceRect.left + sourceRect.width / 2);
+    const deltaY = targetCenterY - (sourceRect.top + sourceRect.height / 2);
 
     requestAnimationFrame(() => {
       flyingImage.style.transform = `translate(${deltaX}px, ${deltaY}px) scale(0.2)`;
@@ -1600,7 +1703,10 @@ const ClientProductPage = ({ id }: { id: string }) => {
                   </Badge>
                 </div>
 
-                <div className="relative aspect-square w-full bg-white rounded-xl overflow-hidden">
+                <div
+                  className="relative w-full bg-white rounded-xl overflow-hidden"
+                  style={{ aspectRatio: previewAspect || 1 }}
+                >
                   {shouldShow3D &&
                   modelUrl &&
                   (itemType === "mug" || itemType === "caneca") ? (
@@ -1628,12 +1734,6 @@ const ClientProductPage = ({ id }: { id: string }) => {
                           },
                         },
                       ]}
-                    />
-                  ) : itemType === "frame" || itemType === "quadro" ? (
-                    <MockupGallery
-                      designUrl={textureUrl}
-                      itemType={itemType}
-                      className="w-full h-full"
                     />
                   ) : (
                     <div className="flex items-center justify-center h-full w-full p-6">
@@ -1735,12 +1835,6 @@ const ClientProductPage = ({ id }: { id: string }) => {
               <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight">
                 {product.name}
               </h1>
-
-              <div className="flex items-center gap-3 text-sm text-gray-500">
-                <span>
-                  +{Math.floor(Math.random() * (1500 - 300 + 1)) + 300} vendidos
-                </span>
-              </div>
 
               <div className="space-y-2">
                 {hasDiscount ? (
@@ -1921,94 +2015,184 @@ const ClientProductPage = ({ id }: { id: string }) => {
                         component.item.customizations?.length || 0;
 
                       return (
-                        <Button
+                        <Collapsible
                           key={component.id}
-                          onClick={() => {
-                            if (!ensureAuthenticated()) {
+                          open={activeCustomizationModal === component.id}
+                          onOpenChange={(open) => {
+                            if (open && !ensureAuthenticated()) {
                               return;
                             }
-                            setActiveCustomizationModal(component.id);
+                            setActiveCustomizationModal(
+                              open ? component.id : null,
+                            );
                           }}
-                          variant="outline"
-                          className={cn(
-                            "w-full justify-between h-auto py-3 px-4",
-                            hasMissingRequired &&
-                              "border-red-400 text-red-950 hover:border-red-500 hover:text-red-700",
-                          )}
+                          className="rounded-xl border border-gray-200 bg-white"
                         >
-                          <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 relative overflow-hidden flex-shrink-0">
-                              <img
-                                src={
-                                  getInternalImageUrl(
-                                    component.item.image_url,
-                                  ) || getPublicAssetUrl("placeholder-v2.png")
+                          <CollapsibleTrigger asChild>
+                            <Button
+                              onClick={() => {
+                                if (!ensureAuthenticated()) {
+                                  return;
                                 }
-                                alt={component.item.name}
-                                className="absolute inset-0 rounded-lg h-full w-full object-cover object-center bg-white"
-                                loading="lazy"
-                                decoding="async"
-                              />
-                            </div>
-                            <div className="text-left">
-                              <p className="font-medium text-sm">
-                                {component.item.name}
-                                {requiredCount > 0 && (
-                                  <span className="text-red-500 ml-1">*</span>
-                                )}
-                              </p>
-                              <p className="text-xs text-gray-500">
-                                {totalCount}{" "}
-                                {totalCount > 1 ? "opções" : "opção"}
-                                {itemImagesCount[component.id] && (
-                                  <span className="ml-2 text-blue-600">
-                                    {itemImagesCount[component.id].current}/
-                                    {itemImagesCount[component.id].max} fotos
-                                  </span>
-                                )}
-                              </p>
-                              {hasCustomizations && (
-                                <div className="mt-2 space-y-1">
-                                  {componentCustomizations.map(
-                                    (custom, idx) => {
-                                      const label =
-                                        getCustomizationPreviewLabel(custom);
-                                      const previews =
-                                        getCustomizationPreviewUrls(custom);
-                                      return (
-                                        <div key={`${component.id}-${idx}`}>
-                                          <p className="text-[11px] text-gray-700 truncate">
-                                            {label}
-                                          </p>
-                                          {previews.length > 0 && (
-                                            <div className="mt-1 flex gap-1.5">
-                                              {previews
-                                                .slice(0, 3)
-                                                .map((url, previewIdx) => (
-                                                  <img
-                                                    key={`${component.id}-preview-${previewIdx}`}
-                                                    src={url}
-                                                    alt={`${component.item.name} preview ${previewIdx + 1}`}
-                                                    className="h-8 w-8 rounded border border-gray-200 object-contain object-center bg-white p-0.5"
-                                                  />
-                                                ))}
+                              }}
+                              variant="ghost"
+                              className={cn(
+                                "w-full justify-between h-auto py-3 px-4 rounded-xl",
+                                hasMissingRequired &&
+                                  "border border-red-400 text-red-950 hover:border-red-500 hover:text-red-700",
+                              )}
+                            >
+                              <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 relative overflow-hidden flex-shrink-0">
+                                  <img
+                                    src={
+                                      getInternalImageUrl(
+                                        component.item.image_url,
+                                      ) ||
+                                      getPublicAssetUrl("placeholder-v2.png")
+                                    }
+                                    alt={component.item.name}
+                                    className="absolute inset-0 rounded-lg h-full w-full object-cover object-center bg-white"
+                                    loading="lazy"
+                                    decoding="async"
+                                  />
+                                </div>
+                                <div className="text-left">
+                                  <p className="font-medium text-sm">
+                                    {component.item.name}
+                                    {requiredCount > 0 && (
+                                      <span className="text-red-500 ml-1">
+                                        *
+                                      </span>
+                                    )}
+                                  </p>
+                                  <p className="text-xs text-gray-500">
+                                    {totalCount}{" "}
+                                    {totalCount > 1 ? "opções" : "opção"}
+                                    {itemImagesCount[component.id] && (
+                                      <span className="ml-2 text-blue-600">
+                                        {itemImagesCount[component.id].current}/
+                                        {itemImagesCount[component.id].max}{" "}
+                                        fotos
+                                      </span>
+                                    )}
+                                  </p>
+                                  {hasCustomizations && (
+                                    <div className="mt-2 space-y-1">
+                                      {componentCustomizations.map(
+                                        (custom, idx) => {
+                                          const label =
+                                            getCustomizationPreviewLabel(
+                                              custom,
+                                            );
+                                          const previews =
+                                            getCustomizationPreviewUrls(custom);
+                                          return (
+                                            <div key={`${component.id}-${idx}`}>
+                                              <p className="text-[11px] text-gray-700 truncate">
+                                                {label}
+                                              </p>
+                                              {previews.length > 0 && (
+                                                <div className="mt-1 flex gap-1.5">
+                                                  {previews
+                                                    .slice(0, 3)
+                                                    .map((url, previewIdx) => (
+                                                      <img
+                                                        key={`${component.id}-preview-${previewIdx}`}
+                                                        src={url}
+                                                        alt={`${component.item.name} preview ${previewIdx + 1}`}
+                                                        className="h-8 w-8 rounded border border-gray-200 object-contain object-center bg-white p-0.5"
+                                                      />
+                                                    ))}
+                                                </div>
+                                              )}
                                             </div>
-                                          )}
-                                        </div>
-                                      );
-                                    },
+                                          );
+                                        },
+                                      )}
+                                    </div>
                                   )}
                                 </div>
-                              )}
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            {hasCustomizations && (
-                              <CheckCircle2 className="w-5 h-5 text-green-600" />
-                            )}
-                            <ChevronLeft className="w-5 h-5 rotate-180" />
-                          </div>
-                        </Button>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                {hasCustomizations && (
+                                  <CheckCircle2 className="w-5 h-5 text-green-600" />
+                                )}
+                                <ChevronLeft
+                                  className={cn(
+                                    "w-5 h-5 transition-transform",
+                                    activeCustomizationModal === component.id
+                                      ? "-rotate-90"
+                                      : "rotate-180",
+                                  )}
+                                />
+                              </div>
+                            </Button>
+                          </CollapsibleTrigger>
+                          <CollapsibleContent className="px-4 pb-4">
+                            <ItemCustomizationModal
+                              isOpen={activeCustomizationModal === component.id}
+                              onClose={() => setActiveCustomizationModal(null)}
+                              renderMode="inline"
+                              itemId={component.item.id}
+                              itemName={component.item.name}
+                              customizations={(
+                                component.item.customizations || []
+                              ).map((c) => ({
+                                id: c.id,
+                                name: c.name,
+                                description: c.description,
+                                type: c.type as
+                                  | "DYNAMIC_LAYOUT"
+                                  | "TEXT"
+                                  | "IMAGES"
+                                  | "MULTIPLE_CHOICE",
+                                isRequired: c.isRequired,
+                                price: c.price,
+                                customization_data: c.customization_data as {
+                                  layouts?: Array<{
+                                    id: string;
+                                    name: string;
+                                    model_url?: string;
+                                    image_url?: string;
+                                    slots?: SlotDef[];
+                                  }>;
+                                  fields?: Array<{
+                                    id: string;
+                                    label: string;
+                                    placeholder?: string;
+                                    max_length?: number;
+                                  }>;
+                                  dynamic_layout?: {
+                                    max_images: number;
+                                    min_width?: number;
+                                    min_height?: number;
+                                    max_file_size_mb?: number;
+                                    accepted_formats?: string[];
+                                  };
+                                  options?: Array<{
+                                    id: string;
+                                    label: string;
+                                    value: string;
+                                    price_adjustment?: number;
+                                    image_url?: string;
+                                    description?: string;
+                                  }>;
+                                },
+                              }))}
+                              onComplete={(hasCustomizations, data) =>
+                                handleCustomizationComplete(
+                                  component.id,
+                                  hasCustomizations,
+                                  data,
+                                )
+                              }
+                              onImagesUpdate={(id, current, max) =>
+                                handleImagesUpdate(component.id, current, max)
+                              }
+                            />
+                          </CollapsibleContent>
+                        </Collapsible>
                       );
                     })}
                 </div>
@@ -2164,6 +2348,77 @@ const ClientProductPage = ({ id }: { id: string }) => {
                     );
                   })}
                 </div>
+                {activeAdditionalModal && (
+                  <div className="mt-3">
+                    {(() => {
+                      const additional = additionals.find(
+                        (a) => a.id === activeAdditionalModal,
+                      );
+                      if (!additional) return null;
+                      return (
+                        <ItemCustomizationModal
+                          isOpen={true}
+                          onClose={() => setActiveAdditionalModal(null)}
+                          renderMode="inline"
+                          itemId={additional.id}
+                          itemName={additional.name}
+                          customizations={(additional.customizations || []).map(
+                            (c) => ({
+                              id: c.id,
+                              name: c.name,
+                              description: c.description,
+                              type: c.type as
+                                | "DYNAMIC_LAYOUT"
+                                | "TEXT"
+                                | "IMAGES"
+                                | "MULTIPLE_CHOICE",
+                              isRequired: c.isRequired,
+                              price: c.price,
+                              customization_data: c.customization_data as {
+                                layouts?: Array<{
+                                  id: string;
+                                  name: string;
+                                  model_url?: string;
+                                  image_url?: string;
+                                  slots?: SlotDef[];
+                                }>;
+                                fields?: Array<{
+                                  id: string;
+                                  label: string;
+                                  placeholder?: string;
+                                  max_length?: number;
+                                }>;
+                                dynamic_layout?: {
+                                  max_images: number;
+                                  min_width?: number;
+                                  min_height?: number;
+                                  max_file_size_mb?: number;
+                                  accepted_formats?: string[];
+                                };
+                                options?: Array<{
+                                  id: string;
+                                  label: string;
+                                  value: string;
+                                  price_adjustment?: number;
+                                  image_url?: string;
+                                  description?: string;
+                                }>;
+                              },
+                            }),
+                          )}
+                          onComplete={(hasCustomizations, data) =>
+                            handleAdditionalCustomizationComplete(
+                              additional.id,
+                              hasCustomizations,
+                              data,
+                            )
+                          }
+                          onImagesUpdate={handleImagesUpdate}
+                        />
+                      );
+                    })()}
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -2182,7 +2437,9 @@ const ClientProductPage = ({ id }: { id: string }) => {
                   props={{
                     id: relatedProduct.id,
                     name: relatedProduct.name,
-                    image_url: relatedProduct.image_url || getPublicAssetUrl("placeholder-v2.png"),
+                    image_url:
+                      relatedProduct.image_url ||
+                      getPublicAssetUrl("placeholder-v2.png"),
                     price: relatedProduct.price,
                     discount: relatedProduct.discount,
                   }}
@@ -2192,128 +2449,6 @@ const ClientProductPage = ({ id }: { id: string }) => {
           </div>
         )}
       </div>
-
-      {components
-        .filter((c) => c.item.allows_customization)
-        .map((component) => (
-          <ItemCustomizationModal
-            key={component.id}
-            isOpen={activeCustomizationModal === component.id}
-            onClose={() => setActiveCustomizationModal(null)}
-            itemId={component.item.id}
-            itemName={component.item.name}
-            customizations={(component.item.customizations || []).map((c) => ({
-              id: c.id,
-              name: c.name,
-              description: c.description,
-              type: c.type as
-                | "DYNAMIC_LAYOUT"
-                | "TEXT"
-                | "IMAGES"
-                | "MULTIPLE_CHOICE",
-              isRequired: c.isRequired,
-              price: c.price,
-              customization_data: c.customization_data as {
-                layouts?: Array<{
-                  id: string;
-                  name: string;
-                  model_url?: string;
-                  image_url?: string;
-                  slots?: SlotDef[];
-                }>;
-                fields?: Array<{
-                  id: string;
-                  label: string;
-                  placeholder?: string;
-                  max_length?: number;
-                }>;
-                dynamic_layout?: {
-                  max_images: number;
-                  min_width?: number;
-                  min_height?: number;
-                  max_file_size_mb?: number;
-                  accepted_formats?: string[];
-                };
-                options?: Array<{
-                  id: string;
-                  label: string;
-                  value: string;
-                  price_adjustment?: number;
-                  image_url?: string;
-                  description?: string;
-                }>;
-              },
-            }))}
-            onComplete={(hasCustomizations, data) =>
-              handleCustomizationComplete(component.id, hasCustomizations, data)
-            }
-            onImagesUpdate={(id, current, max) =>
-              handleImagesUpdate(component.id, current, max)
-            }
-          />
-        ))}
-
-      {additionals
-        .filter((a) => a.allows_customization)
-        .map((additional) => (
-          <ItemCustomizationModal
-            key={additional.id}
-            isOpen={activeAdditionalModal === additional.id}
-            onClose={() => setActiveAdditionalModal(null)}
-            itemId={additional.id}
-            itemName={additional.name}
-            customizations={(additional.customizations || []).map((c) => ({
-              id: c.id,
-              name: c.name,
-              description: c.description,
-              type: c.type as
-                | "DYNAMIC_LAYOUT"
-                | "TEXT"
-                | "IMAGES"
-                | "MULTIPLE_CHOICE",
-              isRequired: c.isRequired,
-              price: c.price,
-              customization_data: c.customization_data as {
-                layouts?: Array<{
-                  id: string;
-                  name: string;
-                  model_url?: string;
-                  image_url?: string;
-                  slots?: SlotDef[];
-                }>;
-                fields?: Array<{
-                  id: string;
-                  label: string;
-                  placeholder?: string;
-                  max_length?: number;
-                }>;
-                dynamic_layout?: {
-                  max_images: number;
-                  min_width?: number;
-                  min_height?: number;
-                  max_file_size_mb?: number;
-                  accepted_formats?: string[];
-                };
-                options?: Array<{
-                  id: string;
-                  label: string;
-                  value: string;
-                  price_adjustment?: number;
-                  image_url?: string;
-                  description?: string;
-                }>;
-              },
-            }))}
-            onComplete={(hasCustomizations, data) =>
-              handleAdditionalCustomizationComplete(
-                additional.id,
-                hasCustomizations,
-                data,
-              )
-            }
-            onImagesUpdate={handleImagesUpdate}
-          />
-        ))}
     </div>
   );
 };

@@ -3,19 +3,17 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import React, { useState, useRef, useEffect } from "react";
 import type { Canvas as FabricCanvas } from "fabric";
-import { Card, CardContent } from "./ui/card";
 import { Button } from "./ui/button";
 import { Label } from "./ui/label";
 import { Input } from "./ui/input";
 import { Textarea } from "./ui/textarea";
+import { Progress } from "./ui/progress";
 import {
   Upload,
   Check,
   ArrowLeft,
-  Sparkles,
   Type,
   ImageIcon,
-  Palette,
   Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -110,6 +108,7 @@ export default function ClientFabricEditor({
 }: ClientFabricEditorProps) {
   const [fabricRef, setFabricRef] = useState<FabricCanvas | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const wrapperRef = useRef<HTMLDivElement>(null);
   const initRunRef = useRef(0);
 
   const [editableTexts, setEditableTexts] = useState<Record<string, string>>(
@@ -127,7 +126,7 @@ export default function ClientFabricEditor({
     }
   });
   const [loading, setLoading] = useState(true);
-  const [workspaceZoom, setWorkspaceZoom] = useState(0.4);
+  const [workspaceZoom, setWorkspaceZoom] = useState(0.6);
 
   useEffect(() => {
     if (layoutBase.id && Object.keys(localImages).length > 0) {
@@ -144,17 +143,18 @@ export default function ClientFabricEditor({
   const [cropAspect, setCropAspect] = useState<number | undefined>(undefined);
   const [isProcessingImage, setIsProcessingImage] = useState(false);
 
+  // Observa o wrapper do canvas (coluna esquerda) para calcular zoom
   useEffect(() => {
-    const parentContainer = containerRef.current?.parentElement;
-    if (!parentContainer) return;
+    const wrapper = wrapperRef.current;
+    if (!wrapper) return;
 
     const observer = new ResizeObserver((entries) => {
       for (const entry of entries) {
         const { width: availWidth, height: availHeight } = entry.contentRect;
 
-        const margin = 32;
-        const maxWidth = Math.max(availWidth - margin, 150);
-        const maxHeight = Math.max(availHeight - margin, 150);
+        const margin = 24;
+        const maxWidth = Math.max(availWidth - margin, 80);
+        const maxHeight = Math.max(availHeight - margin, 80);
 
         const layoutWidth = Number(layoutBase.width) || 378;
         const layoutHeight = Number(layoutBase.height) || 567;
@@ -162,16 +162,12 @@ export default function ClientFabricEditor({
         const zoomW = maxWidth / layoutWidth;
         const zoomH = maxHeight / layoutHeight;
 
-        const scaleFactor = Math.min(zoomW, zoomH);
-
-        const finalZoom = Math.min(scaleFactor, 1.1);
-
+        const finalZoom = Math.min(zoomW, zoomH, 1.1);
         setWorkspaceZoom(Math.max(0.1, finalZoom));
       }
     });
 
-    observer.observe(parentContainer);
-
+    observer.observe(wrapper);
     return () => observer.disconnect();
   }, [layoutBase.width, layoutBase.height]);
 
@@ -494,7 +490,6 @@ export default function ClientFabricEditor({
                 await Promise.all(
                   Array.from(fontsToLoad).map((f) => loadGoogleFont(f)),
                 );
-
                 await new Promise((r) => setTimeout(r, 250));
               }
 
@@ -780,242 +775,200 @@ export default function ClientFabricEditor({
     }
   };
 
+  const frames = fabricRef?.getObjects().filter((o: any) => o.isFrame) ?? [];
+  const hasTexts = Object.keys(editableTexts).length > 0;
+  const hasFrames = frames.length > 0;
+
   return (
-    <div className="flex flex-col h-[82vh] min-h-[600px] overflow-hidden bg-gray-50/70">
-      <header className="shrink-0 z-10 bg-white/95 backdrop-blur-sm border-b border-gray-100 shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-14 sm:h-16">
-            <Button
-              variant="ghost"
-              onClick={onBack}
-              className="gap-1.5 sm:gap-2 text-gray-700 hover:text-rose-600 hover:bg-rose-50/70 -ml-2 sm:-ml-3"
-            >
-              <ArrowLeft className="h-4 w-4 sm:h-5 sm:w-5" />
-              <span className="font-medium text-sm sm:text-base">
-                Alterar Layout
-              </span>
-            </Button>
-
-            <div className="text-right">
-              <h3 className="font-semibold text-gray-900 text-base sm:text-lg leading-tight">
-                {layoutBase.name}
-              </h3>
-              <p className="text-[10px] sm:text-xs font-medium text-rose-600/90 uppercase tracking-wider mt-0.5">
-                Edição em Tempo Real
-              </p>
-            </div>
-          </div>
+    <div className="flex h-full min-h-0 w-full flex-col gap-3 p-3">
+      <div className="flex items-center justify-between">
+        <button
+          onClick={onBack}
+          className="flex items-center gap-1.5 rounded-md px-2 py-1.5 text-sm text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900"
+        >
+          <ArrowLeft className="h-3.5 w-3.5" />
+          Voltar
+        </button>
+        <div className="text-right">
+          <p className="text-sm font-semibold text-gray-900">
+            {layoutBase.name}
+          </p>
         </div>
-      </header>
+      </div>
 
-      <main className="flex-1 flex flex-col lg:flex-row w-full px-4 sm:px-6 lg:px-10 py-4 lg:py-6 gap-4 lg:gap-8 overflow-hidden min-h-0">
-        <section className="flex-[1.2] lg:flex-1 w-full flex flex-col min-h-0 overflow-hidden">
-          <div className="flex-1 bg-white rounded-2xl shadow-xl border border-gray-200/80 overflow-hidden relative flex flex-col">
-            {loading && (
-              <div className="absolute inset-0 bg-white/75 backdrop-blur-sm z-20 flex flex-col items-center justify-center gap-3">
-                <Loader2 className="h-10 w-10 sm:h-12 sm:w-12 animate-spin text-rose-500" />
-                <p className="text-sm font-medium text-gray-700">
-                  Inicializando estúdio...
-                </p>
-              </div>
-            )}
-
-            <div className="flex-1 flex items-center justify-center p-4 sm:p-6 lg:p-10 bg-gray-50/30 overflow-hidden relative min-h-0">
-              <div
-                ref={containerRef}
-                className="bg-white border-4 sm:border-6 border-white shadow-2xl rounded-xl pointer-events-none overflow-hidden flex items-center justify-center shrink-0"
-                style={{
-                  width: (layoutBase.width || 378) * workspaceZoom,
-                  height: (layoutBase.height || 567) * workspaceZoom,
-                  maxWidth: "100%",
-                  maxHeight: "100%",
-                }}
-              />
-            </div>
-
-            <div className="py-3 px-4 bg-gray-50/70 border-t border-gray-100 text-center flex-shrink-0">
-              <div className="inline-flex items-center gap-1.5 text-xs sm:text-sm font-medium text-gray-500 uppercase tracking-wide">
-                <Sparkles className="h-3.5 w-3.5 text-rose-400" />
-                Visualização em Tempo Real
+      <div className="flex flex-1 flex-col gap-3">
+        <div
+          ref={wrapperRef}
+          className="relative flex w-full h-[40vh] md:h-[500px] shrink-0 items-center justify-center overflow-hidden rounded-lg bg-gray-50"
+        >
+          {loading && (
+            <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/80">
+              <div className="flex flex-col items-center gap-1.5 text-gray-500">
+                <Loader2 className="h-6 w-6 animate-spin text-rose-500" />
+                <p className="text-xs">Carregando...</p>
               </div>
             </div>
-          </div>
-        </section>
+          )}
 
-        <aside className="w-full flex-1 lg:flex-none lg:w-80 xl:w-96 flex flex-col gap-6 lg:gap-8 overflow-y-auto h-full custom-scrollbar px-1 lg:px-2 pb-6 lg:pb-0 shrink-0 border-l border-gray-100/50 bg-white/50 lg:backdrop-blur-sm">
-          <Card className="border border-rose-100/60 shadow-md bg-white/80 backdrop-blur-sm">
-            <CardContent className="p-5 sm:p-6 lg:p-7 space-y-6 lg:space-y-7">
-              <div className="flex items-center gap-3 pb-4 border-b border-gray-100">
-                <div className="p-2 bg-rose-50 rounded-lg">
-                  <Palette className="h-5 w-5 text-rose-600" />
-                </div>
-                <h4 className="font-semibold text-gray-800 text-lg">
-                  Personalizações
-                </h4>
+          <div
+            ref={containerRef}
+            className="flex justify-center pointer-events-none shrink-0 overflow-hidden w-full h-full"
+          />
+        </div>
+
+        <div className="flex w-full shrink-0 flex-col gap-3 overflow-y-auto">
+          {hasTexts && (
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+                <Type className="h-3 w-3" />
+                Textos
               </div>
 
-              {Object.keys(editableTexts).length > 0 && (
-                <div className="space-y-5">
-                  <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-gray-500">
-                    <Type className="h-4 w-4" />
-                    Textos editáveis
+              {Object.entries(editableTexts).map(([id, text]) => {
+                const obj = fabricRef
+                  ?.getObjects()
+                  .find((o: any) => (o.id || o.name) === id);
+                const maxChars = (obj as any)?.maxChars || 50;
+                const isLongText = maxChars > 20;
+
+                return (
+                  <div key={id} className="flex flex-col gap-1">
+                    <Label className="text-[11px] font-medium text-gray-600">
+                      {fieldLabels[id] || "Campo de texto"}
+                    </Label>
+
+                    {isLongText ? (
+                      <Textarea
+                        value={text}
+                        onChange={(e) => handleTextChange(id, e.target.value)}
+                        maxLength={maxChars}
+                        className="min-h-[64px] resize-none border-gray-200 text-xs"
+                        placeholder="Texto"
+                      />
+                    ) : (
+                      <Input
+                        value={text}
+                        onChange={(e) => handleTextChange(id, e.target.value)}
+                        maxLength={maxChars}
+                        className="h-8 border-gray-200 text-xs"
+                        placeholder="Texto"
+                      />
+                    )}
+
+                    <div className="text-right text-[10px] text-gray-400">
+                      <span
+                        className={
+                          text.length === maxChars
+                            ? "font-medium text-rose-500"
+                            : ""
+                        }
+                      >
+                        {text.length}/{maxChars}
+                      </span>
+                    </div>
                   </div>
+                );
+              })}
+            </div>
+          )}
 
-                  <div className="space-y-4">
-                    {Object.entries(editableTexts).map(([id, text]) => {
-                      const obj = fabricRef
-                        ?.getObjects()
-                        .find((o: any) => (o.id || o.name) === id);
-                      const maxChars = (obj as any)?.maxChars || 50;
-                      const isLongText = maxChars > 20;
+          {hasFrames && (
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+                <ImageIcon className="h-3 w-3" />
+                Fotos
+              </div>
 
-                      return (
-                        <div key={id} className="space-y-2">
-                          <Label className="text-sm font-medium text-gray-700">
-                            {fieldLabels[id] || "Campo de texto"}
-                          </Label>
-
-                          {isLongText ? (
-                            <Textarea
-                              value={text}
-                              onChange={(e) =>
-                                handleTextChange(id, e.target.value)
-                              }
-                              maxLength={maxChars}
-                              className="min-h-[70px] sm:min-h-[90px] resize-none border-gray-200 focus:border-rose-400 focus:ring-rose-100/40 text-sm"
-                              placeholder="Escreva algo especial..."
-                            />
-                          ) : (
-                            <Input
-                              value={text}
-                              onChange={(e) =>
-                                handleTextChange(id, e.target.value)
-                              }
-                              maxLength={maxChars}
-                              className="h-11 border-gray-200 focus:border-rose-400 focus:ring-rose-100/40"
-                              placeholder="Escreva algo especial..."
-                            />
-                          )}
-
-                          <div className="flex justify-between text-xs text-gray-500">
-                            <span>Limite: {maxChars} caracteres</span>
-                            <span
-                              className={
-                                text.length === maxChars
-                                  ? "text-rose-600 font-medium"
-                                  : ""
-                              }
-                            >
-                              {text.length}/{maxChars}
-                            </span>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
+              {isProcessingImage && (
+                <div className="rounded-md border border-rose-100 bg-rose-50 p-2">
+                  <Progress value={70} className="h-1" />
                 </div>
               )}
 
-              <div className="space-y-5 pt-5 border-t border-dashed border-gray-200">
-                <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-gray-500">
-                  <ImageIcon className="h-4 w-4" />
-                  Molduras de fotos
-                </div>
+              <div className="grid grid-cols-3 gap-2 lg:grid-cols-2">
+                {frames.map((frame: any, index: number) => {
+                  const id = frame.id || frame.name;
+                  const label = fieldLabels[id] || `${index + 1}`;
+                  let imageUrl = localImages[id];
+                  if (imageUrl) imageUrl = toBackendAssetUrl(imageUrl);
+                  const hasImage = !!imageUrl;
 
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-2 gap-4">
-                  {fabricRef
-                    ?.getObjects()
-                    .filter((o: any) => o.isFrame)
-                    .map((frame: any, index: number) => {
-                      const id = frame.id || frame.name;
-                      const label = fieldLabels[id] || `Foto ${index + 1}`;
-                      let imageUrl = localImages[id];
+                  return (
+                    <div key={`${id}-${index}`} className="flex flex-col gap-1">
+                      <p className="truncate text-center text-[10px] font-medium text-gray-500">
+                        {label}
+                      </p>
 
-                      if (imageUrl) {
-                        imageUrl = toBackendAssetUrl(imageUrl);
-                      }
-
-                      const hasImage = !!imageUrl;
-
-                      return (
-                        <div key={`${id}-${index}`} className="space-y-2">
-                          <Label className="text-xs font-medium text-gray-600 block text-center truncate">
-                            {label}
-                          </Label>
-
-                          <div
-                            className={`group relative aspect-square rounded-xl overflow-hidden border-2 transition-all duration-200 cursor-pointer
-                            ${
-                              hasImage
-                                ? "border-rose-400 shadow-sm hover:shadow-md"
-                                : "border-dashed border-gray-300 hover:border-rose-300 bg-gray-50/60 hover:bg-rose-50/30"
-                            }`}
-                            onClick={() =>
-                              document.getElementById(`upload-${id}`)?.click()
-                            }
-                          >
-                            {hasImage ? (
-                              <Image
-                                src={imageUrl}
-                                alt={`Foto ${label}`}
-                                fill
-                                className="object-cover"
-                                unoptimized
-                              />
-                            ) : (
-                              <div className="absolute inset-0 flex items-center justify-center">
-                                <Upload className="h-7 w-7 text-gray-400 group-hover:text-rose-500 transition-colors" />
-                              </div>
-                            )}
-
-                            <div className="absolute bottom-2 right-2 bg-white/90 backdrop-blur-sm rounded-full p-1.5 shadow-sm border border-white/80">
-                              {hasImage ? (
-                                <Check className="h-4 w-4 text-green-600" />
-                              ) : (
-                                <Upload className="h-4 w-4 text-rose-600" />
-                              )}
-                            </div>
-
-                            <Input
-                              id={`upload-${id}`}
-                              type="file"
-                              accept="image/*"
-                              className="hidden"
-                              onChange={(e) => handleImageUpload(e, id)}
-                            />
+                      <div
+                        className={`group relative aspect-square cursor-pointer overflow-hidden rounded-lg border-2 transition-all
+                          ${
+                            hasImage
+                              ? "border-rose-400 hover:border-rose-500"
+                              : "border-dashed border-gray-300 bg-gray-50 hover:border-rose-300"
+                          }`}
+                        onClick={() =>
+                          document.getElementById(`upload-${id}`)?.click()
+                        }
+                      >
+                        {hasImage ? (
+                          <Image
+                            src={imageUrl}
+                            alt={label}
+                            fill
+                            className="object-cover"
+                            unoptimized
+                          />
+                        ) : (
+                          <div className="absolute inset-0 flex items-center justify-center">
+                            <Upload className="h-5 w-5 text-gray-300 group-hover:text-rose-400 transition-colors" />
                           </div>
+                        )}
+
+                        <div className="absolute bottom-1.5 right-1.5 rounded-full border border-white/80 bg-white/90 p-0.5 shadow-sm">
+                          {hasImage ? (
+                            <Check className="h-3 w-3 text-green-500" />
+                          ) : (
+                            <Upload className="h-3 w-3 text-rose-500" />
+                          )}
                         </div>
-                      );
-                    })}
-                </div>
+
+                        <Input
+                          id={`upload-${id}`}
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={(e) => handleImageUpload(e, id)}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          )}
+
+          <div className="flex-1" />
 
           <Button
-            size="lg"
-            className="w-full h-12 sm:h-14 text-base sm:text-lg font-semibold bg-gradient-to-r from-rose-500 to-rose-600 hover:from-rose-600 hover:to-rose-700 shadow-lg hover:shadow-xl transition-all active:scale-[0.98] rounded-xl gap-2"
+            size="sm"
+            className="h-9 w-full gap-1.5 rounded-lg bg-rose-600 text-sm font-semibold hover:bg-rose-700"
             onClick={handleComplete}
             disabled={isProcessingImage}
           >
             {isProcessingImage ? (
               <>
-                <Loader2 className="h-5 w-5 animate-spin" />
-                Processando...
+                <Loader2 className="h-4 w-4 animate-spin" />
+                ...
               </>
             ) : (
               <>
-                <Check className="h-5 w-5" />
-                Concluir e Salvar
+                <Check className="h-4 w-4" />
+                Salvar
               </>
             )}
           </Button>
-
-          <p className="text-center text-xs text-gray-400 font-medium tracking-wide">
-            Garantia de Qualidade • Cesto d&apos;Amore
-          </p>
-        </aside>
-      </main>
+        </div>
+      </div>
 
       {fileToCrop && (
         <ImageCropDialog

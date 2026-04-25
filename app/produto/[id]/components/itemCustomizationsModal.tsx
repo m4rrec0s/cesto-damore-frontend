@@ -2,27 +2,14 @@
 
 import dynamic from "next/dynamic";
 import React, { useState, useCallback, useEffect, useRef } from "react";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/app/components/ui/dialog";
+import { Dialog, DialogContent } from "@/app/components/ui/dialog";
 import { Button } from "@/app/components/ui/button";
 import { Badge } from "@/app/components/ui/badge";
 import { Card } from "@/app/components/ui/card";
 import { Input } from "@/app/components/ui/input";
 import { Textarea } from "@/app/components/ui/textarea";
 import { Label } from "@/app/components/ui/label";
-import {
-  Upload,
-  X,
-  Type,
-  CheckCircle2,
-  Palette,
-  Loader2,
-  Check,
-} from "lucide-react";
+import { Upload, X, CheckCircle2, Palette, Loader2, Check } from "lucide-react";
 import { motion } from "motion/react";
 
 import { toast } from "sonner";
@@ -39,7 +26,6 @@ import type {
 import { getDirectImageUrl } from "@/app/helpers/drive-normalize";
 import useApi from "@/app/hooks/use-api";
 import { ImageCropDialog } from "@/app/components/ui/image-crop-dialog";
-import Image from "next/image";
 import { getInternalImageUrl, getPublicAssetUrl } from "@/lib/image-helper";
 
 const ClientFabricEditor = dynamic(
@@ -117,6 +103,7 @@ interface Customization {
 interface Props {
   isOpen: boolean;
   onClose: () => void;
+  renderMode?: "modal" | "inline";
   itemId: string;
   itemName: string;
   customizations: Customization[];
@@ -243,8 +230,8 @@ function clearCustomizationImages(
 export function ItemCustomizationModal({
   isOpen,
   onClose,
+  renderMode = "modal",
   itemId,
-  itemName,
   customizations,
   onComplete,
   onPreviewChange,
@@ -454,6 +441,7 @@ export function ItemCustomizationModal({
             : normalizedType === "quadro"
               ? "frame"
               : normalizedType;
+        const layoutDataRecord = layoutData as unknown as Record<string, unknown>;
 
         setCustomizationData((prev) => ({
           ...prev,
@@ -461,6 +449,11 @@ export function ItemCustomizationModal({
             ...((prev[baseLayoutCustom.id] as Record<string, unknown>) || {}),
             model_url: modelUrl,
             item_type: standardType,
+            layout_width: layoutData.width,
+            layout_height: layoutData.height,
+            mockupRules: layoutDataRecord.mockupRules,
+            mockup_rules: layoutDataRecord.mockup_rules,
+            mockups: layoutDataRecord.mockups,
           },
         }));
 
@@ -580,6 +573,11 @@ export function ItemCustomizationModal({
           model_url: existingData.model_url,
           layout_id: existingData.layout_id,
           layout_name: existingData.layout_name,
+          layout_width: existingData.layout_width,
+          layout_height: existingData.layout_height,
+          mockupRules: existingData.mockupRules,
+          mockup_rules: existingData.mockup_rules,
+          mockups: existingData.mockups,
           additional_time:
             apiProductionTime || existingData.additional_time || 0,
         },
@@ -606,6 +604,11 @@ export function ItemCustomizationModal({
             previewUrl?: string;
             fabricState?: string;
             highQualityUrl?: string;
+            layout_width?: number;
+            layout_height?: number;
+            mockupRules?: unknown;
+            mockup_rules?: unknown;
+            mockups?: unknown;
             additional_time?: number;
           };
           if (layoutData.layout_id) {
@@ -628,10 +631,15 @@ export function ItemCustomizationModal({
                 layout_name: layoutData.layout_name || "",
                 model_url: layoutData.model_url,
                 item_type: layoutData.item_type,
+                layout_width: layoutData.layout_width,
+                layout_height: layoutData.layout_height,
                 images: layoutData.images || [],
                 fabricState: layoutData.fabricState,
                 previewUrl: layoutData.previewUrl,
                 highQualityUrl: layoutData.highQualityUrl,
+                mockupRules: layoutData.mockupRules,
+                mockup_rules: layoutData.mockup_rules,
+                mockups: layoutData.mockups,
                 selected_item_label: layoutData.layout_name || custom.name,
                 label_selected: layoutData.layout_name || custom.name,
                 customization_name: custom.name,
@@ -796,7 +804,13 @@ export function ItemCustomizationModal({
         setLoading(false);
       }
     },
-    [currentCustomizationId, customizations, fileToCrop, itemId, uploadTempImage],
+    [
+      currentCustomizationId,
+      customizations,
+      fileToCrop,
+      itemId,
+      uploadTempImage,
+    ],
   );
 
   const handleDetailsConfirm = async (croppedImageUrl: string) => {
@@ -981,25 +995,15 @@ export function ItemCustomizationModal({
 
     return (
       <div className="space-y-4">
-        <div>
-          <Label className="text-lg font-semibold text-gray-900">
-            {customization.name}
-            {customization.isRequired && (
-              <span className="ml-2 text-sm text-red-500">*</span>
-            )}
-          </Label>
-          {customization.description && (
-            <p className="text-sm text-gray-600 mt-1">
-              {customization.description}
-            </p>
+        <Label className="text-sm font-semibold text-gray-900">
+          {customization.name}
+          {customization.isRequired && (
+            <span className="ml-1 text-xs text-red-500">*</span>
           )}
-        </div>
+        </Label>
 
         {(currentLayoutName || currentPreview) && (
-          <Card className="p-3 border border-neutral-200 bg-white">
-            <p className="text-xs font-semibold text-neutral-700 mb-2 uppercase tracking-wide">
-              Layout selecionado
-            </p>
+          <div className="p-3 border border-neutral-200 bg-white">
             <div className="flex items-center gap-3">
               {currentPreview ? (
                 <img
@@ -1012,28 +1016,21 @@ export function ItemCustomizationModal({
                 <p className="text-sm font-medium text-neutral-900 truncate">
                   {currentLayoutName || "Design personalizado"}
                 </p>
-                {currentPreview && (
-                  <p className="text-xs text-neutral-500">
-                    Arte final disponível
-                  </p>
-                )}
               </div>
             </div>
-          </Card>
+          </div>
         )}
 
         {layouts.length === 0 ? (
-          <Card className="p-8 text-center bg-gray-50">
+          <div className="p-8 text-center bg-gray-50">
             <Palette className="h-16 w-16 mx-auto text-gray-300 mb-3" />
-            <p className="text-sm text-gray-500">Nenhum layout disponível</p>
-          </Card>
+          </div>
         ) : loadingLayouts ? (
-          <Card className="p-8 text-center bg-gray-50">
+          <div className="p-8 text-center bg-gray-50">
             <Loader2 className="h-16 w-16 mx-auto text-rose-600 animate-spin mb-3" />
-            <p className="text-sm text-gray-500">Carregando layouts...</p>
-          </Card>
+          </div>
         ) : (
-          <div className="grid grid-cols-1 min-[420px]:grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
+          <div className="grid grid-cols-3 gap-3">
             {layouts.map((layoutFromCustomization) => {
               const fullLayout =
                 layoutsWithImages[layoutFromCustomization.id] ||
@@ -1073,15 +1070,45 @@ export function ItemCustomizationModal({
                   ).image_url ||
                   "",
               );
-              const isQuadro =
-                (
-                  fullLayout as { item_type?: string }
-                ).item_type?.toLowerCase() === "frame";
+              const layoutWidth = Number(
+                (fullLayout as { width?: number }).width || 0,
+              );
+              const layoutHeight = Number(
+                (fullLayout as { height?: number }).height || 0,
+              );
+              const inferredRatio =
+                layoutWidth > 0 && layoutHeight > 0
+                  ? layoutWidth / layoutHeight
+                  : null;
+
+              const typeToken = (
+                (fullLayout as { item_type?: string }).item_type || ""
+              ).toLowerCase();
+              const nameToken = (
+                (fullLayout as { name?: string }).name || ""
+              ).toLowerCase();
+              const semanticToken = `${typeToken} ${nameToken}`;
+
+              const isFrameLike =
+                semanticToken.includes("frame") ||
+                semanticToken.includes("quadro");
+              const isMugLike =
+                semanticToken.includes("mug") ||
+                semanticToken.includes("caneca");
+
+              const cardAspectRatio = (() => {
+                if (inferredRatio && Number.isFinite(inferredRatio)) {
+                  return Math.max(0.5, Math.min(2, inferredRatio));
+                }
+                if (isFrameLike) return 3 / 4;
+                if (isMugLike) return 16 / 9;
+                return 1;
+              })();
 
               return (
                 <div
                   key={fullLayout.id}
-                  className="group cursor-pointer transition-all max-h-fit overflow-hidden hover:shadow-lg border-2 border-gray-200 hover:border-gray-900 rounded-xl"
+                  className="group cursor-pointer transition-all h-auto overflow-hidden hover:shadow-lg border-2 border-gray-200 hover:border-gray-900 rounded-xl"
                   onClick={() => handleLayoutSelect(fullLayout.id)}
                 >
                   <div className="relative bg-gray-50">
@@ -1092,18 +1119,11 @@ export function ItemCustomizationModal({
                     )}
 
                     {imageUrl ? (
-                      <div
-                        className={`relative w-full aspect-square ${
-                          isQuadro ? "p-1" : ""
-                        }`}
-                      >
-                        <Image
+                      <div className="relative w-full" style={{ aspectRatio: cardAspectRatio }}>
+                        <img
                           src={imageUrl}
                           alt={fullLayout.name}
-                          fill
-                          className={`transition-all duration-300 object-cover ${
-                            imageLoaded ? "opacity-100" : "opacity-0"
-                          }`}
+                          className={`transition-all duration-300 object-cover h-full w-full `}
                           onLoad={() => {
                             setImageLoadStates((prev) => ({
                               ...prev,
@@ -1148,10 +1168,6 @@ export function ItemCustomizationModal({
           <Card className="p-12 bg-gradient-to-br from-rose-50 to-pink-50">
             <div className="flex flex-col items-center justify-center gap-4">
               <Loader2 className="h-14 w-14 animate-spin text-rose-600" />
-              <p className="text-base font-semibold text-gray-800">
-                Carregando editor de personalização...
-              </p>
-              <p className="text-sm text-gray-600">Aguarde um momento</p>
             </div>
           </Card>
         )}
@@ -1164,28 +1180,12 @@ export function ItemCustomizationModal({
 
     return (
       <div className="flex min-h-0 flex-col gap-4 pb-5">
-        <div className="p-4 rounded-lg bg-neutral-50 border border-neutral-200 shadow-sm relative overflow-hidden">
-          <div className="flex items-center gap-3 relative z-10">
-            <div className="p-2 rounded-lg bg-neutral-100 shadow-sm">
-              <Type className="h-5 w-5 text-neutral-700" />
-            </div>
-            <div>
-              <Label className="text-lg font-bold text-neutral-900">
-                {customization.name}
-                {customization.isRequired && (
-                  <Badge variant="destructive" className="ml-2 text-xs">
-                    Obrigatório
-                  </Badge>
-                )}
-              </Label>
-              {customization.description && (
-                <p className="text-sm text-neutral-600 mt-1">
-                  {customization.description}
-                </p>
-              )}
-            </div>
-          </div>
-        </div>
+        <Label className="text-sm font-semibold text-neutral-900">
+          {customization.name}
+          {customization.isRequired && (
+            <span className="ml-1 text-red-500">*</span>
+          )}
+        </Label>
 
         {fields.map((field) => {
           let data = customizationData[customization.id] as
@@ -1203,15 +1203,6 @@ export function ItemCustomizationModal({
 
           return (
             <div key={field.id} className="space-y-2">
-              <Label
-                htmlFor={field.id}
-                className="font-medium text-amber-900"
-                style={{
-                  fontFamily: '"Georgia", serif',
-                }}
-              >
-                {field.label}
-              </Label>
               {field.max_length && field.max_length > 20 ? (
                 <Textarea
                   id={field.id}
@@ -1221,7 +1212,7 @@ export function ItemCustomizationModal({
                   onChange={(e) =>
                     handleTextChange(customization.id, field.id, e.target.value)
                   }
-                  className="bg-gradient-to-b from-yellow-50 to-white border-amber-200 focus:border-amber-500 focus:ring-amber-200 text-gray-800 placeholder:text-amber-400 shadow-inner min-h-[100px]"
+                  className="shadow-inner min-h-[100px]"
                   style={{
                     fontFamily: '"Georgia", serif',
                     letterSpacing: "0.5px",
@@ -1237,7 +1228,7 @@ export function ItemCustomizationModal({
                   onChange={(e) =>
                     handleTextChange(customization.id, field.id, e.target.value)
                   }
-                  className="bg-gradient-to-b from-yellow-50 to-white border-amber-200 focus:border-amber-500 focus:ring-amber-200 text-gray-800 placeholder:text-amber-400 shadow-inner"
+                  className="shadow-inner"
                   style={{
                     fontFamily: '"Georgia", serif',
                     letterSpacing: "0.5px",
@@ -1245,11 +1236,8 @@ export function ItemCustomizationModal({
                 />
               )}
               {field.max_length && (
-                <p
-                  className="text-xs text-amber-700"
-                  style={{ fontFamily: '"Georgia", serif' }}
-                >
-                  {value.length}/{field.max_length} caracteres
+                <p className="text-xs text-black">
+                  {value.length}/{field.max_length}
                 </p>
               )}
             </div>
@@ -1257,7 +1245,7 @@ export function ItemCustomizationModal({
         })}
 
         <motion.div
-          className="sticky bottom-0 left-0 right-0 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] bg-gradient-to-t from-white via-white to-transparent border-t-2 border-amber-200 shadow-md"
+          className="sticky bottom-0 left-0 right-0 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] bg-gradient-to-t shadow-md"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ type: "spring", stiffness: 300, damping: 30 }}
@@ -1304,7 +1292,7 @@ export function ItemCustomizationModal({
 
                 onComplete(result.length > 0, result);
               }}
-              className="flex-1 gap-2 bg-amber-600 hover:bg-amber-700 text-white"
+              className="flex-1 gap-2 bg-rose-500 hover:bg-rose-600 text-white"
               disabled={
                 loading ||
                 !(
@@ -1342,36 +1330,15 @@ export function ItemCustomizationModal({
 
     return (
       <div className="space-y-4 pb-5">
-        <div className="p-4 rounded-lg bg-neutral-50 border border-neutral-200 shadow-sm">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-neutral-100">
-              <Upload className="h-5 w-5 text-neutral-700" />
-            </div>
-            <div>
-              <Label className="text-lg font-bold text-neutral-900">
-                {customization.name}
-                {customization.isRequired && (
-                  <Badge variant="destructive" className="ml-2 text-xs">
-                    Obrigatório
-                  </Badge>
-                )}
-              </Label>
-              {customization.description && (
-                <p className="text-sm text-neutral-600 mt-1">
-                  {customization.description}
-                </p>
-              )}
-            </div>
-          </div>
-          <p className="text-xs text-neutral-500 mt-2 ml-11">
-            {imageEntries.length}/{maxImages} imagens
-          </p>
-          {hasImages && !hasAllImagesUploaded && (
-            <p className="text-xs text-red-600 mt-1 ml-11">
-              Algumas imagens ainda precisam ser enviadas corretamente.
-            </p>
+        <Label className="text-sm font-semibold text-neutral-900">
+          {customization.name}
+          {customization.isRequired && (
+            <span className="ml-1 text-red-500">*</span>
           )}
-        </div>
+          <span className="ml-2 text-xs text-neutral-500">
+            {imageEntries.length}/{maxImages}
+          </span>
+        </Label>
 
         {imageEntries.length > 0 && (
           <div className="grid grid-cols-2 gap-3 bg-white p-3 rounded-lg border border-neutral-200 sm:grid-cols-4">
@@ -1424,10 +1391,7 @@ export function ItemCustomizationModal({
                     </div>
                     <div>
                       <p className="text-sm font-semibold text-neutral-900 group-hover:text-neutral-700">
-                        Adicionar Foto {globalIndex + 1}
-                      </p>
-                      <p className="text-xs text-neutral-500">
-                        Clique para selecionar
+                        Foto {globalIndex + 1}
                       </p>
                     </div>
                   </div>
@@ -1579,39 +1543,12 @@ export function ItemCustomizationModal({
 
     return (
       <div className="space-y-4 pb-5">
-        <div className="p-4 rounded-lg bg-neutral-50 border border-neutral-200 shadow-sm">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-neutral-100">
-              <CheckCircle2 className="h-5 w-5 text-neutral-700" />
-            </div>
-            <div>
-              <Label className="text-lg font-bold text-neutral-900">
-                {customization.name}
-                {customization.isRequired && (
-                  <Badge variant="destructive" className="ml-2 text-xs">
-                    Obrigatório
-                  </Badge>
-                )}
-              </Label>
-              {customization.description && (
-                <p className="text-sm text-neutral-600 mt-1">
-                  {customization.description}
-                </p>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {selectedLabel && (
-          <Card className="p-3 border border-neutral-200 bg-white">
-            <p className="text-xs font-semibold text-neutral-700 mb-1 uppercase tracking-wide">
-              Opção selecionada
-            </p>
-            <p className="text-sm font-medium text-neutral-900">
-              {selectedLabel}
-            </p>
-          </Card>
-        )}
+        <Label className="text-sm font-semibold text-neutral-900">
+          {customization.name}
+          {customization.isRequired && (
+            <span className="ml-1 text-red-500">*</span>
+          )}
+        </Label>
 
         <div className="space-y-2 px-1 sm:px-5">
           {options.map((option) => {
@@ -1667,11 +1604,6 @@ export function ItemCustomizationModal({
                       >
                         {option.label}
                       </p>
-                      {option.description && (
-                        <p className="text-xs text-neutral-500 mt-1 line-clamp-2">
-                          {option.description}
-                        </p>
-                      )}
                     </div>
                     {option.price_adjustment && option.price_adjustment > 0 && (
                       <Badge
@@ -1756,7 +1688,100 @@ export function ItemCustomizationModal({
     );
   };
 
-  return (
+  if (!isOpen) {
+    return null;
+  }
+
+  const modalBody = (
+    <>
+      {loading && (
+        <div className="absolute top-3 right-12 z-[60] flex items-center gap-1.5 bg-white/90 backdrop-blur-sm border border-neutral-200 rounded-full px-3 py-1 shadow-sm">
+          <Loader2 className="h-3 w-3 animate-spin text-rose-500" />
+          <span className="text-xs text-neutral-500">Salvando...</span>
+        </div>
+      )}
+
+      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
+        {step === "selection" ? (
+          <div className="space-y-6 sm:space-y-8">
+            {customizations.map((customization) => {
+              if (customization.type === "DYNAMIC_LAYOUT") {
+                return (
+                  <div key={customization.id}>
+                    {renderDynamicLayoutSelection(customization)}
+                  </div>
+                );
+              }
+              if (customization.type === "TEXT") {
+                return (
+                  <div key={customization.id}>
+                    {renderTextCustomization(customization)}
+                  </div>
+                );
+              }
+              if (customization.type === "IMAGES") {
+                return (
+                  <div key={customization.id}>
+                    {renderImageCustomization(customization)}
+                  </div>
+                );
+              }
+              if (customization.type === "MULTIPLE_CHOICE") {
+                return (
+                  <div key={customization.id}>
+                    {renderMultipleChoiceCustomization(customization)}
+                  </div>
+                );
+              }
+              return null;
+            })}
+          </div>
+        ) : (
+          <div className="min-h-0">
+            {fullLayoutBase && (
+              <ClientFabricEditor
+                layoutBase={fullLayoutBase}
+                onBack={handleBackToSelection}
+                onComplete={handleLayoutComplete}
+                initialState={
+                  (
+                    customizationData[fullLayoutBase.id] as
+                      | { fabricState?: string }
+                      | undefined
+                  )?.fabricState
+                }
+              />
+            )}
+          </div>
+        )}
+      </div>
+    </>
+  );
+
+  return renderMode === "inline" ? (
+    <>
+      <div className="relative flex h-[min(78vh,760px)] min-h-[440px] w-full flex-col overflow-hidden rounded-xl border border-neutral-200 bg-white">
+        {modalBody}
+      </div>
+      {fileToCrop && (
+        <ImageCropDialog
+          file={fileToCrop}
+          isOpen={cropDialogOpen}
+          onClose={() => {
+            setCropDialogOpen(false);
+            setFileToCrop(null);
+            setCurrentCustomizationId(null);
+            setPendingFiles([]);
+            setIsCropping(false);
+          }}
+          onCropComplete={handleDetailsConfirm}
+          aspect={cropAspect}
+          title="Ajustar foto"
+          description=""
+        />
+      )}
+    </>
+  ) : (
     <Dialog
       open={isOpen}
       onOpenChange={(newOpen) => {
@@ -1789,75 +1814,7 @@ export function ItemCustomizationModal({
           }
         }}
       >
-        {loading && (
-          <div className="absolute top-3 right-12 z-[60] flex items-center gap-1.5 bg-white/90 backdrop-blur-sm border border-neutral-200 rounded-full px-3 py-1 shadow-sm">
-            <Loader2 className="h-3 w-3 animate-spin text-rose-500" />
-            <span className="text-xs text-neutral-500">Salvando...</span>
-          </div>
-        )}
-
-        <DialogHeader className="shrink-0 border-b border-neutral-200 px-4 py-4 pr-12 text-left sm:px-6">
-          <DialogTitle className="text-xl font-bold leading-tight sm:text-2xl">
-            {step === "selection"
-              ? `Personalizar ${itemName}`
-              : "Editar Personalização"}
-          </DialogTitle>
-        </DialogHeader>
-
-        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-6">
-          {step === "selection" ? (
-            <div className="space-y-6 sm:space-y-8">
-              {customizations.map((customization) => {
-                if (customization.type === "DYNAMIC_LAYOUT") {
-                  return (
-                    <div key={customization.id}>
-                      {renderDynamicLayoutSelection(customization)}
-                    </div>
-                  );
-                }
-                if (customization.type === "TEXT") {
-                  return (
-                    <div key={customization.id}>
-                      {renderTextCustomization(customization)}
-                    </div>
-                  );
-                }
-                if (customization.type === "IMAGES") {
-                  return (
-                    <div key={customization.id}>
-                      {renderImageCustomization(customization)}
-                    </div>
-                  );
-                }
-                if (customization.type === "MULTIPLE_CHOICE") {
-                  return (
-                    <div key={customization.id}>
-                      {renderMultipleChoiceCustomization(customization)}
-                    </div>
-                  );
-                }
-                return null;
-              })}
-            </div>
-          ) : (
-            <div className="min-h-0">
-              {fullLayoutBase && (
-                <ClientFabricEditor
-                  layoutBase={fullLayoutBase}
-                  onBack={handleBackToSelection}
-                  onComplete={handleLayoutComplete}
-                  initialState={
-                    (
-                      customizationData[fullLayoutBase.id] as
-                        | { fabricState?: string }
-                        | undefined
-                    )?.fabricState
-                  }
-                />
-              )}
-            </div>
-          )}
-        </div>
+        {modalBody}
       </DialogContent>
 
       {fileToCrop && (

@@ -1,7 +1,13 @@
 "use client";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import React, { useEffect, useState, useCallback, useRef } from "react";
+import React, {
+  useEffect,
+  useState,
+  useCallback,
+  useRef,
+  useMemo,
+} from "react";
 import { Badge } from "@/app/components/ui/badge";
 import { AlertCircle, CheckCircle2, Edit2, Loader2 } from "lucide-react";
 import { Button } from "@/app/components/ui/button";
@@ -764,7 +770,7 @@ export function CustomizationsReview({
   } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  const [modalOpen, setModalOpen] = useState(false);
+  const [activeEditorKey, setActiveEditorKey] = useState<string | null>(null);
   const [activeItemId, setActiveItemId] = useState<string | null>(null);
   const [activeItemName, setActiveItemName] = useState<string>("");
   const [activeCustomizations, setActiveCustomizations] = useState<
@@ -778,6 +784,10 @@ export function CustomizationsReview({
     null,
   );
   const [refreshVersion, setRefreshVersion] = useState(0);
+  const backendRetryRef = useRef<{ orderId: string | null; attempts: number }>({
+    orderId: null,
+    attempts: 0,
+  });
 
   useEffect(() => {
     setActiveItemId(null);
@@ -785,9 +795,52 @@ export function CustomizationsReview({
     setActiveOrderItemId(null);
     setActiveComponentId(null);
     setActiveInitialValues({});
-    setModalOpen(false);
+    setActiveEditorKey(null);
     setIsSaving(false);
+
+    if (orderId) {
+      backendRetryRef.current = { orderId, attempts: 0 };
+    } else {
+      backendRetryRef.current = { orderId: null, attempts: 0 };
+    }
   }, [orderId]);
+
+  const cartValidationKey = useMemo(
+    () =>
+      cartItems
+        .map((item, index) => {
+          const customizations = item.customizations || [];
+          const customizationKey = customizations
+            .map((custom) => {
+              const ruleId = getCustomizationRuleId(custom) || "";
+              const type = custom.customization_type || "";
+              const component = custom.componentId || "";
+              const text = custom.text || "";
+              const photosCount =
+                custom.photos?.length ||
+                ((custom.data as { photos?: unknown[] } | undefined)?.photos
+                  ?.length ??
+                  0);
+              const hasPreview = getCustomizationImageUrls(custom).length;
+              const label =
+                custom.label_selected || custom.selected_item_label || "";
+              return [
+                ruleId,
+                type,
+                component,
+                text,
+                photosCount,
+                hasPreview,
+                label,
+              ].join(":");
+            })
+            .join("|");
+
+          return `${index}-${item.product_id}-${customizationKey}`;
+        })
+        .join("||"),
+    [cartItems],
+  );
 
   useEffect(() => {
     if (!orderId) return;
@@ -836,7 +889,7 @@ export function CustomizationsReview({
 
   const fetchAvailableCustomizations = useCallback(async () => {
     setIsLoading(true);
-    
+
     // Reportar que está carregando
     validationStatusChangeRef.current?.({
       valid: false,
@@ -940,8 +993,8 @@ export function CustomizationsReview({
             availableCustomizations,
             filledCustomizations: filled,
             missingRequired,
-          isComplete: missingRequired.length === 0,
-        };
+            isComplete: missingRequired.length === 0,
+          };
         });
 
         const totalReviewCustomizations = results.reduce(
@@ -992,6 +1045,9 @@ export function CustomizationsReview({
           ? Boolean(fileValidationResult?.valid)
           : true;
         const combinedValid = backendValid && reviewDataIsComplete;
+        const hasLocalCustomizations = cartItems.some(
+          (item) => (item.customizations?.length || 0) > 0,
+        );
         const backendMissingRequired =
           fileValidationResult?.missingRequired ||
           results.flatMap((entry) =>
@@ -1021,9 +1077,7 @@ export function CustomizationsReview({
           fileValidationResult?.recommendations ||
           (combinedValid
             ? []
-            : [
-                "Ainda existem inconsistências no review das personalizações.",
-              ]);
+            : ["Ainda existem inconsistências no review das personalizações."]);
 
         setBackendValidationState({
           valid: combinedValid,
@@ -1058,6 +1112,25 @@ export function CustomizationsReview({
 
         setValidations(results);
         setIsLoading(false);
+
+        if (
+          orderId &&
+          !combinedValid &&
+          hasLocalCustomizations &&
+          backendRetryRef.current.orderId === orderId &&
+          backendRetryRef.current.attempts < 2
+        ) {
+          backendRetryRef.current.attempts += 1;
+          const retryDelayMs = 1200 * backendRetryRef.current.attempts;
+          setTimeout(() => {
+            setRefreshVersion((value) => value + 1);
+          }, retryDelayMs);
+        }
+
+        if (combinedValid && backendRetryRef.current.orderId === orderId) {
+          backendRetryRef.current.attempts = 0;
+        }
+
         return;
       } catch (error) {
         console.error("Erro ao buscar dados de revisão consolidados:", error);
@@ -1274,7 +1347,7 @@ export function CustomizationsReview({
       setValidations([]);
       setIsLoading(false);
     }
-  }, [orderId, refreshVersion, cartItems.length]);
+  }, [orderId, refreshVersion, cartValidationKey, cartItems.length]);
 
   // REMOVIDO: useEffect duplicado que causava race condition
   // useEffect anterior (linha 1262) já cobre tanto orderId presente quanto ausente
@@ -1295,6 +1368,7 @@ export function CustomizationsReview({
       itemId: string,
       itemName: string,
       componentId: string,
+      editorKey: string,
       orderItemId?: string,
       cartItemIndex?: number,
     ) => {
@@ -1412,12 +1486,12 @@ export function CustomizationsReview({
         setActiveProductId(productId);
         setActiveOrderItemId(orderItemId || null);
         setActiveComponentId(componentId);
-        setModalOpen(true);
+        setActiveEditorKey(editorKey);
       } catch (error) {
         console.error("Erro ao carregar customizações:", error);
       }
     },
-    [getItemCustomizations, cartItems, orderId, validations, setModalOpen],
+    [getItemCustomizations, cartItems, orderId, validations],
   );
 
   const [isSaving, setIsSaving] = useState(false);
@@ -1429,7 +1503,7 @@ export function CustomizationsReview({
   const handleCustomizationComplete = useCallback(
     async (hasCustomizations: boolean, data: CustomizationInput[]) => {
       if (!hasCustomizations || !activeItemId) {
-        setModalOpen(false);
+        setActiveEditorKey(null);
         return;
       }
 
@@ -1437,36 +1511,25 @@ export function CustomizationsReview({
         setIsSaving(true);
         try {
           let candidateOrderItemId = activeOrderItemId;
-          console.log('🔍 [SAVE DEBUG] Iniciando save:', {
-            orderId,
-            activeOrderItemId,
-            activeProductId,
-            activeComponentId,
-          });
-          
+
           if (orderId) {
             try {
               const latestReviewData = await getOrderReviewData(orderId);
-              console.log('🔍 [SAVE DEBUG] Review data recebido:', latestReviewData);
-              
+
               const resolvedOrderItem = latestReviewData.find(
                 (entry: any) => entry.orderItemId === activeOrderItemId,
               );
-              console.log('🔍 [SAVE DEBUG] Resolved order item:', resolvedOrderItem);
-              
+
               if (
                 resolvedOrderItem?.orderItemId &&
                 typeof resolvedOrderItem.orderItemId === "string"
               ) {
                 candidateOrderItemId = resolvedOrderItem.orderItemId;
-                console.log('✅ [SAVE DEBUG] OrderItemId resolvido:', candidateOrderItemId);
-                console.log('⚠️ [SAVE DEBUG] Comparação de IDs:', {
-                  activeOrderItemId,
-                  resolvedOrderItemId: candidateOrderItemId,
-                  idsMatch: activeOrderItemId === candidateOrderItemId,
-                });
               } else {
-                console.warn('⚠️ [SAVE DEBUG] Não encontrou orderItemId no review, mantendo:', candidateOrderItemId);
+                console.warn(
+                  "⚠️ [SAVE DEBUG] Não encontrou orderItemId no review, mantendo:",
+                  candidateOrderItemId,
+                );
               }
             } catch (resolveError) {
               console.error(
@@ -1561,38 +1624,6 @@ export function CustomizationsReview({
 
             payload.data = normalizeCustomizationData(sanitizedData);
 
-            console.log('📤 [SAVE DEBUG] Antes da normalização:', {
-              hasImage: !!sanitizedData.image,
-              hasFinalArtwork: !!sanitizedData.final_artwork,
-              hasText: !!sanitizedData.text,
-              imagePreviewUrl: sanitizedData.image?.preview_url,
-              finalArtworkPreviewUrl: sanitizedData.final_artwork?.preview_url,
-            });
-            
-            console.log('📤 [SAVE DEBUG] Após normalização - payload.data:', {
-              hasImage: !!(payload.data as any).image,
-              hasFinalArtwork: !!(payload.data as any).final_artwork,
-              hasText: !!(payload.data as any).text,
-              imagePreviewUrl: (payload.data as any).image?.preview_url,
-              finalArtworkPreviewUrl: (payload.data as any).final_artwork?.preview_url,
-            });
-
-            console.log('📤 [SAVE DEBUG] Enviando para backend:', {
-              orderId,
-              orderItemId: candidateOrderItemId,
-              customizationType: payload.customizationType,
-              hasFinalArtwork: !!payload.finalArtwork,
-              finalArtworkKeys: payload.finalArtwork ? Object.keys(payload.finalArtwork) : [],
-              dataKeys: Object.keys(payload.data),
-              sanitizedDataPreview: {
-                hasImage: !!sanitizedData.image,
-                hasFinalArtwork: !!sanitizedData.final_artwork,
-                hasText: !!sanitizedData.text,
-                imagePreviewUrl: sanitizedData.image?.preview_url,
-                finalArtworkPreviewUrl: sanitizedData.final_artwork?.preview_url,
-              }
-            });
-
             await saveOrderItemCustomization(
               orderId,
               candidateOrderItemId,
@@ -1602,16 +1633,12 @@ export function CustomizationsReview({
 
           toast.dismiss("order-customization-save");
           onCustomizationSaved?.();
-          
-          // Aguardar um pouco para backend processar, então atualizar Review
+
           setTimeout(() => {
             setRefreshVersion((value) => value + 1);
           }, 500);
 
-          // ❌ REMOVIDO: onCustomizationUpdate causava recriação dos items e mudança de IDs
-          // O Review já busca os dados atualizados via fetchAvailableCustomizations
-
-          setModalOpen(false);
+          setActiveEditorKey(null);
           return;
         } catch (error) {
           console.error(
@@ -1647,7 +1674,7 @@ export function CustomizationsReview({
         );
       }
 
-      setModalOpen(false);
+      setActiveEditorKey(null);
       if (!orderId) {
         fetchAvailableCustomizations();
       }
@@ -1663,7 +1690,7 @@ export function CustomizationsReview({
       onCustomizationUpdate,
       onCustomizationSaved,
       saveOrderItemCustomization,
-      setModalOpen,
+      setActiveEditorKey,
     ],
   );
 
@@ -1868,6 +1895,9 @@ export function CustomizationsReview({
                     cIdx,
                   ) => {
                     const isIncomplete = missing.length > 0;
+                    const editorKey = `${
+                      validation.orderItemId || validation.productId
+                    }-${componentId}`;
 
                     return (
                       <div
@@ -1914,6 +1944,7 @@ export function CustomizationsReview({
                                           itemId,
                                           itemName || "Item",
                                           componentId,
+                                          editorKey,
                                           validation.orderItemId,
                                           validation.cartItemIndex,
                                         )
@@ -1982,6 +2013,7 @@ export function CustomizationsReview({
                                                     itemId,
                                                     itemName || "Item",
                                                     componentId,
+                                                    editorKey,
                                                     validation.orderItemId,
                                                     validation.cartItemIndex,
                                                   )
@@ -2012,6 +2044,7 @@ export function CustomizationsReview({
                                 itemId,
                                 itemName || "Item",
                                 componentId,
+                                editorKey,
                                 validation.orderItemId,
                                 validation.cartItemIndex,
                               )
@@ -2061,6 +2094,21 @@ export function CustomizationsReview({
                             </div>
                           </div>
                         )}
+
+                        {activeEditorKey === editorKey && activeItemId && (
+                          <div className="mt-3 border-t border-gray-100 pt-3">
+                            <ItemCustomizationModal
+                              isOpen={true}
+                              onClose={() => setActiveEditorKey(null)}
+                              renderMode="inline"
+                              itemId={activeItemId}
+                              itemName={activeItemName}
+                              customizations={activeCustomizations}
+                              onComplete={handleCustomizationComplete}
+                              initialValues={activeInitialValues}
+                            />
+                          </div>
+                        )}
                       </div>
                     );
                   },
@@ -2074,9 +2122,27 @@ export function CustomizationsReview({
           backendValidationState.progress &&
           backendValidationState.progress.total > 0 && (
             <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+              {(() => {
+                const { completed, total } = backendValidationState.progress;
+                const progressPercent = Math.max(
+                  0,
+                  Math.min(100, Math.round((completed / total) * 100)),
+                );
+                return (
+                  <div className="mb-2">
+                    <div className="h-1.5 w-full rounded-full bg-blue-100">
+                      <div
+                        className="h-1.5 rounded-full bg-blue-500 transition-all duration-300"
+                        style={{ width: `${progressPercent}%` }}
+                      />
+                    </div>
+                  </div>
+                );
+              })()}
               <p className="text-xs font-semibold text-blue-800">
-                Validando personalizações ({backendValidationState.progress.completed}
-                /{backendValidationState.progress.total})
+                Validando personalizações (
+                {backendValidationState.progress.completed}/
+                {backendValidationState.progress.total})
               </p>
               {backendValidationState.progress.currentLabel && (
                 <p className="text-xs text-blue-700 mt-1">
@@ -2138,18 +2204,6 @@ export function CustomizationsReview({
             </div>
           )}
       </Card>
-
-      {activeItemId && (
-        <ItemCustomizationModal
-          isOpen={modalOpen}
-          onClose={() => setModalOpen(false)}
-          itemId={activeItemId}
-          itemName={activeItemName}
-          customizations={activeCustomizations}
-          onComplete={handleCustomizationComplete}
-          initialValues={activeInitialValues}
-        />
-      )}
     </>
   );
 }
