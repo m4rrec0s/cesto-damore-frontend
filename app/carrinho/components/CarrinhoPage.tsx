@@ -275,6 +275,7 @@ export default function CarrinhoPageContent() {
   const [sendAnonymously, setSendAnonymously] = useState(false);
   const [isSelfRecipient, setIsSelfRecipient] = useState(false);
   const [isLoadingCep, setIsLoadingCep] = useState(false);
+  const [cepError, setCepError] = useState<string | null>(null);
   const [userDocument, setUserDocument] = useState<string>("");
   const [confirmationState, setConfirmationState] = useState<
     "none" | "animating" | "confirmed"
@@ -287,6 +288,7 @@ export default function CarrinhoPageContent() {
       message: string,
       options?: Parameters<(typeof toast)["success"]>[1],
     ) => {
+      if (type !== "error") return;
       toast[type](message, { id: CHECKOUT_PAYMENT_TOAST_ID, ...options });
     },
     [],
@@ -298,6 +300,7 @@ export default function CarrinhoPageContent() {
       message: string,
       options?: Parameters<(typeof toast)["success"]>[1],
     ) => {
+      if (type !== "error") return;
       toast[type](message, { id: CHECKOUT_FLOW_TOAST_ID, ...options });
     },
     [],
@@ -309,6 +312,7 @@ export default function CarrinhoPageContent() {
       message: string,
       options?: Parameters<(typeof toast)["success"]>[1],
     ) => {
+      if (type !== "error") return;
       toast[type](message, { id: CHECKOUT_PIX_TOAST_ID, ...options });
     },
     [],
@@ -1155,7 +1159,7 @@ export default function CarrinhoPageContent() {
         const latestOrder = await getOrder(currentOrderId);
         const orderTotal = getOrderGrandTotal(latestOrder);
         if (orderTotal === null) {
-          toast.error(
+          setPaymentError(
             "Não foi possível validar o valor atual do pedido. Tente novamente.",
           );
           return false;
@@ -1163,7 +1167,7 @@ export default function CarrinhoPageContent() {
 
         const expectedTotal = roundMoney(grandTotal);
         if (Math.abs(orderTotal - expectedTotal) > 0.01) {
-          toast.error(
+          setPaymentError(
             "O valor do pedido foi atualizado. Revise o carrinho antes de pagar.",
           );
           return false;
@@ -1171,7 +1175,7 @@ export default function CarrinhoPageContent() {
         return true;
       } catch (err) {
         logger.debug("Erro ao validar total do pedido:", err);
-        toast.error(
+        setPaymentError(
           "Não foi possível validar o valor do pedido. Tente novamente.",
         );
         return false;
@@ -1234,17 +1238,32 @@ export default function CarrinhoPageContent() {
 
   const buildPixDataFromStatus = useCallback(
     (
-      statusData: Record<string, unknown>,
+      statusPayload: Record<string, unknown>,
       fallbackAmount: number,
     ): PixData | null => {
-      const poi = statusData.point_of_interaction as
-        | Record<string, unknown>
-        | undefined;
-      const data = (poi?.transaction_data ||
-        poi?.transactionData ||
-        statusData.transaction_data ||
-        statusData.data ||
-        statusData) as Record<string, unknown>;
+      const asRecord = (
+        value: unknown,
+      ): Record<string, unknown> | undefined => {
+        if (!value || typeof value !== "object" || Array.isArray(value)) {
+          return undefined;
+        }
+        return value as Record<string, unknown>;
+      };
+      const statusData = asRecord(statusPayload.data) || statusPayload;
+      const mercadoPagoData = asRecord(statusData.mercado_pago_data);
+      const mercadoPagoPoi = asRecord(mercadoPagoData?.point_of_interaction);
+      const mercadoPagoTransaction = asRecord(mercadoPagoPoi?.transaction_data);
+      const pointOfInteraction =
+        asRecord(statusData.point_of_interaction) ||
+        mercadoPagoPoi;
+      const transactionData =
+        asRecord(pointOfInteraction?.transaction_data) ||
+        asRecord(pointOfInteraction?.transactionData) ||
+        asRecord(statusData.transaction_data) ||
+        asRecord(statusData.data) ||
+        asRecord(mercadoPagoData?.transaction_data) ||
+        mercadoPagoTransaction;
+      const data = asRecord(transactionData) || statusData;
 
       const getString = (
         source: Record<string, unknown> | undefined,
@@ -1262,25 +1281,36 @@ export default function CarrinhoPageContent() {
         const value = source[key];
         return typeof value === "number" ? value : undefined;
       };
+      const getIdString = (
+        source: Record<string, unknown> | undefined,
+        key: string,
+      ): string | undefined => {
+        if (!source) return undefined;
+        const value = source[key];
+        if (typeof value === "string") return value;
+        if (typeof value === "number") return String(value);
+        return undefined;
+      };
 
       const qrCode =
         getString(data, "qr_code") ||
         getString(data, "qrCode") ||
         getString(data, "qr_code_plain") ||
-        getString(statusData?.mercado_pago_data?.point_of_interaction?.transaction_data, "qr_code");
+        getString(mercadoPagoTransaction, "qr_code");
       const qrBase64 =
-        getString(data, "qr_code_base64") || 
+        getString(data, "qr_code_base64") ||
         getString(data, "qrCodeBase64") ||
-        getString(statusData?.mercado_pago_data?.point_of_interaction?.transaction_data, "qr_code_base64");
+        getString(mercadoPagoTransaction, "qr_code_base64");
       const ticketUrl =
-        getString(data, "ticket_url") || 
+        getString(data, "ticket_url") ||
         getString(data, "ticketUrl") ||
-        getString(statusData?.mercado_pago_data?.point_of_interaction?.transaction_data, "ticket_url");
+        getString(mercadoPagoTransaction, "ticket_url");
 
       if (!qrCode && !qrBase64) return null;
 
       const rawStatus =
         getString(statusData, "status") ||
+        getString(mercadoPagoData, "status") ||
         getString(data, "status") ||
         pendingOrder?.payment?.status ||
         "pending";
@@ -1288,6 +1318,7 @@ export default function CarrinhoPageContent() {
       const amount = Number(
         getNumber(data, "amount") ??
           getNumber(data, "transaction_amount") ??
+          getNumber(mercadoPagoData, "transaction_amount") ??
           getNumber(statusData, "transaction_amount") ??
           getNumber(statusData, "amount") ??
           fallbackAmount,
@@ -1302,26 +1333,32 @@ export default function CarrinhoPageContent() {
           getString(data, "expires_at") ||
           getString(data, "expiration_date") ||
           getString(data, "expiration_time") ||
+          getString(mercadoPagoData, "date_of_expiration") ||
           getString(statusData, "date_of_expiration") ||
           new Date(Date.now() + 30 * 60 * 1000).toISOString(),
         payment_id:
-          getString(statusData, "id") ||
-          getString(data, "payment_id") ||
+          getIdString(statusData, "id") ||
+          getIdString(mercadoPagoData, "id") ||
+          getIdString(data, "payment_id") ||
           pendingOrder?.payment?.id ||
           currentOrderId ||
           "",
         mercado_pago_id:
-          getString(statusData, "mercado_pago_id") ||
+          getIdString(statusData, "mercado_pago_id") ||
+          getIdString(mercadoPagoData, "id") ||
+          getString(mercadoPagoData, "mercado_pago_id") ||
           getString(statusData, "mercadoPagoId") ||
           pendingOrder?.payment?.mercado_pago_id ||
           "",
         status: rawStatus,
         status_detail:
           getString(data, "status_detail") ||
+          getString(mercadoPagoData, "status_detail") ||
           getString(statusData, "status_detail") ||
           "",
         payer_info:
-          (data?.payer_info as PixData["payer_info"]) ||
+          ((asRecord(data?.payer_info) ||
+            asRecord(mercadoPagoData?.payer)) as PixData["payer_info"]) ||
           ({
             id: "",
             email: user?.email || "",
@@ -1390,13 +1427,13 @@ export default function CarrinhoPageContent() {
       pixGeneratedForOrderRef.current !== currentOrderId
     ) {
       if (!customizationsValid) {
-        toast.error(
+        setPaymentError(
           "Complete as personalizações pendentes antes de gerar o pagamento.",
         );
         return;
       }
       if (!isDeliveryScheduleValid) {
-        toast.error(
+        setPaymentError(
           "A data/horário de entrega não está mais disponível. Ajuste o agendamento.",
         );
         updateStepUrl(2);
@@ -1409,7 +1446,7 @@ export default function CarrinhoPageContent() {
         if (!totalsOk) return;
         const reused = await tryReuseExistingPixPayment();
         if (!reused) {
-          toast.error(
+          setPaymentError(
             "Não foi possível recuperar o PIX pendente. Tente novamente mais tarde.",
           );
         }
@@ -1568,11 +1605,23 @@ export default function CarrinhoPageContent() {
   ]);
 
   useEffect(() => {
-    if (paymentMethod === "pix" && currentStep === 3) {
+    if (paymentMethod === "pix" && currentStep === 3 && currentOrderId) {
       generatePixPayment();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [paymentMethod, currentStep]);
+  }, [
+    paymentMethod,
+    currentStep,
+    currentOrderId,
+    pendingOrder?.payment?.id,
+    pendingOrder?.payment?.mercado_pago_id,
+    pendingOrder?.payment?.status,
+    isPendingPaymentExpired,
+    generatePixPayment,
+  ]);
+
+  const handleGeneratePix = useCallback(() => {
+    void generatePixPayment();
+  }, [generatePixPayment]);
 
   useEffect(() => {
     if (!isPendingPaymentExpired) return;
@@ -1585,17 +1634,17 @@ export default function CarrinhoPageContent() {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     async (formData: any) => {
       if (!currentOrderId) {
-        toast.error("Pedido não encontrado. Tente recarregar a página.");
+        setPaymentError("Pedido não encontrado. Tente recarregar a página.");
         return;
       }
       if (!customizationsValid) {
-        toast.error(
+        setPaymentError(
           "Complete as personalizações pendentes antes de prosseguir com o pagamento.",
         );
         return;
       }
       if (!isDeliveryScheduleValid) {
-        toast.error(
+        setPaymentError(
           "A data/horário de entrega não está mais disponível. Ajuste o agendamento.",
         );
         updateStepUrl(2);
@@ -1944,6 +1993,7 @@ export default function CarrinhoPageContent() {
     }
 
     setIsLoadingCep(true);
+    setCepError(null);
     try {
       const cepData = await getCepInfo(cep);
       setAddress(cepData.address);
@@ -1956,7 +2006,7 @@ export default function CarrinhoPageContent() {
       setNeighborhood("");
       setCity("");
       setState("");
-      toast.error(
+      setCepError(
         "Erro ao buscar informações do CEP. Verifique se o CEP está correto.",
       );
     } finally {
@@ -2505,6 +2555,7 @@ export default function CarrinhoPageContent() {
                       setZipCode={setZipCode}
                       handleCepSearch={handleCepSearch}
                       isLoadingCep={isLoadingCep}
+                      cepError={cepError}
                       address={address}
                       setAddress={setAddress}
                       houseNumber={houseNumber}
@@ -2554,7 +2605,7 @@ export default function CarrinhoPageContent() {
                       isGeneratingPix={isGeneratingPix}
                       isProcessing={isProcessing}
                       paymentError={paymentError}
-                      handlePlaceOrder={handleNextStep}
+                      handleGeneratePix={handleGeneratePix}
                       handleCardSubmit={handleCardSubmit}
                       payerEmail={user?.email || ""}
                       payerName={user?.name || ""}

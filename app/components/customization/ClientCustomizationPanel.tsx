@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { toast } from "sonner";
+import { Alert, AlertDescription } from "@/app/components/ui/alert";
 
 import { Image as ImageIcon, Type, Check, Loader2 } from "lucide-react";
 import { Button } from "@/app/components/ui/button";
@@ -48,6 +48,7 @@ export function ClientCustomizationPanel({
     }>
   >([]);
   const [currentRuleIndex, setCurrentRuleIndex] = useState(0);
+  const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
 
   useEffect(() => {
     const loadCustomizationConfig = async () => {
@@ -64,7 +65,7 @@ export function ClientCustomizationPanel({
         }
       } catch (error) {
         console.error("Erro ao carregar configuração:", error);
-        toast.error("Erro ao carregar opções de customização");
+        setFeedbackMessage("Erro ao carregar opções de customização");
         onComplete?.(false);
       } finally {
         setLoading(false);
@@ -95,7 +96,7 @@ export function ClientCustomizationPanel({
     const validation = customizationClientService.validateRequiredRules();
 
     if (!validation.valid) {
-      toast.error(
+      setFeedbackMessage(
         `Campos obrigatórios não preenchidos: ${validation.missingRules.join(
           ", "
         )}`
@@ -111,18 +112,19 @@ export function ClientCustomizationPanel({
       });
 
       if (!response.valid) {
-        toast.error(`Erros de validação: ${response.errors.join(", ")}`);
+        setFeedbackMessage(`Erros de validação: ${response.errors.join(", ")}`);
         return;
       }
 
       if (response.warnings.length > 0) {
-        response.warnings.forEach((warning) => toast.warning(warning));
+        setFeedbackMessage(response.warnings.join(" | "));
       }
 
+      setFeedbackMessage(null);
       onComplete?.(true);
     } catch (error) {
       console.error("Erro ao validar customizações:", error);
-      toast.error("Erro ao validar customizações");
+      setFeedbackMessage("Erro ao validar customizações");
     }
   };
 
@@ -150,6 +152,11 @@ export function ClientCustomizationPanel({
 
   return (
     <div className="space-y-6">
+      {feedbackMessage ? (
+        <Alert variant="destructive">
+          <AlertDescription>{feedbackMessage}</AlertDescription>
+        </Alert>
+      ) : null}
       
       <div className="flex items-center justify-between">
         <div className="text-sm text-muted-foreground">
@@ -255,7 +262,6 @@ function CustomizationRuleStep({
     const photos = await Promise.all(photoPromises);
 
     updateData({ photos });
-    toast.success(`${files.length} foto(s) adicionada(s)`);
   };
 
   const options = customization.customization_data.options as

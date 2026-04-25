@@ -33,6 +33,7 @@ interface StepDeliveryProps {
   setZipCode: (val: string) => void;
   handleCepSearch: (cep: string) => void;
   isLoadingCep: boolean;
+  cepError?: string | null;
   address: string;
   setAddress: (val: string) => void;
   houseNumber: string;
@@ -77,6 +78,7 @@ export const StepDelivery = ({
   zipCode,
   setZipCode,
   handleCepSearch,
+  cepError,
   address,
   setAddress,
   houseNumber,
@@ -268,6 +270,18 @@ export const StepDelivery = ({
                       className="h-10 border-gray-300 rounded focus:ring-[#3483fa]"
                     />
                   </div>
+
+                  {cepError && (
+                    <Alert
+                      variant="destructive"
+                      className="bg-red-50 border-red-200 py-2"
+                    >
+                      <AlertCircle className="h-4 w-4 text-red-600" />
+                      <AlertDescription className="text-red-800 text-xs">
+                        {cepError}
+                      </AlertDescription>
+                    </Alert>
+                  )}
 
                   {addressWarning && (
                     <Alert

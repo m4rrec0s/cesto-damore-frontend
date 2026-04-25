@@ -674,7 +674,6 @@ export default function ClientFabricEditor({
     if (!fabricRef || !currentFrameId) return;
 
     setIsProcessingImage(true);
-    const tid = toast.loading("Processando imagem...");
 
     try {
       const blob = dataURLtoBlob(croppedImageUrl);
@@ -728,11 +727,9 @@ export default function ClientFabricEditor({
       setCropDialogOpen(false);
       setFileToCrop(null);
       setCurrentFrameId(null);
-
-      toast.success("Imagem aplicada!", { id: tid });
     } catch (err) {
       console.error("Erro no processamento da imagem:", err);
-      toast.error("Erro ao salvar imagem", { id: tid });
+      toast.error("Erro ao salvar imagem");
     } finally {
       setIsProcessingImage(false);
     }
@@ -741,7 +738,6 @@ export default function ClientFabricEditor({
   const handleComplete = async () => {
     if (!fabricRef) return;
 
-    const tid = toast.loading("Gerando arquivos finais...");
     try {
       const originalTransform = [...(fabricRef as any).viewportTransform];
       (fabricRef as any).setViewportTransform([
@@ -778,10 +774,9 @@ export default function ClientFabricEditor({
       );
 
       onComplete(images as ImageData[], previewUrl, state, highQualityUrl);
-      toast.success("Design concluído!", { id: tid });
     } catch (err) {
       console.error("Erro ao finalizar:", err);
-      toast.error("Erro ao salvar", { id: tid });
+      toast.error("Erro ao salvar");
     }
   };
 

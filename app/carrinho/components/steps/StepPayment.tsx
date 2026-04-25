@@ -17,7 +17,7 @@ interface StepPaymentProps {
   isGeneratingPix: boolean;
   isProcessing: boolean;
   paymentError: string | null;
-  handlePlaceOrder: () => void;
+  handleGeneratePix: () => void;
   handleCardSubmit: (formData: MPPaymentFormData) => Promise<void>;
   payerEmail: string;
   payerName: string;
@@ -32,12 +32,13 @@ export const StepPayment = ({
   isGeneratingPix,
   isProcessing,
   paymentError,
-  handlePlaceOrder,
+  handleGeneratePix,
   handleCardSubmit,
   payerEmail,
   payerName,
 }: StepPaymentProps) => {
   const [isBrickLoading, setIsBrickLoading] = useState(false);
+  const hasOrderId = Boolean(currentOrderId);
 
   const handleCardFormStateChange = ({
     ready,
@@ -70,12 +71,12 @@ export const StepPayment = ({
         <div className="space-y-3">
           <div
             onClick={() => {
-              if (isBrickLoading) return;
+              if (isBrickLoading || !hasOrderId) return;
               setPaymentMethod("pix");
             }}
             className={cn(
               "bg-white p-5 rounded-lg border transition-all",
-              isBrickLoading
+              isBrickLoading || !hasOrderId
                 ? "cursor-not-allowed opacity-50"
                 : "cursor-pointer hover:bg-gray-50",
               paymentMethod === "pix"
@@ -128,9 +129,9 @@ export const StepPayment = ({
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        handlePlaceOrder();
+                        handleGeneratePix();
                       }}
-                      disabled={isProcessing}
+                      disabled={isProcessing || !hasOrderId}
                       className="bg-[#3483fa] text-white px-6 py-2 rounded font-medium hover:bg-[#2968c8] transition-colors"
                     >
                       Gerar QR Code
@@ -143,13 +144,17 @@ export const StepPayment = ({
 
           <div
             onClick={() => {
+              if (!hasOrderId) return;
               if (paymentMethod !== "card") {
                 setPaymentMethod("card");
                 setIsBrickLoading(true);
               }
             }}
             className={cn(
-              "bg-white p-5 rounded-lg border cursor-pointer transition-all hover:bg-gray-50",
+              "bg-white p-5 rounded-lg border transition-all",
+              hasOrderId
+                ? "cursor-pointer hover:bg-gray-50"
+                : "cursor-not-allowed opacity-50",
               paymentMethod === "card"
                 ? "border-gray-200"
                 : "border-gray-100 opacity-70",
@@ -197,6 +202,12 @@ export const StepPayment = ({
           </div>
         </div>
       </div>
+
+      {!hasOrderId && (
+        <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg text-amber-800 text-sm">
+          Preparando pedido para pagamento. Aguarde alguns segundos.
+        </div>
+      )}
 
       {paymentError && (
         <div className="p-4 bg-red-50 border border-red-100 rounded-lg flex gap-3 text-red-800 text-sm">

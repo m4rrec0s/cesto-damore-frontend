@@ -6,7 +6,6 @@ import { ProductCard } from "@/app/components/layout/product-card";
 import { Button } from "@/app/components/ui/button";
 import { Search, X } from "lucide-react";
 import useApi, { Product, Category, Type } from "@/app/hooks/use-api";
-import { toast } from "sonner";
 
 function SearchPageContent() {
   const searchParams = useSearchParams();
@@ -29,6 +28,7 @@ function SearchPageContent() {
   );
   const [totalPages, setTotalPages] = useState(1);
   const [showFilters] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const loadFilters = async () => {
     try {
@@ -45,6 +45,7 @@ function SearchPageContent() {
 
   const loadProducts = async () => {
     setLoading(true);
+    setLoadError(null);
     try {
       const params: {
         page: number;
@@ -73,7 +74,7 @@ function SearchPageContent() {
       setCurrentPage(response.pagination.page);
     } catch (error) {
       console.error("Erro ao buscar produtos:", error);
-      toast.error("Erro ao carregar produtos");
+      setLoadError("Não foi possível carregar os produtos no momento.");
     } finally {
       setLoading(false);
     }
@@ -131,6 +132,11 @@ function SearchPageContent() {
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-none sm:max-w-[90%] mx-auto px-4 py-8">
+        {loadError && (
+          <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+            {loadError}
+          </div>
+        )}
 
         <div className="flex gap-6">
           <aside

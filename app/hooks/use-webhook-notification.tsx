@@ -57,6 +57,8 @@ export function useWebhookNotification({
   const reconnectAttemptsRef = useRef(0);
   const reconnectTimeoutRef = useRef<number | null>(null);
   const connectRef = useRef<(() => void) | null>(null);
+  const disconnectRef = useRef<((force?: boolean) => void) | null>(null);
+  const pollOrderStatusRef = useRef<(() => Promise<void>) | null>(null);
   const lastConnectTimeRef = useRef<number | null>(null);
   const lastPaymentStatusRef = useRef<string | null>(null);
 
@@ -309,6 +311,9 @@ export function useWebhookNotification({
   useEffect(() => {
     connectRef.current = connect;
   }, [connect]);
+  useEffect(() => {
+    pollOrderStatusRef.current = pollOrderStatus;
+  }, [pollOrderStatus]);
 
   const disconnect = useCallback((force = false) => {
     if (eventSourceRef.current) {
@@ -332,18 +337,21 @@ export function useWebhookNotification({
 
     stopPolling();
   }, [onDisconnected, stopPolling]);
+  useEffect(() => {
+    disconnectRef.current = disconnect;
+  }, [disconnect]);
 
   useEffect(() => {
     if (enabled && orderId) {
-      connect();
+      connectRef.current?.();
     } else {
-      disconnect();
+      disconnectRef.current?.();
     }
 
     return () => {
-      disconnect();
+      disconnectRef.current?.();
     };
-  }, [orderId, enabled, connect, disconnect]);
+  }, [orderId, enabled]);
 
   useEffect(() => {
     if (!enabled || !orderId) {
@@ -353,11 +361,11 @@ export function useWebhookNotification({
     const recoverRealtimeConnection = () => {
       if (!enabled || !orderId) return;
 
-      void pollOrderStatus();
+      void pollOrderStatusRef.current?.();
 
       const readyState = eventSourceRef.current?.readyState;
       if (!eventSourceRef.current || readyState !== EventSource.OPEN) {
-        disconnect(true);
+        disconnectRef.current?.(true);
         setTimeout(() => {
           connectRef.current?.();
         }, 100);
@@ -381,15 +389,17 @@ export function useWebhookNotification({
       window.removeEventListener("online", recoverRealtimeConnection);
       document.removeEventListener("visibilitychange", onVisibilityChange);
     };
-  }, [enabled, orderId, pollOrderStatus, disconnect]);
+  }, [enabled, orderId]);
 
   return {
     isConnected,
     isPolling,
     disconnect,
     reconnect: () => {
-      disconnect(true);
-      setTimeout(connect, 100);
+      disconnectRef.current?.(true);
+      setTimeout(() => {
+        connectRef.current?.();
+      }, 100);
     },
   };
 }

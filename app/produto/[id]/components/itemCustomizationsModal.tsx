@@ -646,9 +646,6 @@ export function ItemCustomizationModal({
       });
 
       onComplete(result.length > 0, result);
-      toast.success("Design aplicado! (Será salvo ao adicionar ao carrinho)", {
-        id: "product-customization-design",
-      });
 
       setStep("selection");
       setFullLayoutBase(null);
@@ -1306,7 +1303,6 @@ export function ItemCustomizationModal({
                 }
 
                 onComplete(result.length > 0, result);
-                toast.success("Texto confirmado!");
               }}
               className="flex-1 gap-2 bg-amber-600 hover:bg-amber-700 text-white"
               disabled={
@@ -1485,20 +1481,6 @@ export function ItemCustomizationModal({
               </Button>
               <Button
                 onClick={() => {
-                  if (!hasRequiredImageCount) {
-                    toast.error(
-                      `Envie todas as ${maxImages} imagens para continuar.`,
-                    );
-                    return;
-                  }
-
-                  if (!hasAllImagesUploaded) {
-                    toast.error(
-                      "Finalize o envio de todas as imagens antes de confirmar.",
-                    );
-                    return;
-                  }
-
                   const result: CustomizationInput[] = [];
                   if (imageEntries.length > 0) {
                     result.push({
@@ -1534,9 +1516,6 @@ export function ItemCustomizationModal({
                   }
 
                   onComplete(result.length > 0, result);
-                  toast.success("Imagens confirmadas!", {
-                    id: "product-customization-images",
-                  });
                 }}
                 disabled={
                   loading || !hasRequiredImageCount || !hasAllImagesUploaded
@@ -1764,7 +1743,6 @@ export function ItemCustomizationModal({
                     }
                   });
                   onComplete(result.length > 0, result);
-                  toast.success("Opção selecionada!");
                 }}
                 className="flex-1 gap-2 bg-rose-600 hover:bg-rose-700"
               >

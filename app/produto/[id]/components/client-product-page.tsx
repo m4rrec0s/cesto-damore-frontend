@@ -218,7 +218,6 @@ const ClientProductPage = ({ id }: { id: string }) => {
     }
 
     openPrompt({ force: true });
-    toast.info("Faça login para continuar.");
     return false;
   }, [user, openPrompt]);
 
@@ -272,7 +271,6 @@ const ClientProductPage = ({ id }: { id: string }) => {
           setPreviewComponentId(itemId);
         }
 
-        toast.success("Personalização salva!");
       } else {
         setItemCustomizations((prev) => {
           const copy = { ...prev };
@@ -284,7 +282,6 @@ const ClientProductPage = ({ id }: { id: string }) => {
           setPreviewComponentId(null);
         }
 
-        toast.info("Personalização removida");
       }
 
       setActiveCustomizationModal(null);
@@ -314,15 +311,12 @@ const ClientProductPage = ({ id }: { id: string }) => {
           prev.includes(additionalId) ? prev : [...prev, additionalId],
         );
 
-        toast.success("Personalização do adicional salva!");
       } else {
         setAdditionalCustomizations((prev) => {
           const copy = { ...prev };
           delete copy[additionalId];
           return copy;
         });
-
-        toast.info("Personalização do adicional removida");
       }
 
       setActiveAdditionalModal(null);
@@ -541,14 +535,8 @@ const ClientProductPage = ({ id }: { id: string }) => {
           : [...prev, additionalId],
       );
 
-      const isAdding = !selectedAdditionalIds.includes(additionalId);
-      if (isAdding) {
-        toast.success("Adicional selecionado!");
-      } else {
-        toast.info("Adicional removido da seleção");
-      }
     },
-    [selectedAdditionalIds, ensureAuthenticated],
+    [ensureAuthenticated],
   );
 
   const router = useRouter();
@@ -856,7 +844,6 @@ const ClientProductPage = ({ id }: { id: string }) => {
     }
 
     if (isUploading) {
-      toast.info("Aguarde finalizar o carregamento das personalizações.");
       return;
     }
 
@@ -1356,7 +1343,6 @@ const ClientProductPage = ({ id }: { id: string }) => {
         undefined,
         cartCustomizations,
       );
-      toast.success("Produto adicionado ao carrinho!");
       await animateAddToCartToHeader();
       router.push("/carrinho/rapido");
 

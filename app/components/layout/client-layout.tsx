@@ -1,6 +1,6 @@
 "use client";
 
-import React, { ReactNode } from "react";
+import React, { ReactNode, useEffect, useState } from "react";
 import { SiteHeader } from "./header";
 import { SiteFooter } from "./footer";
 import { usePathname } from "next/navigation";
@@ -8,6 +8,16 @@ import WhatsappToggle from "../whatsappToggle";
 
 const ClientLayout = ({ children }: { children: ReactNode }) => {
   const pathname = usePathname();
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  // Evita mismatch de hidratação quando o pathname inicial diverge entre SSR e cliente.
+  if (!isMounted) {
+    return <>{children}</>;
+  }
 
   const isDashboardPage =
     pathname === "/manage" ||

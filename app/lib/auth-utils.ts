@@ -1,4 +1,3 @@
-import { toast } from "sonner";
 import logger from "@/app/utils/logger";
 
 /**
@@ -15,7 +14,6 @@ export const getAuthToken = (): string | null => {
 
   if (!token || token === "null" || token === "undefined") {
     logger.warn("Token JWT não encontrado ou inválido");
-    toast.error("Sessão expirada. Faça login novamente.");
     return null;
   }
 

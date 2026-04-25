@@ -3,7 +3,6 @@ import { Badge } from "@/app/components/ui/badge";
 import { Additional } from "@/app/hooks/use-api";
 import { useCartContext } from "@/app/hooks/cart-context";
 import { ShoppingCart, Check, Palette } from "lucide-react";
-import { toast } from "sonner";
 import { useState } from "react";
 import { getInternalImageUrl, getPublicAssetUrl } from "@/lib/image-helper";
 
@@ -45,7 +44,7 @@ const AdditionalCard = ({
 
   const handleAddToCart = async () => {
     if (!productId || !additional.id) {
-      toast.error("Erro: Informações do produto ou adicional não encontradas");
+      console.error("Informações do produto ou adicional não encontradas");
       return;
     }
 
@@ -53,23 +52,17 @@ const AdditionalCard = ({
       hasProductRequiredCustomizations &&
       !hasCompletedProductCustomizations
     ) {
-      toast.warning(
-        "Complete as personalizações obrigatórias do produto antes de adicionar adicionais",
-      );
       return;
     }
 
     if (hasRequiredCustomizations && !hasCustomizations) {
       if (onCustomizeClick) {
         onCustomizeClick(additional.id);
-      } else {
-        toast.warning("Este adicional requer personalização");
       }
       return;
     }
 
     if (isInCart) {
-      toast.info("Este adicional já está no carrinho!");
       return;
     }
 
@@ -78,10 +71,9 @@ const AdditionalCard = ({
       if (onAddToCart) {
         await onAddToCart(additional.id);
       } else {
-        toast.error("Função de adicionar ao carrinho não disponível");
+        console.error("Função de adicionar ao carrinho não disponível");
       }
     } catch (error) {
-      toast.error("Erro ao adicionar adicional ao carrinho");
       console.error(error);
     } finally {
       setIsAddingToCart(false);
@@ -90,15 +82,12 @@ const AdditionalCard = ({
 
   const handleDirectAddToCartClick = () => {
     if (!hasCompletedProductCustomizations) {
-      toast.warning(
-        "Complete as personalizações obrigatórias do produto antes de adicionar este item.",
-      );
       return;
     }
     if (onAddToCart) {
       onAddToCart(additional.id);
     } else {
-      toast.error("Função de adicionar ao carrinho não disponível");
+      console.error("Função de adicionar ao carrinho não disponível");
     }
   };
 

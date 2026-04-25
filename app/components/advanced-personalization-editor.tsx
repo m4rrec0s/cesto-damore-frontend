@@ -11,9 +11,9 @@ import {
 import { Button } from "../components/ui/button";
 import { Label } from "../components/ui/label";
 import { Input } from "../components/ui/input";
+import { Alert, AlertDescription } from "../components/ui/alert";
 import { Trash2, Upload, DownloadIcon } from "lucide-react";
 import { getPublicAssetUrl } from "@/lib/image-helper";
-import { toast } from "sonner";
 import { usePersonalization } from "../hooks/use-personalization";
 import type { LayoutBase, ImageData, SlotDef } from "../types/personalization";
 import {
@@ -56,8 +56,16 @@ export default function AdvancedPersonalizationEditor({
       imageUrl?: string | null;
       filename?: string | null;
       uploading?: boolean;
+      uploadProgress?: number;
     }>
   >([]);
+  const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
+  const [slotUploadProgress, setSlotUploadProgress] = useState<
+    Record<string, number>
+  >({});
+  const hasActiveUploads =
+    Object.values(slotUploadProgress).some((p) => p > 0 && p < 100) ||
+    multipleChoiceOptions.some((opt) => !!opt.uploading);
 
   useEffect(() => {
     const fetchItems = async () => {
@@ -85,8 +93,13 @@ export default function AdvancedPersonalizationEditor({
   const uploadOptionImage = async (file: File, optionId: string) => {
     try {
       setMultipleChoiceOptions((prev) =>
-        prev.map((o) => (o.id === optionId ? { ...o, uploading: true } : o)),
+        prev.map((o) =>
+          o.id === optionId
+            ? { ...o, uploading: true, uploadProgress: 0 }
+            : o,
+        ),
       );
+      setFeedbackMessage(null);
 
       const token =
         typeof window !== "undefined"
@@ -95,21 +108,43 @@ export default function AdvancedPersonalizationEditor({
       const form = new FormData();
       form.append("image", file);
 
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/customization/upload-image`,
-        {
-          method: "POST",
-          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-          body: form,
+      const data = await new Promise<Record<string, string>>(
+        (resolve, reject) => {
+          const xhr = new XMLHttpRequest();
+          xhr.open(
+            "POST",
+            `${process.env.NEXT_PUBLIC_API_URL}/customization/upload-image`,
+          );
+          if (token) {
+            xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+          }
+          xhr.upload.onprogress = (event) => {
+            if (!event.lengthComputable) return;
+            const progress = Math.round((event.loaded / event.total) * 100);
+            setMultipleChoiceOptions((prev) =>
+              prev.map((o) =>
+                o.id === optionId
+                  ? { ...o, uploading: true, uploadProgress: progress }
+                  : o,
+              ),
+            );
+          };
+          xhr.onerror = () => reject(new Error("Erro ao enviar imagem"));
+          xhr.onload = () => {
+            try {
+              const json = JSON.parse(xhr.responseText || "{}");
+              if (xhr.status < 200 || xhr.status >= 300) {
+                reject(new Error(json?.error || "Erro ao enviar imagem"));
+                return;
+              }
+              resolve(json);
+            } catch {
+              reject(new Error("Erro ao processar resposta do upload"));
+            }
+          };
+          xhr.send(form);
         },
       );
-
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err?.error || "Erro ao enviar imagem");
-      }
-
-      const data = await res.json();
 
       setMultipleChoiceOptions((prev) =>
         prev.map((o) =>
@@ -119,17 +154,20 @@ export default function AdvancedPersonalizationEditor({
                 imageUrl: data.imageUrl || data.imageUrl || data.imageUrl,
                 filename: data.filename || data.filename,
                 uploading: false,
+                uploadProgress: 100,
               }
             : o,
         ),
       );
-
-      toast.success("Imagem carregada para opção");
     } catch (err) {
       console.error("Erro upload option image:", err);
-      toast.error((err as Error).message || "Erro ao enviar imagem");
+      setFeedbackMessage((err as Error).message || "Erro ao enviar imagem");
       setMultipleChoiceOptions((prev) =>
-        prev.map((o) => (o.id === optionId ? { ...o, uploading: false } : o)),
+        prev.map((o) =>
+          o.id === optionId
+            ? { ...o, uploading: false, uploadProgress: undefined }
+            : o,
+        ),
       );
     }
   };
@@ -169,10 +207,9 @@ export default function AdvancedPersonalizationEditor({
             : o,
         ),
       );
-      toast.success("Imagem removida");
     } catch (err) {
       console.error(err);
-      toast.error("Erro ao remover imagem");
+      setFeedbackMessage("Erro ao remover imagem");
     }
   };
 
@@ -187,7 +224,7 @@ export default function AdvancedPersonalizationEditor({
 
   useEffect(() => {
     if (error) {
-      toast.error(error);
+      setFeedbackMessage(error);
     }
   }, [error]);
 
@@ -209,7 +246,7 @@ export default function AdvancedPersonalizationEditor({
             setTimeout(() => updateCanvasPreview(), 0);
           };
           img.onerror = () => {
-            toast.error("Erro ao carregar imagem base64");
+            setFeedbackMessage("Erro ao carregar imagem base64");
           };
           img.src = imageUrl;
           return;
@@ -231,9 +268,8 @@ export default function AdvancedPersonalizationEditor({
         const blob = await response.blob();
 
         if (!blob.type.startsWith("image/")) {
-          toast.error(
+          setFeedbackMessage(
             "Erro: Imagem do Google Drive não acessível. Por favor, faça upload da imagem novamente.",
-            { duration: 5000 },
           );
           setBaseImageLoaded(false);
           return;
@@ -253,14 +289,14 @@ export default function AdvancedPersonalizationEditor({
           setTimeout(() => updateCanvasPreview(), 0);
         };
         img.onerror = () => {
-          toast.error(
+          setFeedbackMessage(
             "Erro ao processar imagem. Formato inválido ou corrompido.",
           );
         };
         img.src = base64;
       } catch (err) {
         console.error("Erro ao carregar imagem base:", err);
-        toast.error("Erro ao carregar imagem do layout.");
+        setFeedbackMessage("Erro ao carregar imagem do layout.");
       }
     };
 
@@ -366,15 +402,16 @@ export default function AdvancedPersonalizationEditor({
   const handleFileUpload = async (slotId: string, file: File) => {
     try {
       if (file.size > 10 * 1024 * 1024) {
-        toast.error("Arquivo muito grande. Máximo: 10MB");
+        setFeedbackMessage("Arquivo muito grande. Máximo: 10MB");
         return;
       }
 
       if (!file.type.startsWith("image/")) {
-        toast.error("Apenas imagens são permitidas");
+        setFeedbackMessage("Apenas imagens são permitidas");
         return;
       }
 
+      setSlotUploadProgress((prev) => ({ ...prev, [slotId]: 20 }));
       const imageData = await fileToImageData(file, slotId);
 
       const previewUrl = URL.createObjectURL(file);
@@ -385,16 +422,29 @@ export default function AdvancedPersonalizationEditor({
         slotImagesRef.current.set(slotId, img);
         updateCanvasPreview();
       };
+      setSlotUploadProgress((prev) => ({ ...prev, [slotId]: 70 }));
 
       setUploadedImages((prev) => {
         const newMap = new Map(prev);
         newMap.set(slotId, { ...imageData, previewUrl });
         return newMap;
       });
-
-      toast.success("Imagem carregada para preview");
+      setSlotUploadProgress((prev) => ({ ...prev, [slotId]: 100 }));
+      setTimeout(() => {
+        setSlotUploadProgress((prev) => {
+          const next = { ...prev };
+          delete next[slotId];
+          return next;
+        });
+      }, 400);
     } catch (err) {
       console.error("Erro no upload:", err);
+      setFeedbackMessage("Erro no upload da imagem.");
+      setSlotUploadProgress((prev) => {
+        const next = { ...prev };
+        delete next[slotId];
+        return next;
+      });
     }
   };
 
@@ -411,9 +461,9 @@ export default function AdvancedPersonalizationEditor({
       });
       slotImagesRef.current.delete(slotId);
       updateCanvasPreview();
-      toast.success("Imagem removida");
     } catch (err) {
       console.error("Erro ao remover:", err);
+      setFeedbackMessage("Erro ao remover imagem.");
     }
   };
 
@@ -437,7 +487,7 @@ export default function AdvancedPersonalizationEditor({
 
   const handleSwitchTo3D = async () => {
     if (!canvasRef.current) {
-      toast.error("Canvas não disponível para gerar preview 3D.");
+      setFeedbackMessage("Canvas não disponível para gerar preview 3D.");
       return;
     }
 
@@ -449,7 +499,7 @@ export default function AdvancedPersonalizationEditor({
 
     const preview = getPreviewUrl();
     if (!preview) {
-      toast.error("Preview 2D não disponível. Aguarde o carregamento.");
+      setFeedbackMessage("Preview 2D não disponível. Aguarde o carregamento.");
       return;
     }
 
@@ -459,14 +509,14 @@ export default function AdvancedPersonalizationEditor({
 
   const handleComplete = async () => {
     if (uploadedImages.size === 0) {
-      toast.error("Adicione pelo menos uma imagem");
+      setFeedbackMessage("Adicione pelo menos uma imagem");
       return;
     }
 
     const previewUrl = getPreviewUrl();
 
     if (!previewUrl) {
-      toast.error("Preview não disponível. Aguarde o carregamento.");
+      setFeedbackMessage("Preview não disponível. Aguarde o carregamento.");
       return;
     }
 
@@ -478,7 +528,7 @@ export default function AdvancedPersonalizationEditor({
     const previewUrl = getPreviewUrl();
 
     if (!previewUrl) {
-      toast.error("Nenhum preview disponível");
+      setFeedbackMessage("Nenhum preview disponível");
       return;
     }
 
@@ -486,7 +536,6 @@ export default function AdvancedPersonalizationEditor({
     link.href = previewUrl;
     link.download = `preview-${layoutBase.name}-${Date.now()}.png`;
     link.click();
-    toast.success("Preview baixado!");
   };
 
   const renderSlot = (slot: SlotDef) => {
@@ -526,6 +575,19 @@ export default function AdvancedPersonalizationEditor({
             <p className="text-xs text-muted-foreground">
               {imageData.width} × {imageData.height}px
             </p>
+            {slotUploadProgress[slot.id] ? (
+              <div className="space-y-1">
+                <p className="text-xs text-muted-foreground">
+                  Enviando imagem...
+                </p>
+                <div className="h-1.5 w-full rounded bg-gray-200">
+                  <div
+                    className="h-1.5 rounded bg-rose-500 transition-all"
+                    style={{ width: `${slotUploadProgress[slot.id]}%` }}
+                  />
+                </div>
+              </div>
+            ) : null}
           </div>
         ) : (
           <div className="border-2 border-dashed rounded overflow-hidden max-w-[150px] max-h-[150px] aspect-square flex items-center justify-center">
@@ -551,12 +613,30 @@ export default function AdvancedPersonalizationEditor({
             </Label>
           </div>
         )}
+        {!hasImage && slotUploadProgress[slot.id] ? (
+          <div className="space-y-1">
+            <p className="text-xs text-muted-foreground">Enviando imagem...</p>
+            <div className="h-1.5 w-full rounded bg-gray-200">
+              <div
+                className="h-1.5 rounded bg-rose-500 transition-all"
+                style={{ width: `${slotUploadProgress[slot.id]}%` }}
+              />
+            </div>
+          </div>
+        ) : null}
       </div>
     );
   };
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {feedbackMessage ? (
+        <div className="lg:col-span-2">
+          <Alert variant="destructive">
+            <AlertDescription>{feedbackMessage}</AlertDescription>
+          </Alert>
+        </div>
+      ) : null}
       <Card>
         <CardHeader>
           <CardTitle>Personalize seu item</CardTitle>
@@ -807,6 +887,19 @@ export default function AdvancedPersonalizationEditor({
                         className="h-10 w-10 object-cover rounded"
                       />
                     )}
+                    {opt.uploading ? (
+                      <div className="w-24">
+                        <div className="h-1.5 w-full rounded bg-gray-200">
+                          <div
+                            className="h-1.5 rounded bg-rose-500 transition-all"
+                            style={{ width: `${opt.uploadProgress ?? 0}%` }}
+                          />
+                        </div>
+                        <p className="text-[10px] text-muted-foreground mt-1">
+                          {opt.uploadProgress ?? 0}%
+                        </p>
+                      </div>
+                    ) : null}
 
                     <Button
                       variant="destructive"
@@ -838,7 +931,7 @@ export default function AdvancedPersonalizationEditor({
             <div className="flex gap-2">
               <Button
                 onClick={handleComplete}
-                disabled={loading || uploadedImages.size === 0}
+                disabled={loading || uploadedImages.size === 0 || hasActiveUploads}
                 className="flex-1"
               >
                 Confirmar Personalização

@@ -1600,9 +1600,7 @@ export function CustomizationsReview({
             );
           }
 
-          toast.success("Personalização salva no pedido!", {
-            id: "order-customization-save",
-          });
+          toast.dismiss("order-customization-save");
           onCustomizationSaved?.();
           
           // Aguardar um pouco para backend processar, então atualizar Review

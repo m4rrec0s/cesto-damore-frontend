@@ -6,7 +6,7 @@ import { Button } from "./ui/button";
 import { Label } from "./ui/label";
 import { Input } from "./ui/input";
 import { Trash2, Upload, Check, ArrowLeft } from "lucide-react";
-import { toast } from "sonner";
+import { Alert, AlertDescription } from "./ui/alert";
 import { dataURLtoBlob } from "@/app/lib/utils";
 import { usePersonalization } from "../hooks/use-personalization";
 import type { LayoutBase, ImageData, SlotDef } from "../types/personalization";
@@ -37,6 +37,13 @@ export default function ClientPersonalizationEditor({
   const [fileToCrop, setFileToCrop] = useState<File | null>(null);
   const [cropAspect, setCropAspect] = useState<number | undefined>(undefined);
   const [currentSlotId, setCurrentSlotId] = useState<string | null>(null);
+  const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<Record<string, number>>(
+    {},
+  );
+  const hasActiveUploads = Object.values(uploadProgress).some(
+    (progress) => progress > 0 && progress < 100,
+  );
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const baseImageRef = useRef<HTMLImageElement | null>(null);
@@ -69,7 +76,7 @@ export default function ClientPersonalizationEditor({
 
         const blob = await response.blob();
         if (!blob.type.startsWith("image/")) {
-          toast.error("Erro: Imagem não acessível");
+          setFeedbackMessage("Não foi possível carregar a imagem do layout.");
           return;
         }
 
@@ -89,7 +96,7 @@ export default function ClientPersonalizationEditor({
         img.src = base64;
       } catch (err) {
         console.error("Erro ao carregar imagem base:", err);
-        toast.error("Erro ao carregar preview do layout");
+        setFeedbackMessage("Erro ao carregar preview do layout");
       }
     };
 
@@ -235,12 +242,12 @@ export default function ClientPersonalizationEditor({
 
   const handleFileUpload = async (slotId: string, file: File) => {
     if (file.size > 10 * 1024 * 1024) {
-      toast.error("Arquivo muito grande. Máximo: 10MB");
+      setFeedbackMessage("Arquivo muito grande. Máximo: 10MB");
       return;
     }
 
     if (!file.type.startsWith("image/")) {
-      toast.error("Apenas imagens são permitidas");
+      setFeedbackMessage("Apenas imagens são permitidas");
       return;
     }
 
@@ -250,19 +257,21 @@ export default function ClientPersonalizationEditor({
     setCropAspect(aspect);
     setCurrentSlotId(slotId);
     setCropDialogOpen(true);
+    setFeedbackMessage(null);
   };
 
   const handleCropComplete = async (croppedImageUrl: string) => {
     if (!currentSlotId) return;
 
     try {
-
+      setUploadProgress((prev) => ({ ...prev, [currentSlotId]: 20 }));
       const blob = dataURLtoBlob(croppedImageUrl);
       const file = new File([blob], "cropped-image.png", {
         type: "image/png",
       });
 
       const previewUrl = URL.createObjectURL(file);
+      setUploadProgress((prev) => ({ ...prev, [currentSlotId]: 55 }));
 
       const img = new Image();
       img.crossOrigin = "anonymous";
@@ -276,6 +285,7 @@ export default function ClientPersonalizationEditor({
       slotImagesRef.current.set(currentSlotId, img);
 
       const imageData = await fileToImageData(file, currentSlotId);
+      setUploadProgress((prev) => ({ ...prev, [currentSlotId]: 85 }));
 
       setUploadedImages((prev) => {
         const newMap = new Map(prev);
@@ -286,11 +296,25 @@ export default function ClientPersonalizationEditor({
       setTimeout(() => {
         updateCanvasPreview();
       }, 100);
-
-      toast.success("Foto adicionada!");
+      setUploadProgress((prev) => ({ ...prev, [currentSlotId]: 100 }));
+      setTimeout(() => {
+        setUploadProgress((prev) => {
+          const next = { ...prev };
+          delete next[currentSlotId];
+          return next;
+        });
+      }, 400);
+      setFeedbackMessage(null);
     } catch (err) {
       console.error("Erro ao processar imagem cortada:", err);
-      toast.error("Erro ao adicionar foto");
+      setFeedbackMessage("Erro ao adicionar foto");
+      if (currentSlotId) {
+        setUploadProgress((prev) => {
+          const next = { ...prev };
+          delete next[currentSlotId];
+          return next;
+        });
+      }
     }
   };
   const handleRemoveImage = (slotId: string) => {
@@ -307,7 +331,6 @@ export default function ClientPersonalizationEditor({
 
     slotImagesRef.current.delete(slotId);
     updateCanvasPreview();
-    toast.success("Foto removida");
   };
 
   const getPreviewUrl = useCallback((): string | null => {
@@ -321,19 +344,19 @@ export default function ClientPersonalizationEditor({
   }, []);
 
   const handleComplete = () => {
-
     if (layoutBase.slots.length > 0 && uploadedImages.size === 0) {
-      toast.error("Adicione pelo menos uma foto");
+      setFeedbackMessage("Adicione pelo menos uma foto");
       return;
     }
 
     const previewUrl = getPreviewUrl();
 
     if (!previewUrl) {
-      toast.error("Erro ao gerar preview. Tente novamente.");
+      setFeedbackMessage("Erro ao gerar preview. Tente novamente.");
       return;
     }
 
+    setFeedbackMessage(null);
     const images = Array.from(uploadedImages.values());
     onComplete(images, previewUrl);
   };
@@ -391,12 +414,28 @@ export default function ClientPersonalizationEditor({
             />
           </label>
         )}
+        {uploadProgress[slot.id] ? (
+          <div className="mt-2 space-y-1">
+            <p className="text-xs text-gray-500">Enviando foto...</p>
+            <div className="h-1.5 w-full rounded bg-gray-200">
+              <div
+                className="h-1.5 rounded bg-purple-600 transition-all"
+                style={{ width: `${uploadProgress[slot.id]}%` }}
+              />
+            </div>
+          </div>
+        ) : null}
       </div>
     );
   };
 
   return (
     <div className="space-y-6">
+      {feedbackMessage ? (
+        <Alert variant="destructive">
+          <AlertDescription>{feedbackMessage}</AlertDescription>
+        </Alert>
+      ) : null}
       <div className="flex items-center justify-between">
         <Button variant="ghost" onClick={onBack} className="gap-2">
           <ArrowLeft className="h-4 w-4" />
@@ -467,7 +506,10 @@ export default function ClientPersonalizationEditor({
         </Button>
         <Button
           onClick={handleComplete}
-          disabled={layoutBase.slots.length > 0 && uploadedImages.size === 0}
+          disabled={
+            layoutBase.slots.length > 0 &&
+            (uploadedImages.size === 0 || hasActiveUploads)
+          }
           className="bg-purple-600 hover:bg-purple-700 gap-2"
         >
           <Check className="h-4 w-4" />

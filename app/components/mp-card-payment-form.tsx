@@ -159,7 +159,7 @@ export function MPCardPaymentForm({
         clearTimeout(timer);
       }
     };
-  }, [orderId]);
+  }, []);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -362,6 +362,11 @@ export function MPCardPaymentForm({
 
   return (
     <div className="bg-white overflow-hidden">
+      {!orderId && (
+        <div className="p-4 bg-amber-50 border-b border-amber-200 text-amber-800 text-sm">
+          Preparando pedido para carregar o formulário de cartão.
+        </div>
+      )}
       {localError && (
         <div className="p-4 bg-red-50 border-b border-red-200">
           <div className="flex gap-3">
@@ -385,7 +390,7 @@ export function MPCardPaymentForm({
         </div>
       )}
 
-      {!localError && (
+      {!localError && orderId && (
         <div className="relative min-h-[400px]">
           <div>
             <CardPayment

@@ -11,7 +11,7 @@ import { Button } from "../components/ui/button";
 import { Label } from "../components/ui/label";
 import { Input } from "../components/ui/input";
 import { Loader2, Upload, Trash2, Eye } from "lucide-react";
-import { toast } from "sonner";
+import { Alert, AlertDescription } from "../components/ui/alert";
 import { usePersonalization } from "../hooks/use-personalization";
 import type { LayoutBase, ImageData, SlotDef } from "../types/personalization";
 
@@ -34,39 +34,60 @@ export default function PersonalizationEditor({
   >(new Map());
   const [previewUrl, setPreviewUrl] = useState<string>("");
   const [generatingPreview, setGeneratingPreview] = useState(false);
+  const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<Record<string, number>>(
+    {},
+  );
+  const hasActiveUploads = Object.values(uploadProgress).some(
+    (progress) => progress > 0 && progress < 100,
+  );
 
   useEffect(() => {
     if (error) {
-      toast.error(error);
+      setFeedbackMessage(error);
     }
   }, [error]);
 
   const handleFileUpload = async (slotId: string, file: File) => {
     try {
-
       if (file.size > 10 * 1024 * 1024) {
-        toast.error("Arquivo muito grande. Máximo: 10MB");
+        setFeedbackMessage("Arquivo muito grande. Máximo: 10MB");
         return;
       }
 
       if (!file.type.startsWith("image/")) {
-        toast.error("Apenas imagens são permitidas");
+        setFeedbackMessage("Apenas imagens são permitidas");
         return;
       }
 
+      setFeedbackMessage(null);
+      setUploadProgress((prev) => ({ ...prev, [slotId]: 20 }));
       const imageData = await fileToImageData(file, slotId);
+      setUploadProgress((prev) => ({ ...prev, [slotId]: 70 }));
       const previewUrl = URL.createObjectURL(file);
       setUploadedImages((prev) => {
         const newMap = new Map(prev);
         newMap.set(slotId, { ...imageData, previewUrl });
         return newMap;
       });
-
-      toast.success("Imagem carregada para preview");
+      setUploadProgress((prev) => ({ ...prev, [slotId]: 100 }));
+      setTimeout(() => {
+        setUploadProgress((prev) => {
+          const next = { ...prev };
+          delete next[slotId];
+          return next;
+        });
+      }, 400);
 
       await handleGeneratePreview();
     } catch (err) {
       console.error("Erro no upload:", err);
+      setFeedbackMessage("Não foi possível processar a imagem.");
+      setUploadProgress((prev) => {
+        const next = { ...prev };
+        delete next[slotId];
+        return next;
+      });
     }
   };
 
@@ -81,11 +102,11 @@ export default function PersonalizationEditor({
         newMap.delete(slotId);
         return newMap;
       });
-      toast.success("Imagem removida");
 
       await handleGeneratePreview();
     } catch (err) {
       console.error("Erro ao remover:", err);
+      setFeedbackMessage("Não foi possível remover a imagem.");
     }
   };
 
@@ -116,10 +137,11 @@ export default function PersonalizationEditor({
 
   const handleComplete = () => {
     if (uploadedImages.size === 0) {
-      toast.error("Adicione pelo menos uma imagem");
+      setFeedbackMessage("Adicione pelo menos uma imagem");
       return;
     }
 
+    setFeedbackMessage(null);
     const images = Array.from(uploadedImages.values());
     onComplete?.(images, previewUrl);
   };
@@ -182,6 +204,17 @@ export default function PersonalizationEditor({
             </Label>
           </div>
         )}
+        {uploadProgress[slot.id] ? (
+          <div className="space-y-1">
+            <p className="text-xs text-muted-foreground">Enviando imagem...</p>
+            <div className="h-1.5 w-full rounded bg-gray-200">
+              <div
+                className="h-1.5 rounded bg-purple-600 transition-all"
+                style={{ width: `${uploadProgress[slot.id]}%` }}
+              />
+            </div>
+          </div>
+        ) : null}
       </div>
     );
   };
@@ -194,13 +227,21 @@ export default function PersonalizationEditor({
           <CardTitle>Personalize seu item</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
+          {feedbackMessage ? (
+            <Alert variant="destructive">
+              <AlertDescription>{feedbackMessage}</AlertDescription>
+            </Alert>
+          ) : null}
           {layoutBase.slots.map((slot) => renderSlot(slot))}
 
           <div className="flex gap-2 pt-4 border-t">
             <Button
               onClick={handleGeneratePreview}
               disabled={
-                loading || generatingPreview || uploadedImages.size === 0
+                loading ||
+                generatingPreview ||
+                uploadedImages.size === 0 ||
+                hasActiveUploads
               }
               variant="outline"
               className="flex-1"

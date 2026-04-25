@@ -164,7 +164,6 @@ export function useCustomizationManager({
         }
 
         const created = await response.json();
-        toast.success("Customização criada com sucesso!");
 
         await fetchCustomizations();
 
@@ -217,7 +216,6 @@ export function useCustomizationManager({
         }
 
         const updated = await response.json();
-        toast.success("Customização atualizada com sucesso!");
 
         await fetchCustomizations();
 
@@ -262,8 +260,6 @@ export function useCustomizationManager({
               "Erro ao deletar customização",
           );
         }
-
-        toast.success("Customização deletada com sucesso!");
 
         await fetchCustomizations();
 

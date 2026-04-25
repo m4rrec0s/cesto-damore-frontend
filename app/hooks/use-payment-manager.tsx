@@ -43,7 +43,6 @@ export function usePaymentManager() {
    */
   const handleCancelOrder = useCallback(async () => {
     if (!pendingOrder) {
-      toast.error("Nenhum pedido para cancelar");
       return false;
     }
 
@@ -52,8 +51,6 @@ export function usePaymentManager() {
       await cancelOrder(pendingOrder.id);
 
       setPendingOrder(null);
-
-      toast.success("Pedido cancelado com sucesso");
       return true;
     } catch (error) {
       console.error("Erro ao cancelar pedido:", error);

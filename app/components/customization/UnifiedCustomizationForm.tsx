@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { toast } from "sonner";
+import { Alert, AlertDescription } from "@/app/components/ui/alert";
 import { Loader2, Check } from "lucide-react";
 import { Input } from "@/app/components/ui/input";
 import { Textarea } from "@/app/components/ui/textarea";
@@ -56,6 +56,7 @@ export function UnifiedCustomizationForm({
       message?: string;
     }>
   >([]);
+  const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
 
   useEffect(() => {
     const loadConfig = async () => {
@@ -114,7 +115,7 @@ export function UnifiedCustomizationForm({
         }
       } catch (error) {
         console.error("Erro ao carregar configuração:", error);
-        toast.error("Erro ao carregar opções de customização");
+        setFeedbackMessage("Erro ao carregar opções de customização");
         onComplete?.(false, []);
       } finally {
         setLoading(false);
@@ -183,7 +184,7 @@ export function UnifiedCustomizationForm({
               const conflictingSelection = selections.find(
                 (sel) => sel.itemId === conflictingOptionId,
               );
-              toast.error(
+              setFeedbackMessage(
                 constraint.message ||
                   `Não é possível selecionar "${optionLabel}" pois "${conflictingSelection?.label}" já está selecionado em outro componente.`,
               );
@@ -211,8 +212,7 @@ export function UnifiedCustomizationForm({
               if (value?.id === conflictingOptionId) {
 
                 delete newData[customizationKey];
-
-                toast.info(
+                setFeedbackMessage(
                   constraint.message ||
                     `"${value.label}" foi desmarcado pois não é compatível com "${optionLabel}"`,
                 );
@@ -318,7 +318,7 @@ export function UnifiedCustomizationForm({
     const photos = await Promise.all(photoPromises);
 
     handleCustomizationChange(customizationId, "IMAGES", photos);
-    toast.success(`${files.length} foto(s) adicionada(s)`);
+    setFeedbackMessage(`${files.length} foto(s) adicionada(s).`);
   };
 
   const handleLayoutBaseComplete = (
@@ -339,7 +339,7 @@ export function UnifiedCustomizationForm({
       );
     }
 
-    toast.success("Personalização do layout concluída!");
+    setFeedbackMessage("Personalização do layout concluída.");
   };
 
   if (loading) {
@@ -378,6 +378,11 @@ export function UnifiedCustomizationForm({
 
   return (
     <div className="space-y-4 w-full">
+      {feedbackMessage ? (
+        <Alert>
+          <AlertDescription>{feedbackMessage}</AlertDescription>
+        </Alert>
+      ) : null}
       {layoutBaseCustomization && layoutBase && (
         <div className="mb-6">
           <div className="space-y-3">

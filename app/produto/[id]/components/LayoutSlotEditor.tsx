@@ -11,8 +11,8 @@ import {
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
+import { Alert, AlertDescription } from "@/app/components/ui/alert";
 import { Upload, X, Download, Eye, EyeOff } from "lucide-react";
-import { toast } from "sonner";
 import { dataURLtoBlob } from "@/app/lib/utils";
 import type { LayoutBase, ImageData } from "@/app/types/personalization";
 import { getDirectImageUrl } from "@/app/helpers/drive-normalize";
@@ -57,6 +57,10 @@ export function LayoutSlotEditor({
   const [fileToCrop, setFileToCrop] = useState<File | null>(null);
   const [cropAspect, setCropAspect] = useState<number | undefined>(undefined);
   const [currentSlotId, setCurrentSlotId] = useState<string | null>(null);
+  const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<Record<string, number>>(
+    {},
+  );
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const baseImageRef = useRef<HTMLImageElement | null>(null);
@@ -75,7 +79,7 @@ export function LayoutSlotEditor({
         };
 
         img.onerror = () => {
-          toast.error("Erro ao carregar imagem base do layout");
+          setFeedbackMessage("Erro ao carregar imagem base do layout");
         };
 
         const normalizedUrl = getDirectImageUrl(layoutBase.previewImageUrl);
@@ -93,7 +97,7 @@ export function LayoutSlotEditor({
         }
       } catch (err) {
         console.error("Erro ao carregar imagem base:", err);
-        toast.error("Erro ao carregar layout");
+        setFeedbackMessage("Erro ao carregar layout");
       }
     };
 
@@ -225,12 +229,12 @@ export function LayoutSlotEditor({
 
   const handleFileUpload = async (slotId: string, file: File) => {
     if (file.size > 10 * 1024 * 1024) {
-      toast.error("Arquivo muito grande. Máximo: 10MB");
+      setFeedbackMessage("Arquivo muito grande. Máximo: 10MB");
       return;
     }
 
     if (!file.type.startsWith("image/")) {
-      toast.error("Apenas imagens são permitidas");
+      setFeedbackMessage("Apenas imagens são permitidas");
       return;
     }
 
@@ -243,13 +247,14 @@ export function LayoutSlotEditor({
     setCropAspect(aspect);
     setCurrentSlotId(slotId);
     setCropDialogOpen(true);
+    setFeedbackMessage(null);
   };
 
   const handleCropComplete = async (croppedImageUrl: string) => {
     if (!currentSlotId) return;
 
     try {
-
+      setUploadProgress((prev) => ({ ...prev, [currentSlotId]: 20 }));
       const blob = dataURLtoBlob(croppedImageUrl);
       const file = new File([blob], "cropped-image.png", {
         type: "image/png",
@@ -257,6 +262,7 @@ export function LayoutSlotEditor({
 
       const imageData = await fileToImageData(file, currentSlotId);
       const preview = URL.createObjectURL(file);
+      setUploadProgress((prev) => ({ ...prev, [currentSlotId]: 60 }));
 
       const img = new Image();
       img.crossOrigin = "anonymous";
@@ -270,6 +276,7 @@ export function LayoutSlotEditor({
         ...prev,
         [currentSlotId]: { file, preview, imageData },
       }));
+      setUploadProgress((prev) => ({ ...prev, [currentSlotId]: 90 }));
 
       const allImages = Object.values({
         ...slotImages,
@@ -279,11 +286,24 @@ export function LayoutSlotEditor({
         .filter(Boolean);
 
       onImagesChange(allImages);
-
-      toast.success("Imagem adicionada ao slot");
+      setUploadProgress((prev) => ({ ...prev, [currentSlotId]: 100 }));
+      setTimeout(() => {
+        setUploadProgress((prev) => {
+          const next = { ...prev };
+          delete next[currentSlotId];
+          return next;
+        });
+      }, 400);
     } catch (err) {
       console.error("Erro no upload:", err);
-      toast.error("Erro ao processar imagem");
+      setFeedbackMessage("Erro ao processar imagem");
+      if (currentSlotId) {
+        setUploadProgress((prev) => {
+          const next = { ...prev };
+          delete next[currentSlotId];
+          return next;
+        });
+      }
     }
   };
 
@@ -310,16 +330,15 @@ export function LayoutSlotEditor({
         .filter(Boolean);
 
       onImagesChange(allImages);
-
-      toast.success("Imagem removida");
     } catch (err) {
       console.error("Erro ao remover:", err);
+      setFeedbackMessage("Erro ao remover imagem.");
     }
   };
 
   const handleDownloadPreview = () => {
     if (!canvasRef.current) {
-      toast.error("Preview não disponível");
+      setFeedbackMessage("Preview não disponível");
       return;
     }
 
@@ -329,10 +348,9 @@ export function LayoutSlotEditor({
       link.href = previewUrl;
       link.download = `preview-${layoutBase.name}-${Date.now()}.png`;
       link.click();
-      toast.success("Preview baixado!");
     } catch (err) {
       console.error("Erro ao baixar:", err);
-      toast.error("Erro ao baixar preview");
+      setFeedbackMessage("Erro ao baixar preview");
     }
   };
 
@@ -351,12 +369,12 @@ export function LayoutSlotEditor({
 
   const handleSwitchTo3D = async () => {
     if (!canvasRef.current) {
-      toast.error("Canvas não disponível para gerar preview 3D.");
+      setFeedbackMessage("Canvas não disponível para gerar preview 3D.");
       return;
     }
 
     if (!layoutBase.model_url) {
-      toast.error("Este layout não possui modelo 3D disponível.");
+      setFeedbackMessage("Este layout não possui modelo 3D disponível.");
       return;
     }
 
@@ -368,7 +386,7 @@ export function LayoutSlotEditor({
 
     const preview = getPreviewUrl();
     if (!preview) {
-      toast.error("Preview 2D não disponível. Aguarde o carregamento.");
+      setFeedbackMessage("Preview 2D não disponível. Aguarde o carregamento.");
       return;
     }
 
@@ -378,6 +396,11 @@ export function LayoutSlotEditor({
 
   return (
     <div className="space-y-4">
+      {feedbackMessage ? (
+        <Alert variant="destructive">
+          <AlertDescription>{feedbackMessage}</AlertDescription>
+        </Alert>
+      ) : null}
       <Card className="border-2 border-purple-200 bg-gradient-to-br from-purple-50 to-pink-50">
         <CardHeader>
           <div className="flex items-center justify-between">
@@ -498,6 +521,19 @@ export function LayoutSlotEditor({
                         <p className="text-xs text-muted-foreground">
                           ✅ {slotImages[slot.id].file.name}
                         </p>
+                        {uploadProgress[slot.id] ? (
+                          <div className="space-y-1">
+                            <p className="text-xs text-muted-foreground">
+                              Enviando imagem...
+                            </p>
+                            <div className="h-1.5 w-full rounded bg-gray-200">
+                              <div
+                                className="h-1.5 rounded bg-purple-600 transition-all"
+                                style={{ width: `${uploadProgress[slot.id]}%` }}
+                              />
+                            </div>
+                          </div>
+                        ) : null}
                       </div>
                     ) : (
                       <div className="border-2 border-dashed border-purple-300 rounded-lg overflow-hidden w-full max-w-[200px] h-[200px] flex items-center justify-center bg-gradient-to-br from-purple-50 to-pink-50 hover:border-purple-400 transition-colors">
@@ -525,6 +561,19 @@ export function LayoutSlotEditor({
                         </Label>
                       </div>
                     )}
+                    {!hasImage && uploadProgress[slot.id] ? (
+                      <div className="mt-2 space-y-1">
+                        <p className="text-xs text-muted-foreground">
+                          Enviando imagem...
+                        </p>
+                        <div className="h-1.5 w-full rounded bg-gray-200">
+                          <div
+                            className="h-1.5 rounded bg-purple-600 transition-all"
+                            style={{ width: `${uploadProgress[slot.id]}%` }}
+                          />
+                        </div>
+                      </div>
+                    ) : null}
                   </div>
                 );
               })}
