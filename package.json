@@ -43,9 +43,8 @@
     "fabric": "^7.1.0",
     "firebase": "^12.2.1",
     "lucide-react": "^0.542.0",
-    "mercadopago": "^0.5.0",
     "motion": "^12.23.24",
-    "next": "^9.3.3",
+    "next": "^15.5.2",
     "next-themes": "^0.4.6",
     "radix-ui": "^1.4.3",
     "react": "^19.2.4",
@@ -57,7 +56,8 @@
     "recharts": "^2.15.4",
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.3.1",
-    "three": "^0.180.0"
+    "three": "^0.180.0",
+    "vinext": "^0.0.44"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
@@ -73,7 +73,6 @@
     "tailwindcss": "^4",
     "tw-animate-css": "^1.3.8",
     "typescript": "^5",
-    "vinext": "^0.0.0",
     "vite": "^8.0.3"
   },
   "type": "module"
