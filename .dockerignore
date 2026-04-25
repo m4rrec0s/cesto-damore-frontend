@@ -16,3 +16,5 @@ yarn-error.log
 # Nunca enviar segredos para o contexto de build
 .env
 .env.*
+.serena/
+tsconfig.tsbuildinfo
