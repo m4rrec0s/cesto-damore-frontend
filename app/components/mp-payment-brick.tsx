@@ -10,9 +10,10 @@ import {
   CreditCard,
   QrCode,
 } from "lucide-react";
-import { initializeMercadoPago } from "../lib/mercadopago";
-
-const MP_PUBLIC_KEY = process.env.NEXT_PUBLIC_MERCADO_PAGO_PUBLIC_KEY;
+import {
+  getMercadoPagoPublicConfig,
+  initializeMercadoPago,
+} from "../lib/mercadopago";
 
 interface MPPaymentBrickProps {
   amount: number;
@@ -84,6 +85,7 @@ export function MPPaymentBrick({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [paymentReady, setPaymentReady] = useState(false);
   const [brickKey, setBrickKey] = useState(() => Date.now());
+  const [configReady, setConfigReady] = useState(false);
   const mountedRef = useRef(true);
 
   const initialAmountRef = useRef(amount);
@@ -102,11 +104,29 @@ export function MPPaymentBrick({
   useEffect(() => {
     mountedRef.current = true;
 
-    if (MP_PUBLIC_KEY) {
-      initializeMercadoPago(MP_PUBLIC_KEY);
-    }
+    let cancelled = false;
+
+    const prepareBrick = async () => {
+      try {
+        const config = await getMercadoPagoPublicConfig();
+        if (cancelled || !mountedRef.current) return;
+        initializeMercadoPago(config.publicKey);
+        setConfigReady(true);
+        setLocalError(null);
+      } catch (error) {
+        if (cancelled || !mountedRef.current) return;
+        setConfigReady(false);
+        setLocalError(
+          "Não foi possível carregar a configuração do Mercado Pago. Recarregue a página e tente novamente.",
+        );
+        console.error("Falha ao carregar configuração do Mercado Pago:", error);
+      }
+    };
+
+    void prepareBrick();
 
     return () => {
+      cancelled = true;
       mountedRef.current = false;
       try {
         const controller = (
@@ -121,7 +141,7 @@ export function MPPaymentBrick({
 
       }
     };
-  }, []);
+  }, [brickKey]);
 
   const handleRetry = useCallback(() => {
     setLocalError(null);
@@ -217,15 +237,22 @@ export function MPPaymentBrick({
     onPaymentMethodChange?.("card");
   }, [onPaymentMethodChange]);
 
-  if (!MP_PUBLIC_KEY) {
+  if (localError && !configReady) {
     return (
       <div className="p-6 border border-red-200 bg-red-50 rounded-2xl">
         <div className="flex items-center gap-3">
           <AlertCircle className="h-5 w-5 text-red-600" />
           <p className="text-red-600">
-            Chave pública do Mercado Pago não configurada
+            {localError}
           </p>
         </div>
+        <button
+          onClick={handleRetry}
+          className="mt-3 w-full flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium text-rose-600 hover:bg-rose-50 rounded-xl border border-rose-200 transition-colors"
+        >
+          <RefreshCw className="h-4 w-4" />
+          Tentar novamente
+        </button>
       </div>
     );
   }
@@ -278,7 +305,7 @@ export function MPPaymentBrick({
       )}
 
       
-      {!localError && (
+      {configReady && !localError && (
         <div className="p-4 sm:p-6 relative min-h-[450px]">
           <Payment
             key={stableKey}
@@ -331,6 +358,13 @@ export function MPPaymentBrick({
               </span>
             </div>
           )}
+        </div>
+      )}
+
+      {!configReady && !localError && (
+        <div className="p-6 flex items-center justify-center gap-2">
+          <Loader2 className="h-5 w-5 animate-spin text-rose-500" />
+          <span className="text-gray-600">Carregando configuração do pagamento...</span>
         </div>
       )}
 

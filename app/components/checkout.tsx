@@ -5,6 +5,7 @@ import { Button } from "@/app/components/ui/button";
 import { Card } from "@/app/components/ui/card";
 import { useCart } from "@/app/hooks/use-cart";
 import { Loader2, CreditCard, X } from "lucide-react";
+import { getMercadoPagoPublicConfig } from "@/app/lib/mercadopago";
 
 declare global {
   interface Window {
@@ -48,17 +49,26 @@ export function Checkout({ user, onClose, isOpen = true }: CheckoutProps) {
   const [showPayment, setShowPayment] = useState(false);
 
   useEffect(() => {
+    let cancelled = false;
 
-    if (typeof window !== "undefined" && window.MercadoPago && !mp) {
+    const init = async () => {
+      if (typeof window === "undefined" || !window.MercadoPago || mp) return;
+
       try {
-        const mpInstance = new window.MercadoPago(
-          process.env.NEXT_PUBLIC_MERCADO_PAGO_PUBLIC_KEY || ""
-        );
+        const config = await getMercadoPagoPublicConfig();
+        if (cancelled) return;
+        const mpInstance = new window.MercadoPago(config.publicKey);
         setMp(mpInstance);
       } catch (error) {
         console.error("Erro ao inicializar Mercado Pago:", error);
       }
-    }
+    };
+
+    void init();
+
+    return () => {
+      cancelled = true;
+    };
   }, [mp]);
 
   const handleCheckout = async () => {

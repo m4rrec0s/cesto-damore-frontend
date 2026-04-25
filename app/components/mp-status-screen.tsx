@@ -9,9 +9,10 @@ import {
   Clock,
   AlertCircle,
 } from "lucide-react";
-import { initializeMercadoPago } from "../lib/mercadopago";
-
-const MP_PUBLIC_KEY = process.env.NEXT_PUBLIC_MERCADO_PAGO_PUBLIC_KEY;
+import {
+  getMercadoPagoPublicConfig,
+  initializeMercadoPago,
+} from "../lib/mercadopago";
 
 interface MPStatusScreenProps {
   paymentId: string;
@@ -69,16 +70,35 @@ export function MPStatusScreen({
   onError,
 }: MPStatusScreenProps) {
   const [isReady, setIsReady] = useState(false);
+  const [configReady, setConfigReady] = useState(false);
+  const [configError, setConfigError] = useState<string | null>(null);
   const mountedRef = useRef(true);
 
   useEffect(() => {
     mountedRef.current = true;
+    let cancelled = false;
 
-    if (MP_PUBLIC_KEY) {
-      initializeMercadoPago(MP_PUBLIC_KEY);
-    }
+    const prepare = async () => {
+      try {
+        const config = await getMercadoPagoPublicConfig();
+        if (cancelled || !mountedRef.current) return;
+        initializeMercadoPago(config.publicKey);
+        setConfigReady(true);
+        setConfigError(null);
+      } catch (error) {
+        if (cancelled || !mountedRef.current) return;
+        setConfigReady(false);
+        setConfigError(
+          "Não foi possível carregar a configuração do Mercado Pago.",
+        );
+        onError?.(error);
+      }
+    };
+
+    void prepare();
 
     return () => {
+      cancelled = true;
       mountedRef.current = false;
       try {
         const controller = (
@@ -93,7 +113,7 @@ export function MPStatusScreen({
 
       }
     };
-  }, []);
+  }, [onError]);
 
   const handleOnReady = useCallback(() => {
     if (mountedRef.current) {
@@ -109,11 +129,11 @@ export function MPStatusScreen({
     [onError],
   );
 
-  if (!MP_PUBLIC_KEY) {
+  if (configError) {
     return (
       <div className="p-8 flex items-center justify-center gap-3 bg-white rounded-2xl shadow-sm border border-gray-100">
         <AlertCircle className="h-6 w-6 text-red-500" />
-        <span className="text-red-500">Chave pública não configurada</span>
+        <span className="text-red-500">{configError}</span>
       </div>
     );
   }
@@ -144,7 +164,7 @@ export function MPStatusScreen({
           onError={handleOnError}
         />
 
-        {!isReady && (
+        {(!configReady || !isReady) && (
           <div className="absolute inset-0 flex items-center justify-center bg-white/80 rounded-xl">
             <Loader2 className="h-8 w-8 animate-spin text-rose-500" />
           </div>

@@ -12,70 +12,83 @@ export interface MercadoPagoPublicConfig {
   source: "runtime" | "build";
 }
 
-const MP_PUBLIC_KEY = process.env.NEXT_PUBLIC_MERCADO_PAGO_PUBLIC_KEY || "";
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "";
 
 const fallbackPublicConfig = (): MercadoPagoPublicConfig => {
-  if (!MP_PUBLIC_KEY) {
-    throw new Error("Chave pública do Mercado Pago não configurada");
+  throw new Error(
+    "Não foi possível carregar a chave pública do Mercado Pago em runtime.",
+  );
+};
+
+const runtimePublicConfigEndpoints = (): string[] => {
+  const endpoints = ["/api/backend/mercadopago/public-config"];
+
+  if (API_URL) {
+    endpoints.push(`${API_URL}/mercadopago/public-config`);
   }
 
-  return {
-    publicKey: MP_PUBLIC_KEY,
-    publicKeyPrefix: MP_PUBLIC_KEY.slice(0, 16),
-    source: "build",
-  };
+  return endpoints;
 };
 
 export const getMercadoPagoPublicConfig =
   async (): Promise<MercadoPagoPublicConfig> => {
     if (!publicConfigPromise) {
       publicConfigPromise = (async () => {
-        if (!API_URL) {
-          return fallbackPublicConfig();
+        const endpoints = runtimePublicConfigEndpoints();
+        let lastRuntimeError: unknown = null;
+
+        for (const endpoint of endpoints) {
+          try {
+            const response = await fetch(endpoint, {
+              method: "GET",
+              cache: "no-store",
+            });
+
+            if (!response.ok) {
+              throw new Error(
+                `Falha ao carregar configuração pública (${response.status})`,
+              );
+            }
+
+            const payload = (await response.json()) as {
+              success?: boolean;
+              data?: {
+                publicKey?: string;
+                publicKeyEnvironment?: string;
+                publicKeyFingerprint?: string;
+                publicKeyPrefix?: string;
+              };
+            };
+
+            if (!payload?.data?.publicKey) {
+              throw new Error("Resposta sem chave pública do Mercado Pago");
+            }
+
+            return {
+              publicKey: payload.data.publicKey,
+              publicKeyEnvironment: payload.data.publicKeyEnvironment,
+              publicKeyFingerprint: payload.data.publicKeyFingerprint,
+              publicKeyPrefix:
+                payload.data.publicKeyPrefix ||
+                payload.data.publicKey.slice(0, 16),
+              source: "runtime",
+            };
+          } catch (error) {
+            lastRuntimeError = error;
+          }
         }
 
         try {
-          const response = await fetch(`${API_URL}/mercadopago/public-config`, {
-            method: "GET",
-            cache: "no-store",
-          });
-
-          if (!response.ok) {
-            throw new Error(
-              `Falha ao carregar configuração pública (${response.status})`,
-            );
-          }
-
-          const payload = (await response.json()) as {
-            success?: boolean;
-            data?: {
-              publicKey?: string;
-              publicKeyEnvironment?: string;
-              publicKeyFingerprint?: string;
-              publicKeyPrefix?: string;
-            };
-          };
-
-          if (!payload?.data?.publicKey) {
-            throw new Error("Resposta sem chave pública do Mercado Pago");
-          }
-
-          return {
-            publicKey: payload.data.publicKey,
-            publicKeyEnvironment: payload.data.publicKeyEnvironment,
-            publicKeyFingerprint: payload.data.publicKeyFingerprint,
-            publicKeyPrefix:
-              payload.data.publicKeyPrefix ||
-              payload.data.publicKey.slice(0, 16),
-            source: "runtime",
-          };
-        } catch (error) {
-          console.warn(
-            "⚠️ Falha ao carregar chave pública do Mercado Pago em runtime. Usando fallback do build.",
-            error,
-          );
           return fallbackPublicConfig();
+        } catch (fallbackError) {
+          console.warn(
+            "⚠️ Falha ao carregar chave pública do Mercado Pago em runtime e fallback de build.",
+            {
+              runtimeError: lastRuntimeError,
+              fallbackError,
+            },
+          );
+          throw fallbackError;
         }
       })();
     }
