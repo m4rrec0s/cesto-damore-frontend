@@ -835,7 +835,6 @@ export function CustomizationsReview({
   >({});
 
   const fetchAvailableCustomizations = useCallback(async () => {
-    console.log('🔄 [REFRESH DEBUG] fetchAvailableCustomizations iniciado, orderId:', orderId, 'cartItems:', cartItems.length);
     setIsLoading(true);
     
     // Reportar que está carregando
@@ -1261,16 +1260,21 @@ export function CustomizationsReview({
     fetchFileValidation,
   ]);
 
+  const fetchAvailableCustomizationsRef = useRef(fetchAvailableCustomizations);
+
   useEffect(() => {
-    console.log('🔄 [REFRESH DEBUG] useEffect disparado - orderId:', orderId, 'refreshVersion:', refreshVersion, 'cartItems:', cartItems.length);
+    fetchAvailableCustomizationsRef.current = fetchAvailableCustomizations;
+  }, [fetchAvailableCustomizations]);
+
+  useEffect(() => {
     // Consolidado: valida tanto com orderId quanto sem
     if (cartItems.length > 0) {
-      fetchAvailableCustomizations();
+      fetchAvailableCustomizationsRef.current();
     } else {
       setValidations([]);
       setIsLoading(false);
     }
-  }, [orderId, refreshVersion, fetchAvailableCustomizations, cartItems.length]);
+  }, [orderId, refreshVersion, cartItems.length]);
 
   // REMOVIDO: useEffect duplicado que causava race condition
   // useEffect anterior (linha 1262) já cobre tanto orderId presente quanto ausente
@@ -1601,14 +1605,9 @@ export function CustomizationsReview({
           });
           onCustomizationSaved?.();
           
-          console.log('🔄 [REFRESH DEBUG] Incrementando refreshVersion em 500ms...');
           // Aguardar um pouco para backend processar, então atualizar Review
           setTimeout(() => {
-            console.log('🔄 [REFRESH DEBUG] Incrementando refreshVersion AGORA');
-            setRefreshVersion((value) => {
-              console.log('🔄 [REFRESH DEBUG] refreshVersion mudou de', value, 'para', value + 1);
-              return value + 1;
-            });
+            setRefreshVersion((value) => value + 1);
           }, 500);
 
           // ❌ REMOVIDO: onCustomizationUpdate causava recriação dos items e mudança de IDs

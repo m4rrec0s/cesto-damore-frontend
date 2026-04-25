@@ -9,15 +9,7 @@ import {
   type MercadoPagoPublicConfig,
 } from "../lib/mercadopago";
 const BRICK_AUTO_RECOVERY_LIMIT = 1;
-const BRICK_AUTO_RECOVERY_DELAY_MS = 250;
-
-type CardPaymentBrickController = {
-  unmount: () => void;
-};
-
-type CardPaymentWindow = Window & {
-  cardPaymentBrickController?: CardPaymentBrickController;
-};
+const BRICK_AUTO_RECOVERY_DELAY_MS = 500;
 
 interface MPCardPaymentFormProps {
   amount: number;
@@ -84,21 +76,14 @@ export function MPCardPaymentForm({
   const [localError, setLocalError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [cardPaymentReady, setCardPaymentReady] = useState(false);
-  const [brickKey, setBrickKey] = useState(() => Date.now());
+  const [brickKey, setBrickKey] = useState(0);
   const [isDelayedReady, setIsDelayedReady] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
   const [publicConfig, setPublicConfig] =
     useState<MercadoPagoPublicConfig | null>(null);
   const mountedRef = useRef(true);
   const retryCountRef = useRef(0);
-
-  const getCardPaymentWindow = useCallback(() => {
-    if (typeof window === "undefined") {
-      return null;
-    }
-
-    return window as CardPaymentWindow;
-  }, []);
+  const isRecreatingRef = useRef(false);
 
   const emitStateChange = useCallback(
     (state: { ready: boolean; hasError: boolean; retryCount: number }) => {
@@ -107,46 +92,28 @@ export function MPCardPaymentForm({
     [onStateChange],
   );
 
-  const unmountCardBrick = useCallback(() => {
-    const cardPaymentWindow = getCardPaymentWindow();
-
-    if (!cardPaymentWindow) return;
-
-    try {
-      const controller = cardPaymentWindow.cardPaymentBrickController;
-
-      if (controller?.unmount) {
-        controller.unmount();
-      }
-
-      cardPaymentWindow.cardPaymentBrickController = undefined;
-    } catch (error) {
-      console.warn("Falha ao desmontar CardPayment Brick:", error);
-    }
-  }, [getCardPaymentWindow]);
-
   const recreateCardBrick = useCallback(() => {
-    if (!mountedRef.current) return;
+    if (!mountedRef.current || isRecreatingRef.current) return;
 
-    unmountCardBrick();
+    isRecreatingRef.current = true;
     setLocalError(null);
     setCardPaymentReady(false);
-    setIsDelayedReady(false);
     setRetryCount((prev) => {
       const nextRetry = prev + 1;
       emitStateChange({ ready: false, hasError: false, retryCount: nextRetry });
       return nextRetry;
     });
-    setBrickKey(Date.now());
-  }, [emitStateChange, unmountCardBrick]);
+    setBrickKey((prev) => prev + 1);
+    window.setTimeout(() => {
+      isRecreatingRef.current = false;
+    }, 300);
+  }, [emitStateChange]);
 
   useEffect(() => {
     retryCountRef.current = retryCount;
   }, [retryCount]);
 
   useEffect(() => {
-    mountedRef.current = true;
-
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
 
@@ -161,6 +128,7 @@ export function MPCardPaymentForm({
         initializeMercadoPago(config.publicKey);
         setPublicConfig(config);
         setLocalError(null);
+        setIsDelayedReady(false);
 
         timer = setTimeout(() => {
           if (mountedRef.current && !cancelled) {
@@ -187,13 +155,18 @@ export function MPCardPaymentForm({
 
     return () => {
       cancelled = true;
-      mountedRef.current = false;
       if (timer) {
         clearTimeout(timer);
       }
-      unmountCardBrick();
     };
-  }, [brickKey, unmountCardBrick]);
+  }, [orderId]);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -295,8 +268,7 @@ export function MPCardPaymentForm({
               errorMessage,
             )
           ) {
-            unmountCardBrick();
-            setBrickKey(Date.now());
+            setBrickKey((prev) => prev + 1);
           }
         }
       } finally {
@@ -313,7 +285,6 @@ export function MPCardPaymentForm({
       publicConfig?.publicKeyFingerprint,
       publicConfig?.publicKeyPrefix,
       onSubmit,
-      unmountCardBrick,
     ],
   );
 
@@ -416,10 +387,10 @@ export function MPCardPaymentForm({
 
       {!localError && (
         <div className="relative min-h-[400px]">
-          <div id={`card-container-${brickKey}`}>
+          <div>
             <CardPayment
               key={`card-${orderId}-${brickKey}`}
-              id={`cardPaymentBrick_container_${orderId}_${brickKey}`}
+              id={`cardPaymentBrick_container_${orderId}`}
               initialization={{
                 amount: amount,
                 payer: {
