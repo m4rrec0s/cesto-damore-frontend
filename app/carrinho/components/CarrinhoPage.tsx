@@ -75,7 +75,7 @@ const normalizeString = (value: string) =>
         .toLowerCase()
     : "";
 
-type PaymentStatusType = "" | "pending" | "success" | "failure";
+type PaymentStatusType = "" | "pending" | "in_process" | "success" | "failure";
 type CheckoutValidationIssue = {
   reason: string;
   itemName?: string;
@@ -199,11 +199,8 @@ export default function CarrinhoPageContent() {
     refreshCart,
   } = useCartContext();
 
-  const {
-    pendingOrder,
-    hasPendingOrder,
-    clearPendingOrder,
-  } = usePaymentManager();
+  const { pendingOrder, hasPendingOrder, clearPendingOrder } =
+    usePaymentManager();
 
   const [currentStep, setCurrentStep] = useState<1 | 2 | 3>(1);
   const [paymentStatus, setPaymentStatus] = useState<PaymentStatusType>("");
@@ -437,11 +434,12 @@ export default function CarrinhoPageContent() {
 
       switch (status.toLowerCase()) {
         case "pending":
-        case "in_process":
         case "pending_waiting_payment":
         case "pending_waiting_transfer":
         case "waiting_payment":
           return "pending";
+        case "in_process":
+          return "in_process";
         case "approved":
         case "authorized":
         case "accredited":
@@ -484,7 +482,10 @@ export default function CarrinhoPageContent() {
 
   const { startPolling } = usePaymentPolling({
     orderId: currentOrderId,
-    enabled: Boolean(currentOrderId && paymentStatus === "pending"),
+    enabled: Boolean(
+      currentOrderId &&
+      (paymentStatus === "pending" || paymentStatus === "in_process"),
+    ),
     maxAttempts: 120,
     intervalMs: 5000,
     onSuccess: handlePaymentSuccess,
@@ -509,14 +510,6 @@ export default function CarrinhoPageContent() {
         "Ainda não recebemos a confirmação do pagamento. Você pode acompanhar o status na página de pedidos.",
         { duration: 8000 },
       );
-      setTimeout(() => {
-        const shouldRedirect = confirm(
-          "Deseja verificar o status do seu pedido agora?",
-        );
-        if (shouldRedirect) {
-          router.push("/pedidos");
-        }
-      }, 2000);
     },
     onPending: () => {},
   });
@@ -527,7 +520,7 @@ export default function CarrinhoPageContent() {
     const triggerPollingOnResume = () => {
       if (
         currentOrderId &&
-        paymentStatus === "pending" &&
+        (paymentStatus === "pending" || paymentStatus === "in_process") &&
         !pollingStartedRef.current
       ) {
         pollingStartedRef.current = true;
@@ -559,7 +552,7 @@ export default function CarrinhoPageContent() {
       sseDisconnectCountRef.current >= 3 &&
       !pollingStartedRef.current &&
       currentOrderId &&
-      paymentStatus === "pending"
+      (paymentStatus === "pending" || paymentStatus === "in_process")
     ) {
       pollingStartedRef.current = true;
       startPolling();
@@ -569,16 +562,13 @@ export default function CarrinhoPageContent() {
   const sseOnError = useCallback(
     (error: unknown) => {
       sseDisconnectCountRef.current += 1;
-      logger.debug(
-        `❌ SSE Error (${sseDisconnectCountRef.current}/3):`,
-        error,
-      );
+      logger.debug(`❌ SSE Error (${sseDisconnectCountRef.current}/3):`, error);
 
       if (
         sseDisconnectCountRef.current >= 3 &&
         !pollingStartedRef.current &&
         currentOrderId &&
-        paymentStatus === "pending"
+        (paymentStatus === "pending" || paymentStatus === "in_process")
       ) {
         pollingStartedRef.current = true;
         startPolling();
@@ -675,14 +665,21 @@ export default function CarrinhoPageContent() {
       ).toLowerCase();
       if (status && lastRealtimeStatusRef.current !== status) {
         lastRealtimeStatusRef.current = status;
-        showPaymentToast("info", "Pagamento em processamento", {
-          description:
-            status === "in_process"
-              ? "Seu pagamento foi recebido e está em análise."
-              : "Aguardando confirmação do pagamento.",
-        });
+        if (status === "in_process") {
+          showPaymentToast("info", "Pagamento recebido pelo banco!", {
+            description:
+              "Seu pagamento está sendo processado. Vamos te notificar assim que for confirmado.",
+          });
+          setPaymentStatus("in_process");
+        } else {
+          showPaymentToast("info", "Aguardando pagamento", {
+            description: "Aguardando confirmação do pagamento.",
+          });
+          setPaymentStatus("pending");
+        }
+      } else if (!status) {
+        setPaymentStatus("pending");
       }
-      setPaymentStatus("pending");
     },
     [showPaymentToast],
   );
@@ -695,7 +692,9 @@ export default function CarrinhoPageContent() {
       if (!statusRaw) return;
       const normalized = mapPaymentStatus(statusRaw);
 
-      if (normalized === "pending") {
+      if (normalized === "in_process") {
+        setPaymentStatus("in_process");
+      } else if (normalized === "pending") {
         setPaymentStatus("pending");
       } else if (normalized === "failure") {
         setPaymentStatus("failure");
@@ -1254,8 +1253,7 @@ export default function CarrinhoPageContent() {
       const mercadoPagoPoi = asRecord(mercadoPagoData?.point_of_interaction);
       const mercadoPagoTransaction = asRecord(mercadoPagoPoi?.transaction_data);
       const pointOfInteraction =
-        asRecord(statusData.point_of_interaction) ||
-        mercadoPagoPoi;
+        asRecord(statusData.point_of_interaction) || mercadoPagoPoi;
       const transactionData =
         asRecord(pointOfInteraction?.transaction_data) ||
         asRecord(pointOfInteraction?.transactionData) ||
@@ -2604,6 +2602,7 @@ export default function CarrinhoPageContent() {
                       currentOrderId={currentOrderId ?? ""}
                       isGeneratingPix={isGeneratingPix}
                       isProcessing={isProcessing}
+                      pixProcessing={paymentStatus === "in_process"}
                       paymentError={paymentError}
                       handleGeneratePix={handleGeneratePix}
                       handleCardSubmit={handleCardSubmit}

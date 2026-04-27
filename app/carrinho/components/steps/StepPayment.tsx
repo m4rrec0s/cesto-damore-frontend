@@ -16,6 +16,7 @@ interface StepPaymentProps {
   currentOrderId: string;
   isGeneratingPix: boolean;
   isProcessing: boolean;
+  pixProcessing?: boolean;
   paymentError: string | null;
   handleGeneratePix: () => void;
   handleCardSubmit: (formData: MPPaymentFormData) => Promise<void>;
@@ -31,6 +32,7 @@ export const StepPayment = ({
   currentOrderId,
   isGeneratingPix,
   isProcessing,
+  pixProcessing = false,
   paymentError,
   handleGeneratePix,
   handleCardSubmit,
@@ -112,7 +114,38 @@ export const StepPayment = ({
 
             {paymentMethod === "pix" && (
               <div className="mt-6 pt-6 border-t border-gray-100 animate-in slide-in-from-top-2 duration-300">
-                {isGeneratingPix ? (
+                {pixProcessing ? (
+                  <div className="flex flex-col items-center justify-center p-8 space-y-3">
+                    <motion.svg
+                      width="140"
+                      height="140"
+                      viewBox="0 0 120 120"
+                      xmlns="http://www.w3.org/2000/svg"
+                      aria-hidden
+                      animate={{ rotate: 360 }}
+                      transition={{
+                        duration: 1.3,
+                        repeat: Infinity,
+                        ease: "linear",
+                      }}
+                    >
+                      <circle
+                        cx="60"
+                        cy="60"
+                        r="50"
+                        fill="none"
+                        stroke="#F59E0B"
+                        strokeWidth="6"
+                        strokeLinecap="round"
+                        strokeDasharray="220 120"
+                        strokeDashoffset="0"
+                      />
+                    </motion.svg>
+                    <span className="inline-flex items-center rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800 border border-amber-200">
+                      Processando pagamento
+                    </span>
+                  </div>
+                ) : isGeneratingPix ? (
                   <div className="flex flex-col items-center justify-center p-8 space-y-3">
                     <Loader2 className="h-8 w-8 animate-spin text-[#3483fa]" />
                     <p className="text-sm text-gray-500">
