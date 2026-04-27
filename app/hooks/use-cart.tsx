@@ -472,6 +472,7 @@ export function useCart(): CartContextType {
   });
 
   const [pendingOrderId, setPendingOrderId] = useState<string | null>(null);
+  const [isSyncReady, setIsSyncReady] = useState<boolean>(false);
 
   const clearPendingOrderId = useCallback(() => {
     setPendingOrderId(null);
@@ -810,6 +811,7 @@ export function useCart(): CartContextType {
       getOrderAttemptedRef.current.clear();
       setPendingOrderId(null);
       isInitializedRef.current = false;
+      setIsSyncReady(false);
 
       if (!currentUserId) {
         setCart({ items: [], total: 0, itemCount: 0 });
@@ -830,6 +832,11 @@ export function useCart(): CartContextType {
       if (!user) return;
 
       if (isInitializedRef.current) return;
+
+      const markInitialized = () => {
+        isInitializedRef.current = true;
+        setIsSyncReady(true);
+      };
 
       try {
         const pendingOrder = await api.getPendingOrder(user.id);
@@ -854,14 +861,14 @@ export function useCart(): CartContextType {
           setCart(updatedCart);
           setPendingOrderId(pendingOrder.id);
 
-          isInitializedRef.current = true;
+          markInitialized();
         } else {
-          isInitializedRef.current = true;
+          markInitialized();
         }
       } catch (error) {
         logger.debug("Erro ao carregar pedido pendente:", error);
 
-        isInitializedRef.current = true;
+        markInitialized();
       }
     };
 
@@ -910,16 +917,19 @@ export function useCart(): CartContextType {
   }, []);
 
   const syncLockRef = useRef<boolean>(false);
+  const pendingSyncCartRef = useRef<CartState | null>(null);
 
   const syncCartToBackend = useCallback(
     async (currentCart: CartState) => {
       if (!user) return;
 
-      if (!isInitializedRef.current) {
+      if (!isSyncReady) {
+        pendingSyncCartRef.current = currentCart;
         return;
       }
 
       if (syncLockRef.current) {
+        pendingSyncCartRef.current = currentCart;
         return;
       }
 
@@ -930,21 +940,14 @@ export function useCart(): CartContextType {
         if (itemsPayload.length === 0) {
           if (pendingOrderId) {
             try {
-              const serverOrder = await api.getOrder(pendingOrderId);
-              getOrderAttemptedRef.current.add(pendingOrderId);
-              if (isAutoDeletableDraftOrder(serverOrder)) {
-                await api.deleteOrder(pendingOrderId);
-                clearPendingOrderId();
-                setOrderMetadata({
-                  send_anonymously: false,
-                  complement: undefined,
-                });
-              }
+              await api.deleteOrder(pendingOrderId);
+              clearPendingOrderId();
+              setOrderMetadata({
+                send_anonymously: false,
+                complement: undefined,
+              });
             } catch (error) {
-              logger.debug(
-                "Erro ao verificar/deletar pedido pendente:",
-                error,
-              );
+              logger.debug("Erro ao deletar pedido pendente vazio:", error);
             }
           }
           return;
@@ -1039,12 +1042,19 @@ export function useCart(): CartContextType {
         } catch {}
       } finally {
         syncLockRef.current = false;
+
+        const queuedCart = pendingSyncCartRef.current;
+        if (queuedCart) {
+          pendingSyncCartRef.current = null;
+          void syncCartToBackend(queuedCart);
+        }
       }
     },
     [
       api,
       cartItemsToOrderItems,
       pendingOrderId,
+      isSyncReady,
       user,
       orderMetadata,
       setOrderMetadata,
@@ -1052,6 +1062,14 @@ export function useCart(): CartContextType {
       isAutoDeletableDraftOrder,
     ],
   );
+
+  useEffect(() => {
+    if (!user || !isSyncReady || syncLockRef.current) return;
+    const queuedCart = pendingSyncCartRef.current;
+    if (!queuedCart) return;
+    pendingSyncCartRef.current = null;
+    void syncCartToBackend(queuedCart);
+  }, [user, isSyncReady, syncCartToBackend]);
 
   const syncTimeoutRef = useRef<number | null>(null);
 
@@ -1459,26 +1477,16 @@ export function useCart(): CartContextType {
 
             if (updatedCart.items.length === 0 && pendingOrderId) {
               try {
-                const serverOrder = await api.getOrder(pendingOrderId);
-                if (isAutoDeletableDraftOrder(serverOrder)) {
-                  try {
-                    await api.deleteOrder(pendingOrderId);
-                  } catch (deleteErr) {
-                    logger.debug(
-                      `❌ [removeFromCart] Erro ao deletar pedido rascunho ${pendingOrderId}:`,
-                      deleteErr,
-                    );
-                  }
-                  clearPendingOrderId();
-                  setOrderMetadata({
-                    send_anonymously: false,
-                    complement: undefined,
-                  });
-                }
-              } catch (err) {
+                await api.deleteOrder(pendingOrderId);
+                clearPendingOrderId();
+                setOrderMetadata({
+                  send_anonymously: false,
+                  complement: undefined,
+                });
+              } catch (deleteErr) {
                 logger.debug(
-                  "Erro ao verificar pedido pendente ao remover item do carrinho:",
-                  err,
+                  `❌ [removeFromCart] Erro ao deletar pedido vazio ${pendingOrderId}:`,
+                  deleteErr,
                 );
               }
             }
