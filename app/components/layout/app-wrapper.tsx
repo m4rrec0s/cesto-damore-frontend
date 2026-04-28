@@ -13,7 +13,9 @@ import { CartProvider } from "@/app/hooks/cart-context";
 import TokenMonitor from "../auth/token-monitor";
 import ServerActionRecovery from "../runtime/server-action-recovery";
 import { useAuth } from "@/app/hooks/use-auth";
+import { useApi } from "@/app/hooks/use-api";
 import { usePathname } from "next/navigation";
+import { initGoogleOneTap, triggerGoogleOneTap } from "@/app/lib/google-one-tap";
 
 const LOGIN_POPUP_SESSION_KEY = "cesto_login_popup_dismissed";
 const LoginPopUp = dynamic(() => import("../login-pop-up"), {
@@ -24,7 +26,8 @@ const LoginPopUp = dynamic(() => import("../login-pop-up"), {
 export default function AppWrapper({ children }: { children: ReactNode }) {
   const [isLoginPromptOpen, setIsLoginPromptOpen] = useState(false);
   const [isLoginPromptDismissed, setIsLoginPromptDismissed] = useState(false);
-  const { user, isLoading } = useAuth();
+  const { user, isLoading, login } = useAuth();
+  const api = useApi();
   const pathname = usePathname();
 
   useEffect(() => {
@@ -55,18 +58,26 @@ export default function AppWrapper({ children }: { children: ReactNode }) {
   );
 
   useEffect(() => {
-    if (isLoading || user || isLoginPromptDismissed) return;
+    if (isLoading || user) return;
 
-    if (pathname === "/login" || pathname.startsWith("/manage")) {
-      return;
-    }
+    const googleClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
+    if (!googleClientId) return;
+
+    initGoogleOneTap(googleClientId, async (credential) => {
+      try {
+        const response = await api.google(credential);
+        login(response.user, response.appToken);
+      } catch (error) {
+        console.error("Erro no auto login com Google:", error);
+      }
+    });
 
     const timeout = setTimeout(() => {
-      setIsLoginPromptOpen(true);
-    }, 7000);
+      triggerGoogleOneTap(() => {});
+    }, 3000);
 
     return () => clearTimeout(timeout);
-  }, [isLoading, user, pathname, isLoginPromptDismissed]);
+  }, [isLoading, user, api, login]);
 
   useEffect(() => {
     if (user) {
