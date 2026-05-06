@@ -21,12 +21,20 @@ interface ProductCardProps {
   };
   className?: string;
   imagePriority?: boolean;
+  isEmphasis?: boolean;
+  index?: number;
+  largeCard?: boolean;
+  imageAspectClass?: string;
 }
 
 export function ProductCard({
   props,
   className,
   imagePriority = false,
+  isEmphasis,
+  index,
+  largeCard = false,
+  imageAspectClass,
 }: ProductCardProps) {
   const finalPrice = props.discount
     ? props.price - (props.discount * props.price) / 100
@@ -42,11 +50,16 @@ export function ProductCard({
       href={`/produto/${props.id}`}
       prefetch={false}
       className={cn(
-        "group flex flex-col gap-3 h-full rounded-2xl border border-gray-100 bg-white p-3 shadow-sm transition-all hover:-translate-y-1 hover:shadow-md",
+        "group flex h-full w-full min-w-0 flex-col overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm transition-all hover:-translate-y-1 hover:shadow-md",
         className,
       )}
     >
-      <div className="relative aspect-square w-full overflow-hidden rounded-xl bg-gray-100">
+      <div
+        className={cn(
+          "relative w-full shrink-0 overflow-hidden bg-gray-100",
+          imageAspectClass || (largeCard ? "aspect-[3/4]" : "aspect-square"),
+        )}
+      >
         <img
           src={
             getInternalImageUrl(props.image_url) ||
@@ -57,24 +70,36 @@ export function ProductCard({
           loading={imagePriority ? "eager" : "lazy"}
           fetchPriority={imagePriority ? "high" : "auto"}
         />
+
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/10 via-transparent to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
-        {categories.length > 0 ? (
-          <div className="absolute left-2 top-2 max-w-[70%]">
+
+        <div className="absolute left-2 top-2 z-10 flex max-w-[72%] flex-wrap gap-1">
+          {isEmphasis && (
+            <Badge className="rounded-full bg-rose-500/95 text-white hover:bg-rose-500">
+              {index !== undefined ? index : null}
+            </Badge>
+          )}
+          {categories.length > 0 ? (
             <Badge className="max-w-full truncate border border-white/40 bg-white/90 text-gray-700">
               {categories[0]}
             </Badge>
-          </div>
-        ) : null}
+          ) : null}
+        </div>
+
         {hasDiscount ? (
-          <Badge className="absolute right-2 top-2 bg-red-500/95 text-white hover:bg-red-500">
+          <Badge className="absolute right-2 top-2 z-10 bg-red-500/95 text-white hover:bg-red-500">
             -{props.discount}%
           </Badge>
         ) : null}
       </div>
-      <div className="flex flex-col gap-1 px-1">
-        <h3 className="text-sm text-gray-900">{props.name}</h3>
-        <div className="flex items-end gap-2">
-          <p className="text-xl font-semibold text-gray-900">
+
+      <div className="flex flex-1 flex-col gap-2 px-3 py-3">
+        <h3 className="min-h-[2.5rem] text-sm font-medium leading-snug text-gray-900 line-clamp-2">
+          {props.name}
+        </h3>
+
+        <div className="mt-auto flex items-end gap-2">
+          <p className="text-lg font-semibold leading-none text-rose-600">
             {new Intl.NumberFormat("pt-BR", {
               style: "currency",
               currency: "BRL",

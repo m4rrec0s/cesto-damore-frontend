@@ -91,7 +91,6 @@ const CategoryProductPageClient = ({ id }: { id: string }) => {
                 })) ?? [],
               discount: product.discount,
             }}
-            className="max-sm:min-w-[150px]"
           />
         ))}
       </div>

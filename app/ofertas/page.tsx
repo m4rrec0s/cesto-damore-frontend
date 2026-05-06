@@ -17,7 +17,7 @@ export default function OfertasPage() {
         const res = await api.getProducts({ page: 1, perPage: 48 });
         if (!mounted) return;
         const filtered = (res.products || []).filter(
-          (p) => (p.discount && p.discount > 0) || p.price < 120
+          (p) => (p.discount && p.discount > 0) || p.price < 120,
         );
         setProducts(filtered);
       } catch (err) {
@@ -55,7 +55,6 @@ export default function OfertasPage() {
                   })) ?? [],
                 discount: p.discount,
               }}
-              className="max-sm:min-w-[150px]"
             />
           ))}
         </div>

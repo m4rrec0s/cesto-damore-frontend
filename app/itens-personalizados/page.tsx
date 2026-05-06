@@ -161,7 +161,7 @@ export default function ItensPersonalizadosPage() {
               </div>
             ) : (
               <>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                   {selectedComponent.products.map((product) => (
                     <Link
                       key={product.id}
@@ -241,7 +241,7 @@ export default function ItensPersonalizadosPage() {
               </p>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 xl:grid-cols-4 gap-6">
               {components.map((component) => (
                 <div
                   key={component.id}

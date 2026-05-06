@@ -17,12 +17,12 @@ export default function CestasRomanticasPage() {
         const cats: Category[] = await api.getCategories();
         const matchRegex = /rom[aã]ntica|romantica|casal|amor/i;
         const matched = (cats || []).filter((c) =>
-          matchRegex.test(c.name.toLowerCase())
+          matchRegex.test(c.name.toLowerCase()),
         );
         const productSets = await Promise.all(
           matched.map((c) =>
-            api.getProducts({ page: 1, perPage: 48, category_id: c.id })
-          )
+            api.getProducts({ page: 1, perPage: 48, category_id: c.id }),
+          ),
         );
         const allProducts = productSets.flatMap((ps) => ps.products || []);
         const uniqueMap: Record<string, Product> = {};
@@ -64,7 +64,6 @@ export default function CestasRomanticasPage() {
                   })) ?? [],
                 discount: p.discount,
               }}
-              className="max-sm:min-w-[150px]"
             />
           ))}
         </div>

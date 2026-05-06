@@ -8,7 +8,7 @@ import {
   PublicFeedResponse,
 } from "./hooks/use-api";
 import { Button } from "./components/ui/button";
-import { RefreshCw } from "lucide-react";
+import { Loader, RefreshCw } from "lucide-react";
 import { DatabaseErrorFallback } from "./components/database-error-fallback";
 import FeedBannerCarousel from "./components/feed/FeedBannerCarousel";
 import FeedSection from "./components/feed/FeedSection";
@@ -186,7 +186,7 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white">
+    <div className="min-h-screen bg-[#f7f4f1]">
       {feedData &&
         !useFallback &&
         feedData.banners &&
@@ -204,13 +204,14 @@ export default function Home() {
             hasMore={sections.length < (pagination?.totalSections || 0)}
             scrollThreshold={scrollThreshold}
             loader={
-              <h4 className="text-center py-4 animate-pulse">
-                Carregando mais seções...
+              <h4 className="flex items-center justify-center py-4">
+                <span className="animate-pulse">Carregando produtos</span>
+                <Loader className="w-5 h-5 text-rose-600 animate-spin ml-2" />
               </h4>
             }
             endMessage={
               <p className="text-center py-4 text-gray-500">
-                Você viu tudo! 🎉
+                Obrigado pela visita! Você chegou ao fim do feed por enquanto.
               </p>
             }
           >

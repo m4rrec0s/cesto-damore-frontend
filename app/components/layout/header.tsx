@@ -147,7 +147,7 @@ export function SiteHeader() {
 
   return (
     <div className="flex flex-col items-center w-full">
-      <div className="hidden md:flex w-full bg-gradient-to-r from-rose-500 to-rose-600 text-white shadow-lg overflow-hidden">
+      <div className="flex w-full bg-gradient-to-r from-rose-500 to-rose-600 text-white shadow-lg overflow-hidden">
         <div className="flex w-full max-w-[90%] mx-auto text-sm py-2 justify-between items-center px-4">
           <span className="text-xs flex items-center gap-2 font-medium">
             <span className="bg-white/20 rounded-full w-2 h-2 animate-pulse"></span>
