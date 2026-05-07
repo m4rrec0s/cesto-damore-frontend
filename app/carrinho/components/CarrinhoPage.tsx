@@ -333,6 +333,8 @@ export default function CarrinhoPageContent() {
   const creatingOrderRef = useRef(false);
   const lastRealtimeStatusRef = useRef<string | null>(null);
   const restoredFormRef = useRef(false);
+  const [hasHydratedCheckoutForm, setHasHydratedCheckoutForm] =
+    useState(false);
 
   useEffect(() => {
     pollingStartedRef.current = false;
@@ -355,14 +357,22 @@ export default function CarrinhoPageContent() {
       if (persisted.neighborhood) setNeighborhood(persisted.neighborhood);
       if (persisted.city) setCity(persisted.city);
       if (persisted.state) setState(persisted.state);
-      if (persisted.customerPhone) setCustomerPhone(persisted.customerPhone);
-      if (persisted.recipientPhone) setRecipientPhone(persisted.recipientPhone);
+      if (persisted.customerPhone) {
+        setCustomerPhone(formatPhoneNumber(persisted.customerPhone));
+      }
+      if (persisted.recipientPhone) {
+        setRecipientPhone(formatPhoneNumber(persisted.recipientPhone));
+      }
       if (persisted.complemento) setComplemento(persisted.complemento);
       if (typeof persisted.sendAnonymously === "boolean") {
         setSendAnonymously(persisted.sendAnonymously);
       }
       if (typeof persisted.isSelfRecipient === "boolean") {
         setIsSelfRecipient(persisted.isSelfRecipient);
+      } else if (persisted.isSelfRecipient === "true") {
+        setIsSelfRecipient(true);
+      } else if (persisted.isSelfRecipient === "false") {
+        setIsSelfRecipient(false);
       }
       if (persisted.userDocument) setUserDocument(persisted.userDocument);
       if (persisted.selectedDate) {
@@ -375,11 +385,13 @@ export default function CarrinhoPageContent() {
       if (persisted.paymentMethod) setPaymentMethod(persisted.paymentMethod);
     } catch (error) {
       logger.debug("Erro ao restaurar estado do checkout:", error);
+    } finally {
+      setHasHydratedCheckoutForm(true);
     }
   }, []);
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
+    if (typeof window === "undefined" || !hasHydratedCheckoutForm) return;
 
     const payload: PersistedCheckoutForm = {
       optionSelected,
@@ -418,6 +430,7 @@ export default function CarrinhoPageContent() {
     selectedDate,
     selectedTime,
     paymentMethod,
+    hasHydratedCheckoutForm,
   ]);
 
   useEffect(() => {
@@ -880,11 +893,7 @@ export default function CarrinhoPageContent() {
           }
           if (pendingOrder.recipient_phone) {
             const digits = pendingOrder.recipient_phone.replace(/\D/g, "");
-
-            const localNumber = digits.startsWith("55")
-              ? digits.substring(2)
-              : digits;
-            setRecipientPhone(localNumber);
+            setRecipientPhone(formatPhoneNumber(digits));
           }
           if (pendingOrder.delivery_city) {
             setCity(pendingOrder.delivery_city);
@@ -908,10 +917,16 @@ export default function CarrinhoPageContent() {
 
           if (pendingOrder.user?.phone) {
             const userPhoneDigits = pendingOrder.user.phone.replace(/\D/g, "");
-            const localNumber = userPhoneDigits.startsWith("55")
-              ? userPhoneDigits.substring(2)
-              : userPhoneDigits;
-            setCustomerPhone(localNumber);
+            setCustomerPhone(formatPhoneNumber(userPhoneDigits));
+
+            if (pendingOrder.recipient_phone) {
+              const sameRecipient =
+                normalizePhoneForBackend(pendingOrder.recipient_phone) ===
+                normalizePhoneForBackend(userPhoneDigits);
+              if (sameRecipient) {
+                setIsSelfRecipient(true);
+              }
+            }
           }
 
           if (pendingOrder.user?.zip_code) {
