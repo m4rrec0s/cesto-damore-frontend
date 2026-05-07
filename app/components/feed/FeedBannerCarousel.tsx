@@ -27,8 +27,8 @@ export default function FeedBannerCarousel({
   if (!banners.length) return null;
 
   return (
-    <section className="w-full mb-8 px-5">
-      <div className="relative w-full aspect-video overflow-hidden rounded-xl shadow-lg max-h-[400px]">
+    <section className="w-full my-8 px-5">
+      <div className="relative w-full aspect-video overflow-hidden rounded-xl shadow-lg max-h-[400px] xl:max-h-[500px]">
         {banners.map((banner, index) => (
           <div
             key={banner.id}

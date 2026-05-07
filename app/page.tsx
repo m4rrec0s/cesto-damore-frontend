@@ -48,7 +48,8 @@ export default function Home() {
     perPage?: number;
   } | null>(null);
   const [useFallback, setUseFallback] = useState(false);
-  const [scrollThreshold, setScrollThreshold] = useState<string>("1300px");
+  const [scrollThreshold, setScrollThreshold] = useState<number>(0.7);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
@@ -72,14 +73,7 @@ export default function Home() {
     const computeThreshold = () => {
       const isMobile = window.innerWidth < 768;
 
-      if (isMobile) {
-        const val = Math.floor(window.innerHeight * 1.2);
-        setScrollThreshold(`${val}px`);
-      } else {
-        const minPx = 800;
-        const val = Math.max(minPx, Math.floor(window.innerHeight * 0.8));
-        setScrollThreshold(`${val}px`);
-      }
+      setScrollThreshold(isMobile ? 0.62 : 0.72);
     };
 
     computeThreshold();
@@ -168,6 +162,12 @@ export default function Home() {
   };
 
   const loadMoreSections = async () => {
+    if (isLoadingMore) return;
+
+    const hasMoreSections = sections.length < (pagination?.totalSections || 0);
+    if (!hasMoreSections) return;
+
+    setIsLoadingMore(true);
     try {
       const nextPage = page + 1;
       const nextFeed = await api.getPublicFeed(undefined, nextPage, perPage);
@@ -178,6 +178,8 @@ export default function Home() {
       }
     } catch (err) {
       console.error("Erro ao carregar mais seções:", err);
+    } finally {
+      setIsLoadingMore(false);
     }
   };
 
@@ -210,7 +212,7 @@ export default function Home() {
               </h4>
             }
             endMessage={
-              <p className="text-center py-4 text-gray-500">
+              <p className="text-center py-4 px-3 text-gray-500">
                 Obrigado pela visita! Você chegou ao fim do feed por enquanto.
               </p>
             }
