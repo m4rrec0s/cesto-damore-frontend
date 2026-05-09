@@ -5,6 +5,7 @@ import { getPublicAssetUrl } from "@/lib/image-helper";
 import { cn } from "@/app/lib/utils";
 import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 import { Button } from "@/app/components/ui/button";
+import type { StaticCanvas } from "fabric";
 
 export interface MockupVertex {
   x: number;
@@ -27,13 +28,10 @@ interface MockupGalleryProps {
 }
 
 type Point = { x: number; y: number };
-type FabricCanvasLike = {
-  clear: () => void;
-  setDimensions: (dimensions: { width: number; height: number }) => void;
-  add: (obj: unknown) => void;
-  renderAll: () => void;
-  dispose: () => void;
-};
+type FabricCanvasLike = Pick<
+  StaticCanvas,
+  "clear" | "setDimensions" | "add" | "renderAll" | "dispose"
+>;
 
 const buildRectVertices = (
   leftPct: number,

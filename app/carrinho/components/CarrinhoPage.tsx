@@ -183,6 +183,7 @@ export default function CarrinhoPageContent() {
     getOrder,
     updateOrderMetadata,
     getPaymentStatus,
+    getStockAvailability,
   } = useApi();
   const {
     cart,
@@ -217,6 +218,47 @@ export default function CarrinhoPageContent() {
   useEffect(() => {
     setCurrentStep(getStepFromPath(pathname));
   }, [pathname]);
+
+  // Validate stock availability when entering cart
+  const [insufficientStockItems, setInsufficientStockItems] = useState<
+    { productId: string; productName: string; available: number }[]
+  >([]);
+
+  useEffect(() => {
+    const validateStockForCartItems = async () => {
+      const itemsInCart = cart?.items ?? [];
+      if (itemsInCart.length === 0) {
+        setInsufficientStockItems([]);
+        return;
+      }
+
+      try {
+        const productIds = [
+          ...new Set(itemsInCart.map((item) => item.product_id)),
+        ];
+        const availability = await getStockAvailability({
+          productIds,
+        });
+
+        const insufficientItems = itemsInCart
+          .filter((item) => {
+            const stock = availability.products[item.product_id];
+            return stock && stock.available < item.quantity;
+          })
+          .map((item) => ({
+            productId: item.product_id,
+            productName: item.product.name,
+            available: availability.products[item.product_id]?.available || 0,
+          }));
+
+        setInsufficientStockItems(insufficientItems);
+      } catch (error) {
+        logger.error("Error validating cart stock:", error);
+      }
+    };
+
+    validateStockForCartItems();
+  }, [cart?.items]);
 
   const updateStepUrl = useCallback(
     (step: 1 | 2 | 3) => {
@@ -333,8 +375,7 @@ export default function CarrinhoPageContent() {
   const creatingOrderRef = useRef(false);
   const lastRealtimeStatusRef = useRef<string | null>(null);
   const restoredFormRef = useRef(false);
-  const [hasHydratedCheckoutForm, setHasHydratedCheckoutForm] =
-    useState(false);
+  const [hasHydratedCheckoutForm, setHasHydratedCheckoutForm] = useState(false);
 
   useEffect(() => {
     pollingStartedRef.current = false;
@@ -2443,6 +2484,21 @@ export default function CarrinhoPageContent() {
 
           {currentStep < 3 && (
             <>
+              {insufficientStockItems.length > 0 && (
+                <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded-lg">
+                  <p className="text-sm text-red-800 font-medium mb-2">
+                    ⚠️ Estoque insuficiente para prosseguir:
+                  </p>
+                  <ul className="text-sm text-red-700 space-y-1">
+                    {insufficientStockItems.map((item) => (
+                      <li key={item.productId}>
+                        {item.productName}: apenas {item.available}{" "}
+                        disponível(is)
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
               {currentStep === 1 &&
                 !customizationsValidationStatus?.isRunning &&
                 !canProceedToStep2 &&
@@ -2482,6 +2538,7 @@ export default function CarrinhoPageContent() {
                   disabled={
                     isProcessing ||
                     isSavingCustomization ||
+                    insufficientStockItems.length > 0 ||
                     (currentStep === 1 && !canProceedToStep2) ||
                     (currentStep === 2 && !canProceedToStep3)
                   }

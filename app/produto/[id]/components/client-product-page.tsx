@@ -23,6 +23,7 @@ import useApi, {
   ProductComponent,
 } from "@/app/hooks/use-api";
 import { useCartContext } from "@/app/hooks/cart-context";
+import { useStockAvailability } from "@/app/hooks/useStockAvailability";
 import type { CartCustomization } from "@/app/hooks/use-cart";
 import { useLayoutApi } from "@/app/hooks/use-layout-api";
 import { sanitizeProductDescription } from "@/app/utils/descriptionSanitizer";
@@ -248,6 +249,11 @@ const ClientProductPage = ({ id }: { id: string }) => {
 
   const [product, setProduct] = useState<Product>({} as Product);
   const [loadingProduct, setLoadingProduct] = useState(true);
+  const stockAvailability = useStockAvailability({
+    productIds: product?.id ? [product.id] : [],
+    pollingInterval: 5000,
+    autoRefresh: true,
+  });
   const [quantity, setQuantity] = useState(1);
   const [addingToCart, setAddingToCart] = useState(false);
   const [additionals, setAdditionals] = useState<Additional[]>([]);
@@ -1858,25 +1864,50 @@ const ClientProductPage = ({ id }: { id: string }) => {
                 )}
               </div>
 
-              <div
-                className={cn(
-                  "inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-sm",
-                  currentProductionTime && currentProductionTime > 1
-                    ? "bg-gray-100 text-gray-700"
-                    : "bg-green-50 text-green-700",
-                )}
-              >
-                <Clock className="w-4 h-4" />
-                <span>
-                  {currentProductionTime && currentProductionTime > 1
-                    ? `${currentProductionTime}h de produção`
-                    : "Produção imediata"}
-                  {currentProductionTime > (product.production_time || 0) && (
-                    <span className="ml-1 text-xs opacity-75">
-                      (personalizado)
-                    </span>
+              <div className="flex items-center gap-3">
+                {(() => {
+                  const availability = stockAvailability.get(product?.id);
+                  if (!availability) return null;
+                  return (
+                    <div
+                      className={cn(
+                        "text-sm",
+                        availability.status === "in_stock"
+                          ? "text-black"
+                          : availability.status === "low_stock"
+                            ? "text-yellow-600"
+                            : "text-red-600",
+                      )}
+                    >
+                      {availability.status === "in_stock" &&
+                        "Estoque disponível"}
+                      {availability.status === "low_stock" &&
+                        `Últimas ${availability.available} disponíveis`}
+                      {availability.status === "out_of_stock" &&
+                        "✗ Fora de estoque"}
+                    </div>
+                  );
+                })()}
+                <div
+                  className={cn(
+                    "inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-sm",
+                    currentProductionTime && currentProductionTime > 1
+                      ? "bg-gray-100 text-gray-700"
+                      : "bg-green-50 text-green-700",
                   )}
-                </span>
+                >
+                  <Clock className="w-4 h-4" />
+                  <span>
+                    {currentProductionTime && currentProductionTime > 1
+                      ? `${currentProductionTime}h de produção`
+                      : "Produção imediata"}
+                    {currentProductionTime > (product.production_time || 0) && (
+                      <span className="ml-1 text-xs opacity-75">
+                        (personalizado)
+                      </span>
+                    )}
+                  </span>
+                </div>
               </div>
             </div>
 
@@ -2230,8 +2261,12 @@ const ClientProductPage = ({ id }: { id: string }) => {
             <Button
               ref={addToCartButtonRef}
               onClick={handleAddToCart}
-              disabled={addingToCart || isUploading}
-              className="w-full bg-gray-900 hover:bg-gray-800 text-white h-12 text-base font-medium"
+              disabled={
+                addingToCart ||
+                isUploading ||
+                stockAvailability.get(product?.id)?.status === "out_of_stock"
+              }
+              className="w-full bg-gray-900 hover:bg-gray-800 text-white h-12 text-base font-medium disabled:opacity-50 disabled:cursor-not-allowed"
               size="lg"
             >
               {addingToCart ? (

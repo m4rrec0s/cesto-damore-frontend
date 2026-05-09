@@ -35,7 +35,9 @@ function isFrontendProxyLoop(baseUrl: string, request: NextRequest): boolean {
 
     const sameOriginAsCurrentRequest = parsed.origin === request.nextUrl.origin;
 
-    return pointsToProxyPath && (isLocalFrontendPort || sameOriginAsCurrentRequest);
+    return (
+      pointsToProxyPath && (isLocalFrontendPort || sameOriginAsCurrentRequest)
+    );
   } catch {
     return false;
   }
@@ -118,10 +120,7 @@ function buildApiPrefixFallbackUrl(
     .replace(/\/+$/, "")
     .split("/")
     .filter(Boolean);
-  const pathSegments = path
-    .replace(/^\/+/, "")
-    .split("/")
-    .filter(Boolean);
+  const pathSegments = path.replace(/^\/+/, "").split("/").filter(Boolean);
 
   let fallbackBaseSegments = [...baseSegments];
   let fallbackPathSegments = [...pathSegments];
@@ -155,7 +154,7 @@ const hopByHopHeaders = new Set([
 
 async function proxyRequest(
   request: NextRequest,
-  context: { params: { path?: string[] } },
+  context: { params: Promise<{ path: string[] }> },
 ) {
   const apiBaseUrl = resolveApiBaseUrl(request);
   const apiKey = resolveApiKey();
@@ -170,7 +169,7 @@ async function proxyRequest(
     );
   }
 
-  const { path = [] } = context.params;
+  const { path = [] } = await context.params;
   const query = request.nextUrl.search || "";
   const normalizedPath = path.join("/");
   const targetUrl = buildTargetUrl(apiBaseUrl, normalizedPath, query);
@@ -248,7 +247,10 @@ async function proxyRequest(
   if (debugProxy) {
     responseHeaders.set("x-proxy-target-url", targetUrl);
     responseHeaders.set("x-proxy-fallback-url", fallbackTargetUrl);
-    responseHeaders.set("x-proxy-fallback-status", String(fallbackStatus ?? ""));
+    responseHeaders.set(
+      "x-proxy-fallback-status",
+      String(fallbackStatus ?? ""),
+    );
     responseHeaders.set("x-proxy-fallback-used", String(fallbackUsed));
   }
 
@@ -261,42 +263,42 @@ async function proxyRequest(
 
 export async function GET(
   request: NextRequest,
-  context: { params: { path?: string[] } },
+  context: { params: Promise<{ path: string[] }> },
 ) {
   return proxyRequest(request, context);
 }
 
 export async function POST(
   request: NextRequest,
-  context: { params: { path?: string[] } },
+  context: { params: Promise<{ path: string[] }> },
 ) {
   return proxyRequest(request, context);
 }
 
 export async function PUT(
   request: NextRequest,
-  context: { params: { path?: string[] } },
+  context: { params: Promise<{ path: string[] }> },
 ) {
   return proxyRequest(request, context);
 }
 
 export async function PATCH(
   request: NextRequest,
-  context: { params: { path?: string[] } },
+  context: { params: Promise<{ path: string[] }> },
 ) {
   return proxyRequest(request, context);
 }
 
 export async function DELETE(
   request: NextRequest,
-  context: { params: { path?: string[] } },
+  context: { params: Promise<{ path: string[] }> },
 ) {
   return proxyRequest(request, context);
 }
 
 export async function OPTIONS(
   request: NextRequest,
-  context: { params: { path?: string[] } },
+  context: { params: Promise<{ path: string[] }> },
 ) {
   return proxyRequest(request, context);
 }

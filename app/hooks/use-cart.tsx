@@ -967,10 +967,7 @@ export function useCart(): CartContextType {
               return;
             }
           } catch (error) {
-            logger.debug(
-              "Erro ao verificar pedido pendente existente:",
-              error,
-            );
+            logger.debug("Erro ao verificar pedido pendente existente:", error);
           }
 
           const payload: {
@@ -1324,6 +1321,18 @@ export function useCart(): CartContextType {
       customizations?: CartCustomization[],
     ) => {
       try {
+        // Validate stock availability
+        const stockData = await api.getStockAvailability({
+          productIds: [productId],
+        });
+
+        const productStock = stockData.products[productId];
+        if (!productStock || productStock.available < quantity) {
+          throw new Error(
+            `Insufficient stock available. Only ${productStock?.available || 0} items in stock.`,
+          );
+        }
+
         const product = await api.getProduct(productId);
 
         const additionalDetails =
