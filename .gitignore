@@ -43,7 +43,6 @@ next-env.d.ts
 
 # AI configs
 .agents
-.github
 skills-lock.json
 AGENTS.md
 .serena
