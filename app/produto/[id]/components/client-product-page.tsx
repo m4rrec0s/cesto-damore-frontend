@@ -1868,6 +1868,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
                 {(() => {
                   const availability = stockAvailability.get(product?.id);
                   if (!availability) return null;
+                  if (availability.isLoading) return null;
                   return (
                     <div
                       className={cn(
@@ -2264,7 +2265,8 @@ const ClientProductPage = ({ id }: { id: string }) => {
               disabled={
                 addingToCart ||
                 isUploading ||
-                stockAvailability.get(product?.id)?.status === "out_of_stock"
+                (stockAvailability.get(product?.id)?.isLoading === false &&
+                  stockAvailability.get(product?.id)?.status === "out_of_stock")
               }
               className="w-full bg-gray-900 hover:bg-gray-800 text-white h-12 text-base font-medium disabled:opacity-50 disabled:cursor-not-allowed"
               size="lg"
