@@ -917,8 +917,9 @@ export function CustomizationsReview({
               )
             : [];
 
-          const filled: CartCustomization[] = data.filledCustomizations.map(
-            (f: any) => {
+          const filled: CartCustomization[] = data.filledCustomizations
+            .filter((f: any) => f?.is_valid !== false)
+            .map((f: any) => {
               const val = safeParseCustomizationJson(
                 f.value || {},
               ) as PersonalizationData;
@@ -928,8 +929,14 @@ export function CustomizationsReview({
                 data: val,
               });
 
+              const explicitMatchedRuleId =
+                typeof f.matched_customization_id === "string"
+                  ? f.matched_customization_id
+                  : undefined;
+
               const rule = availableCustomizations.find(
                 (avail: AvailableCustomization) =>
+                  (!!explicitMatchedRuleId && avail.id === explicitMatchedRuleId) ||
                   avail.id === normalizedRuleId ||
                   f.customization_id === avail.componentId ||
                   (val.title &&
@@ -939,12 +946,15 @@ export function CustomizationsReview({
               const inferredType =
                 (rule?.type as CustomizationTypeValue) || "TEXT";
 
-              return {
-                id: f.id,
-                customization_id: f.customization_id,
-                customization_type:
-                  (val.customization_type as CustomizationTypeValue) ||
-                  inferredType,
+                return {
+                  id: f.id,
+                  customization_id:
+                    explicitMatchedRuleId ||
+                    normalizedRuleId ||
+                    f.customization_id,
+                  customization_type:
+                    (val.customization_type as CustomizationTypeValue) ||
+                    inferredType,
                 title:
                   (val.title as string) ||
                   rule?.name ||
@@ -965,16 +975,22 @@ export function CustomizationsReview({
                   (val.text as string) ||
                   undefined,
                 componentId: (val.componentId as string) || rule?.componentId,
-                data: buildNormalizedImageData(val),
+                data: buildNormalizedImageData({
+                  ...val,
+                  matched_customization_id:
+                    explicitMatchedRuleId || normalizedRuleId || undefined,
+                }),
               };
-            },
-          );
+            });
 
           const missingRequired = availableCustomizations.filter(
             (avail: AvailableCustomization) => {
               const filledCustom = filled.find(
                 (f) =>
-                  (getCustomizationRuleId(f) === avail.id ||
+                  (((f.data as Record<string, unknown> | undefined)
+                    ?.matched_customization_id as string | undefined) ===
+                    avail.id ||
+                    getCustomizationRuleId(f) === avail.id ||
                     f.title?.toLowerCase() === avail.name?.toLowerCase() ||
                     (f.data?.title as string)?.toLowerCase() ===
                       avail.name?.toLowerCase()) &&
@@ -1260,11 +1276,14 @@ export function CustomizationsReview({
         const missingRequired = allAvailable.filter((avail) => {
           const filledCustom = filled.find(
             (f) =>
-              (f.customization_id === avail.id ||
-                f.customization_id?.includes(avail.id)) &&
+              ((((f.data as Record<string, unknown> | undefined)
+                ?.matched_customization_id as string | undefined) ===
+                avail.id ||
+                f.customization_id === avail.id ||
+                getCustomizationRuleId(f) === avail.id) &&
               (!f.componentId ||
                 f.componentId === avail.componentId ||
-                f.componentId === avail.itemId),
+                f.componentId === avail.itemId)),
           );
 
           if (avail.isRequired && !isCustomizationFilled(filledCustom, avail)) {
