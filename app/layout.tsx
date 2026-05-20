@@ -8,6 +8,9 @@ import AppWrapper from "./components/layout/app-wrapper";
 import { CookieBanner } from "./components/layout/cookie-banner";
 import { installApiKeyFetchInterceptor } from "./lib/api-key-fetch";
 
+const MAINTENANCE_MODE_ENABLED =
+  process.env.NEXT_PUBLIC_MAINTENANCE_MODE === "true";
+
 installApiKeyFetchInterceptor();
 
 export const metadata: Metadata = {
@@ -34,13 +37,32 @@ export default function RootLayout({
         <link rel="preconnect" href="https://drive.google.com" crossOrigin="" />
       </head>
       <body className="antialiased bg-gray-50 text-gray-900 font-sans">
-        <AuthProvider>
-          <AppWrapper>
-            <ClientLayout>{children}</ClientLayout>
-            <CookieBanner />
-          </AppWrapper>
-        </AuthProvider>
-        <Toaster position="top-center" richColors />
+        {MAINTENANCE_MODE_ENABLED ? (
+          <main className="min-h-screen bg-gray-950 text-white flex items-center justify-center px-6">
+            <section className="w-full max-w-2xl rounded-2xl border border-white/15 bg-white/5 p-8 text-center">
+              <p className="text-sm tracking-[0.2em] uppercase text-rose-300 mb-4">
+                Cesto d&apos;Amore
+              </p>
+              <h1 className="text-3xl md:text-4xl font-semibold mb-4">
+                Estamos em manutenção
+              </h1>
+              <p className="text-white/80 leading-relaxed">
+                Nosso site está temporariamente indisponível para melhorias.
+                Voltaremos em breve. Obrigado pela compreensão.
+              </p>
+            </section>
+          </main>
+        ) : (
+          <>
+            <AuthProvider>
+              <AppWrapper>
+                <ClientLayout>{children}</ClientLayout>
+                <CookieBanner />
+              </AppWrapper>
+            </AuthProvider>
+            <Toaster position="top-center" richColors />
+          </>
+        )}
       </body>
     </html>
   );
