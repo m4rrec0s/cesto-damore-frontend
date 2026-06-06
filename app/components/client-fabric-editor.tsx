@@ -1,7 +1,7 @@
 "use client";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import type { Canvas as FabricCanvas } from "fabric";
 import { Button } from "./ui/button";
 import { Label } from "./ui/label";
@@ -19,9 +19,16 @@ import {
 import { toast } from "sonner";
 import type { LayoutBase, ImageData } from "../types/personalization";
 import { ImageCropDialog } from "./ui/image-crop-dialog";
-import Image from "next/image";
 import { dataURLtoBlob } from "@/app/lib/utils";
 import { getPublicAssetUrl } from "@/lib/image-helper";
+import { jsPDF } from "jspdf";
+import {
+  getFrameKey,
+  normalizeImageIds,
+  validateCustomization,
+  extractRawFrameId,
+  type LayoutImage,
+} from "@/app/lib/frame-utils";
 
 const INTERNAL_DPI_MULTIPLIER = 2;
 const BACKEND_PROXY_BASE = "/api/backend";
@@ -29,6 +36,9 @@ const BACKEND_PROXY_BASE = "/api/backend";
 const toBackendAssetUrl = (value: string): string => {
   if (!value) return value;
   if (value.startsWith(`${BACKEND_PROXY_BASE}/`)) return value;
+  if (value.startsWith("data:")) return value;
+  if (value.startsWith("blob:")) return value;
+  if (value.includes(`${BACKEND_PROXY_BASE}/`)) return value;
   if (value.startsWith("/")) return `${BACKEND_PROXY_BASE}${value}`;
 
   try {
@@ -95,6 +105,7 @@ interface ClientFabricEditorProps {
     previewUrl: string,
     fabricState?: string,
     highQualityUrl?: string,
+    pdfUrl?: string,
   ) => void;
   onBack: () => void;
   initialState?: string;
@@ -110,25 +121,52 @@ export default function ClientFabricEditor({
   const containerRef = useRef<HTMLDivElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const initRunRef = useRef(0);
+  const imageCache = useRef<Map<string, HTMLImageElement>>(new Map());
 
   const [editableTexts, setEditableTexts] = useState<Record<string, string>>(
     {},
   );
   const [fieldLabels, setFieldLabels] = useState<Record<string, string>>({});
+  const [allFrames, setAllFrames] = useState<any[]>([]);
+  const multiPageRef = useRef<{ pages: any[]; activePageIndex: number }>({
+    pages: [],
+    activePageIndex: 0,
+  });
   const [localImages, setLocalImages] = useState<Record<string, string>>(() => {
     if (typeof window === "undefined") return {};
     try {
       if (!layoutBase.id) return {};
       const saved = localStorage.getItem(`client-design-imgs-${layoutBase.id}`);
-      return saved ? JSON.parse(saved) : {};
+      if (!saved) return {};
+      const parsed = JSON.parse(saved) as Record<string, string>;
+      if (Object.keys(parsed).length === 0) return {};
+
+      // Use the normalize function from frame-utils
+      const fabricState =
+        layoutBase.fabricJsonState || layoutBase.fabric_json_state;
+      if (fabricState) {
+        const imagesArray: LayoutImage[] = Object.entries(parsed).map(
+          ([id, url]) => ({ id, url, preview_url: url }),
+        );
+        const normalized = normalizeImageIds(imagesArray, fabricState);
+        const result: Record<string, string> = {};
+        for (const img of normalized) {
+          result[img.id] = img.url;
+        }
+        return result;
+      }
+
+      return parsed;
     } catch {
       return {};
     }
   });
   const [loading, setLoading] = useState(true);
   const [workspaceZoom, setWorkspaceZoom] = useState(0.6);
+  const localImagesRef = useRef(localImages);
 
   useEffect(() => {
+    localImagesRef.current = localImages;
     if (layoutBase.id && Object.keys(localImages).length > 0) {
       localStorage.setItem(
         `client-design-imgs-${layoutBase.id}`,
@@ -140,8 +178,15 @@ export default function ClientFabricEditor({
   const [cropDialogOpen, setCropDialogOpen] = useState(false);
   const [fileToCrop, setFileToCrop] = useState<File | null>(null);
   const [currentFrameId, setCurrentFrameId] = useState<string | null>(null);
+  const [currentFramePageIndex, setCurrentFramePageIndex] = useState<number | null>(null);
   const [cropAspect, setCropAspect] = useState<number | undefined>(undefined);
   const [isProcessingImage, setIsProcessingImage] = useState(false);
+  const [renderKey, setRenderKey] = useState(0);
+  const [validationResult, setValidationResult] = useState<{
+    valid: boolean;
+    totalFrames: number;
+    filledFrames: number;
+  } | null>(null);
 
   // Observa o wrapper do canvas (coluna esquerda) para calcular zoom
   useEffect(() => {
@@ -206,7 +251,30 @@ export default function ClientFabricEditor({
     }
   }, [workspaceZoom, fabricRef, layoutBase.width, layoutBase.height]);
 
-  const addFramePlaceholder = async (canvas: any, frame: any) => {
+  // Atualiza validação quando imagens mudam
+  useEffect(() => {
+    const stateSource = initialState || layoutBase.fabricJsonState || layoutBase.fabric_json_state;
+    if (!stateSource) return;
+
+    let fabricState: any;
+    try {
+      fabricState = typeof stateSource === "string" ? JSON.parse(stateSource) : stateSource;
+    } catch {
+      return;
+    }
+
+    const imagesForValidation: LayoutImage[] = Object.entries(localImages).map(
+      ([k, v]) => ({ id: k, url: v, preview_url: v }),
+    );
+    const result = validateCustomization(imagesForValidation, fabricState);
+    setValidationResult({
+      valid: result.valid,
+      totalFrames: result.totalFrames,
+      filledFrames: result.filledFrames,
+    });
+  }, [localImages, initialState, layoutBase]);
+
+  const addFramePlaceholder = useCallback(async (canvas: any, frame: any) => {
     const { FabricImage, Rect, Circle } = await import("fabric");
 
     frame.set("fill", "#f3f4f6");
@@ -253,10 +321,11 @@ export default function ClientFabricEditor({
         return;
       }
 
-      const scale = Math.max(
+      // Use contain (Math.min) para placeholder aparecer completo
+      const scale = Math.min(
         frameWidth / placeholderImg.width!,
         frameHeight / placeholderImg.height!,
-      );
+      ) * 0.8; // 80% para deixar margem
 
       placeholderImg.set({
         scaleX: scale,
@@ -267,58 +336,27 @@ export default function ClientFabricEditor({
         originY: "center",
         selectable: false,
         evented: false,
-        opacity: 0.5,
-        name: `placeholder-img-${frame.id || frame.name}`,
+        opacity: 0.4,
+        name: `placeholder-img-${extractRawFrameId(frame.id || frame.name)}`,
         angle: frame.angle || 0,
       });
 
-      let mask: any;
-      if (frame.type === "circle") {
-        mask = new Circle({
-          radius: (frame as any).radius || frame.width / 2,
-          scaleX: frame.scaleX,
-          scaleY: frame.scaleY,
-          originX: "center",
-          originY: "center",
-          left: center.x,
-          top: center.y,
-          angle: frame.angle || 0,
-          absolutePositioned: true,
-        });
-      } else {
-        mask = new Rect({
-          width: frame.width,
-          height: frame.height,
-          rx: frame.rx,
-          ry: frame.ry,
-          scaleX: frame.scaleX,
-          scaleY: frame.scaleY,
-          originX: "center",
-          originY: "center",
-          left: center.x,
-          top: center.y,
-          angle: frame.angle || 0,
-          absolutePositioned: true,
-        });
-      }
-
-      placeholderImg.set("clipPath", mask);
-
+      // Não adicionar clipPath no placeholder para mostrar a imagem completa
       canvas.add(placeholderImg);
       canvas.renderAll();
     } catch (err) {
       console.error("Erro ao carregar placeholder:", err);
     }
-  };
+  }, []);
 
-  const loadLocalImageToFrame = async (
+  const loadLocalImageToFrame = useCallback(async (
     canvas: any,
     frame: any,
     url: string,
   ) => {
     const { FabricImage, Rect, Circle } = await import("fabric");
 
-    const frameId = frame.id || frame.name;
+    const frameId = extractRawFrameId(frame.id || frame.name);
     const placeholders = canvas
       .getObjects()
       .filter(
@@ -332,14 +370,32 @@ export default function ClientFabricEditor({
     try {
       const finalUrl = toBackendAssetUrl(url);
 
-      const img = await FabricImage.fromURL(finalUrl, {
-        crossOrigin: "anonymous",
-      });
+      // Usar cache de HTMLImageElement para evitar re-download
+      let imgEl: HTMLImageElement;
+      if (imageCache.current.has(finalUrl)) {
+        imgEl = imageCache.current.get(finalUrl)!;
+      } else {
+        imgEl = await new Promise<HTMLImageElement>((resolve, reject) => {
+          const el = new window.Image();
+          el.crossOrigin = "anonymous";
+          el.onload = () => resolve(el);
+          el.onerror = reject;
+          el.src = finalUrl;
+        });
+        imageCache.current.set(finalUrl, imgEl);
+      }
+
+      const img = new FabricImage(imgEl);
+
+      if (!img || !img.width) {
+        return;
+      }
 
       const frameWidth = frame.width * frame.scaleX;
       const frameHeight = frame.height * frame.scaleY;
       const center = frame.getCenterPoint();
 
+      // Ocultar frame SOMENTE após imagem carregada com sucesso
       frame.set({ fill: "transparent", stroke: "transparent", opacity: 0 });
 
       const scale = Math.max(
@@ -405,7 +461,7 @@ export default function ClientFabricEditor({
       console.error("Erro ao carregar imagem no frame:", err);
       toast.error("Erro ao carregar imagem");
     }
-  };
+  }, []);
 
   useEffect(() => {
     let canvasInstance: FabricCanvas | null = null;
@@ -429,6 +485,12 @@ export default function ClientFabricEditor({
         FabricObject.ownDefaults.minScaleLimit = 0.05;
         FabricObject.ownDefaults.selectable = false;
         FabricObject.ownDefaults.evented = false;
+
+        // Adicionar isFrame aos campos customizados serializados
+        const originalToObject = FabricObject.prototype.toObject;
+        FabricObject.prototype.toObject = function(propertiesToInclude = []) {
+          return originalToObject.call(this, [...propertiesToInclude, 'id', 'isFrame', 'customData', 'isCustomizable', 'name']);
+        };
 
         containerRef.current.innerHTML = "";
         const canvasEl = document.createElement("canvas");
@@ -479,9 +541,20 @@ export default function ClientFabricEditor({
                 ? JSON.parse(stateToLoad)
                 : stateToLoad;
 
-            if (state.objects) {
+            const isMultiPage = Array.isArray(state?.pages);
+            const pages = isMultiPage ? state.pages : [];
+            const activePageIndex = 0;
+            multiPageRef.current = { pages, activePageIndex };
+
+            const stateForCanvas = isMultiPage && pages[0]
+              ? pages[0].canvasState
+              : state;
+
+            const objectsForDetection = stateForCanvas?.objects || [];
+
+            if (objectsForDetection.length > 0) {
               const fontsToLoad = new Set<string>();
-              state.objects.forEach((obj: any) => {
+              objectsForDetection.forEach((obj: any) => {
                 if (obj.fontFamily && obj.fontFamily !== "Arial") {
                   fontsToLoad.add(obj.fontFamily);
                 }
@@ -501,7 +574,7 @@ export default function ClientFabricEditor({
                 return;
               }
 
-              state.objects = state.objects.map((obj: any) => {
+              stateForCanvas.objects = objectsForDetection.map((obj: any) => {
                 if (obj.type === "i-text" || obj.type === "IText") {
                   obj.type = "textbox";
                 }
@@ -522,7 +595,7 @@ export default function ClientFabricEditor({
             }
 
             if (isCanvasAlive(canvasInstance)) {
-              await canvasInstance.loadFromJSON(state);
+              await canvasInstance.loadFromJSON(stateForCanvas);
             }
           } catch (jsonErr) {
             console.error(
@@ -556,56 +629,64 @@ export default function ClientFabricEditor({
           return;
         }
 
-        const objects = canvasInstance.getObjects();
-        const texts: Record<string, string> = {};
-        const labels: Record<string, string> = {};
-
-        for (const obj of objects as any[]) {
-          obj.set({
-            selectable: false,
-            evented: false,
-            lockMovementX: true,
-            lockMovementY: true,
-            lockScalingX: true,
-            lockScalingY: true,
-            lockRotation: true,
-            hasControls: false,
-            hoverCursor: "default",
-          });
-
-          const isFrame =
-            obj.isFrame === true ||
-            obj.name === "photo-frame" ||
-            obj.name === "image-frame" ||
-            (obj.name && obj.name.includes("frame")) ||
-            (obj.customData && obj.customData.isFrame === true);
-
-          if (isFrame) {
-            obj.isFrame = true;
-            const id = obj.id || obj.name;
-            labels[id] = obj.name || "Moldura de Foto";
-
-            const hasImg = objects.some(
-              (o: any) => o.name === `uploaded-img-${id}`,
-            );
-
-            if (!hasImg && !localImages[id]) {
-              await addFramePlaceholder(canvasInstance, obj);
-            } else if (localImages[id]) {
-              await loadLocalImageToFrame(canvasInstance, obj, localImages[id]);
-            }
-          } else if (obj.isCustomizable) {
-            if (obj.type === "textbox" || obj.type === "i-text") {
-              const id = obj.id || obj.name;
-              texts[id] = obj.text || "";
-              labels[id] = obj.name || "Campo de Texto";
-            }
-          }
-        }
+        const { texts, labels } = await processCanvasObjects(canvasInstance);
 
         if (isMounted) {
           setEditableTexts(texts);
           setFieldLabels(labels);
+
+          const collectedFrames: any[] = [];
+          if (multiPageRef.current.pages.length > 0) {
+            for (let pi = 0; pi < multiPageRef.current.pages.length; pi++) {
+              const pg = multiPageRef.current.pages[pi];
+              const pgObjects = pg.canvasState?.objects || [];
+              for (const obj of pgObjects) {
+                const isFrame =
+                  obj.isFrame === true ||
+                  obj.name === "photo-frame" ||
+                  obj.name === "image-frame" ||
+                  (obj.name && obj.name.includes("frame") &&
+                    !obj.name.startsWith("placeholder-") &&
+                    !obj.name.startsWith("uploaded-")) ||
+                  (obj.customData && obj.customData.isFrame === true);
+                if (isFrame && (obj.id || obj.name)) {
+                  const rawFid = extractRawFrameId(obj.id || obj.name);
+                  const isMp = multiPageRef.current.pages.length > 1;
+                  const fid = getFrameKey(pi, rawFid);
+                  collectedFrames.push({
+                    ...obj,
+                    pageId: pg.id,
+                    pageIndex: pi,
+                    label: isMp
+                      ? `P${pi + 1} - ${obj.name || "Foto"}`
+                      : obj.name || "Foto",
+                    _frameId: fid,
+                    _rawFrameId: rawFid,
+                    _pagePrefix: isMp ? `p${pi}_` : "",
+                  });
+                }
+              }
+            }
+          } else {
+            // Single-page: collect from live canvas
+            for (const obj of canvasInstance.getObjects() as any[]) {
+              if (obj.isFrame && (obj.id || obj.name)) {
+                const rawFid = extractRawFrameId(obj.id || obj.name);
+                const fid = getFrameKey(0, rawFid);
+                collectedFrames.push({
+                  ...obj,
+                  pageIndex: 0,
+                  label: obj.name || "Foto",
+                  _frameId: fid,
+                  _rawFrameId: rawFid,
+                  _pagePrefix: "",
+                });
+              }
+            }
+          }
+
+          setAllFrames(collectedFrames);
+
           canvasInstance.renderAll();
           setFabricRef(canvasInstance);
           setLoading(false);
@@ -630,11 +711,82 @@ export default function ClientFabricEditor({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [layoutBase, initialState]);
 
+  const processCanvasObjects = useCallback(
+    async (canvas: FabricCanvas, pageIndex?: number) => {
+      const objects = [...canvas.getObjects()]; // Snapshot to avoid mutation during iteration
+      const texts: Record<string, string> = {};
+      const labels: Record<string, string> = {};
+
+      const currentPageIndex = pageIndex ?? multiPageRef.current.activePageIndex;
+      const imageLoadPromises: Promise<void>[] = [];
+
+      for (const obj of objects as any[]) {
+        obj.set({
+          selectable: false,
+          evented: false,
+          lockMovementX: true,
+          lockMovementY: true,
+          lockScalingX: true,
+          lockScalingY: true,
+          lockRotation: true,
+          hasControls: false,
+          hoverCursor: "default",
+        });
+
+        const isFrame =
+          obj.isFrame === true ||
+          obj.name === "photo-frame" ||
+          obj.name === "image-frame" ||
+          (obj.name && obj.name.includes("frame") &&
+            !obj.name.startsWith("placeholder-") &&
+            !obj.name.startsWith("uploaded-")) ||
+          (obj.customData && obj.customData.isFrame === true);
+
+        if (isFrame && (obj.id || obj.name)) {
+          obj.isFrame = true;
+          const rawFid = extractRawFrameId(obj.id || obj.name);
+          const fid = getFrameKey(currentPageIndex, rawFid);
+          labels[rawFid] = obj.name || "Moldura de Foto";
+
+          const hasImg = objects.some(
+            (o: any) => o.name === `uploaded-img-${rawFid}`,
+          );
+          const hasPlaceholder = objects.some(
+            (o: any) => o.name === `placeholder-img-${rawFid}`,
+          );
+
+          if (!hasImg && !hasPlaceholder && !localImagesRef.current[fid]) {
+            await addFramePlaceholder(canvas, obj);
+          } else if (!hasImg && localImagesRef.current[fid]) {
+            // Carregar imagem em paralelo (não bloqueia o loop)
+            imageLoadPromises.push(loadLocalImageToFrame(canvas, obj, localImagesRef.current[fid]));
+          } else if (hasImg) {
+            obj.set({ fill: "transparent", stroke: "transparent", opacity: 0 });
+          }
+        } else if (obj.isCustomizable) {
+          if (obj.type === "textbox" || obj.type === "i-text") {
+            const fid = obj.id || obj.name;
+            texts[fid] = obj.text || "";
+            labels[fid] = obj.name || "Campo de Texto";
+          }
+        }
+      }
+
+      // Carregar imagens em paralelo
+      if (imageLoadPromises.length > 0) {
+        Promise.all(imageLoadPromises).then(() => canvas.requestRenderAll());
+      }
+
+      return { texts, labels };
+    },
+    [addFramePlaceholder, loadLocalImageToFrame],
+  );
+
   const handleTextChange = (id: string, value: string) => {
     if (!fabricRef) return;
     const obj = fabricRef
       .getObjects()
-      .find((o: any) => o.id === id || o.name === id);
+      .find((o: any) => (o.id === id || o.name === id || extractRawFrameId(o.id || o.name) === id));
     if (obj && (obj.type === "textbox" || obj.type === "i-text")) {
       obj.set("text", value);
       setEditableTexts((prev) => ({ ...prev, [id]: value }));
@@ -645,22 +797,30 @@ export default function ClientFabricEditor({
   const handleImageUpload = (
     e: React.ChangeEvent<HTMLInputElement>,
     frameId: string,
+    frameWidth?: number,
+    frameHeight?: number,
+    framePageIndex?: number,
   ) => {
     const file = e.target.files?.[0];
     if (file && fabricRef) {
-      const frame = fabricRef
-        .getObjects()
-        .find((o: any) => o.id === frameId || o.name === frameId);
-      if (frame) {
-        const width = frame.width * frame.scaleX;
-        const height = frame.height * frame.scaleY;
-        setCropAspect(width / height);
+      if (frameWidth && frameHeight) {
+        setCropAspect(frameWidth / frameHeight);
       } else {
-        setCropAspect(undefined);
+        const frame = fabricRef
+          .getObjects()
+          .find((o: any) => extractRawFrameId(o.id || o.name) === frameId && (o.isFrame || o.isCustomizable || o.type === "Rect" || o.type === "rect"));
+        if (frame) {
+          const width = frame.width * frame.scaleX;
+          const height = frame.height * frame.scaleY;
+          setCropAspect(width / height);
+        } else {
+          setCropAspect(undefined);
+        }
       }
 
       setFileToCrop(file);
       setCurrentFrameId(frameId);
+      setCurrentFramePageIndex(framePageIndex ?? null);
       setCropDialogOpen(true);
     }
   };
@@ -710,18 +870,29 @@ export default function ClientFabricEditor({
       if (!finalUrl) throw new Error("URL não retornada");
       finalUrl = toBackendAssetUrl(finalUrl);
 
-      setLocalImages((prev) => ({ ...prev, [currentFrameId]: finalUrl }));
+      const isMultiPage = multiPageRef.current.pages.length > 1;
+      const pageIdx = currentFramePageIndex !== null
+        ? currentFramePageIndex
+        : multiPageRef.current.activePageIndex;
+      const imageKey = getFrameKey(pageIdx, currentFrameId);
+      setLocalImages((prev) => {
+        const next = { ...prev, [imageKey]: finalUrl };
+        return next;
+      });
+      setRenderKey((n) => n + 1);
 
       const frame = fabricRef
         .getObjects()
-        .find((o: any) => o.id === currentFrameId || o.name === currentFrameId);
+        .find((o: any) => extractRawFrameId(o.id || o.name) === currentFrameId && (o.isFrame || o.isCustomizable || o.type === "Rect" || o.type === "rect"));
       if (frame) {
         await loadLocalImageToFrame(fabricRef, frame, finalUrl);
+        fabricRef.requestRenderAll();
       }
 
       setCropDialogOpen(false);
       setFileToCrop(null);
       setCurrentFrameId(null);
+      setCurrentFramePageIndex(null);
     } catch (err) {
       console.error("Erro no processamento da imagem:", err);
       toast.error("Erro ao salvar imagem");
@@ -730,7 +901,7 @@ export default function ClientFabricEditor({
     }
   };
 
-  const handleComplete = async () => {
+  const handleComplete = useCallback(async () => {
     if (!fabricRef) return;
 
     try {
@@ -744,23 +915,150 @@ export default function ClientFabricEditor({
         0,
       ]);
 
-      const highQualityUrl = fabricRef.toDataURL({
-        format: "png",
-        multiplier: 4 / INTERNAL_DPI_MULTIPLIER,
-        enableRetinaScaling: false,
-      });
+      const isMultiPage = multiPageRef.current.pages.length > 0;
 
-      const previewUrl = fabricRef.toDataURL({
-        format: "png",
-        multiplier: 2 / INTERNAL_DPI_MULTIPLIER,
-        enableRetinaScaling: false,
-      });
+      let previewUrl: string;
+      let highQualityUrl: string;
+      let pdfUrl: string | undefined;
+
+      if (isMultiPage && multiPageRef.current.pages.length > 1) {
+        // Multi-page: export each page individually, then composite + PDF
+        const { Canvas: FabricCanvas } = await import("fabric");
+        const pages = multiPageRef.current.pages;
+        const pageExports: Array<{
+          dataUrl: string;
+          width: number;
+          height: number;
+        }> = [];
+
+        const originalPageIndex = multiPageRef.current.activePageIndex;
+
+        for (let i = 0; i < pages.length; i++) {
+          const tempCanvas = new FabricCanvas(
+            document.createElement("canvas"),
+            { width: fabricRef.width, height: fabricRef.height },
+          );
+
+          await tempCanvas.loadFromJSON(pages[i].canvasState);
+
+          tempCanvas.setViewportTransform([
+            INTERNAL_DPI_MULTIPLIER,
+            0,
+            0,
+            INTERNAL_DPI_MULTIPLIER,
+            0,
+            0,
+          ]);
+
+          // Temporarily set activePageIndex so processCanvasObjects uses correct frame keys
+          multiPageRef.current.activePageIndex = i;
+          await processCanvasObjects(tempCanvas, i);
+          multiPageRef.current.activePageIndex = originalPageIndex;
+
+          tempCanvas.renderAll();
+
+          const dataUrl = tempCanvas.toDataURL({
+            format: "png",
+            multiplier: 4 / INTERNAL_DPI_MULTIPLIER,
+            enableRetinaScaling: false,
+          });
+
+          pageExports.push({
+            dataUrl,
+            width: fabricRef.width,
+            height: fabricRef.height,
+          });
+
+          tempCanvas.dispose();
+        }
+
+        // Composite all pages vertically
+        const totalHeight = pageExports.reduce((sum, p) => sum + p.height, 0);
+        const maxWidth = Math.max(...pageExports.map((p) => p.width));
+
+        const compositeCanvas = document.createElement("canvas");
+        compositeCanvas.width = maxWidth;
+        compositeCanvas.height = totalHeight;
+        const ctx = compositeCanvas.getContext("2d")!;
+
+        let yOffset = 0;
+        for (const page of pageExports) {
+          const img = new window.Image();
+          await new Promise<void>((resolve, reject) => {
+            img.onload = () => resolve();
+            img.onerror = reject;
+            img.src = page.dataUrl;
+          });
+          ctx.drawImage(img, 0, yOffset, page.width, page.height);
+          yOffset += page.height;
+        }
+
+        highQualityUrl = compositeCanvas.toDataURL("image/png");
+        previewUrl = compositeCanvas.toDataURL("image/png", 0.92);
+
+        // Generate PDF
+        try {
+          const pdf = new jsPDF({
+            orientation: "portrait",
+            unit: "px",
+            format: [
+              fabricRef.width / INTERNAL_DPI_MULTIPLIER,
+              fabricRef.height / INTERNAL_DPI_MULTIPLIER,
+            ],
+          });
+
+          for (let i = 0; i < pageExports.length; i++) {
+            if (i > 0) pdf.addPage();
+            pdf.addImage(
+              pageExports[i].dataUrl,
+              "PNG",
+              0,
+              0,
+              fabricRef.width / INTERNAL_DPI_MULTIPLIER,
+              fabricRef.height / INTERNAL_DPI_MULTIPLIER,
+            );
+          }
+
+          pdfUrl = pdf.output("dataurlstring");
+        } catch (pdfErr) {
+          console.error("Erro ao gerar PDF:", pdfErr);
+          // Continue without PDF — preview/hq images are still available
+        }
+      } else {
+        // Single-page or single-page multi-page: export live canvas directly
+        highQualityUrl = fabricRef.toDataURL({
+          format: "png",
+          multiplier: 4 / INTERNAL_DPI_MULTIPLIER,
+          enableRetinaScaling: false,
+        });
+
+        previewUrl = fabricRef.toDataURL({
+          format: "png",
+          multiplier: 2 / INTERNAL_DPI_MULTIPLIER,
+          enableRetinaScaling: false,
+        });
+      }
 
       (fabricRef as any).setViewportTransform(originalTransform);
 
-      const state = JSON.stringify(fabricRef.toJSON());
+      let state: string;
+      if (isMultiPage) {
+        const currentPageState = JSON.parse(JSON.stringify(fabricRef.toJSON()));
+        currentPageState.objects = (currentPageState.objects || []).filter((o: any) =>
+          !o.name?.startsWith("placeholder-") && !o.name?.startsWith("uploaded-img-")
+        );
+        const updatedPages = multiPageRef.current.pages.map(
+          (pg: any, i: number) =>
+            i === multiPageRef.current.activePageIndex
+              ? { ...pg, canvasState: currentPageState }
+              : pg,
+        );
+        state = JSON.stringify({ pages: updatedPages });
+      } else {
+        state = JSON.stringify(fabricRef.toJSON());
+      }
 
-      const images: any[] = Object.entries(localImages).map(
+      const images: LayoutImage[] = Object.entries(localImages).map(
         ([frameId, url]) => ({
           id: frameId,
           url: url,
@@ -768,19 +1066,26 @@ export default function ClientFabricEditor({
         }),
       );
 
-      onComplete(images as ImageData[], previewUrl, state, highQualityUrl);
+      onComplete(
+        images as unknown as ImageData[],
+        previewUrl,
+        state,
+        highQualityUrl,
+        pdfUrl,
+      );
     } catch (err) {
       console.error("Erro ao finalizar:", err);
       toast.error("Erro ao salvar");
     }
-  };
+  }, [fabricRef, localImages, onComplete, processCanvasObjects]);
 
-  const frames = fabricRef?.getObjects().filter((o: any) => o.isFrame) ?? [];
+  const isMultiPage = multiPageRef.current.pages.length > 0;
+  const displayFrames = allFrames;
   const hasTexts = Object.keys(editableTexts).length > 0;
-  const hasFrames = frames.length > 0;
+  const hasFrames = displayFrames.length > 0;
 
   return (
-    <div className="flex h-full min-h-0 w-full flex-col gap-3 p-3">
+    <div className="flex min-h-0 w-full flex-col gap-3 p-3">
       <div className="flex items-center justify-between">
         <button
           onClick={onBack}
@@ -797,6 +1102,84 @@ export default function ClientFabricEditor({
       </div>
 
       <div className="flex flex-1 flex-col gap-3">
+        {isMultiPage && (
+          <div className="flex items-center gap-1 overflow-x-auto">
+            {multiPageRef.current.pages.map((pg: any, idx: number) => (
+              <button
+                key={pg.id || idx}
+                data-vaul-no-drag
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={async (e) => {
+                  e.stopPropagation();
+                  if (!fabricRef || idx === multiPageRef.current.activePageIndex) return;
+                  try {
+                    // Save current page state WITHOUT dynamic objects (placeholders/uploaded)
+                    const rawState = JSON.parse(JSON.stringify(fabricRef.toJSON()));
+                    rawState.objects = (rawState.objects || []).filter((o: any) =>
+                      !o.name?.startsWith("placeholder-") && !o.name?.startsWith("uploaded-img-")
+                    );
+                    const updatedPages = multiPageRef.current.pages.map((p: any, i: number) =>
+                      i === multiPageRef.current.activePageIndex
+                        ? { ...p, canvasState: rawState }
+                        : p,
+                    );
+                    multiPageRef.current.pages = updatedPages;
+                    multiPageRef.current.activePageIndex = idx;
+                    // Processar URLs antes de carregar e filtrar objetos dinâmicos
+                    const pageState = JSON.parse(JSON.stringify(updatedPages[idx].canvasState));
+                    if (pageState.objects) {
+                      pageState.objects = pageState.objects
+                        .filter((obj: any) => !obj.name?.startsWith("placeholder-") && !obj.name?.startsWith("uploaded-img-"))
+                        .map((obj: any) => {
+                          if ((obj.type === "Image" || obj.type === "image") && obj.src) {
+                            obj.src = toBackendAssetUrl(obj.src);
+                          }
+                          return obj;
+                        });
+                    }
+                    await fabricRef.loadFromJSON(pageState);
+                    // Atualizar dimensões se a página tem tamanho diferente
+                    const pgWidth = pageState.width || layoutBase.width || 378;
+                    const pgHeight = pageState.height || layoutBase.height || 567;
+                    fabricRef.setDimensions(
+                      { width: pgWidth * INTERNAL_DPI_MULTIPLIER, height: pgHeight * INTERNAL_DPI_MULTIPLIER },
+                      { backstoreOnly: true },
+                    );
+                    fabricRef.setDimensions(
+                      { width: `${pgWidth * workspaceZoom}px`, height: `${pgHeight * workspaceZoom}px` },
+                      { cssOnly: true },
+                    );
+                    fabricRef.setViewportTransform([
+                      INTERNAL_DPI_MULTIPLIER, 0, 0, INTERNAL_DPI_MULTIPLIER, 0, 0,
+                    ]);
+                    // Restaurar propriedades custom que loadFromJSON não preserva
+                    const pageObjects = updatedPages[idx].canvasState?.objects || [];
+                    const objMap = new Map(pageObjects.map((o: any) => [o.id, o]));
+                    fabricRef.getObjects().forEach((obj: any) => {
+                      const srcObj = objMap.get(obj.id);
+                      if (srcObj?.isFrame) obj.isFrame = true;
+                      if (srcObj?.isCustomizable) obj.isCustomizable = true;
+                    });
+                    const { texts, labels } = await processCanvasObjects(fabricRef, idx);
+                    setEditableTexts(texts);
+                    setFieldLabels(labels);
+                    fabricRef.calcOffset();
+                    fabricRef.requestRenderAll();
+                  } catch (err) {
+                    console.error('[PageSwitch] ERRO:', err);
+                  }
+                }}
+                className={`px-3 py-1.5 text-xs rounded-md whitespace-nowrap transition-colors ${
+                  idx === multiPageRef.current.activePageIndex
+                    ? "bg-rose-500 text-white"
+                    : "bg-gray-200 text-gray-600 hover:bg-gray-300"
+                }`}
+              >
+                {pg.name || `Página ${idx + 1}`}
+              </button>
+            ))}
+          </div>
+        )}
         <div
           ref={wrapperRef}
           className="relative flex w-full h-[40vh] md:h-[500px] shrink-0 items-center justify-center overflow-hidden rounded-lg bg-gray-50"
@@ -885,18 +1268,20 @@ export default function ClientFabricEditor({
                 </div>
               )}
 
-              <div className="grid grid-cols-3 gap-2 lg:grid-cols-2">
-                {frames.map((frame: any, index: number) => {
-                  const id = frame.id || frame.name;
-                  const label = fieldLabels[id] || `${index + 1}`;
+              <div className="grid grid-cols-3 gap-2 lg:grid-cols-2" key={`grid-${renderKey}`} data-frame-grid>
+                {displayFrames.map((frame: any, index: number) => {
+                  const id = frame._frameId || frame.id || frame.name;
+                  const rawId = frame._rawFrameId || frame.id || frame.name;
+                  const displayLabel = frame.label || fieldLabels[rawId] || `${index + 1}`;
+                  const domId = id;
                   let imageUrl = localImages[id];
                   if (imageUrl) imageUrl = toBackendAssetUrl(imageUrl);
                   const hasImage = !!imageUrl;
 
                   return (
-                    <div key={`${id}-${index}`} className="flex flex-col gap-1">
+                    <div key={`${domId}-${index}`} className="flex flex-col gap-1">
                       <p className="truncate text-center text-[10px] font-medium text-gray-500">
-                        {label}
+                        {displayLabel}
                       </p>
 
                       <div
@@ -907,16 +1292,15 @@ export default function ClientFabricEditor({
                               : "border-dashed border-gray-300 bg-gray-50 hover:border-rose-300"
                           }`}
                         onClick={() =>
-                          document.getElementById(`upload-${id}`)?.click()
+                          document.getElementById(`upload-${domId}`)?.click()
                         }
                       >
                         {hasImage ? (
-                          <Image
+                          <img
+                            key={imageUrl}
                             src={imageUrl}
-                            alt={label}
-                            fill
-                            className="object-cover"
-                            unoptimized
+                            alt={displayLabel}
+                            className="absolute inset-0 w-full h-full object-cover z-10"
                           />
                         ) : (
                           <div className="absolute inset-0 flex items-center justify-center">
@@ -933,11 +1317,11 @@ export default function ClientFabricEditor({
                         </div>
 
                         <Input
-                          id={`upload-${id}`}
+                          id={`upload-${domId}`}
                           type="file"
                           accept="image/*"
                           className="hidden"
-                          onChange={(e) => handleImageUpload(e, id)}
+                          onChange={(e) => handleImageUpload(e, rawId, frame.width * (frame.scaleX || 1), frame.height * (frame.scaleY || 1), frame.pageIndex)}
                         />
                       </div>
                     </div>
@@ -951,9 +1335,9 @@ export default function ClientFabricEditor({
 
           <Button
             size="sm"
-            className="h-9 w-full gap-1.5 rounded-lg bg-rose-600 text-sm font-semibold hover:bg-rose-700"
+            className="flex h-9 w-full gap-1.5 rounded-lg bg-rose-600 text-sm font-semibold hover:bg-rose-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
             onClick={handleComplete}
-            disabled={isProcessingImage}
+            disabled={isProcessingImage || !validationResult || !validationResult.valid}
           >
             {isProcessingImage ? (
               <>
@@ -967,6 +1351,19 @@ export default function ClientFabricEditor({
               </>
             )}
           </Button>
+
+          {validationResult && validationResult.totalFrames > 0 && (
+              <div className="flex items-center justify-between rounded-md border border-gray-200 bg-gray-50 px-3 py-1.5 text-[11px]">
+                <span className="text-gray-500">
+                  {validationResult.filledFrames} de {validationResult.totalFrames} fotos
+                </span>
+                <span className={validationResult.valid ? "font-medium text-green-600" : "font-medium text-amber-600"}>
+                  {validationResult.valid ? "Completo" : `${validationResult.totalFrames - validationResult.filledFrames} faltando`}
+                </span>
+              </div>
+          )}
+
+
         </div>
       </div>
 
@@ -978,6 +1375,7 @@ export default function ClientFabricEditor({
             setCropDialogOpen(false);
             setFileToCrop(null);
             setCurrentFrameId(null);
+            setCurrentFramePageIndex(null);
           }}
           onCropComplete={handleCropComplete}
           aspect={cropAspect}

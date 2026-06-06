@@ -423,3 +423,12 @@ export function isSubstitutionOptions(
     "items" in options
   );
 }
+
+/**
+ * Referência a uma página de layout multi-página composta
+ */
+export interface DynamicLayoutPageRef {
+  pageId: string;
+  pageIndex: number;
+  url: string;
+}

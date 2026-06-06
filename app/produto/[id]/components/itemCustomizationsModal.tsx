@@ -27,6 +27,7 @@ import { getDirectImageUrl } from "@/app/helpers/drive-normalize";
 import useApi from "@/app/hooks/use-api";
 import { ImageCropDialog } from "@/app/components/ui/image-crop-dialog";
 import { getInternalImageUrl, getPublicAssetUrl } from "@/lib/image-helper";
+import { normalizeImageIds, type LayoutImage } from "@/app/lib/frame-utils";
 
 const ClientFabricEditor = dynamic(
   () => import("@/app/components/client-fabric-editor"),
@@ -232,6 +233,7 @@ export function ItemCustomizationModal({
   onClose,
   renderMode = "modal",
   itemId,
+  itemName,
   customizations,
   onComplete,
   onPreviewChange,
@@ -424,6 +426,27 @@ export function ItemCustomizationModal({
 
         if (!layoutData) throw new Error("Layout não encontrado");
 
+        // Strip base64 thumbnails from fabricJsonState to reduce memory/payload
+        if (layoutData) {
+          const state = (layoutData as any).fabricJsonState || (layoutData as any).fabric_json_state;
+          if (state) {
+            const parsed = typeof state === 'string' ? JSON.parse(state) : state;
+            if (Array.isArray(parsed?.pages)) {
+              parsed.pages = parsed.pages.map((p: any) => {
+                const { thumbnailDataUrl, ...rest } = p;
+                return rest;
+              });
+              if (typeof state === 'string') {
+                (layoutData as any).fabricJsonState = JSON.stringify(parsed);
+                (layoutData as any).fabric_json_state = JSON.stringify(parsed);
+              } else {
+                (layoutData as any).fabricJsonState = parsed;
+                (layoutData as any).fabric_json_state = parsed;
+              }
+            }
+          }
+        }
+
         setFullLayoutBase(layoutData as LayoutBase);
 
         const apiType = (layoutData as unknown as { type?: string }).type;
@@ -441,7 +464,10 @@ export function ItemCustomizationModal({
             : normalizedType === "quadro"
               ? "frame"
               : normalizedType;
-        const layoutDataRecord = layoutData as unknown as Record<string, unknown>;
+        const layoutDataRecord = layoutData as unknown as Record<
+          string,
+          unknown
+        >;
 
         setCustomizationData((prev) => ({
           ...prev,
@@ -535,9 +561,18 @@ export function ItemCustomizationModal({
         }
       });
       setCustomizationData(savedData);
-      setStep("selection");
-      setSelectedLayoutId(null);
-      setFullLayoutBase(null);
+
+      const baseLayoutCustom = customizationsRef.current.find(
+        (c) => c.type === "DYNAMIC_LAYOUT",
+      );
+      const layouts = baseLayoutCustom?.customization_data.layouts || [];
+      if (layouts.length === 1) {
+        handleLayoutSelect(layouts[0].id);
+      } else {
+        setStep("selection");
+        setSelectedLayoutId(null);
+        setFullLayoutBase(null);
+      }
     }
   }, [isOpen, initialValues, itemId, handleLayoutSelect]);
 
@@ -547,11 +582,26 @@ export function ItemCustomizationModal({
       previewUrl: string,
       fabricState?: string,
       highQualityUrl?: string,
+      pdfUrl?: string,
     ) => {
       const baseLayoutCustom = customizations.find(
         (c) => c.type === "DYNAMIC_LAYOUT",
       );
       if (!baseLayoutCustom) return;
+
+      // Normalise image ids to canonical "pN_frameId" format
+      const canvasState = fabricState
+        ? (() => {
+            try {
+              return JSON.parse(fabricState);
+            } catch {
+              return null;
+            }
+          })()
+        : null;
+      const normalisedImages = canvasState
+        ? normalizeImageIds(images as unknown as LayoutImage[], canvasState)
+        : (images as unknown as LayoutImage[]);
 
       const existingData =
         (customizationData[baseLayoutCustom.id] as Record<string, unknown>) ||
@@ -560,14 +610,26 @@ export function ItemCustomizationModal({
       const apiProductionTime = (
         fullLayoutBase as unknown as { productionTime?: number }
       )?.productionTime;
+      // Extract pages array from fabricState for backend DYNAMIC_LAYOUT detection
+      let extractedPages: Array<{ pageId: string; pageIndex: number; url: string }> | undefined;
+      if (fabricState && canvasState?.pages) {
+        extractedPages = canvasState.pages.map((pg: any, i: number) => ({
+          pageId: pg.pageId || `page-${i}`,
+          pageIndex: i,
+          url: pg.url || "",
+        }));
+      }
+
       const updatedData = {
         ...customizationData,
         [baseLayoutCustom.id]: {
           ...existingData,
-          images,
+          images: normalisedImages,
           previewUrl,
           fabricState,
           highQualityUrl,
+          pdfUrl,
+          pages: extractedPages,
 
           item_type: existingData.item_type,
           model_url: existingData.model_url,
@@ -604,6 +666,8 @@ export function ItemCustomizationModal({
             previewUrl?: string;
             fabricState?: string;
             highQualityUrl?: string;
+            pdfUrl?: string;
+            pages?: Array<{ pageId: string; pageIndex: number; url: string }>;
             layout_width?: number;
             layout_height?: number;
             mockupRules?: unknown;
@@ -637,6 +701,8 @@ export function ItemCustomizationModal({
                 fabricState: layoutData.fabricState,
                 previewUrl: layoutData.previewUrl,
                 highQualityUrl: layoutData.highQualityUrl,
+                pdfUrl: layoutData.pdfUrl,
+                pages: layoutData.pages,
                 mockupRules: layoutData.mockupRules,
                 mockup_rules: layoutData.mockup_rules,
                 mockups: layoutData.mockups,
@@ -1119,7 +1185,10 @@ export function ItemCustomizationModal({
                     )}
 
                     {imageUrl ? (
-                      <div className="relative w-full" style={{ aspectRatio: cardAspectRatio }}>
+                      <div
+                        className="relative w-full"
+                        style={{ aspectRatio: cardAspectRatio }}
+                      >
                         <img
                           src={imageUrl}
                           alt={fullLayout.name}
@@ -1179,78 +1248,78 @@ export function ItemCustomizationModal({
     const fields = customization.customization_data.fields || [];
 
     return (
-      <div className="flex min-h-0 flex-col gap-4 pb-5">
-        <Label className="text-sm font-semibold text-neutral-900">
-          {customization.name}
-          {customization.isRequired && (
-            <span className="ml-1 text-red-500">*</span>
-          )}
-        </Label>
+      <div className="flex min-h-0 flex-col h-full">
+        <div className="flex-1 overflow-y-auto px-1 pt-1 space-y-4">
+          <Label className="text-sm font-semibold text-neutral-900">
+            {customization.name}
+            {customization.isRequired && (
+              <span className="ml-1 text-red-500">*</span>
+            )}
+          </Label>
 
-        {fields.map((field) => {
-          let data = customizationData[customization.id] as
-            | Record<string, string>
-            | undefined;
+          {fields.map((field) => {
+            let data = customizationData[customization.id] as
+              | Record<string, string>
+              | undefined;
 
-          if (!data && initialValues && initialValues[customization.id]) {
-            const initialValue = initialValues[customization.id] as unknown;
-            if (typeof initialValue === "object" && initialValue !== null) {
-              data = initialValue as Record<string, string>;
+            if (!data && initialValues && initialValues[customization.id]) {
+              const initialValue = initialValues[customization.id] as unknown;
+              if (typeof initialValue === "object" && initialValue !== null) {
+                data = initialValue as Record<string, string>;
+              }
             }
-          }
 
-          const value = data?.[field.id] || "";
+            const value = data?.[field.id] || "";
 
-          return (
-            <div key={field.id} className="space-y-2">
-              {field.max_length && field.max_length > 20 ? (
-                <Textarea
-                  id={field.id}
-                  placeholder={field.placeholder}
-                  maxLength={field.max_length}
-                  value={value}
-                  onChange={(e) =>
-                    handleTextChange(customization.id, field.id, e.target.value)
-                  }
-                  className="shadow-inner min-h-[100px]"
-                  style={{
-                    fontFamily: '"Georgia", serif',
-                    letterSpacing: "0.5px",
-                  }}
-                />
-              ) : (
-                <Input
-                  id={field.id}
-                  type="text"
-                  placeholder={field.placeholder}
-                  maxLength={field.max_length}
-                  value={value}
-                  onChange={(e) =>
-                    handleTextChange(customization.id, field.id, e.target.value)
-                  }
-                  className="shadow-inner"
-                  style={{
-                    fontFamily: '"Georgia", serif',
-                    letterSpacing: "0.5px",
-                  }}
-                />
-              )}
-              {field.max_length && (
-                <p className="text-xs text-black">
-                  {value.length}/{field.max_length}
-                </p>
-              )}
-            </div>
-          );
-        })}
+            return (
+              <div key={field.id} className="space-y-1.5">
+                {field.max_length && field.max_length > 20 ? (
+                  <Textarea
+                    id={field.id}
+                    placeholder={field.placeholder}
+                    maxLength={field.max_length}
+                    value={value}
+                    onChange={(e) =>
+                      handleTextChange(customization.id, field.id, e.target.value)
+                    }
+                    className="min-h-[100px] border-neutral-200 focus:border-rose-300 focus:ring-rose-200"
+                    style={{
+                      fontFamily: '"Georgia", serif',
+                      letterSpacing: "0.5px",
+                    }}
+                  />
+                ) : (
+                  <Input
+                    id={field.id}
+                    type="text"
+                    placeholder={field.placeholder}
+                    maxLength={field.max_length}
+                    value={value}
+                    onChange={(e) =>
+                      handleTextChange(customization.id, field.id, e.target.value)
+                    }
+                    className="border-neutral-200 focus:border-rose-300 focus:ring-rose-200"
+                    style={{
+                      fontFamily: '"Georgia", serif',
+                      letterSpacing: "0.5px",
+                    }}
+                  />
+                )}
+                {field.max_length && (
+                  <p className="text-right text-[11px] text-neutral-400">
+                    <span className={value.length >= field.max_length ? "text-rose-500 font-medium" : ""}>
+                      {value.length}
+                    </span>
+                    /{field.max_length}
+                  </p>
+                )}
+              </div>
+            );
+          })}
+        </div>
 
-        <motion.div
-          className="sticky bottom-0 left-0 right-0 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] bg-gradient-to-t shadow-md"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ type: "spring", stiffness: 300, damping: 30 }}
-        >
-          <div className="mx-auto flex w-full max-w-6xl flex-col-reverse gap-3 sm:flex-row">
+        <div className="shrink-0 pt-3 pb-[max(0.5rem,env(safe-area-inset-bottom))] bg-white border-t border-neutral-100">
+          <div className="mx-auto flex w-full max-w-6xl flex-col-reverse gap-2 sm:flex-row">
             <Button
               variant="outline"
               onClick={() =>
@@ -1312,7 +1381,7 @@ export function ItemCustomizationModal({
               Confirmar
             </Button>
           </div>
-        </motion.div>
+        </div>
       </div>
     );
   };
@@ -1542,28 +1611,25 @@ export function ItemCustomizationModal({
     const selectedLabel = data?.label;
 
     return (
-      <div className="space-y-4 pb-5">
-        <Label className="text-sm font-semibold text-neutral-900">
-          {customization.name}
-          {customization.isRequired && (
-            <span className="ml-1 text-red-500">*</span>
-          )}
-        </Label>
+      <div className="flex min-h-0 flex-col h-full">
+        <div className="flex-1 overflow-y-auto px-1 pt-1 space-y-4">
+          <Label className="text-sm font-semibold text-neutral-900">
+            {customization.name}
+            {customization.isRequired && (
+              <span className="ml-1 text-red-500">*</span>
+            )}
+          </Label>
 
-        <div className="space-y-2 px-1 sm:px-5">
-          {options.map((option) => {
-            const isSelected = selectedId === option.id;
-            return (
-              <motion.div
-                key={option.id}
-                whileHover={{ scale: 1.01 }}
-                whileTap={{ scale: 0.99 }}
-              >
-                <Card
-                  className={`p-4 cursor-pointer transition-all ${
+          <div className="space-y-2 px-1 sm:px-5">
+            {options.map((option) => {
+              const isSelected = selectedId === option.id;
+              return (
+                <div
+                  key={option.id}
+                  className={`rounded-lg p-3 cursor-pointer transition-all ${
                     isSelected
-                      ? "border-2 border-neutral-900 bg-neutral-50 shadow-sm"
-                      : "border border-neutral-200 hover:border-neutral-400 hover:bg-neutral-50/50"
+                      ? "border-2 border-neutral-900 bg-neutral-50"
+                      : "border border-neutral-200 hover:border-neutral-300 hover:bg-neutral-50/50"
                   }`}
                   onClick={() =>
                     handleOptionSelect(
@@ -1574,19 +1640,14 @@ export function ItemCustomizationModal({
                   }
                 >
                   <div className="flex items-center gap-3">
-                    <motion.div
-                      initial={false}
-                      animate={{
-                        scale: isSelected ? 1.1 : 1,
-                        backgroundColor: isSelected
-                          ? "rgb(23 23 23)"
-                          : "transparent",
-                      }}
-                      className="flex-shrink-0 w-5 h-5 rounded-full border border-neutral-300 flex items-center justify-center"
+                    <div
+                      className={`flex-shrink-0 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors ${
+                        isSelected ? "border-neutral-900 bg-neutral-900" : "border-neutral-300"
+                      }`}
                     >
                       {isSelected && <Check className="h-3 w-3 text-white" />}
-                    </motion.div>
-                    <div className="relative w-16 h-16 flex-shrink-0 rounded-md overflow-hidden border border-neutral-100">
+                    </div>
+                    <div className="relative w-14 h-14 flex-shrink-0 rounded-md overflow-hidden border border-neutral-100">
                       <img
                         src={
                           getInternalImageUrl(option.image_url) ||
@@ -1596,38 +1657,33 @@ export function ItemCustomizationModal({
                         className="w-full h-full object-cover object-center bg-neutral-50"
                       />
                     </div>
-                    <div className="flex-1">
-                      <p
-                        className={`font-semibold ${
-                          isSelected ? "text-neutral-900" : "text-neutral-700"
-                        }`}
-                      >
-                        {option.label}
-                      </p>
-                    </div>
-                    {option.price_adjustment && option.price_adjustment > 0 && (
-                      <Badge
-                        variant="secondary"
-                        className="bg-neutral-100 text-neutral-900 font-bold"
-                      >
-                        +R$ {option.price_adjustment.toFixed(2)}
-                      </Badge>
-                    )}
-                  </div>
-                </Card>
-              </motion.div>
-            );
-          })}
-        </div>
+                     <div className="flex-1">
+                         <p
+                           className={`font-semibold ${
+                             isSelected ? "text-neutral-900" : "text-neutral-700"
+                           }`}
+                         >
+                           {option.label}
+                         </p>
+                       </div>
+                       {option.price_adjustment && option.price_adjustment > 0 && (
+                         <Badge
+                           variant="secondary"
+                           className="bg-neutral-100 text-neutral-900 font-bold"
+                         >
+                           +R$ {option.price_adjustment.toFixed(2)}
+                         </Badge>
+                       )}
+                   </div>
+                 </div>
+               );
+             })}
+           </div>
+         </div>
 
         {selectedId && selectedLabel && (
-          <motion.div
-            className="sticky bottom-0 left-0 right-0 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] bg-white/95 backdrop-blur-md border-t border-neutral-200 shadow-md"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ type: "spring", stiffness: 300, damping: 30 }}
-          >
-            <div className="mx-auto flex w-full max-w-6xl flex-col-reverse gap-3 sm:flex-row">
+          <div className="shrink-0 pt-3 pb-[max(0.5rem,env(safe-area-inset-bottom))] bg-white border-t border-neutral-100">
+            <div className="mx-auto flex w-full max-w-6xl flex-col-reverse gap-2 sm:flex-row">
               <Button
                 variant="outline"
                 onClick={() =>
@@ -1682,7 +1738,7 @@ export function ItemCustomizationModal({
                 Confirmar
               </Button>
             </div>
-          </motion.div>
+          </div>
         )}
       </div>
     );
@@ -1705,7 +1761,11 @@ export function ItemCustomizationModal({
         {step === "selection" ? (
           <div className="space-y-6 sm:space-y-8">
             {customizations.map((customization) => {
-              if (customization.type === "DYNAMIC_LAYOUT") {
+              if (
+                customization.type === "DYNAMIC_LAYOUT" &&
+                customization.customization_data.layouts &&
+                customization.customization_data.layouts?.length > 1
+              ) {
                 return (
                   <div key={customization.id}>
                     {renderDynamicLayoutSelection(customization)}

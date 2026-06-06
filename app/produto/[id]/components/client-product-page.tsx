@@ -39,14 +39,15 @@ import {
 } from "@/app/types/customization";
 import type { SlotDef } from "@/app/types/personalization";
 import { ItemCustomizationModal } from "./itemCustomizationsModal";
+import { ItemCustomizationInlineWithContext } from "./ItemCustomizationInlineWithContext";
 import { getInternalImageUrl, getPublicAssetUrl } from "@/lib/image-helper";
 import { useLoginPrompt } from "@/app/components/layout/app-wrapper";
 import { normalizeCustomizationData } from "@/app/lib/customization-serialization";
 import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/app/components/ui/collapsible";
+  validateCustomization,
+  type LayoutImage,
+} from "@/app/lib/frame-utils";
+import { CustomizationItem } from "./CustomizationItem";
 
 const Model3DViewer = dynamic(
   () => import("./Model3DViewer").then((mod) => mod.Model3DViewer),
@@ -973,6 +974,31 @@ const ClientProductPage = ({ id }: { id: string }) => {
 
     setMissingRequiredByComponent({});
 
+    // Validate DYNAMIC_LAYOUT images — all frames must be filled
+    for (const component of components) {
+      const layoutInputs = (itemCustomizations[component.id] || []).filter(
+        (inp) => inp.customizationType === CustomizationType.DYNAMIC_LAYOUT,
+      );
+      for (const input of layoutInputs) {
+        const data = input.data as Record<string, unknown>;
+        const fabricState = data.fabricState as string | undefined;
+        const images = (data.images || []) as LayoutImage[];
+        if (!fabricState) continue;
+
+        const validation = validateCustomization(images, (() => {
+          try { return JSON.parse(fabricState); } catch { return null; }
+        })());
+
+        if (!validation.valid) {
+          const missing = validation.missingFrames.map((f) => f.label).join(", ");
+          toast.error(
+            `Preencha todos os espaços obrigatórios. Faltam: ${missing} (${validation.filledFrames}/${validation.totalFrames})`,
+          );
+          return;
+        }
+      }
+    }
+
     const missingAdditionals = selectedAdditionalIds.reduce<string[]>(
       (acc, additionalId) => {
         const additional = additionals.find((a) => a.id === additionalId);
@@ -1190,9 +1216,24 @@ const ClientProductPage = ({ id }: { id: string }) => {
               productionTime?: number;
               fabricState?: string;
               highQualityUrl?: string;
+              pages?: Array<{ pageId: string; pageIndex: number; url: string }>;
+              pdfUrl?: string | null;
             };
 
             const imageCount = layoutData.images?.length || 0;
+
+            let parsedFabricState: any = undefined;
+            if (layoutData.fabricState) {
+              try {
+                parsedFabricState = typeof layoutData.fabricState === "string"
+                  ? JSON.parse(layoutData.fabricState)
+                  : layoutData.fabricState;
+              } catch {
+                parsedFabricState = layoutData.fabricState;
+              }
+            }
+
+            const isMultiPage = Array.isArray(parsedFabricState?.pages);
 
             const cartCustomization: CartCustomization = {
               customization_id: input.ruleId
@@ -1219,6 +1260,8 @@ const ClientProductPage = ({ id }: { id: string }) => {
               additional_time:
                 layoutData.productionTime ?? layoutData.additional_time ?? 0,
               fabricState: layoutData.fabricState,
+              pages: layoutData.pages,
+              pdfUrl: layoutData.pdfUrl ?? null,
               data: normalizeCustomizationData(layoutData),
             };
 
@@ -1253,11 +1296,39 @@ const ClientProductPage = ({ id }: { id: string }) => {
                 );
               }
             }
+            // Upload PDF if present (data URL from client-side jsPDF generation)
+            let uploadedPdfUrl: string | null = layoutData.pdfUrl ?? null;
+            if (uploadedPdfUrl && uploadedPdfUrl.startsWith("data:")) {
+              try {
+                const pdfRes = await fetch(uploadedPdfUrl);
+                const pdfBlob = await pdfRes.blob();
+                const pdfFile = new File([pdfBlob], "design-multi-page.pdf", {
+                  type: "application/pdf",
+                });
+                const pdfUploadResult = await uploadCustomizationImage(pdfFile);
+                if (pdfUploadResult.success) {
+                  uploadedPdfUrl = pdfUploadResult.imageUrl;
+                } else {
+                  console.warn(
+                    `⚠️ [DYNAMIC_LAYOUT-AddToCart] PDF upload failed`,
+                  );
+                }
+              } catch (err) {
+                console.error(
+                  `❌ [DYNAMIC_LAYOUT-AddToCart] Error uploading PDF:`,
+                  err,
+                );
+              }
+            }
+
             cartCustomization.text = finalPreviewUrl;
+            cartCustomization.pdfUrl = uploadedPdfUrl;
             cartCustomization.data = normalizeCustomizationData({
               ...layoutData,
               previewUrl: finalPreviewUrl,
               text: finalPreviewUrl,
+              pages: layoutData.pages,
+              pdfUrl: uploadedPdfUrl,
             });
 
             cartCustomizations.push(cartCustomization);
@@ -2047,184 +2118,48 @@ const ClientProductPage = ({ id }: { id: string }) => {
                         component.item.customizations?.length || 0;
 
                       return (
-                        <Collapsible
+                        <CustomizationItem
                           key={component.id}
-                          open={activeCustomizationModal === component.id}
-                          onOpenChange={(open) => {
-                            if (open && !ensureAuthenticated()) {
-                              return;
-                            }
-                            setActiveCustomizationModal(
-                              open ? component.id : null,
-                            );
-                          }}
-                          className="rounded-xl border border-gray-200 bg-white"
+                          id={component.id}
+                          name={component.item.name}
+                          imageUrl={getInternalImageUrl(component.item.image_url) || undefined}
+                          requiredCount={requiredCount}
+                          totalCount={totalCount}
+                          hasCustomizations={hasCustomizations}
+                          hasMissingRequired={hasMissingRequired}
+                          imagesCount={itemImagesCount[component.id]}
+                          previewItems={componentCustomizations.map((custom) => ({
+                            label: getCustomizationPreviewLabel(custom),
+                            previews: getCustomizationPreviewUrls(custom),
+                          }))}
+                          isOpen={activeCustomizationModal === component.id}
+                          onOpenChange={(open) => setActiveCustomizationModal(open ? component.id : null)}
+                          onAuthCheck={ensureAuthenticated}
                         >
-                          <CollapsibleTrigger asChild>
-                            <Button
-                              onClick={() => {
-                                if (!ensureAuthenticated()) {
-                                  return;
-                                }
-                              }}
-                              variant="ghost"
-                              className={cn(
-                                "w-full justify-between h-auto py-3 px-4 rounded-xl",
-                                hasMissingRequired &&
-                                  "border border-red-400 text-red-950 hover:border-red-500 hover:text-red-700",
-                              )}
-                            >
-                              <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 relative overflow-hidden flex-shrink-0">
-                                  <img
-                                    src={
-                                      getInternalImageUrl(
-                                        component.item.image_url,
-                                      ) ||
-                                      getPublicAssetUrl("placeholder-v2.png")
-                                    }
-                                    alt={component.item.name}
-                                    className="absolute inset-0 rounded-lg h-full w-full object-cover object-center bg-white"
-                                    loading="lazy"
-                                    decoding="async"
-                                  />
-                                </div>
-                                <div className="text-left">
-                                  <p className="font-medium text-sm">
-                                    {component.item.name}
-                                    {requiredCount > 0 && (
-                                      <span className="text-red-500 ml-1">
-                                        *
-                                      </span>
-                                    )}
-                                  </p>
-                                  <p className="text-xs text-gray-500">
-                                    {totalCount}{" "}
-                                    {totalCount > 1 ? "opções" : "opção"}
-                                    {itemImagesCount[component.id] && (
-                                      <span className="ml-2 text-blue-600">
-                                        {itemImagesCount[component.id].current}/
-                                        {itemImagesCount[component.id].max}{" "}
-                                        fotos
-                                      </span>
-                                    )}
-                                  </p>
-                                  {hasCustomizations && (
-                                    <div className="mt-2 space-y-1">
-                                      {componentCustomizations.map(
-                                        (custom, idx) => {
-                                          const label =
-                                            getCustomizationPreviewLabel(
-                                              custom,
-                                            );
-                                          const previews =
-                                            getCustomizationPreviewUrls(custom);
-                                          return (
-                                            <div key={`${component.id}-${idx}`}>
-                                              <p className="text-[11px] text-gray-700 truncate">
-                                                {label}
-                                              </p>
-                                              {previews.length > 0 && (
-                                                <div className="mt-1 flex gap-1.5">
-                                                  {previews
-                                                    .slice(0, 3)
-                                                    .map((url, previewIdx) => (
-                                                      <img
-                                                        key={`${component.id}-preview-${previewIdx}`}
-                                                        src={url}
-                                                        alt={`${component.item.name} preview ${previewIdx + 1}`}
-                                                        className="h-8 w-8 rounded border border-gray-200 object-contain object-center bg-white p-0.5"
-                                                      />
-                                                    ))}
-                                                </div>
-                                              )}
-                                            </div>
-                                          );
-                                        },
-                                      )}
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                {hasCustomizations && (
-                                  <CheckCircle2 className="w-5 h-5 text-green-600" />
-                                )}
-                                <ChevronLeft
-                                  className={cn(
-                                    "w-5 h-5 transition-transform",
-                                    activeCustomizationModal === component.id
-                                      ? "-rotate-90"
-                                      : "rotate-180",
-                                  )}
-                                />
-                              </div>
-                            </Button>
-                          </CollapsibleTrigger>
-                          <CollapsibleContent className="px-4 pb-4">
-                            <ItemCustomizationModal
-                              isOpen={activeCustomizationModal === component.id}
-                              onClose={() => setActiveCustomizationModal(null)}
-                              renderMode="inline"
-                              itemId={component.item.id}
-                              itemName={component.item.name}
-                              customizations={(
-                                component.item.customizations || []
-                              ).map((c) => ({
-                                id: c.id,
-                                name: c.name,
-                                description: c.description,
-                                type: c.type as
-                                  | "DYNAMIC_LAYOUT"
-                                  | "TEXT"
-                                  | "IMAGES"
-                                  | "MULTIPLE_CHOICE",
-                                isRequired: c.isRequired,
-                                price: c.price,
-                                customization_data: c.customization_data as {
-                                  layouts?: Array<{
-                                    id: string;
-                                    name: string;
-                                    model_url?: string;
-                                    image_url?: string;
-                                    slots?: SlotDef[];
-                                  }>;
-                                  fields?: Array<{
-                                    id: string;
-                                    label: string;
-                                    placeholder?: string;
-                                    max_length?: number;
-                                  }>;
-                                  dynamic_layout?: {
-                                    max_images: number;
-                                    min_width?: number;
-                                    min_height?: number;
-                                    max_file_size_mb?: number;
-                                    accepted_formats?: string[];
-                                  };
-                                  options?: Array<{
-                                    id: string;
-                                    label: string;
-                                    value: string;
-                                    price_adjustment?: number;
-                                    image_url?: string;
-                                    description?: string;
-                                  }>;
-                                },
-                              }))}
-                              onComplete={(hasCustomizations, data) =>
-                                handleCustomizationComplete(
-                                  component.id,
-                                  hasCustomizations,
-                                  data,
-                                )
-                              }
-                              onImagesUpdate={(id, current, max) =>
-                                handleImagesUpdate(component.id, current, max)
-                              }
-                            />
-                          </CollapsibleContent>
-                        </Collapsible>
+                          <ItemCustomizationInlineWithContext
+                            componentId={component.id}
+                            isOpen={activeCustomizationModal === component.id}
+                            onClose={() => setActiveCustomizationModal(null)}
+                            itemId={component.item.id}
+                            itemName={component.item.name}
+                            customizations={(component.item.customizations || []).map((c) => ({
+                              id: c.id,
+                              name: c.name,
+                              description: c.description,
+                              type: c.type as "DYNAMIC_LAYOUT" | "TEXT" | "IMAGES" | "MULTIPLE_CHOICE",
+                              isRequired: c.isRequired,
+                              price: c.price,
+                              customization_data: c.customization_data as {
+                                layouts?: Array<{ id: string; name: string; model_url?: string; image_url?: string; slots?: SlotDef[] }>;
+                                fields?: Array<{ id: string; label: string; placeholder?: string; max_length?: number }>;
+                                dynamic_layout?: { max_images: number; min_width?: number; min_height?: number; max_file_size_mb?: number; accepted_formats?: string[] };
+                                options?: Array<{ id: string; label: string; value: string; price_adjustment?: number; image_url?: string; description?: string }>;
+                              },
+                            }))}
+                            onComplete={(hasCustomizations, data) => handleCustomizationComplete(component.id, hasCustomizations, data)}
+                            onImagesUpdate={(id, current, max) => handleImagesUpdate(component.id, current, max)}
+                          />
+                        </CustomizationItem>
                       );
                     })}
                 </div>

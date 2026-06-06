@@ -27,6 +27,8 @@ export interface CartCustomization extends CustomizationValue {
   data?: Record<string, unknown>;
   fabricState?: string;
   value?: string;
+  pages?: Array<{ pageId: string; pageIndex: number; url: string }>;
+  pdfUrl?: string | null;
 }
 
 interface OrderAdditionalItem {
@@ -910,6 +912,8 @@ export function useCart(): CartContextType {
           price_adjustment: custom.price_adjustment,
           additional_time: custom.additional_time || 0,
           fabricState: custom.fabricState,
+          pages: custom.pages,
+          pdfUrl: custom.pdfUrl,
           ...custom.data,
         },
       })),
