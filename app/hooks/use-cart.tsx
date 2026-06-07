@@ -25,7 +25,7 @@ export interface CartCustomization extends CustomizationValue {
   label_selected?: string;
   additional_time?: number;
   data?: Record<string, unknown>;
-  fabricState?: string;
+  editorState?: { layoutId: string; images: Array<{ frameId: string; url: string }>; texts: Record<string, string> };
   value?: string;
   pages?: Array<{ pageId: string; pageIndex: number; url: string }>;
   pdfUrl?: string | null;
@@ -219,7 +219,7 @@ const serializeCustomizations = (customizations?: CartCustomization[]) => {
       selected_option_label: customization.selected_option_label || null,
       componentId: customization.componentId || null,
       data: Object.keys(cleanData).length > 0 ? cleanData : null,
-      fabricState: customization.fabricState || null,
+      editorState: customization.editorState || null,
       photos:
         customization.photos?.map(
           (photo) =>
@@ -738,7 +738,7 @@ export function useCart(): CartContextType {
                       (data.text as string),
                     additional_time: dynamicAdditionalTime,
                     data: data,
-                    fabricState: (data.fabricState as string) || undefined,
+                    editorState: (data.editorState as CartCustomization["editorState"]) || undefined,
                     value:
                       typeof customization.value === "string"
                         ? customization.value
@@ -911,7 +911,7 @@ export function useCart(): CartContextType {
           label_selected: custom.label_selected,
           price_adjustment: custom.price_adjustment,
           additional_time: custom.additional_time || 0,
-          fabricState: custom.fabricState,
+          editorState: custom.editorState,
           pages: custom.pages,
           pdfUrl: custom.pdfUrl,
           ...custom.data,

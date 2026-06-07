@@ -603,6 +603,9 @@ export function ItemCustomizationModal({
         ? normalizeImageIds(images as unknown as LayoutImage[], canvasState)
         : (images as unknown as LayoutImage[]);
 
+      // Keep PDF as data URL in memory - upload only happens at add-to-cart time
+      const uploadedPdfUrl = pdfUrl;
+
       const existingData =
         (customizationData[baseLayoutCustom.id] as Record<string, unknown>) ||
         {};
@@ -620,15 +623,36 @@ export function ItemCustomizationModal({
         }));
       }
 
+      // Build minimal editorState for re-editing
+      const editorTexts: Record<string, string> = {};
+      const extractObjects = canvasState?.pages
+        ? canvasState.pages.flatMap((pg: any) => pg.canvasState?.objects || [])
+        : canvasState?.objects || [];
+      for (const obj of extractObjects) {
+        if (obj.isCustomizable && (obj.type === "textbox" || obj.type === "i-text") && obj.text) {
+          editorTexts[obj.id || obj.name] = obj.text;
+        }
+      }
+      const editorState = existingData.layout_id
+        ? {
+            layoutId: existingData.layout_id as string,
+            images: (normalisedImages as Array<{ id: string; url: string }>).map((img) => ({
+              frameId: img.id,
+              url: img.url,
+            })),
+            texts: editorTexts,
+          }
+        : undefined;
+
       const updatedData = {
         ...customizationData,
         [baseLayoutCustom.id]: {
           ...existingData,
           images: normalisedImages,
           previewUrl,
-          fabricState,
+          editorState,
           highQualityUrl,
-          pdfUrl,
+          pdfUrl: uploadedPdfUrl,
           pages: extractedPages,
 
           item_type: existingData.item_type,
@@ -664,7 +688,7 @@ export function ItemCustomizationModal({
             item_type?: string;
             images?: ImageData[];
             previewUrl?: string;
-            fabricState?: string;
+            editorState?: { layoutId: string; images: Array<{ frameId: string; url: string }>; texts: Record<string, string> };
             highQualityUrl?: string;
             pdfUrl?: string;
             pages?: Array<{ pageId: string; pageIndex: number; url: string }>;
@@ -698,7 +722,7 @@ export function ItemCustomizationModal({
                 layout_width: layoutData.layout_width,
                 layout_height: layoutData.layout_height,
                 images: layoutData.images || [],
-                fabricState: layoutData.fabricState,
+                editorState: layoutData.editorState,
                 previewUrl: layoutData.previewUrl,
                 highQualityUrl: layoutData.highQualityUrl,
                 pdfUrl: layoutData.pdfUrl,
@@ -1069,7 +1093,7 @@ export function ItemCustomizationModal({
         </Label>
 
         {(currentLayoutName || currentPreview) && (
-          <div className="p-3 border border-neutral-200 bg-white">
+          <div className="p-3 border border-neutral-200 bg-white rounded-lg">
             <div className="flex items-center gap-3">
               {currentPreview ? (
                 <img
@@ -1078,7 +1102,7 @@ export function ItemCustomizationModal({
                   className="h-16 w-16 rounded-md object-cover object-center border border-neutral-200"
                 />
               ) : null}
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1">
                 <p className="text-sm font-medium text-neutral-900 truncate">
                   {currentLayoutName || "Design personalizado"}
                 </p>
@@ -1803,12 +1827,21 @@ export function ItemCustomizationModal({
                 layoutBase={fullLayoutBase}
                 onBack={handleBackToSelection}
                 onComplete={handleLayoutComplete}
-                initialState={
-                  (
-                    customizationData[fullLayoutBase.id] as
-                      | { fabricState?: string }
-                      | undefined
-                  )?.fabricState
+                initialImages={
+                  (() => {
+                    const d = customizationData[fullLayoutBase.id] as any;
+                    if (d?.editorState?.images) {
+                      const map: Record<string, string> = {};
+                      for (const img of d.editorState.images) {
+                        map[img.frameId] = img.url;
+                      }
+                      return map;
+                    }
+                    return undefined;
+                  })()
+                }
+                initialTexts={
+                  (customizationData[fullLayoutBase.id] as any)?.editorState?.texts
                 }
               />
             )}

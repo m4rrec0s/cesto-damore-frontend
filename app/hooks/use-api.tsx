@@ -1931,6 +1931,28 @@ class ApiService {
     return res.data;
   };
 
+  uploadCustomizationFile = async (
+    file: File,
+  ): Promise<{
+    success: boolean;
+    imageUrl: string;
+    filename: string;
+    mimeType: string;
+    size: number;
+  }> => {
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const res = await this.client.post(
+      "/customization/upload-file",
+      formData,
+      {
+        headers: { "Content-Type": "multipart/form-data" },
+      },
+    );
+    return res.data;
+  };
+
   uploadTempImage = async (
     imageFile: File,
   ): Promise<{

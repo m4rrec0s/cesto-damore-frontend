@@ -452,7 +452,6 @@ const isCustomizationFilled = (
       return uploadedImageCount > 0;
     }
     case "DYNAMIC_LAYOUT": {
-      const fabricState = data.fabricState;
       const artworkUrl =
         custom.text ||
         data.image?.preview_url ||
@@ -465,9 +464,8 @@ const isCustomizationFilled = (
         !!artworkUrl &&
         !artworkUrl.startsWith("blob:") &&
         !artworkUrl.startsWith("data:");
-      const hasFabric =
-        !!fabricState &&
-        (typeof fabricState === "string" ? fabricState.length > 20 : true);
+      const hasPdf = !!(data.pdfUrl as string);
+      const hasEditorState = !!(data.editorState as any);
       const hasLabel = !!(
         custom.label_selected ||
         custom.selected_item_label ||
@@ -475,7 +473,7 @@ const isCustomizationFilled = (
         data.label_selected
       );
 
-      return hasArtwork || hasFabric || hasLabel;
+      return hasArtwork || hasPdf || hasEditorState || hasLabel;
     }
     default:
       return !!custom.text || Object.keys(data).length > 0;

@@ -242,6 +242,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
     getAdditionalsByProduct,
     getItemsByProduct,
     uploadCustomizationImage,
+    uploadCustomizationFile,
     validateCustomizationsV2,
   } = useApi();
   const { addToCart, cart } = useCartContext();
@@ -981,19 +982,10 @@ const ClientProductPage = ({ id }: { id: string }) => {
       );
       for (const input of layoutInputs) {
         const data = input.data as Record<string, unknown>;
-        const fabricState = data.fabricState as string | undefined;
-        const images = (data.images || []) as LayoutImage[];
-        if (!fabricState) continue;
-
-        const validation = validateCustomization(images, (() => {
-          try { return JSON.parse(fabricState); } catch { return null; }
-        })());
-
-        if (!validation.valid) {
-          const missing = validation.missingFrames.map((f) => f.label).join(", ");
-          toast.error(
-            `Preencha todos os espaços obrigatórios. Faltam: ${missing} (${validation.filledFrames}/${validation.totalFrames})`,
-          );
+        const hasPdf = !!(data.pdfUrl as string);
+        const hasEditorState = !!(data.editorState as any);
+        if (!hasPdf && !hasEditorState) {
+          toast.error("Complete a personalização do design antes de adicionar ao carrinho.");
           return;
         }
       }
@@ -1214,7 +1206,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
               previewUrl?: string;
               additional_time?: number;
               productionTime?: number;
-              fabricState?: string;
+              editorState?: { layoutId: string; images: Array<{ frameId: string; url: string }>; texts: Record<string, string> };
               highQualityUrl?: string;
               pages?: Array<{ pageId: string; pageIndex: number; url: string }>;
               pdfUrl?: string | null;
@@ -1222,18 +1214,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
 
             const imageCount = layoutData.images?.length || 0;
 
-            let parsedFabricState: any = undefined;
-            if (layoutData.fabricState) {
-              try {
-                parsedFabricState = typeof layoutData.fabricState === "string"
-                  ? JSON.parse(layoutData.fabricState)
-                  : layoutData.fabricState;
-              } catch {
-                parsedFabricState = layoutData.fabricState;
-              }
-            }
-
-            const isMultiPage = Array.isArray(parsedFabricState?.pages);
+            const isMultiPage = Array.isArray(layoutData.pages) && layoutData.pages.length > 1;
 
             const cartCustomization: CartCustomization = {
               customization_id: input.ruleId
@@ -1259,7 +1240,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
               text: undefined,
               additional_time:
                 layoutData.productionTime ?? layoutData.additional_time ?? 0,
-              fabricState: layoutData.fabricState,
+              editorState: layoutData.editorState,
               pages: layoutData.pages,
               pdfUrl: layoutData.pdfUrl ?? null,
               data: normalizeCustomizationData(layoutData),
@@ -1305,7 +1286,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
                 const pdfFile = new File([pdfBlob], "design-multi-page.pdf", {
                   type: "application/pdf",
                 });
-                const pdfUploadResult = await uploadCustomizationImage(pdfFile);
+                const pdfUploadResult = await uploadCustomizationFile(pdfFile);
                 if (pdfUploadResult.success) {
                   uploadedPdfUrl = pdfUploadResult.imageUrl;
                 } else {
@@ -1443,7 +1424,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
               previewUrl?: string;
               productionTime?: number;
               additional_time?: number;
-              fabricState?: string;
+              editorState?: { layoutId: string; images: Array<{ frameId: string; url: string }>; texts: Record<string, string> };
               highQualityUrl?: string;
             };
 
@@ -1465,7 +1446,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
               text: undefined,
               additional_time:
                 layoutData.productionTime ?? layoutData.additional_time ?? 0,
-              fabricState: layoutData.fabricState,
+              editorState: layoutData.editorState,
               data: normalizeCustomizationData(layoutData),
             };
 
@@ -2132,6 +2113,12 @@ const ClientProductPage = ({ id }: { id: string }) => {
                             label: getCustomizationPreviewLabel(custom),
                             previews: getCustomizationPreviewUrls(custom),
                           }))}
+                          pdfUrl={(() => {
+                            const dl = componentCustomizations.find(
+                              (c) => c.customizationType === CustomizationType.DYNAMIC_LAYOUT
+                            );
+                            return (dl?.data?.pdfUrl as string) || undefined;
+                          })()}
                           isOpen={activeCustomizationModal === component.id}
                           onOpenChange={(open) => setActiveCustomizationModal(open ? component.id : null)}
                           onAuthCheck={ensureAuthenticated}

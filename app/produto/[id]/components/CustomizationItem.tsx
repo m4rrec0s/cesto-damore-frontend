@@ -15,7 +15,7 @@ import {
   DrawerHeader,
   DrawerTitle,
 } from "@/app/components/ui/drawer";
-import { CheckCircle2, ChevronLeft, X } from "lucide-react";
+import { CheckCircle2, ChevronLeft, FileDown, X } from "lucide-react";
 import { getPublicAssetUrl } from "@/lib/image-helper";
 
 interface CustomizationItemProps {
@@ -28,6 +28,7 @@ interface CustomizationItemProps {
   hasMissingRequired: boolean;
   imagesCount?: { current: number; max: number };
   previewItems?: Array<{ label: string; previews: string[] }>;
+  pdfUrl?: string;
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
   onAuthCheck: () => boolean;
@@ -44,6 +45,7 @@ export function CustomizationItem({
   hasMissingRequired,
   imagesCount,
   previewItems = [],
+  pdfUrl,
   isOpen,
   onOpenChange,
   onAuthCheck,
@@ -124,6 +126,28 @@ export function CustomizationItem({
                   )}
                 </div>
               ))}
+              {pdfUrl && (
+                <a
+                  href="#"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (pdfUrl.startsWith("data:")) {
+                      // Convert data URL to blob URL to avoid browser blocking
+                      fetch(pdfUrl).then(r => r.blob()).then(blob => {
+                        const url = URL.createObjectURL(blob);
+                        window.open(url, "_blank");
+                      });
+                    } else {
+                      window.open(pdfUrl, "_blank");
+                    }
+                  }}
+                  className="inline-flex items-center gap-1 mt-1 text-[11px] text-rose-600 hover:text-rose-700 font-medium"
+                >
+                  <FileDown className="h-3 w-3" />
+                  Ver PDF
+                </a>
+              )}
             </div>
           )}
         </div>

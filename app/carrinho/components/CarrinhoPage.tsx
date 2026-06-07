@@ -2003,7 +2003,7 @@ export default function CarrinhoPageContent() {
             additional_time: Number(
               data.additional_time || data.productionTime || 0,
             ),
-            fabricState: data.fabricState as string | undefined,
+            editorState: (data.editorState as CartCustomization["editorState"]) || undefined,
             // Para DYNAMIC_LAYOUT, preservar rawData para não perder arte final
             data: rawData,
           };

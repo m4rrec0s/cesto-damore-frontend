@@ -109,6 +109,8 @@ interface ClientFabricEditorProps {
   ) => void;
   onBack: () => void;
   initialState?: string;
+  initialImages?: Record<string, string>;
+  initialTexts?: Record<string, string>;
 }
 
 export default function ClientFabricEditor({
@@ -116,6 +118,8 @@ export default function ClientFabricEditor({
   onComplete,
   onBack,
   initialState,
+  initialImages,
+  initialTexts,
 }: ClientFabricEditorProps) {
   const [fabricRef, setFabricRef] = useState<FabricCanvas | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -133,12 +137,27 @@ export default function ClientFabricEditor({
     activePageIndex: 0,
   });
   const [localImages, setLocalImages] = useState<Record<string, string>>(() => {
+    if (initialImages && Object.keys(initialImages).length > 0) return initialImages;
     if (typeof window === "undefined") return {};
     try {
       if (!layoutBase.id) return {};
       const saved = localStorage.getItem(`client-design-imgs-${layoutBase.id}`);
       if (!saved) return {};
-      const parsed = JSON.parse(saved) as Record<string, string>;
+      const raw = JSON.parse(saved);
+
+      // Support both old format (plain object) and new format ({ _ts, data })
+      let parsed: Record<string, string>;
+      if (raw._ts && raw.data) {
+        // Expire after 24h
+        if (Date.now() - raw._ts > 24 * 60 * 60 * 1000) {
+          localStorage.removeItem(`client-design-imgs-${layoutBase.id}`);
+          return {};
+        }
+        parsed = raw.data;
+      } else {
+        parsed = raw;
+      }
+
       if (Object.keys(parsed).length === 0) return {};
 
       // Use the normalize function from frame-utils
@@ -170,7 +189,7 @@ export default function ClientFabricEditor({
     if (layoutBase.id && Object.keys(localImages).length > 0) {
       localStorage.setItem(
         `client-design-imgs-${layoutBase.id}`,
-        JSON.stringify(localImages),
+        JSON.stringify({ _ts: Date.now(), data: localImages }),
       );
     }
   }, [localImages, layoutBase.id]);
@@ -631,8 +650,21 @@ export default function ClientFabricEditor({
 
         const { texts, labels } = await processCanvasObjects(canvasInstance);
 
+        // Apply initialTexts if provided (re-editing from editorState)
+        if (initialTexts && Object.keys(initialTexts).length > 0) {
+          for (const obj of canvasInstance.getObjects() as any[]) {
+            if (obj.isCustomizable && (obj.type === "textbox" || obj.type === "i-text")) {
+              const key = obj.id || obj.name;
+              if (key && initialTexts[key]) {
+                obj.set("text", initialTexts[key]);
+              }
+            }
+          }
+          canvasInstance.renderAll();
+        }
+
         if (isMounted) {
-          setEditableTexts(texts);
+          setEditableTexts(initialTexts && Object.keys(initialTexts).length > 0 ? { ...texts, ...initialTexts } : texts);
           setFieldLabels(labels);
 
           const collectedFrames: any[] = [];
@@ -777,7 +809,7 @@ export default function ClientFabricEditor({
         Promise.all(imageLoadPromises).then(() => canvas.requestRenderAll());
       }
 
-      return { texts, labels };
+      return { texts, labels, imageLoadPromises };
     },
     [addFramePlaceholder, loadLocalImageToFrame],
   );
@@ -902,8 +934,9 @@ export default function ClientFabricEditor({
   };
 
   const handleComplete = useCallback(async () => {
-    if (!fabricRef) return;
+    if (!fabricRef || isProcessingImage) return;
 
+    setIsProcessingImage(true);
     try {
       const originalTransform = [...(fabricRef as any).viewportTransform];
       (fabricRef as any).setViewportTransform([
@@ -934,47 +967,52 @@ export default function ClientFabricEditor({
         const originalPageIndex = multiPageRef.current.activePageIndex;
 
         for (let i = 0; i < pages.length; i++) {
+          const pageCanvasState = pages[i].canvasState;
+          // Always use base layout dimensions (pages may have stale backstore dimensions)
+          const pgW = layoutBase.width || 378;
+          const pgH = layoutBase.height || 567;
+
           const tempCanvas = new FabricCanvas(
             document.createElement("canvas"),
-            { width: fabricRef.width, height: fabricRef.height },
+            { width: pgW, height: pgH },
           );
 
-          await tempCanvas.loadFromJSON(pages[i].canvasState);
+          await tempCanvas.loadFromJSON(pageCanvasState);
 
-          tempCanvas.setViewportTransform([
-            INTERNAL_DPI_MULTIPLIER,
-            0,
-            0,
-            INTERNAL_DPI_MULTIPLIER,
-            0,
-            0,
-          ]);
+          tempCanvas.setDimensions({ width: pgW, height: pgH });
+          tempCanvas.setViewportTransform([1, 0, 0, 1, 0, 0]);
 
           // Temporarily set activePageIndex so processCanvasObjects uses correct frame keys
           multiPageRef.current.activePageIndex = i;
-          await processCanvasObjects(tempCanvas, i);
+          const { imageLoadPromises } = await processCanvasObjects(tempCanvas, i);
           multiPageRef.current.activePageIndex = originalPageIndex;
+
+          // Wait for all images to load before exporting
+          if (imageLoadPromises && imageLoadPromises.length > 0) {
+            await Promise.all(imageLoadPromises);
+          }
 
           tempCanvas.renderAll();
 
           const dataUrl = tempCanvas.toDataURL({
             format: "png",
-            multiplier: 4 / INTERNAL_DPI_MULTIPLIER,
+            multiplier: 4,
             enableRetinaScaling: false,
           });
 
           pageExports.push({
             dataUrl,
-            width: fabricRef.width,
-            height: fabricRef.height,
+            width: pgW,
+            height: pgH,
           });
 
           tempCanvas.dispose();
         }
 
-        // Composite all pages vertically
-        const totalHeight = pageExports.reduce((sum, p) => sum + p.height, 0);
-        const maxWidth = Math.max(...pageExports.map((p) => p.width));
+        // Composite all pages vertically (at export resolution)
+        const exportMultiplier = 4;
+        const totalHeight = pageExports.reduce((sum, p) => sum + p.height * exportMultiplier, 0);
+        const maxWidth = Math.max(...pageExports.map((p) => p.width * exportMultiplier));
 
         const compositeCanvas = document.createElement("canvas");
         compositeCanvas.width = maxWidth;
@@ -989,8 +1027,8 @@ export default function ClientFabricEditor({
             img.onerror = reject;
             img.src = page.dataUrl;
           });
-          ctx.drawImage(img, 0, yOffset, page.width, page.height);
-          yOffset += page.height;
+          ctx.drawImage(img, 0, yOffset, page.width * exportMultiplier, page.height * exportMultiplier);
+          yOffset += page.height * exportMultiplier;
         }
 
         highQualityUrl = compositeCanvas.toDataURL("image/png");
@@ -998,24 +1036,46 @@ export default function ClientFabricEditor({
 
         // Generate PDF
         try {
+          // Use first page dimensions for PDF format
+          const canvasW = pageExports[0].width;
+          const canvasH = pageExports[0].height;
+          const aspectRatio = canvasW / canvasH;
+          let pdfWidthCm: number, pdfHeightCm: number;
+
+          if (layoutBase.item_type === "mug") {
+            pdfWidthCm = 20;
+            pdfHeightCm = 9.4;
+          } else {
+            // Default: use canvas aspect ratio scaled to A4-ish size
+            // Assume longest side is 30cm for frames
+            if (aspectRatio >= 1) {
+              pdfWidthCm = 30;
+              pdfHeightCm = 30 / aspectRatio;
+            } else {
+              pdfHeightCm = 30;
+              pdfWidthCm = 30 * aspectRatio;
+            }
+          }
+
+          const orientation = pdfWidthCm > pdfHeightCm ? "landscape" : "portrait";
           const pdf = new jsPDF({
-            orientation: "portrait",
-            unit: "px",
-            format: [
-              fabricRef.width / INTERNAL_DPI_MULTIPLIER,
-              fabricRef.height / INTERNAL_DPI_MULTIPLIER,
-            ],
+            orientation,
+            unit: "cm",
+            format: [pdfWidthCm, pdfHeightCm],
+            compress: true,
           });
 
           for (let i = 0; i < pageExports.length; i++) {
-            if (i > 0) pdf.addPage();
+            if (i > 0) {
+              pdf.addPage([pdfWidthCm, pdfHeightCm], orientation);
+            }
             pdf.addImage(
               pageExports[i].dataUrl,
               "PNG",
               0,
               0,
-              fabricRef.width / INTERNAL_DPI_MULTIPLIER,
-              fabricRef.height / INTERNAL_DPI_MULTIPLIER,
+              pdf.internal.pageSize.getWidth(),
+              pdf.internal.pageSize.getHeight(),
             );
           }
 
@@ -1025,7 +1085,7 @@ export default function ClientFabricEditor({
           // Continue without PDF — preview/hq images are still available
         }
       } else {
-        // Single-page or single-page multi-page: export live canvas directly
+        // Single-page: export live canvas + generate PDF
         highQualityUrl = fabricRef.toDataURL({
           format: "png",
           multiplier: 4 / INTERNAL_DPI_MULTIPLIER,
@@ -1037,6 +1097,47 @@ export default function ClientFabricEditor({
           multiplier: 2 / INTERNAL_DPI_MULTIPLIER,
           enableRetinaScaling: false,
         });
+
+        // Generate single-page PDF
+        try {
+          const canvasW = fabricRef.width / INTERNAL_DPI_MULTIPLIER;
+          const canvasH = fabricRef.height / INTERNAL_DPI_MULTIPLIER;
+          const aspectRatio = canvasW / canvasH;
+          let pdfWidthCm: number, pdfHeightCm: number;
+
+          if (layoutBase.item_type === "mug") {
+            pdfWidthCm = 20;
+            pdfHeightCm = 9.4;
+          } else {
+            if (aspectRatio >= 1) {
+              pdfWidthCm = 30;
+              pdfHeightCm = 30 / aspectRatio;
+            } else {
+              pdfHeightCm = 30;
+              pdfWidthCm = 30 * aspectRatio;
+            }
+          }
+
+          const orientation = pdfWidthCm > pdfHeightCm ? "landscape" : "portrait";
+          const pdf = new jsPDF({
+            orientation,
+            unit: "cm",
+            format: [pdfWidthCm, pdfHeightCm],
+          });
+
+          pdf.addImage(
+            highQualityUrl,
+            "PNG",
+            0,
+            0,
+            pdfWidthCm,
+            pdfHeightCm,
+          );
+
+          pdfUrl = pdf.output("dataurlstring");
+        } catch (pdfErr) {
+          console.error("Erro ao gerar PDF single-page:", pdfErr);
+        }
       }
 
       (fabricRef as any).setViewportTransform(originalTransform);
@@ -1076,8 +1177,10 @@ export default function ClientFabricEditor({
     } catch (err) {
       console.error("Erro ao finalizar:", err);
       toast.error("Erro ao salvar");
+    } finally {
+      setIsProcessingImage(false);
     }
-  }, [fabricRef, localImages, onComplete, processCanvasObjects]);
+  }, [fabricRef, localImages, onComplete, processCanvasObjects, isProcessingImage]);
 
   const isMultiPage = multiPageRef.current.pages.length > 0;
   const displayFrames = allFrames;
