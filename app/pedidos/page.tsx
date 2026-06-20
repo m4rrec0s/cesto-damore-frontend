@@ -282,7 +282,7 @@ export default function PedidosPage() {
                             const isActive =
                               (s === "PENDING" && order.status === "PENDING") ||
                               (s === "PAID" &&
-                                ["PAID", "SHIPPED", "DELIVERED"].includes(
+                                ["PAID", "PAID_STOCK_FAILED", "SHIPPED", "DELIVERED"].includes(
                                   order.status
                                 )) ||
                               (s === "SHIPPED" &&

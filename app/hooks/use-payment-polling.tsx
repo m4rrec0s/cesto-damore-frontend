@@ -92,7 +92,7 @@ export function usePaymentPolling({
       const paymentStatus = order.payment?.status;
       const orderStatus = order.status;
 
-      if (!order.payment && orderStatus === "PAID") {
+      if (!order.payment && (orderStatus === "PAID" || orderStatus === "PAID_STOCK_FAILED")) {
         setStatus("success");
         stopPolling();
         onSuccess?.(order);
@@ -111,7 +111,7 @@ export function usePaymentPolling({
       if (
         paymentStatus === "APPROVED" ||
         paymentStatus === "AUTHORIZED" ||
-        orderStatus === "PAID"
+        (orderStatus === "PAID" || orderStatus === "PAID_STOCK_FAILED")
       ) {
         setStatus("success");
         stopPolling();
