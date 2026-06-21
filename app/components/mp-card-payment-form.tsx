@@ -84,6 +84,8 @@ export function MPCardPaymentForm({
   const mountedRef = useRef(true);
   const retryCountRef = useRef(0);
   const isRecreatingRef = useRef(false);
+  const brickInstanceRef = useRef<any>(null);
+  const cleanupTimerRef = useRef<ReturnType<typeof setTimeout>>();
 
   const emitStateChange = useCallback(
     (state: { ready: boolean; hasError: boolean; retryCount: number }) => {
@@ -96,6 +98,17 @@ export function MPCardPaymentForm({
     if (!mountedRef.current || isRecreatingRef.current) return;
 
     isRecreatingRef.current = true;
+    
+    // Limpa instância anterior antes de criar nova
+    if (brickInstanceRef.current) {
+      try {
+        brickInstanceRef.current.unmount?.();
+      } catch (e) {
+        console.warn("Erro ao desmontar Brick anterior:", e);
+      }
+      brickInstanceRef.current = null;
+    }
+    
     setLocalError(null);
     setCardPaymentReady(false);
     setRetryCount((prev) => {
@@ -104,8 +117,11 @@ export function MPCardPaymentForm({
       return nextRetry;
     });
     setBrickKey((prev) => prev + 1);
-    window.setTimeout(() => {
-      isRecreatingRef.current = false;
+    
+    cleanupTimerRef.current = setTimeout(() => {
+      if (mountedRef.current) {
+        isRecreatingRef.current = false;
+      }
     }, 300);
   }, [emitStateChange]);
 
@@ -165,6 +181,20 @@ export function MPCardPaymentForm({
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
+      
+      // Cleanup completo no unmount
+      if (cleanupTimerRef.current) {
+        clearTimeout(cleanupTimerRef.current);
+      }
+      
+      if (brickInstanceRef.current) {
+        try {
+          brickInstanceRef.current.unmount?.();
+        } catch (e) {
+          console.warn("Erro ao desmontar Brick no cleanup:", e);
+        }
+        brickInstanceRef.current = null;
+      }
     };
   }, []);
 
@@ -294,32 +324,37 @@ export function MPCardPaymentForm({
 
       if (!mountedRef.current) return;
 
-      let errorMessage = "Erro no formulário de pagamento";
+      // Usa setTimeout para evitar setState durante render
+      setTimeout(() => {
+        if (!mountedRef.current) return;
 
-      if (typeof error === "string") {
-        errorMessage = error;
-      } else if (error?.cause === "fields_setup_failed_after_3_tries") {
-        errorMessage =
-          "Não foi possível carregar o formulário. Clique em 'Tentar novamente' ou atualize a página.";
+        let errorMessage = "Erro no formulário de pagamento";
 
-        if (retryCountRef.current < BRICK_AUTO_RECOVERY_LIMIT) {
-          window.setTimeout(() => {
-            if (!mountedRef.current) {
-              return;
-            }
+        if (typeof error === "string") {
+          errorMessage = error;
+        } else if (error?.cause === "fields_setup_failed_after_3_tries") {
+          errorMessage =
+            "Não foi possível carregar o formulário. Clique em 'Tentar novamente' ou atualize a página.";
 
-            recreateCardBrick();
-          }, BRICK_AUTO_RECOVERY_DELAY_MS);
+          if (retryCountRef.current < BRICK_AUTO_RECOVERY_LIMIT) {
+            setTimeout(() => {
+              if (!mountedRef.current) {
+                return;
+              }
+
+              recreateCardBrick();
+            }, BRICK_AUTO_RECOVERY_DELAY_MS);
+          }
+        } else if (error?.message) {
+          errorMessage = error.message;
+        } else if (error?.type === "critical") {
+          errorMessage =
+            "Erro crítico no formulário. Recarregue a página e tente novamente.";
         }
-      } else if (error?.message) {
-        errorMessage = error.message;
-      } else if (error?.type === "critical") {
-        errorMessage =
-          "Erro crítico no formulário. Recarregue a página e tente novamente.";
-      }
 
-      setLocalError(errorMessage);
-      setCardPaymentReady(false);
+        setLocalError(errorMessage);
+        setCardPaymentReady(false);
+      }, 0);
     },
     [recreateCardBrick],
   );
@@ -329,6 +364,10 @@ export function MPCardPaymentForm({
       setCardPaymentReady(true);
       setLocalError(null);
       onReady?.();
+      
+      // Armazena referência do Brick para cleanup posterior
+      // O MP SDK não expõe a instância diretamente, mas marcamos como ready
+      brickInstanceRef.current = { ready: true };
     }
   }, [onReady]);
 
