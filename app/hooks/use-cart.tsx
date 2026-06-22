@@ -944,6 +944,11 @@ export function useCart(): CartContextType {
         if (itemsPayload.length === 0) {
           if (pendingOrderId) {
             try {
+              const orderCheck = await api.getOrder(pendingOrderId).catch(() => null);
+              if (orderCheck && orderCheck.status !== "PENDING") {
+                clearPendingOrderId();
+                return;
+              }
               await api.deleteOrder(pendingOrderId);
               clearPendingOrderId();
               setOrderMetadata({
@@ -1490,6 +1495,12 @@ export function useCart(): CartContextType {
 
             if (updatedCart.items.length === 0 && pendingOrderId) {
               try {
+                // Não deletar se o pedido já foi pago (clearPendingOrderId deveria ter sido chamado antes)
+                const orderCheck = await api.getOrder(pendingOrderId).catch(() => null);
+                if (orderCheck && orderCheck.status !== "PENDING") {
+                  clearPendingOrderId();
+                  return;
+                }
                 await api.deleteOrder(pendingOrderId);
                 clearPendingOrderId();
                 setOrderMetadata({
