@@ -2191,6 +2191,66 @@ const ClientProductPage = ({ id }: { id: string }) => {
                       );
                     })}
                 </div>
+
+                {selectedAdditionalIds.length > 0 && (
+                  <div className="space-y-2">
+                    {selectedAdditionalIds.map((addId) => {
+                      const additional = additionals.find((a) => a.id === addId);
+                      if (!additional || !additional.allows_customization) return null;
+
+                      const addCustomizations = additionalCustomizations[addId] || [];
+                      const hasCustomizations = addCustomizations.length > 0;
+                      const requiredCount = additional.customizations?.filter((c) => c.isRequired).length || 0;
+                      const totalCount = additional.customizations?.length || 0;
+                      const missingIds = getMissingRequiredAdditionalCustomizationIds(additional);
+
+                      return (
+                        <CustomizationItem
+                          key={`add-cust-${addId}`}
+                          id={addId}
+                          name={additional.name}
+                          imageUrl={getInternalImageUrl(additional.image_url) || undefined}
+                          requiredCount={requiredCount}
+                          totalCount={totalCount}
+                          hasCustomizations={hasCustomizations}
+                          hasMissingRequired={missingIds.length > 0}
+                          imagesCount={itemImagesCount[addId]}
+                          previewItems={addCustomizations.map((custom) => ({
+                            label: getCustomizationPreviewLabel(custom),
+                            previews: getCustomizationPreviewUrls(custom),
+                          }))}
+                          isOpen={activeAdditionalModal === addId}
+                          onOpenChange={(open) => setActiveAdditionalModal(open ? addId : null)}
+                          onAuthCheck={ensureAuthenticated}
+                        >
+                          <ItemCustomizationInlineWithContext
+                            componentId={addId}
+                            isOpen={activeAdditionalModal === addId}
+                            onClose={() => setActiveAdditionalModal(null)}
+                            itemId={additional.id}
+                            itemName={additional.name}
+                            customizations={(additional.customizations || []).map((c) => ({
+                              id: c.id,
+                              name: c.name,
+                              description: c.description,
+                              type: c.type as "DYNAMIC_LAYOUT" | "TEXT" | "IMAGES" | "MULTIPLE_CHOICE",
+                              isRequired: c.isRequired,
+                              price: c.price,
+                              customization_data: c.customization_data as {
+                                layouts?: Array<{ id: string; name: string; model_url?: string; image_url?: string; slots?: SlotDef[] }>;
+                                fields?: Array<{ id: string; label: string; placeholder?: string; max_length?: number }>;
+                                dynamic_layout?: { max_images: number; min_width?: number; min_height?: number; max_file_size_mb?: number; accepted_formats?: string[] };
+                                options?: Array<{ id: string; label: string; value: string; price_adjustment?: number; image_url?: string; description?: string }>;
+                              },
+                            }))}
+                            onComplete={(hasCustomizations, data) => handleAdditionalCustomizationComplete(addId, hasCustomizations, data)}
+                            onImagesUpdate={(id, current, max) => handleImagesUpdate(addId, current, max)}
+                          />
+                        </CustomizationItem>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             )}
 
