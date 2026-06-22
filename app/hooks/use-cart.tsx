@@ -972,7 +972,29 @@ export function useCart(): CartContextType {
                 complement: existingPending.complement || undefined,
               });
               const orderIdToUpdate = existingPending.id;
-              await api.updateOrderItems(orderIdToUpdate, itemsPayload);
+              const updatedOrder = await api.updateOrderItems(orderIdToUpdate, itemsPayload);
+              if (updatedOrder?.grand_total != null) {
+                setCart((prev) => {
+                  const updatedItems = prev.items.map((cartItem) => {
+                    const backendItem = updatedOrder.items?.find(
+                      (oi: any) => oi.product_id === cartItem.product_id,
+                    );
+                    if (!backendItem) return cartItem;
+                    const updatedAdditionals = cartItem.additionals?.map((add) => {
+                      const backendAdd = backendItem.additionals?.find(
+                        (ba: any) => ba.additional_id === add.id,
+                      );
+                      return backendAdd ? { ...add, price: backendAdd.price } : add;
+                    });
+                    return {
+                      ...cartItem,
+                      effectivePrice: backendItem.price,
+                      additionals: updatedAdditionals,
+                    };
+                  });
+                  return { ...prev, items: updatedItems, total: updatedOrder.grand_total };
+                });
+              }
               return;
             }
           } catch (error) {
@@ -996,7 +1018,29 @@ export function useCart(): CartContextType {
           setPendingOrderId(order?.id || null);
         } else {
           try {
-            await api.updateOrderItems(pendingOrderId, itemsPayload);
+            const updatedOrder = await api.updateOrderItems(pendingOrderId, itemsPayload);
+            if (updatedOrder?.grand_total != null) {
+              setCart((prev) => {
+                const updatedItems = prev.items.map((cartItem) => {
+                  const backendItem = updatedOrder.items?.find(
+                    (oi: any) => oi.product_id === cartItem.product_id,
+                  );
+                  if (!backendItem) return cartItem;
+                  const updatedAdditionals = cartItem.additionals?.map((add) => {
+                    const backendAdd = backendItem.additionals?.find(
+                      (ba: any) => ba.additional_id === add.id,
+                    );
+                    return backendAdd ? { ...add, price: backendAdd.price } : add;
+                  });
+                  return {
+                    ...cartItem,
+                    effectivePrice: backendItem.price,
+                    additionals: updatedAdditionals,
+                  };
+                });
+                return { ...prev, items: updatedItems, total: updatedOrder.grand_total };
+              });
+            }
           } catch (updateError: unknown) {
             logger.debug("Erro ao atualizar pedido:", updateError);
             const maybe = updateError as { response?: { status: number } };
