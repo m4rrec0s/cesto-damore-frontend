@@ -775,9 +775,24 @@ const ClientProductPage = ({ id }: { id: string }) => {
     [basePrice, customizationTotal],
   );
 
+  const selectedAdditionalsTotal = useMemo(() => {
+    return selectedAdditionalIds.reduce((sum, addId) => {
+      const add = additionals.find((a) => a.id === addId);
+      if (!add) return sum;
+      const customEntry = add.compatible_products?.find(
+        (entry: { product_id: string; is_active: boolean; custom_price?: number | null }) =>
+          entry.product_id === product.id && entry.is_active,
+      );
+      const price = typeof customEntry?.custom_price === "number"
+        ? customEntry.custom_price
+        : add.price;
+      return sum + price;
+    }, 0);
+  }, [selectedAdditionalIds, additionals, product.id]);
+
   const totalPriceForQuantity = useMemo(
-    () => unitPriceWithCustomizations * quantity,
-    [unitPriceWithCustomizations, quantity],
+    () => (unitPriceWithCustomizations + selectedAdditionalsTotal) * quantity,
+    [unitPriceWithCustomizations, selectedAdditionalsTotal, quantity],
   );
 
   const isItemInCart = useMemo(() => {
@@ -1864,6 +1879,32 @@ const ClientProductPage = ({ id }: { id: string }) => {
                       />
                     </div>
                   ))}
+
+                  {selectedAdditionalIds.map((addId) => {
+                    const add = additionals.find((a) => a.id === addId);
+                    if (!add) return null;
+                    return (
+                      <div
+                        key={`add-${addId}`}
+                        className="relative w-20 h-20 flex-shrink-0 bg-gray-100 rounded-xl border-2 border-emerald-300 ring-1 ring-emerald-100 cursor-default transition-all"
+                        title={add.name}
+                      >
+                        <img
+                          src={
+                            getInternalImageUrl(add.image_url) ||
+                            getPublicAssetUrl("placeholder-v2.png")
+                          }
+                          alt={add.name}
+                          className="absolute inset-0 h-full w-full object-cover object-center rounded-xl p-1 bg-white"
+                          loading="lazy"
+                          decoding="async"
+                        />
+                        <span className="absolute -top-1 -right-1 w-4 h-4 bg-emerald-500 rounded-full flex items-center justify-center">
+                          <span className="text-[9px] text-white font-bold">+</span>
+                        </span>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -2208,7 +2249,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
               )}
             </Button>
 
-            {additionals.length > 0 && (
+            {additionals.filter((a) => !selectedAdditionalIds.includes(a.id)).length > 0 && (
               <div className="space-y-4 pt-6 border-t">
                 <div>
                   <h3 className="text-base font-semibold text-gray-900">
@@ -2253,7 +2294,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
                 </div>
 
                 <div className="flex gap-3 overflow-x-auto pb-2 [&::-webkit-scrollbar]:hidden">
-                  {additionals.map((additional) => {
+                  {additionals.filter((a) => !selectedAdditionalIds.includes(a.id)).map((additional) => {
                     const hasProductRequiredCustomizations = components.some(
                       (component) =>
                         component.item.customizations?.some(

@@ -33,6 +33,16 @@ const AdditionalCard = ({
   const hasRequiredCustomizations =
     allowsCustomization && additional.customizations?.some((c) => c.isRequired);
 
+  const displayPrice = (() => {
+    const customEntry = additional.compatible_products?.find(
+      (entry: { product_id: string; is_active: boolean; custom_price?: number | null }) =>
+        entry.product_id === productId && entry.is_active,
+    );
+    return typeof customEntry?.custom_price === "number"
+      ? customEntry.custom_price
+      : additional.price;
+  })();
+
   const isInCart =
     isInCartExternal ||
     cart?.items?.some(
@@ -115,7 +125,7 @@ const AdditionalCard = ({
           {additional.name}
         </h3>
         <span className="text-xl font-bold">
-          {additional.price.toLocaleString("pt-BR", {
+          {displayPrice.toLocaleString("pt-BR", {
             style: "currency",
             currency: "BRL",
           })}
