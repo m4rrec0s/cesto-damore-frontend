@@ -1078,7 +1078,7 @@ class ApiService {
     return res.data;
   };
   getAdditional = async (id: string) =>
-    (await this.client.get(`/additional/${id}`)).data;
+    (await this.client.get(`/additional/${id}?include_products=true`)).data;
   createAdditional = async (
     payload: Partial<Additional> & {
       colors?: Array<{ color_id: string; stock_quantity: number }>;
