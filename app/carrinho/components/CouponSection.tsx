@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Tag, X, Loader2, Check } from "lucide-react";
+import { Tag, X, Loader2, Check, Truck, Percent, DollarSign } from "lucide-react";
 import useApi from "@/app/hooks/use-api";
 import { useCart } from "@/app/hooks/use-cart";
 
@@ -16,9 +16,36 @@ const ERROR_MESSAGES: Record<string, string> = {
   ALREADY_USED: "Você já usou este cupom",
 };
 
+const TYPE_COLORS: Record<string, { bg: string; border: string; text: string; badge: string }> = {
+  PORCENTAGEM: { bg: "bg-purple-50", border: "border-purple-200", text: "text-purple-700", badge: "bg-purple-100 text-purple-700" },
+  VALOR_FIXO: { bg: "bg-blue-50", border: "border-blue-200", text: "text-blue-700", badge: "bg-blue-100 text-blue-700" },
+  FRETE_GRATIS: { bg: "bg-emerald-50", border: "border-emerald-200", text: "text-emerald-700", badge: "bg-emerald-100 text-emerald-700" },
+};
+
+function getDiscountIcon(type: string) {
+  switch (type) {
+    case "PORCENTAGEM": return <Percent className="w-4 h-4" />;
+    case "FRETE_GRATIS": return <Truck className="w-4 h-4" />;
+    default: return <DollarSign className="w-4 h-4" />;
+  }
+}
+
+function formatDiscount(coupon: AvailableCoupon): string {
+  switch (coupon.discount_type) {
+    case "PORCENTAGEM":
+      return `${coupon.discount_value}% OFF${coupon.max_discount_cap ? ` (máx R$${coupon.max_discount_cap.toFixed(0)})` : ""}`;
+    case "VALOR_FIXO":
+      return `R$${coupon.discount_value.toFixed(2)} OFF`;
+    case "FRETE_GRATIS":
+      return coupon.discount_value > 0 ? `R$${coupon.discount_value.toFixed(2)} no frete` : "Frete grátis";
+    default:
+      return "";
+  }
+}
+
 interface AvailableCoupon {
   code: string;
-  description: string;
+  description: string | null;
   coupon_type: string;
   discount_type: string;
   discount_value: number;
@@ -38,25 +65,25 @@ type Status = "idle" | "loading" | "success" | "error";
 
 export const CouponSection = () => {
   const api = useApi();
-  const { cart, orderMetadata, setOrderMetadata } = useCart();
+  const { orderMetadata, setOrderMetadata } = useCart();
   const [availableCoupons, setAvailableCoupons] = useState<AvailableCoupon[]>([]);
   const [inputCode, setInputCode] = useState("");
   const [status, setStatus] = useState<Status>("idle");
   const [errorMsg, setErrorMsg] = useState("");
   const [appliedCoupon, setAppliedCoupon] = useState<AppliedCoupon | null>(null);
+  const [showManualInput, setShowManualInput] = useState(false);
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     api.getAvailableCoupons().then(setAvailableCoupons).catch(() => {});
   }, [api]);
 
-  // Restore applied coupon from orderMetadata on mount
   useEffect(() => {
     if (orderMetadata.couponCode && !appliedCoupon) {
       setAppliedCoupon({
         code: orderMetadata.couponCode as string,
         discount_amount: (orderMetadata.couponDiscount as number) || 0,
-        discount_type: (orderMetadata.couponDiscountType as string) || "fixed",
+        discount_type: (orderMetadata.couponDiscountType as string) || "",
         description: orderMetadata.couponDescription as string | undefined,
       });
       setStatus("success");
@@ -122,10 +149,13 @@ export const CouponSection = () => {
     }
   };
 
-  const handleSelectCoupon = (code: string) => {
-    setInputCode(code);
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    validateCode(code);
+  const handleToggleCoupon = (code: string) => {
+    if (appliedCoupon?.code === code) {
+      handleRemove();
+    } else {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      validateCode(code);
+    }
   };
 
   const handleRemove = () => {
@@ -136,19 +166,85 @@ export const CouponSection = () => {
     applyResult(null);
   };
 
-  return (
-    <div className="p-4 bg-white rounded-lg border border-gray-200">
-      <div className="flex items-center gap-2 mb-3">
-        <Tag className="w-4 h-4 text-gray-600" />
-        <span className="text-sm font-medium text-gray-900">Cupom de desconto</span>
-      </div>
+  const colors = (type: string) => TYPE_COLORS[type] || TYPE_COLORS.VALOR_FIXO;
 
-      {appliedCoupon ? (
-        <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-md px-3 py-2">
+  if (availableCoupons.length === 0 && !showManualInput && !appliedCoupon) {
+    return (
+      <div className="p-4 bg-white rounded-lg border border-gray-200">
+        <button
+          onClick={() => setShowManualInput(true)}
+          className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-700 transition-colors"
+        >
+          <Tag className="w-4 h-4" />
+          <span>Tem um cupom de desconto?</span>
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      {/* Available coupons as banners */}
+      {availableCoupons.map((coupon) => {
+        const c = colors(coupon.discount_type);
+        const isSelected = appliedCoupon?.code === coupon.code;
+        const isDisabled = appliedCoupon && appliedCoupon.code !== coupon.code;
+
+        return (
+          <button
+            key={coupon.code}
+            onClick={() => handleToggleCoupon(coupon.code)}
+            disabled={status === "loading"}
+            className={`w-full flex items-center gap-3 p-3 rounded-lg border transition-all text-left ${
+              isSelected
+                ? `${c.bg} ${c.border} ring-1 ring-offset-1 ring-current ${c.text}`
+                : isDisabled
+                  ? "bg-gray-50 border-gray-200 opacity-50"
+                  : `bg-white border-gray-200 hover:${c.bg} hover:${c.border}`
+            }`}
+          >
+            <div className={`flex-shrink-0 w-5 h-5 rounded border-2 flex items-center justify-center ${
+              isSelected ? `${c.border} ${c.bg}` : "border-gray-300"
+            }`}>
+              {isSelected && <Check className={`w-3 h-3 ${c.text}`} />}
+            </div>
+
+            <div className={`flex-shrink-0 ${c.text}`}>
+              {getDiscountIcon(coupon.discount_type)}
+            </div>
+
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <span className={`text-sm font-semibold ${isSelected ? c.text : "text-gray-900"}`}>
+                  {formatDiscount(coupon)}
+                </span>
+                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${c.badge}`}>
+                  {coupon.code}
+                </span>
+              </div>
+              {coupon.description && (
+                <p className="text-xs text-gray-500 mt-0.5 truncate">{coupon.description}</p>
+              )}
+              {coupon.min_purchase_amount && (
+                <p className="text-[10px] text-gray-400 mt-0.5">
+                  Mín. R${coupon.min_purchase_amount.toFixed(0)}
+                </p>
+              )}
+            </div>
+
+            {status === "loading" && appliedCoupon?.code !== coupon.code && inputCode === coupon.code && (
+              <Loader2 className="w-4 h-4 text-gray-400 animate-spin flex-shrink-0" />
+            )}
+          </button>
+        );
+      })}
+
+      {/* Applied coupon confirmation */}
+      {appliedCoupon && (
+        <div className={`flex items-center justify-between rounded-lg px-3 py-2 ${colors(appliedCoupon.discount_type).bg} ${colors(appliedCoupon.discount_type).border} border`}>
           <div className="flex items-center gap-2">
-            <Check className="w-4 h-4 text-green-600" />
-            <span className="text-sm font-medium text-green-800">{appliedCoupon.code}</span>
-            <span className="text-xs text-green-600">
+            <Check className={`w-4 h-4 ${colors(appliedCoupon.discount_type).text}`} />
+            <span className={`text-sm font-medium ${colors(appliedCoupon.discount_type).text}`}>
               -R$ {appliedCoupon.discount_amount.toFixed(2)}
             </span>
           </div>
@@ -156,44 +252,31 @@ export const CouponSection = () => {
             <X className="w-4 h-4" />
           </button>
         </div>
-      ) : (
-        <>
+      )}
+
+      {/* Manual input */}
+      {!appliedCoupon && (
+        <div className="p-3 bg-white rounded-lg border border-gray-200">
+          <div className="flex items-center gap-2 mb-2">
+            <Tag className="w-3.5 h-3.5 text-gray-400" />
+            <span className="text-xs text-gray-500">Ou digite um código:</span>
+          </div>
           <div className="relative">
             <input
               type="text"
               value={inputCode}
               onChange={(e) => handleInputChange(e.target.value.toUpperCase())}
-              placeholder="Digite o código do cupom"
-              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+              placeholder="CÓDIGO DO CUPOM"
+              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 uppercase tracking-wide"
             />
-            {status === "loading" && (
+            {status === "loading" && !availableCoupons.find(c => c.code === inputCode) && (
               <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 animate-spin" />
             )}
           </div>
           {status === "error" && errorMsg && (
-            <p className="text-xs text-red-500 mt-1">{errorMsg}</p>
+            <p className="text-xs text-red-500 mt-1.5">{errorMsg}</p>
           )}
-
-          {availableCoupons.length > 0 && (
-            <div className="mt-3 space-y-2">
-              <span className="text-xs text-gray-500">Cupons disponíveis:</span>
-              <div className="flex flex-wrap gap-2">
-                {availableCoupons.map((c) => (
-                  <button
-                    key={c.code}
-                    onClick={() => handleSelectCoupon(c.code)}
-                    className="text-xs border border-dashed border-gray-300 rounded px-2 py-1 text-gray-700 hover:border-blue-400 hover:text-blue-600 transition-colors"
-                  >
-                    {c.code}
-                    {c.description && (
-                      <span className="text-gray-400 ml-1">· {c.description}</span>
-                    )}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-        </>
+        </div>
       )}
     </div>
   );
