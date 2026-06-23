@@ -25,7 +25,6 @@ export default function CarrinhoRapidoPage() {
 
   const cartItems = Array.isArray(cart?.items) ? cart.items : [];
   const cartTotal = cart?.total || 0;
-  const cartItemCount = cart?.itemCount || 0;
 
   const handleOpenCompleteCart = () => {
     if (!user) {
@@ -37,30 +36,15 @@ export default function CarrinhoRapidoPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-40">
-      <div className="mx-auto w-full max-w-md px-4 py-4 sm:py-6">
-        <div className="rounded-2xl border bg-white p-4 shadow-sm">
-          <div className="mb-4 flex items-center justify-between">
-            <button
-              type="button"
-              onClick={() => router.back()}
-              className="flex items-center gap-1 text-sm font-medium text-gray-600"
-            >
-              <ArrowLeft className="h-4 w-4" />
-              Voltar
-            </button>
-            <span className="text-sm font-semibold text-gray-800">
-              Resumo rápido
-            </span>
-            <span className="text-xs text-gray-500">
-              {cartItemCount} {cartItemCount === 1 ? "item" : "itens"}
-            </span>
-          </div>
-
+    <div className="min-h-screen bg-white pb-40">
+      <div className="mx-auto w-full px-4 py-4 sm:py-6">
+        <div className="rounded-2xl borderp-4">
           {cartItems.length === 0 ? (
             <div className="py-8 text-center">
               <ShoppingBag className="mx-auto mb-3 h-14 w-14 text-gray-300" />
-              <p className="font-medium text-gray-900">Seu carrinho está vazio</p>
+              <p className="font-medium text-gray-900">
+                Seu carrinho está vazio
+              </p>
               <p className="mt-1 text-sm text-gray-500">
                 Adicione produtos para iniciar seu pedido.
               </p>
@@ -77,14 +61,13 @@ export default function CarrinhoRapidoPage() {
                 >
                   <div className="flex gap-3">
                     <div className="relative h-16 w-16 flex-shrink-0">
-                      <Image
+                      <img
                         src={
                           getInternalImageUrl(item.product.image_url) ||
                           getPublicAssetUrl("placeholder-v2.png")
                         }
                         alt={item.product.name}
-                        fill
-                        className="rounded-md object-cover object-center"
+                        className="rounded-md object-cover object-center aspect-square"
                       />
                     </div>
 
@@ -122,7 +105,8 @@ export default function CarrinhoRapidoPage() {
                               </span>
                               {customization.price_adjustment ? (
                                 <span className="whitespace-nowrap font-semibold text-emerald-600">
-                                  +R$ {customization.price_adjustment.toFixed(2)}
+                                  +R${" "}
+                                  {customization.price_adjustment.toFixed(2)}
                                 </span>
                               ) : null}
                             </div>
@@ -210,7 +194,7 @@ export default function CarrinhoRapidoPage() {
 
       {cartItems.length > 0 ? (
         <div className="fixed inset-x-0 bottom-0 border-t bg-white/95 px-4 py-4 backdrop-blur">
-          <div className="mx-auto w-full max-w-md rounded-xl border bg-white p-4 shadow-sm">
+          <div className="mx-auto w-full bg-white p-4">
             <div className="mb-3 flex items-center justify-between">
               <span className="flex items-center gap-2 text-sm font-semibold text-gray-900">
                 <ShoppingBasket className="h-4 w-4" />

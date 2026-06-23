@@ -12,6 +12,7 @@ import {
   Clock,
   CheckCircle2,
   Loader2,
+  FlameIcon,
 } from "lucide-react";
 
 import { Button } from "@/app/components/ui/button";
@@ -43,10 +44,7 @@ import { ItemCustomizationInlineWithContext } from "./ItemCustomizationInlineWit
 import { getInternalImageUrl, getPublicAssetUrl } from "@/lib/image-helper";
 import { useLoginPrompt } from "@/app/components/layout/app-wrapper";
 import { normalizeCustomizationData } from "@/app/lib/customization-serialization";
-import {
-  validateCustomization,
-  type LayoutImage,
-} from "@/app/lib/frame-utils";
+import { validateCustomization, type LayoutImage } from "@/app/lib/frame-utils";
 import { CustomizationItem } from "./CustomizationItem";
 
 const Model3DViewer = dynamic(
@@ -780,12 +778,16 @@ const ClientProductPage = ({ id }: { id: string }) => {
       const add = additionals.find((a) => a.id === addId);
       if (!add) return sum;
       const customEntry = add.compatible_products?.find(
-        (entry: { product_id: string; is_active: boolean; custom_price?: number | null }) =>
-          entry.product_id === product.id && entry.is_active,
+        (entry: {
+          product_id: string;
+          is_active: boolean;
+          custom_price?: number | null;
+        }) => entry.product_id === product.id && entry.is_active,
       );
-      const price = typeof customEntry?.custom_price === "number"
-        ? customEntry.custom_price
-        : add.price;
+      const price =
+        typeof customEntry?.custom_price === "number"
+          ? customEntry.custom_price
+          : add.price;
       return sum + price;
     }, 0);
   }, [selectedAdditionalIds, additionals, product.id]);
@@ -1000,7 +1002,9 @@ const ClientProductPage = ({ id }: { id: string }) => {
         const hasPdf = !!(data.pdfUrl as string);
         const hasEditorState = !!(data.editorState as any);
         if (!hasPdf && !hasEditorState) {
-          toast.error("Complete a personalização do design antes de adicionar ao carrinho.");
+          toast.error(
+            "Complete a personalização do design antes de adicionar ao carrinho.",
+          );
           return;
         }
       }
@@ -1221,7 +1225,11 @@ const ClientProductPage = ({ id }: { id: string }) => {
               previewUrl?: string;
               additional_time?: number;
               productionTime?: number;
-              editorState?: { layoutId: string; images: Array<{ frameId: string; url: string }>; texts: Record<string, string> };
+              editorState?: {
+                layoutId: string;
+                images: Array<{ frameId: string; url: string }>;
+                texts: Record<string, string>;
+              };
               highQualityUrl?: string;
               pages?: Array<{ pageId: string; pageIndex: number; url: string }>;
               pdfUrl?: string | null;
@@ -1229,7 +1237,8 @@ const ClientProductPage = ({ id }: { id: string }) => {
 
             const imageCount = layoutData.images?.length || 0;
 
-            const isMultiPage = Array.isArray(layoutData.pages) && layoutData.pages.length > 1;
+            const isMultiPage =
+              Array.isArray(layoutData.pages) && layoutData.pages.length > 1;
 
             const cartCustomization: CartCustomization = {
               customization_id: input.ruleId
@@ -1439,7 +1448,11 @@ const ClientProductPage = ({ id }: { id: string }) => {
               previewUrl?: string;
               productionTime?: number;
               additional_time?: number;
-              editorState?: { layoutId: string; images: Array<{ frameId: string; url: string }>; texts: Record<string, string> };
+              editorState?: {
+                layoutId: string;
+                images: Array<{ frameId: string; url: string }>;
+                texts: Record<string, string>;
+              };
               highQualityUrl?: string;
             };
 
@@ -1900,7 +1913,9 @@ const ClientProductPage = ({ id }: { id: string }) => {
                           decoding="async"
                         />
                         <span className="absolute -top-1 -right-1 w-4 h-4 bg-emerald-500 rounded-full flex items-center justify-center">
-                          <span className="text-[9px] text-white font-bold">+</span>
+                          <span className="text-[9px] text-white font-bold">
+                            +
+                          </span>
                         </span>
                       </div>
                     );
@@ -1965,20 +1980,34 @@ const ClientProductPage = ({ id }: { id: string }) => {
                   return (
                     <div
                       className={cn(
-                        "text-sm",
+                        "border inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-sm",
                         availability.status === "in_stock"
-                          ? "text-black"
-                          : availability.status === "low_stock"
-                            ? "text-yellow-600"
-                            : "text-red-600",
+                          ? "bg-green-50 text-green-700 border-green-200"
+                          : availability.status === "low_stock" &&
+                              availability.available <= 5
+                            ? "bg-red-500 text-white border-red-200"
+                            : availability.status === "low_stock" &&
+                                availability.available > 5
+                              ? "bg-yellow-50 text-yellow-700 border-yellow-200"
+                              : "bg-none text-red-700 border-red-200",
                       )}
                     >
-                      {availability.status === "in_stock" &&
-                        "Estoque disponível"}
                       {availability.status === "low_stock" &&
-                        `Últimas ${availability.available} disponíveis`}
-                      {availability.status === "out_of_stock" &&
-                        "✗ Fora de estoque"}
+                        availability.available <= 5 && (
+                          <FlameIcon className="w-4 h-4" />
+                        )}
+                      <div className={cn("text-sm")}>
+                        {availability.status === "in_stock" &&
+                          "Estoque disponível"}
+                        {availability.status === "low_stock" &&
+                          availability.available === 1 &&
+                          `Última disponível`}
+                        {availability.status === "low_stock" &&
+                          availability.available > 1 &&
+                          `Últimas ${availability.available} disponíveis`}
+                        {availability.status === "out_of_stock" &&
+                          "✗ Fora de estoque"}
+                      </div>
                     </div>
                   );
                 })()}
@@ -1987,7 +2016,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
                     "inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-sm",
                     currentProductionTime && currentProductionTime > 1
                       ? "bg-gray-100 text-gray-700"
-                      : "bg-green-50 text-green-700",
+                      : "bg-blue-50 text-blue-700",
                   )}
                 >
                   <Clock className="w-4 h-4" />
@@ -2144,24 +2173,35 @@ const ClientProductPage = ({ id }: { id: string }) => {
                           key={component.id}
                           id={component.id}
                           name={component.item.name}
-                          imageUrl={getInternalImageUrl(component.item.image_url) || undefined}
+                          imageUrl={
+                            getInternalImageUrl(component.item.image_url) ||
+                            undefined
+                          }
                           requiredCount={requiredCount}
                           totalCount={totalCount}
                           hasCustomizations={hasCustomizations}
                           hasMissingRequired={hasMissingRequired}
                           imagesCount={itemImagesCount[component.id]}
-                          previewItems={componentCustomizations.map((custom) => ({
-                            label: getCustomizationPreviewLabel(custom),
-                            previews: getCustomizationPreviewUrls(custom),
-                          }))}
+                          previewItems={componentCustomizations.map(
+                            (custom) => ({
+                              label: getCustomizationPreviewLabel(custom),
+                              previews: getCustomizationPreviewUrls(custom),
+                            }),
+                          )}
                           pdfUrl={(() => {
                             const dl = componentCustomizations.find(
-                              (c) => c.customizationType === CustomizationType.DYNAMIC_LAYOUT
+                              (c) =>
+                                c.customizationType ===
+                                CustomizationType.DYNAMIC_LAYOUT,
                             );
                             return (dl?.data?.pdfUrl as string) || undefined;
                           })()}
                           isOpen={activeCustomizationModal === component.id}
-                          onOpenChange={(open) => setActiveCustomizationModal(open ? component.id : null)}
+                          onOpenChange={(open) =>
+                            setActiveCustomizationModal(
+                              open ? component.id : null,
+                            )
+                          }
                           onAuthCheck={ensureAuthenticated}
                         >
                           <ItemCustomizationInlineWithContext
@@ -2170,22 +2210,60 @@ const ClientProductPage = ({ id }: { id: string }) => {
                             onClose={() => setActiveCustomizationModal(null)}
                             itemId={component.item.id}
                             itemName={component.item.name}
-                            customizations={(component.item.customizations || []).map((c) => ({
+                            customizations={(
+                              component.item.customizations || []
+                            ).map((c) => ({
                               id: c.id,
                               name: c.name,
                               description: c.description,
-                              type: c.type as "DYNAMIC_LAYOUT" | "TEXT" | "IMAGES" | "MULTIPLE_CHOICE",
+                              type: c.type as
+                                | "DYNAMIC_LAYOUT"
+                                | "TEXT"
+                                | "IMAGES"
+                                | "MULTIPLE_CHOICE",
                               isRequired: c.isRequired,
                               price: c.price,
                               customization_data: c.customization_data as {
-                                layouts?: Array<{ id: string; name: string; model_url?: string; image_url?: string; slots?: SlotDef[] }>;
-                                fields?: Array<{ id: string; label: string; placeholder?: string; max_length?: number }>;
-                                dynamic_layout?: { max_images: number; min_width?: number; min_height?: number; max_file_size_mb?: number; accepted_formats?: string[] };
-                                options?: Array<{ id: string; label: string; value: string; price_adjustment?: number; image_url?: string; description?: string }>;
+                                layouts?: Array<{
+                                  id: string;
+                                  name: string;
+                                  model_url?: string;
+                                  image_url?: string;
+                                  slots?: SlotDef[];
+                                }>;
+                                fields?: Array<{
+                                  id: string;
+                                  label: string;
+                                  placeholder?: string;
+                                  max_length?: number;
+                                }>;
+                                dynamic_layout?: {
+                                  max_images: number;
+                                  min_width?: number;
+                                  min_height?: number;
+                                  max_file_size_mb?: number;
+                                  accepted_formats?: string[];
+                                };
+                                options?: Array<{
+                                  id: string;
+                                  label: string;
+                                  value: string;
+                                  price_adjustment?: number;
+                                  image_url?: string;
+                                  description?: string;
+                                }>;
                               },
                             }))}
-                            onComplete={(hasCustomizations, data) => handleCustomizationComplete(component.id, hasCustomizations, data)}
-                            onImagesUpdate={(id, current, max) => handleImagesUpdate(component.id, current, max)}
+                            onComplete={(hasCustomizations, data) =>
+                              handleCustomizationComplete(
+                                component.id,
+                                hasCustomizations,
+                                data,
+                              )
+                            }
+                            onImagesUpdate={(id, current, max) =>
+                              handleImagesUpdate(component.id, current, max)
+                            }
                           />
                         </CustomizationItem>
                       );
@@ -2195,21 +2273,33 @@ const ClientProductPage = ({ id }: { id: string }) => {
                 {selectedAdditionalIds.length > 0 && (
                   <div className="space-y-2">
                     {selectedAdditionalIds.map((addId) => {
-                      const additional = additionals.find((a) => a.id === addId);
-                      if (!additional || !additional.allows_customization) return null;
+                      const additional = additionals.find(
+                        (a) => a.id === addId,
+                      );
+                      if (!additional || !additional.allows_customization)
+                        return null;
 
-                      const addCustomizations = additionalCustomizations[addId] || [];
+                      const addCustomizations =
+                        additionalCustomizations[addId] || [];
                       const hasCustomizations = addCustomizations.length > 0;
-                      const requiredCount = additional.customizations?.filter((c) => c.isRequired).length || 0;
+                      const requiredCount =
+                        additional.customizations?.filter((c) => c.isRequired)
+                          .length || 0;
                       const totalCount = additional.customizations?.length || 0;
-                      const missingIds = getMissingRequiredAdditionalCustomizationIds(additional);
+                      const missingIds =
+                        getMissingRequiredAdditionalCustomizationIds(
+                          additional,
+                        );
 
                       return (
                         <CustomizationItem
                           key={`add-cust-${addId}`}
                           id={addId}
                           name={additional.name}
-                          imageUrl={getInternalImageUrl(additional.image_url) || undefined}
+                          imageUrl={
+                            getInternalImageUrl(additional.image_url) ||
+                            undefined
+                          }
                           requiredCount={requiredCount}
                           totalCount={totalCount}
                           hasCustomizations={hasCustomizations}
@@ -2220,7 +2310,9 @@ const ClientProductPage = ({ id }: { id: string }) => {
                             previews: getCustomizationPreviewUrls(custom),
                           }))}
                           isOpen={activeAdditionalModal === addId}
-                          onOpenChange={(open) => setActiveAdditionalModal(open ? addId : null)}
+                          onOpenChange={(open) =>
+                            setActiveAdditionalModal(open ? addId : null)
+                          }
                           onAuthCheck={ensureAuthenticated}
                         >
                           <ItemCustomizationInlineWithContext
@@ -2229,22 +2321,60 @@ const ClientProductPage = ({ id }: { id: string }) => {
                             onClose={() => setActiveAdditionalModal(null)}
                             itemId={additional.id}
                             itemName={additional.name}
-                            customizations={(additional.customizations || []).map((c) => ({
+                            customizations={(
+                              additional.customizations || []
+                            ).map((c) => ({
                               id: c.id,
                               name: c.name,
                               description: c.description,
-                              type: c.type as "DYNAMIC_LAYOUT" | "TEXT" | "IMAGES" | "MULTIPLE_CHOICE",
+                              type: c.type as
+                                | "DYNAMIC_LAYOUT"
+                                | "TEXT"
+                                | "IMAGES"
+                                | "MULTIPLE_CHOICE",
                               isRequired: c.isRequired,
                               price: c.price,
                               customization_data: c.customization_data as {
-                                layouts?: Array<{ id: string; name: string; model_url?: string; image_url?: string; slots?: SlotDef[] }>;
-                                fields?: Array<{ id: string; label: string; placeholder?: string; max_length?: number }>;
-                                dynamic_layout?: { max_images: number; min_width?: number; min_height?: number; max_file_size_mb?: number; accepted_formats?: string[] };
-                                options?: Array<{ id: string; label: string; value: string; price_adjustment?: number; image_url?: string; description?: string }>;
+                                layouts?: Array<{
+                                  id: string;
+                                  name: string;
+                                  model_url?: string;
+                                  image_url?: string;
+                                  slots?: SlotDef[];
+                                }>;
+                                fields?: Array<{
+                                  id: string;
+                                  label: string;
+                                  placeholder?: string;
+                                  max_length?: number;
+                                }>;
+                                dynamic_layout?: {
+                                  max_images: number;
+                                  min_width?: number;
+                                  min_height?: number;
+                                  max_file_size_mb?: number;
+                                  accepted_formats?: string[];
+                                };
+                                options?: Array<{
+                                  id: string;
+                                  label: string;
+                                  value: string;
+                                  price_adjustment?: number;
+                                  image_url?: string;
+                                  description?: string;
+                                }>;
                               },
                             }))}
-                            onComplete={(hasCustomizations, data) => handleAdditionalCustomizationComplete(addId, hasCustomizations, data)}
-                            onImagesUpdate={(id, current, max) => handleImagesUpdate(addId, current, max)}
+                            onComplete={(hasCustomizations, data) =>
+                              handleAdditionalCustomizationComplete(
+                                addId,
+                                hasCustomizations,
+                                data,
+                              )
+                            }
+                            onImagesUpdate={(id, current, max) =>
+                              handleImagesUpdate(addId, current, max)
+                            }
                           />
                         </CustomizationItem>
                       );
@@ -2309,7 +2439,8 @@ const ClientProductPage = ({ id }: { id: string }) => {
               )}
             </Button>
 
-            {additionals.filter((a) => !selectedAdditionalIds.includes(a.id)).length > 0 && (
+            {additionals.filter((a) => !selectedAdditionalIds.includes(a.id))
+              .length > 0 && (
               <div className="space-y-4 pt-6 border-t">
                 <div>
                   <h3 className="text-base font-semibold text-gray-900">
@@ -2354,59 +2485,62 @@ const ClientProductPage = ({ id }: { id: string }) => {
                 </div>
 
                 <div className="flex gap-3 overflow-x-auto pb-2 [&::-webkit-scrollbar]:hidden">
-                  {additionals.filter((a) => !selectedAdditionalIds.includes(a.id)).map((additional) => {
-                    const hasProductRequiredCustomizations = components.some(
-                      (component) =>
-                        component.item.customizations?.some(
-                          (c) => c.isRequired,
-                        ),
-                    );
-                    let hasCompletedProductCustomizations = true;
-                    if (hasProductRequiredCustomizations) {
-                      hasCompletedProductCustomizations = components.every(
-                        (component) => {
-                          const requiredCustomizations =
-                            component.item.customizations?.filter(
-                              (c) => c.isRequired,
-                            ) || [];
-                          if (requiredCustomizations.length === 0) return true;
-                          const componentData =
-                            itemCustomizations[component.id] || [];
-                          return requiredCustomizations.every((reqCustom) =>
-                            componentData.some(
-                              (c) => c.ruleId === reqCustom.id,
-                            ),
-                          );
-                        },
+                  {additionals
+                    .filter((a) => !selectedAdditionalIds.includes(a.id))
+                    .map((additional) => {
+                      const hasProductRequiredCustomizations = components.some(
+                        (component) =>
+                          component.item.customizations?.some(
+                            (c) => c.isRequired,
+                          ),
                       );
-                    }
-                    return (
-                      <AdditionalCard
-                        key={additional.id}
-                        additional={additional}
-                        productId={product.id}
-                        onCustomizeClick={(additionalId) => {
-                          if (!ensureAuthenticated()) {
-                            return;
+                      let hasCompletedProductCustomizations = true;
+                      if (hasProductRequiredCustomizations) {
+                        hasCompletedProductCustomizations = components.every(
+                          (component) => {
+                            const requiredCustomizations =
+                              component.item.customizations?.filter(
+                                (c) => c.isRequired,
+                              ) || [];
+                            if (requiredCustomizations.length === 0)
+                              return true;
+                            const componentData =
+                              itemCustomizations[component.id] || [];
+                            return requiredCustomizations.every((reqCustom) =>
+                              componentData.some(
+                                (c) => c.ruleId === reqCustom.id,
+                              ),
+                            );
+                          },
+                        );
+                      }
+                      return (
+                        <AdditionalCard
+                          key={additional.id}
+                          additional={additional}
+                          productId={product.id}
+                          onCustomizeClick={(additionalId) => {
+                            if (!ensureAuthenticated()) {
+                              return;
+                            }
+                            setActiveAdditionalModal(additionalId);
+                          }}
+                          onAddToCart={handleAddAdditionalToCart}
+                          hasCustomizations={
+                            !!additionalCustomizations[additional.id]
                           }
-                          setActiveAdditionalModal(additionalId);
-                        }}
-                        onAddToCart={handleAddAdditionalToCart}
-                        hasCustomizations={
-                          !!additionalCustomizations[additional.id]
-                        }
-                        isInCartExternal={selectedAdditionalIds.includes(
-                          additional.id,
-                        )}
-                        hasProductRequiredCustomizations={
-                          hasProductRequiredCustomizations
-                        }
-                        hasCompletedProductCustomizations={
-                          hasCompletedProductCustomizations
-                        }
-                      />
-                    );
-                  })}
+                          isInCartExternal={selectedAdditionalIds.includes(
+                            additional.id,
+                          )}
+                          hasProductRequiredCustomizations={
+                            hasProductRequiredCustomizations
+                          }
+                          hasCompletedProductCustomizations={
+                            hasCompletedProductCustomizations
+                          }
+                        />
+                      );
+                    })}
                 </div>
                 {activeAdditionalModal && (
                   <div className="mt-3">

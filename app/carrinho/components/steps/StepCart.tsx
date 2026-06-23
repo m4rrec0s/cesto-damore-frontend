@@ -111,11 +111,12 @@ const ProductCard = ({
   isProcessing: boolean;
 }) => {
   return (
-    <div className="flex gap-4 py-6 border-b border-gray-200 last:border-0">
+    <div className="flex gap-4 py-4 border-b border-gray-200 last:border-0">
       <div className="relative w-20 h-20 flex-shrink-0 rounded-lg overflow-hidden bg-gray-50 border border-gray-100">
         <img
           src={
-            getInternalImageUrl(item.product.image_url) || getPublicAssetUrl("placeholder-v2.png")
+            getInternalImageUrl(item.product.image_url) ||
+            getPublicAssetUrl("placeholder-v2.png")
           }
           alt={item.product.name}
           className="w-full h-full object-cover object-center"
@@ -252,7 +253,7 @@ export const StepCart = ({
       exit={{ opacity: 0 }}
       className="space-y-4"
     >
-      <Card className="bg-white p-4 sm:p-6 rounded-lg border border-gray-200 shadow-none">
+      <Card className="bg-white p-4 gap-0 rounded-lg border border-gray-200 shadow-none">
         <div className="flex items-center justify-between mb-4 border-b border-gray-100 pb-4">
           <h2 className="text-lg font-bold text-gray-900">Produtos</h2>
         </div>
