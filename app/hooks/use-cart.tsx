@@ -458,7 +458,7 @@ interface CartContextType {
   };
   formatDate: (date: Date) => string;
   orderMetadata: Record<string, unknown>;
-  setOrderMetadata: (metadata: Record<string, unknown>) => void;
+  setOrderMetadata: (metadata: Record<string, unknown> | ((prev: Record<string, unknown>) => Record<string, unknown>)) => void;
   clearPendingOrderId: () => void;
   refreshCart: () => Promise<void>;
 }
@@ -525,11 +525,19 @@ export function useCart(): CartContextType {
   const [orderMetadata, _setOrderMetadata] = useState<{
     send_anonymously?: boolean;
     complement?: string;
+    couponCode?: string;
+    couponDiscount?: number;
+    couponDiscountType?: string;
+    couponDescription?: string;
+    [key: string]: unknown;
   }>({});
 
   const setOrderMetadata = useCallback(
-    (metadata: { send_anonymously?: boolean; complement?: string }) => {
-      _setOrderMetadata((prev) => ({ ...prev, ...metadata }));
+    (metadata: Record<string, unknown> | ((prev: Record<string, unknown>) => Record<string, unknown>)) => {
+      _setOrderMetadata((prev) => {
+        if (typeof metadata === "function") return { ...prev, ...metadata(prev) };
+        return { ...prev, ...metadata };
+      });
     },
     [],
   );
@@ -2462,6 +2470,7 @@ export function useCart(): CartContextType {
           cardToken?: string;
           installments?: number;
           issuer_id?: string;
+          couponCode?: string;
         };
 
         const payload: TransparentPayload = {
@@ -2480,6 +2489,7 @@ export function useCart(): CartContextType {
         if (paymentData.installments)
           payload.installments = paymentData.installments;
         if (paymentData.issuer_id) payload.issuer_id = paymentData.issuer_id;
+        if (orderMetadata.couponCode) payload.couponCode = orderMetadata.couponCode as string;
 
         const response = await api.createTransparentPayment(payload);
 
@@ -2493,7 +2503,7 @@ export function useCart(): CartContextType {
         throw error;
       }
     },
-    [api, clearCart],
+    [api, clearCart, orderMetadata],
   );
 
   const formatDate = useCallback((date: Date): string => {

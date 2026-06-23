@@ -2221,6 +2221,16 @@ class ApiService {
     }
   };
 
+  validateCoupon = async (code: string) => {
+    const res = await this.client.post('/coupons/validate', { code });
+    return res.data;
+  };
+
+  getAvailableCoupons = async () => {
+    const res = await this.client.get('/coupons/available');
+    return res.data;
+  };
+
   getOrderForCheckout = async (orderId: string) => {
     try {
       const res = await this.client.get(`/orders/${orderId}`);
