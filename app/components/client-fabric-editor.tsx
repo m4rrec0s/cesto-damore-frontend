@@ -156,7 +156,9 @@ export default function ClientFabricEditor({
         }
         parsed = raw.data;
       } else {
-        parsed = raw;
+        // Old format without timestamp — treat as expired
+        localStorage.removeItem(`client-design-imgs-${layoutBase.id}`);
+        return {};
       }
 
       if (Object.keys(parsed).length === 0) return {};
@@ -185,12 +187,26 @@ export default function ClientFabricEditor({
   const [workspaceZoom, setWorkspaceZoom] = useState(0.6);
   const localImagesRef = useRef(localImages);
 
+  const localImagesCreatedAt = useRef<number>(
+    (() => {
+      if (typeof window === "undefined" || !layoutBase.id) return Date.now();
+      try {
+        const saved = localStorage.getItem(`client-design-imgs-${layoutBase.id}`);
+        if (saved) {
+          const raw = JSON.parse(saved);
+          if (raw._ts) return raw._ts as number;
+        }
+      } catch {}
+      return Date.now();
+    })(),
+  );
+
   useEffect(() => {
     localImagesRef.current = localImages;
     if (layoutBase.id && Object.keys(localImages).length > 0) {
       localStorage.setItem(
         `client-design-imgs-${layoutBase.id}`,
-        JSON.stringify({ _ts: Date.now(), data: localImages }),
+        JSON.stringify({ _ts: localImagesCreatedAt.current, data: localImages }),
       );
     }
   }, [localImages, layoutBase.id]);
