@@ -1878,6 +1878,7 @@ export function useCart(): CartContextType {
             shipping_cost: options?.shippingCost ?? 0,
             payment_method: options?.paymentMethod ?? "not-set",
           },
+          ...(orderMetadata.couponCode ? { couponCode: orderMetadata.couponCode as string } : {}),
         };
 
         const response = await fetch("/api/mercadopago/preferences", {
@@ -1902,7 +1903,7 @@ export function useCart(): CartContextType {
         throw error;
       }
     },
-    [cart.items],
+    [cart.items, orderMetadata],
   );
 
   const getDeliveryWindows = useCallback((): {

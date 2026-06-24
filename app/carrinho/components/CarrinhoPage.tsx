@@ -10,7 +10,7 @@ import { usePaymentManager } from "@/app/hooks/use-payment-manager";
 import type { CartCustomization } from "@/app/hooks/use-cart";
 import { Card } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
-import { User, Loader2 } from "lucide-react";
+import { User, Loader2, Tag } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -32,6 +32,7 @@ import {
 } from "./CustomizationsReview";
 import type { CustomizationInput } from "@/app/types/customization";
 import { normalizeCustomizationData } from "@/app/lib/customization-serialization";
+import { CouponModal } from "./CouponModal";
 
 const ACCEPTED_CITIES = [
   "Campina Grande",
@@ -198,6 +199,7 @@ export default function CarrinhoPageContent() {
     getMaxProductionTime,
     isDateDisabledInCalendar,
     refreshCart,
+    orderMetadata,
   } = useCartContext();
 
   const { pendingOrder, hasPendingOrder, clearPendingOrder } =
@@ -214,6 +216,7 @@ export default function CarrinhoPageContent() {
   const [optionSelected, setOptionSelected] = useState<"delivery" | "pickup">(
     "delivery",
   );
+  const [couponModalOpen, setCouponModalOpen] = useState(false);
 
   useEffect(() => {
     setCurrentStep(getStepFromPath(pathname));
@@ -1189,8 +1192,8 @@ export default function CarrinhoPageContent() {
   }, [optionSelected, paymentMethod]);
 
   const grandTotal = useMemo(
-    () => Math.max(0, cartTotal + (shippingCost ?? 0) - pickupDiscount),
-    [cartTotal, shippingCost, pickupDiscount],
+    () => Math.max(0, cartTotal + (shippingCost ?? 0) - pickupDiscount - (orderMetadata.couponDiscount as number || 0)),
+    [cartTotal, shippingCost, pickupDiscount, orderMetadata.couponDiscount],
   );
 
   const verifyOrderTotals = useCallback(
@@ -2454,6 +2457,32 @@ export default function CarrinhoPageContent() {
               </div>
             )}
 
+            {typeof orderMetadata.couponDiscount === 'number' && orderMetadata.couponDiscount > 0 && (
+              <div className="flex justify-between text-sm">
+                <span className="text-[#00a650]">Cupom ({String(orderMetadata.couponCode || '')})</span>
+                <span className="text-[#00a650]">
+                  - R$ {orderMetadata.couponDiscount.toFixed(2)}
+                </span>
+              </div>
+            )}
+
+            {typeof orderMetadata.couponDiscount !== 'number' || orderMetadata.couponDiscount <= 0 ? (
+              <button
+                onClick={() => setCouponModalOpen(true)}
+                className="w-full flex items-center justify-center gap-2 py-2.5 px-4 border border-dashed border-gray-300 rounded-lg text-sm text-gray-500 hover:text-[#3483fa] hover:border-[#3483fa] transition-colors"
+              >
+                <Tag className="w-4 h-4" />
+                <span>Adicionar cupom</span>
+              </button>
+            ) : (
+              <button
+                onClick={() => setCouponModalOpen(true)}
+                className="w-full flex items-center justify-center gap-2 py-2 px-4 text-sm text-[#3483fa] hover:text-[#2968c8] transition-colors"
+              >
+                <span>Trocar cupom</span>
+              </button>
+            )}
+
             <div className="flex justify-between text-sm">
               <span className="text-gray-600">Frete</span>
               <span className="text-[#00a650]">
@@ -2763,6 +2792,11 @@ export default function CarrinhoPageContent() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      <CouponModal 
+        open={couponModalOpen} 
+        onClose={() => setCouponModalOpen(false)} 
+      />
     </>
   );
 }

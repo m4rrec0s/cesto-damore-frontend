@@ -5,7 +5,6 @@ import { Minus, Plus } from "lucide-react";
 import { Card } from "@/app/components/ui/card";
 import { getInternalImageUrl, getPublicAssetUrl } from "@/lib/image-helper";
 import type { CartCustomization } from "@/app/hooks/use-cart";
-import { CouponSection } from "../CouponSection";
 
 interface CartItem {
   product_id: string;
@@ -283,8 +282,6 @@ export const StepCart = ({
           desconto.
         </p>
       </div>
-
-      <CouponSection />
     </motion.div>
   );
 };
