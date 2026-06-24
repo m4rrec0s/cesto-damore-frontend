@@ -19,7 +19,7 @@ import {
 import { toast } from "sonner";
 import type { LayoutBase, ImageData } from "../types/personalization";
 import { ImageCropDialog } from "./ui/image-crop-dialog";
-import { dataURLtoBlob } from "@/app/lib/utils";
+import { compressImage } from "@/app/lib/utils";
 import { getPublicAssetUrl } from "@/lib/image-helper";
 import { jsPDF } from "jspdf";
 import {
@@ -203,6 +203,11 @@ export default function ClientFabricEditor({
   >(null);
   const [cropAspect, setCropAspect] = useState<number | undefined>(undefined);
   const [isProcessingImage, setIsProcessingImage] = useState(false);
+  type UploadStatus = "idle" | "uploading" | "done" | "error";
+  const [frameUploadStatus, setFrameUploadStatus] = useState<
+    Record<string, UploadStatus>
+  >({});
+  const uploadControllers = useRef<Record<string, AbortController>>({});
   const [renderKey, setRenderKey] = useState(0);
   const [validationResult, setValidationResult] = useState<{
     valid: boolean;
@@ -897,16 +902,67 @@ export default function ClientFabricEditor({
   const handleCropComplete = async (croppedImageUrl: string) => {
     if (!fabricRef || !currentFrameId) return;
 
+    const frameId = currentFrameId;
+    const framePageIndex = currentFramePageIndex;
+
     setIsProcessingImage(true);
 
     try {
-      const blob = dataURLtoBlob(croppedImageUrl);
-      const file = new File([blob], `crop_${currentFrameId}.png`, {
-        type: "image/png",
-      });
+      // 1. Compress the cropped image to JPEG
+      const dataUrl = croppedImageUrl;
+      const arr = dataUrl.split(",");
+      const mime = arr[0].match(/:(.*?);/)?.[1] || "image/png";
+      const bstr = atob(arr[1]);
+      const u8 = new Uint8Array(bstr.length);
+      for (let i = 0; i < bstr.length; i++) u8[i] = bstr.charCodeAt(i);
+      const rawBlob = new Blob([u8], { type: mime });
+      const compressedBlob = await compressImage(rawBlob);
+
+      // 2. objectURL for instant preview
+      const localUrl = URL.createObjectURL(compressedBlob);
+
+      const pageIdx =
+        framePageIndex !== null
+          ? framePageIndex
+          : multiPageRef.current.activePageIndex;
+      const imageKey = getFrameKey(pageIdx, frameId);
+
+      setLocalImages((prev) => ({ ...prev, [imageKey]: localUrl }));
+      setRenderKey((n) => n + 1);
+
+      const frame = fabricRef
+        .getObjects()
+        .find(
+          (o: any) =>
+            extractRawFrameId(o.id || o.name) === frameId &&
+            (o.isFrame || o.isCustomizable || o.type === "Rect" || o.type === "rect"),
+        );
+      if (frame) {
+        await loadLocalImageToFrame(fabricRef, frame, localUrl);
+        fabricRef.requestRenderAll();
+      }
+
+      // Close dialog immediately — preview is already rendered
+      setCropDialogOpen(false);
+      setFileToCrop(null);
+      setCurrentFrameId(null);
+      setCurrentFramePageIndex(null);
+      setIsProcessingImage(false);
+
+      // 3. Background upload
+      // Cancel any existing upload for this frame
+      if (uploadControllers.current[frameId]) {
+        uploadControllers.current[frameId].abort();
+      }
+      const controller = new AbortController();
+      uploadControllers.current[frameId] = controller;
+      setFrameUploadStatus((s) => ({ ...s, [frameId]: "uploading" }));
 
       const formData = new FormData();
-      formData.append("file", file);
+      formData.append(
+        "file",
+        new File([compressedBlob], `crop_${frameId}.jpg`, { type: "image/jpeg" }),
+      );
 
       const token =
         localStorage.getItem("token") || localStorage.getItem("appToken") || "";
@@ -914,6 +970,7 @@ export default function ClientFabricEditor({
       const uploadRes = await fetch(`${BACKEND_PROXY_BASE}/uploads/temp`, {
         method: "POST",
         body: formData,
+        signal: controller.signal,
         headers: {
           "ngrok-skip-browser-warning": "true",
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -924,56 +981,25 @@ export default function ClientFabricEditor({
         let errorDetails = `HTTP ${uploadRes.status}`;
         try {
           const errorBody = await uploadRes.json();
-          errorDetails =
-            errorBody?.error ||
-            errorBody?.details ||
-            errorBody?.message ||
-            errorDetails;
+          errorDetails = errorBody?.error || errorBody?.details || errorBody?.message || errorDetails;
         } catch {}
         throw new Error(`Falha no upload: ${errorDetails}`);
       }
 
       const uploadData = await uploadRes.json();
-      let finalUrl = uploadData.data?.url || uploadData.url || uploadData.path;
+      let serverUrl = uploadData.data?.url || uploadData.url || uploadData.path;
+      if (!serverUrl) throw new Error("URL não retornada");
+      serverUrl = toBackendAssetUrl(serverUrl);
 
-      if (!finalUrl) throw new Error("URL não retornada");
-      finalUrl = toBackendAssetUrl(finalUrl);
-
-      const isMultiPage = multiPageRef.current.pages.length > 1;
-      const pageIdx =
-        currentFramePageIndex !== null
-          ? currentFramePageIndex
-          : multiPageRef.current.activePageIndex;
-      const imageKey = getFrameKey(pageIdx, currentFrameId);
-      setLocalImages((prev) => {
-        const next = { ...prev, [imageKey]: finalUrl };
-        return next;
-      });
-      setRenderKey((n) => n + 1);
-
-      const frame = fabricRef
-        .getObjects()
-        .find(
-          (o: any) =>
-            extractRawFrameId(o.id || o.name) === currentFrameId &&
-            (o.isFrame ||
-              o.isCustomizable ||
-              o.type === "Rect" ||
-              o.type === "rect"),
-        );
-      if (frame) {
-        await loadLocalImageToFrame(fabricRef, frame, finalUrl);
-        fabricRef.requestRenderAll();
-      }
-
-      setCropDialogOpen(false);
-      setFileToCrop(null);
-      setCurrentFrameId(null);
-      setCurrentFramePageIndex(null);
-    } catch (err) {
+      // 4. Swap objectURL → serverURL
+      setLocalImages((prev) => ({ ...prev, [imageKey]: serverUrl }));
+      URL.revokeObjectURL(localUrl);
+      setFrameUploadStatus((s) => ({ ...s, [frameId]: "done" }));
+    } catch (err: any) {
+      if (err?.name === "AbortError") return;
       console.error("Erro no processamento da imagem:", err);
-      toast.error("Erro ao salvar imagem");
-    } finally {
+      toast.error("Erro ao enviar imagem. Tente novamente.");
+      setFrameUploadStatus((s) => ({ ...s, [currentFrameId ?? frameId]: "error" }));
       setIsProcessingImage(false);
     }
   };
@@ -1555,14 +1581,21 @@ export default function ClientFabricEditor({
             className="flex h-9 w-full gap-1.5 rounded-lg bg-rose-600 text-sm font-semibold hover:bg-rose-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
             onClick={handleComplete}
             disabled={
-              isProcessingImage || !validationResult || !validationResult.valid
+              isProcessingImage ||
+              !validationResult ||
+              !validationResult.valid ||
+              Object.values(frameUploadStatus).some((s) => s === "uploading") ||
+              Object.values(frameUploadStatus).some((s) => s === "error")
             }
           >
-            {isProcessingImage ? (
+            {isProcessingImage ||
+            Object.values(frameUploadStatus).some((s) => s === "uploading") ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" />
-                ...
+                Enviando...
               </>
+            ) : Object.values(frameUploadStatus).some((s) => s === "error") ? (
+              <>Erro no upload</>
             ) : (
               <>
                 <Check className="h-4 w-4" />

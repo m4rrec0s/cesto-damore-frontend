@@ -1,5 +1,6 @@
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
+import imageCompression from "browser-image-compression";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -15,4 +16,22 @@ export function dataURLtoBlob(dataURL: string) {
     u8arr[n] = bstr.charCodeAt(n);
   }
   return new Blob([u8arr], { type: mime });
+}
+
+export async function compressImage(
+  blob: Blob,
+  maxDimension = 2048,
+  quality = 0.8,
+): Promise<Blob> {
+  const file =
+    blob instanceof File
+      ? blob
+      : new File([blob], "image.png", { type: blob.type });
+
+  return imageCompression(file, {
+    maxWidthOrHeight: maxDimension,
+    fileType: "image/jpeg",
+    initialQuality: quality,
+    useWebWorker: true,
+  });
 }

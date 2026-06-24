@@ -99,9 +99,15 @@ export function ImageCropDialog({
             onCrop={handleCropReady}
             circularCrop={false}
             locked={false}
+            disabled={isBusy}
           >
-            <div className="flex flex-col items-center gap-4">
+            <div className="relative flex flex-col items-center gap-4">
               <ImageCropContent className="max-h-[50dvh] w-auto max-w-full sm:max-h-[60vh]" />
+              {isBusy && (
+                <div className="absolute inset-0 flex items-center justify-center bg-white/60 rounded">
+                  <Loader2 className="h-8 w-8 animate-spin text-rose-500" />
+                </div>
+              )}
             </div>
 
             <DialogFooter className="mt-4 border-t border-neutral-200 pt-4 pb-[max(0.25rem,env(safe-area-inset-bottom))]">

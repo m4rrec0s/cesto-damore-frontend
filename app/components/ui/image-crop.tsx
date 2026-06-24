@@ -22,9 +22,47 @@ import ReactCrop, {
   type PixelCrop,
   type ReactCropProps,
 } from "react-image-crop";
-import { cn } from "@/app/lib/utils";
+import { cn, compressImage } from "@/app/lib/utils";
 
 import "react-image-crop/dist/ReactCrop.css";
+
+export async function getCroppedImage(
+  imageSrc: string,
+  crop: PixelCrop,
+): Promise<Blob> {
+  const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+    const el = new Image();
+    el.onload = () => resolve(el);
+    el.onerror = reject;
+    el.src = imageSrc;
+  });
+
+  const canvas = document.createElement("canvas");
+  const ctx = canvas.getContext("2d")!;
+  const scaleX = img.naturalWidth / img.width;
+  const scaleY = img.naturalHeight / img.height;
+
+  canvas.width = Math.floor(crop.width * scaleX);
+  canvas.height = Math.floor(crop.height * scaleY);
+
+  ctx.drawImage(
+    img,
+    crop.x * scaleX,
+    crop.y * scaleY,
+    crop.width * scaleX,
+    crop.height * scaleY,
+    0,
+    0,
+    canvas.width,
+    canvas.height,
+  );
+
+  const rawBlob = await new Promise<Blob>((resolve, reject) =>
+    canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("toBlob failed"))), "image/png"),
+  );
+
+  return compressImage(rawBlob);
+}
 
 const centerAspectCrop = (
   mediaWidth: number,
