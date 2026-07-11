@@ -1912,8 +1912,8 @@ export function useCart(): CartContextType {
   } => {
     return {
       weekdays: [
-        { start: "08:30", end: "12:00" },
-        { start: "14:00", end: "16:30" },
+        { start: "09:00", end: "13:00" },
+        { start: "14:00", end: "18:00" },
       ],
       weekends: [{ start: "08:00", end: "11:00" }],
     };
@@ -2236,31 +2236,24 @@ export function useCart(): CartContextType {
         const windowStart = createBrazilDate(year, month, day, startH, startM);
         const windowEnd = createBrazilDate(year, month, day, endH, endM);
 
-        const iter = new Date(windowStart);
+        if (windowStart >= earliestTime) {
+          const startLabel = windowStart.toLocaleTimeString("pt-BR", {
+            timeZone: "America/Sao_Paulo",
+            hour: "2-digit",
+            minute: "2-digit",
+          });
+          const endLabel = windowEnd.toLocaleTimeString("pt-BR", {
+            timeZone: "America/Sao_Paulo",
+            hour: "2-digit",
+            minute: "2-digit",
+          });
 
-        while (iter < windowEnd) {
-          const slotStart = new Date(iter);
-          const slotEnd = new Date(iter.getTime() + 60 * 60 * 1000);
+          const blockName = startH < 12 ? "Manhã" : "Tarde";
 
-          if (slotStart >= earliestTime) {
-            const startStr = slotStart.toLocaleTimeString("pt-BR", {
-              timeZone: "America/Sao_Paulo",
-              hour: "2-digit",
-              minute: "2-digit",
-            });
-            const endStr = slotEnd.toLocaleTimeString("pt-BR", {
-              timeZone: "America/Sao_Paulo",
-              hour: "2-digit",
-              minute: "2-digit",
-            });
-
-            slots.push({
-              value: slotStart.toISOString(),
-              label: `${startStr} - ${endStr}`,
-            });
-          }
-
-          iter.setTime(iter.getTime() + 30 * 60 * 1000);
+          slots.push({
+            value: windowStart.toISOString(),
+            label: `${blockName} (${startLabel} - ${endLabel})`,
+          });
         }
       });
 
@@ -2271,12 +2264,7 @@ export function useCart(): CartContextType {
         label: "A combinar (entraremos em contato)",
       });
 
-      const uniqueSlots = slots.filter(
-        (slot, index, self) =>
-          index === self.findIndex((t) => t.label === slot.label),
-      );
-
-      return uniqueSlots;
+      return slots;
     },
     [
       getDeliveryWindows,

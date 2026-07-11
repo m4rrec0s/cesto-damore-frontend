@@ -2276,7 +2276,7 @@ export default function CarrinhoPageContent() {
 
           const isPickup = optionSelected === "pickup";
           const deliveryAddress = isPickup
-            ? "Retirada na Loja - R. Dr. Raif Ramalho, 350 - Jardim Tavares, Campina Grande - PB, 58402-025"
+            ? "Retirada na Loja - Rua José de Alencar, Prata, Campina Grande - PB, 58400-515"
             : `${address}, ${houseNumber} - ${neighborhood}, ${city}/${state} - CEP: ${zipCode}`;
 
           const createdOrder = await createOrder(
@@ -2349,7 +2349,7 @@ export default function CarrinhoPageContent() {
         try {
           const isPickup = optionSelected === "pickup";
           const deliveryAddress = isPickup
-            ? "Retirada na Loja - R. Dr. Raif Ramalho, 350 - Jardim Tavares, Campina Grande - PB, 58402-025"
+            ? "Retirada na Loja - Rua José de Alencar, Prata, Campina Grande - PB, 58400-515"
             : `${address}, ${houseNumber} - ${neighborhood}, ${city}/${state} - CEP: ${zipCode}`;
 
           let finalDateForBackend = finalDeliveryDate;

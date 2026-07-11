@@ -350,8 +350,17 @@ export const StepDelivery = ({
                   <p className="font-medium text-gray-700">
                     Cesto d&apos;Amore - Campina Grande
                   </p>
-                  <p>R. Dr. Raif Ramalho, 350 - Jardim Tavares</p>
-                  <p>Campina Grande - PB, 58402-025</p>
+                  <p>Rua José de Alencar, Prata</p>
+                  <p>Campina Grande - PB, 58400-515</p>
+                  <a
+                    href="https://www.google.com/maps?q=-7.221833,-35.897222"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-rose-500 hover:text-rose-600 text-xs font-medium inline-flex items-center gap-1 mt-1"
+                  >
+                    <MapPin className="h-3 w-3" />
+                    Ver no Maps
+                  </a>
                   <div className="flex items-center gap-1.5 text-[#00a650] font-bold text-[10px] uppercase tracking-wider mt-3">
                     <CheckCircle2 className="h-3.5 w-3.5" />
                     Pronto para retirada após produção
