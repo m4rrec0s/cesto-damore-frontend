@@ -10,6 +10,7 @@ import {
 import { auth } from "@/app/config/firebase";
 import { GoogleAuthProvider, signInWithPopup } from "firebase/auth";
 import { useApi } from "@/app/hooks/use-api";
+import { trackLogin } from "@/lib/gtm";
 
 function decodeToken(token: string): Record<string, unknown> | null {
   try {
@@ -47,7 +48,11 @@ interface AuthContextType {
   user: User | null;
   appToken: string | null;
   isLoading: boolean;
-  login: (userData: User, appToken: string) => void;
+  login: (
+    userData: User,
+    appToken: string,
+    method?: "email" | "google" | string,
+  ) => void;
   logout: () => void;
   loginWithGoogle: () => Promise<void>;
 }
@@ -105,7 +110,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [api]);
 
-  const login = (userData: User, token: string) => {
+  const login = (
+    userData: User,
+    token: string,
+    method: "email" | "google" | string = "email",
+  ) => {
     const tokenData = decodeToken(token);
     if (!tokenData || isTokenExpired(tokenData)) {
       console.error("❌ Token inválido ou expirado");
@@ -114,6 +123,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     setUser(userData);
     setAppToken(token);
+    trackLogin(method);
     if (typeof window !== "undefined") {
       localStorage.setItem("userId", userData.id);
       localStorage.setItem("appToken", token);
@@ -157,7 +167,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       const response = await api.google(idToken, { email, name, imageUrl });
 
-      login(response.user, response.appToken);
+      login(response.user, response.appToken, "google");
     } catch (error) {
       console.error("Erro no login com Google:", error);
       throw error;

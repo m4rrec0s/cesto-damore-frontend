@@ -100,7 +100,7 @@ export function SiteHeader() {
     setIsLoggingIn(true);
     try {
       const response = await api.login({ email, password });
-      login(response.user, response.appToken);
+      login(response.user, response.appToken, "email");
       setIsUserDropdownOpen(false);
       setPassword("");
     } catch (err: unknown) {

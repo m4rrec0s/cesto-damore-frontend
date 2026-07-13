@@ -45,6 +45,7 @@ import { getInternalImageUrl, getPublicAssetUrl } from "@/lib/image-helper";
 import { useLoginPrompt } from "@/app/components/layout/app-wrapper";
 import { normalizeCustomizationData } from "@/app/lib/customization-serialization";
 import { validateCustomization, type LayoutImage } from "@/app/lib/frame-utils";
+import { trackViewItem, trackAddToCart } from "@/lib/gtm";
 import { CustomizationItem } from "./CustomizationItem";
 
 const Model3DViewer = dynamic(
@@ -724,6 +725,21 @@ const ClientProductPage = ({ id }: { id: string }) => {
     getItemsByProduct,
     fetchPublicLayouts,
   ]);
+
+  const viewItemFiredRef = useRef(false);
+  useEffect(() => {
+    if (viewItemFiredRef.current || !product?.id) return;
+    viewItemFiredRef.current = true;
+    const discount = product.discount || 0;
+    const price = product.price
+      ? product.price * (1 - discount / 100)
+      : product.price;
+    trackViewItem({
+      item_id: product.id,
+      item_name: product.name,
+      price,
+    });
+  }, [product?.id, product?.name, product?.price, product?.discount]);
 
   const customizationTotal = useMemo(() => 0, []);
 
@@ -1530,6 +1546,14 @@ const ClientProductPage = ({ id }: { id: string }) => {
         selectedAdditionalIds.length > 0 ? selectedAdditionalIds : undefined,
         undefined,
         cartCustomizations,
+      );
+      trackAddToCart(
+        {
+          item_id: product.id,
+          item_name: product.name,
+          price: unitPriceWithCustomizations,
+        },
+        quantity,
       );
       await animateAddToCartToHeader();
       router.push("/carrinho/rapido");

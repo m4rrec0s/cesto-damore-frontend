@@ -35,7 +35,7 @@ const LoginPopUp = ({ isVisible, onClose, onSuccess }: LoginPopUpProps) => {
     setIsSubmitting(true);
     try {
       const response = await api.login({ email, password });
-      login(response.user, response.appToken);
+      login(response.user, response.appToken, "email");
       onSuccess?.();
     } catch (err: unknown) {
       const message =

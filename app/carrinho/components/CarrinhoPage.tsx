@@ -14,6 +14,7 @@ import { User, Loader2, Tag } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { trackBeginCheckout, trackPurchaseFromOrder } from "@/lib/gtm";
 import {
   isValidPhone,
   normalizePhoneForBackend,
@@ -380,6 +381,38 @@ export default function CarrinhoPageContent() {
   const restoredFormRef = useRef(false);
   const [hasHydratedCheckoutForm, setHasHydratedCheckoutForm] = useState(false);
 
+  const beginCheckoutFiredRef = useRef(false);
+  useEffect(() => {
+    if (beginCheckoutFiredRef.current) return;
+    const items = cart?.items ?? [];
+    if (items.length === 0) return;
+
+    beginCheckoutFiredRef.current = true;
+
+    const gtmItems = items.flatMap((item) => {
+      const base = {
+        item_id: item.product_id,
+        item_name: item.product?.name,
+        price: item.effectivePrice,
+        quantity: item.quantity,
+      };
+      const additionals = (item.additionals ?? []).map((add) => ({
+        item_id: add.id,
+        item_name: add.name,
+        price: add.price,
+        quantity: item.quantity,
+      }));
+      return [base, ...additionals];
+    });
+
+    const value = gtmItems.reduce(
+      (sum, item) => sum + (item.price ?? 0) * (item.quantity ?? 1),
+      0,
+    );
+
+    trackBeginCheckout(value, gtmItems);
+  }, [cart?.items]);
+
   useEffect(() => {
     pollingStartedRef.current = false;
     sseDisconnectCountRef.current = 0;
@@ -528,6 +561,8 @@ export default function CarrinhoPageContent() {
 
       setConfirmedOrder(order);
       setConfirmationState("animating");
+
+      trackPurchaseFromOrder(order);
 
       showPaymentToast(
         "success",

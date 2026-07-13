@@ -578,6 +578,11 @@ export interface Order {
     webhook_attempts?: number | null;
     last_webhook_at?: string | null;
   } | null;
+  coupon?: {
+    code: string;
+    discount_type: string;
+    discount_value: number;
+  } | null;
 }
 
 export interface CustomizationRule {

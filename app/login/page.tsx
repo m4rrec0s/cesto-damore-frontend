@@ -51,7 +51,7 @@ function RegisterForm() {
       await api.register({ name, email, password });
 
       const response = await api.login({ email, password });
-      login(response.user, response.appToken);
+      login(response.user, response.appToken, "email");
       router.push(redirectTo);
     } catch (error: unknown) {
       const errorMessage =

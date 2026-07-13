@@ -1,19 +1,47 @@
 "use client";
 
-import { useEffect } from "react";
+import { Suspense, useEffect, useRef } from "react";
+import { useSearchParams } from "next/navigation";
 import { Button } from "@/app/components/ui/button";
 import { Card } from "@/app/components/ui/card";
 import { CheckCircle, Home } from "lucide-react";
 import Link from "next/link";
 import { useCart } from "@/app/hooks/use-cart";
+import { useApi } from "@/app/hooks/use-api";
+import { trackPurchaseFromOrder } from "@/lib/gtm";
 
-export default function PaymentSuccess() {
+function PaymentSuccessContent() {
   const { clearCart } = useCart();
+  const api = useApi();
+  const searchParams = useSearchParams();
+  const purchaseFiredRef = useRef(false);
 
   useEffect(() => {
-
     clearCart();
-  }, [clearCart]);
+
+    if (purchaseFiredRef.current) return;
+
+    const status = searchParams.get("status");
+    if (status && status !== "approved") return;
+
+    const orderId = searchParams.get("external_reference");
+    if (!orderId) return;
+
+    purchaseFiredRef.current = true;
+
+    const firePurchase = async () => {
+      try {
+        const order = await api.getOrder(orderId);
+        if (!order) return;
+
+        trackPurchaseFromOrder(order);
+      } catch (error) {
+        console.error("Erro ao disparar evento de compra:", error);
+      }
+    };
+
+    void firePurchase();
+  }, [clearCart, api, searchParams]);
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 bg-green-50">
@@ -41,5 +69,19 @@ export default function PaymentSuccess() {
         </div>
       </Card>
     </div>
+  );
+}
+
+export default function PaymentSuccess() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center bg-green-50">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-500" />
+        </div>
+      }
+    >
+      <PaymentSuccessContent />
+    </Suspense>
   );
 }

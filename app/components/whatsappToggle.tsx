@@ -1,12 +1,18 @@
 import Link from "next/link";
+import { trackContact } from "@/lib/gtm";
 
 const WhatsappToggle = () => {
+  const handleClick = () => {
+    trackContact("whatsapp");
+  };
+
   return (
     <Link
       href={
         "https://tintim.link/whatsapp/0e438d1e-b6d6-41f8-ba1e-1a2554fb2089/e1e7a67b-23ad-4d79-b41f-faad52c88ddf"
       }
       target="_blank"
+      onClick={handleClick}
       className="rounded-full bg-green-500 p-3 w-12 h-12 flex items-center justify-center cursor-pointer hover:bg-green-600 overflow-hidden"
     >
       <svg
