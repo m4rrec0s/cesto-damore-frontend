@@ -350,7 +350,7 @@ export const StepDelivery = ({
                   <p className="font-medium text-gray-700">
                     Cesto d&apos;Amore - Campina Grande
                   </p>
-                  <p>Rua José de Alencar, Prata</p>
+                  <p>Rua José de Alencar, 480, Prata</p>
                   <p>Campina Grande - PB, 58400-515</p>
                   <a
                     href="https://www.google.com/maps?q=-7.221833,-35.897222"
