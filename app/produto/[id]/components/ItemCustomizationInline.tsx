@@ -493,6 +493,10 @@ export function ItemCustomizationInline({
             (customizationData[customization.id] as Record<string, unknown>) ||
             {};
           const value = (data[field.id] as string) || "";
+          const maxLength =
+            typeof field.max_length === "number" && field.max_length > 0
+              ? field.max_length
+              : undefined;
 
           return (
             <div key={field.id} className="space-y-2">
@@ -504,11 +508,11 @@ export function ItemCustomizationInline({
                 onChange={(e) =>
                   handleTextChange(customization.id, field.id, e.target.value)
                 }
-                maxLength={field.max_length}
+                maxLength={maxLength}
               />
-              {field.max_length && (
+              {maxLength && (
                 <p className="text-xs text-gray-500 text-right">
-                  {value.length} / {field.max_length} caracteres
+                  {value.length} / {maxLength} caracteres
                 </p>
               )}
             </div>

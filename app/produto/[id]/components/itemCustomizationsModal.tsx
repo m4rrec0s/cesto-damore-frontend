@@ -1294,14 +1294,18 @@ export function ItemCustomizationModal({
             }
 
             const value = data?.[field.id] || "";
+            const maxLength =
+              typeof field.max_length === "number" && field.max_length > 0
+                ? field.max_length
+                : undefined;
 
             return (
               <div key={field.id} className="space-y-1.5">
-                {field.max_length && field.max_length > 20 ? (
+                {maxLength && maxLength > 20 ? (
                   <Textarea
                     id={field.id}
                     placeholder={field.placeholder}
-                    maxLength={field.max_length}
+                    maxLength={maxLength}
                     value={value}
                     onChange={(e) =>
                       handleTextChange(customization.id, field.id, e.target.value)
@@ -1317,7 +1321,7 @@ export function ItemCustomizationModal({
                     id={field.id}
                     type="text"
                     placeholder={field.placeholder}
-                    maxLength={field.max_length}
+                    maxLength={maxLength}
                     value={value}
                     onChange={(e) =>
                       handleTextChange(customization.id, field.id, e.target.value)
@@ -1329,12 +1333,12 @@ export function ItemCustomizationModal({
                     }}
                   />
                 )}
-                {field.max_length && (
+                {maxLength && (
                   <p className="text-right text-[11px] text-neutral-400">
-                    <span className={value.length >= field.max_length ? "text-rose-500 font-medium" : ""}>
+                    <span className={value.length >= maxLength ? "text-rose-500 font-medium" : ""}>
                       {value.length}
                     </span>
-                    /{field.max_length}
+                    /{maxLength}
                   </p>
                 )}
               </div>
