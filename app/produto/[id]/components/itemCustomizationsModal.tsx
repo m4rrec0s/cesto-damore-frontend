@@ -1857,7 +1857,7 @@ export function ItemCustomizationModal({
 
   return renderMode === "inline" ? (
     <>
-      <div className="relative flex h-[min(78vh,760px)] min-h-[440px] w-full flex-col overflow-hidden rounded-xl border border-neutral-200 bg-white">
+      <div className="relative flex h-[min(78dvh,760px)] min-h-[440px] w-full flex-col overflow-hidden rounded-xl border border-neutral-200 bg-white">
         {modalBody}
       </div>
       {fileToCrop && (
@@ -1894,7 +1894,7 @@ export function ItemCustomizationModal({
       }}
     >
       <DialogContent
-        className="flex h-[calc(100dvh-0.75rem)] w-[calc(100vw-0.75rem)] max-w-6xl flex-col overflow-hidden p-0 sm:h-auto sm:max-h-[95vh] sm:w-[calc(100vw-2rem)]"
+        className="flex h-[calc(100dvh-0.75rem)] w-[calc(100vw-0.75rem)] max-w-6xl flex-col overflow-hidden p-0 sm:h-auto sm:max-h-[95dvh] sm:w-[calc(100vw-2rem)]"
         onPointerDownOutside={(e) => {
           if (cropDialogOpen || pendingFiles.length > 0 || isCropping) {
             e.preventDefault();
