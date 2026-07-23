@@ -17,7 +17,7 @@ installApiKeyFetchInterceptor();
 export const metadata: Metadata = {
   title: "Cesto d'Amore | Cestas e Presentes Personalizados em Campina Grande",
   description:
-    "Transforme momentos em memórias inesquecíveis. As mais sofisticadas cestas de café da manhã e presentes personalizados em Campina Grande/PB. Do mimo delicado ao luxo exclusivo, entregamos amor em cada detalhe. Peça agora!",
+    "Cestas de presente autorais, montadas à mão em Campina Grande. Da curadoria à entrega, cada detalhe é pensado para quem recebe. Peça a sua.",
 };
 
 export default function RootLayout({
