@@ -206,8 +206,11 @@ export function CustomizationItem({
           {triggerContent}
         </button>
 
-        <Drawer open={drawerOpen} onOpenChange={handleDrawerClose}>
-          <DrawerContent className="px-3 drawer-content-safe">
+        <Drawer open={drawerOpen} onOpenChange={handleDrawerClose} repositionInputs={false}>
+          <DrawerContent
+            className="px-3 drawer-content-safe"
+            onOpenAutoFocus={(e) => e.preventDefault()}
+          >
             <DrawerHeader className="border-b border-gray-100 px-4 py-3 flex-shrink-0">
               <div className="flex items-center justify-between">
                 <div>
@@ -231,7 +234,7 @@ export function CustomizationItem({
                 </DrawerClose>
               </div>
             </DrawerHeader>
-            <div className="overflow-y-auto max-h-[75dvh]">
+            <div className="overflow-y-auto max-h-[75svh]">
               {isMobile && children}
             </div>
           </DrawerContent>
