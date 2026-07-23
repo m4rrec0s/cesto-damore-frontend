@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import { cn } from "@/app/lib/utils";
 import { Button } from "@/app/components/ui/button";
 import {
@@ -68,32 +68,6 @@ export function CustomizationItem({
       setDrawerOpen(false);
     }
   }, [isOpen]);
-
-  const drawerContentRef = useRef<HTMLDivElement>(null);
-  const [keyboardPadding, setKeyboardPadding] = useState(0);
-
-  // VisualViewport: detect keyboard open/close on iOS
-  useEffect(() => {
-    if (!drawerOpen) {
-      setKeyboardPadding(0);
-      return;
-    }
-
-    const handleViewport = () => {
-      const vv = window.visualViewport;
-      if (!vv) return;
-      const layoutHeight = window.innerHeight;
-      const kb = Math.max(0, layoutHeight - vv.height);
-      setKeyboardPadding(kb > 80 ? kb : 0);
-    };
-
-    window.visualViewport?.addEventListener('resize', handleViewport);
-    handleViewport();
-    return () => {
-      window.visualViewport?.removeEventListener('resize', handleViewport);
-      setKeyboardPadding(0);
-    };
-  }, [drawerOpen]);
 
   const handleMobileOpen = () => {
     if (!onAuthCheck()) return;
@@ -233,11 +207,7 @@ export function CustomizationItem({
         </button>
 
         <Drawer open={drawerOpen} onOpenChange={handleDrawerClose}>
-          <DrawerContent
-            ref={drawerContentRef}
-            className="max-h-[92dvh] flex flex-col px-3 drawer-content-safe"
-            style={{ paddingBottom: keyboardPadding > 0 ? `${keyboardPadding}px` : undefined }}
-          >
+          <DrawerContent className="px-3 drawer-content-safe">
             <DrawerHeader className="border-b border-gray-100 px-4 py-3 flex-shrink-0">
               <div className="flex items-center justify-between">
                 <div>
@@ -261,7 +231,7 @@ export function CustomizationItem({
                 </DrawerClose>
               </div>
             </DrawerHeader>
-            <div className="flex-1 overflow-y-auto">
+            <div className="overflow-y-auto max-h-[75dvh]">
               {isMobile && children}
             </div>
           </DrawerContent>
