@@ -119,6 +119,8 @@ const loadCartFromSession = (): CartState | null => {
         return null;
     }
 };
+
+const toCartProductSnapshot = (product: Product): Product => {
   const createdAt = product.created_at || new Date().toISOString();
   const updatedAt = product.updated_at || createdAt;
 
