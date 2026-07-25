@@ -2503,6 +2503,26 @@ class ApiService {
     return response.data;
   };
 
+
+  getPublicFeedInitial = async (
+    configId?: string,
+  ): Promise<PublicFeedResponse> => {
+    const cacheKey = `publicFeedInitial_${configId || "default"}`;
+
+    if (ApiService.cache[cacheKey]) {
+      return ApiService.cache[cacheKey] as PublicFeedResponse;
+    }
+
+    const paramsArr: string[] = [];
+    if (configId) paramsArr.push(`config_id=${configId}`);
+    const queryString = paramsArr.length ? `?${paramsArr.join("&")}` : "";
+    const response = await this.client.get(`/feed/initial${queryString}`);
+
+    ApiService.cache[cacheKey] = response.data;
+
+    return response.data;
+  };
+
   getStockReport = async (threshold: number = 5) => {
     const res = await this.client.get(`/reports/stock?threshold=${threshold}`);
     return res.data;

@@ -112,13 +112,25 @@ export default function Home() {
       try {
         let feed: PublicFeedResponse | null = null;
         try {
-          feed = await api.getPublicFeed(undefined, 1, perPage);
-          setFeedData(feed);
-          setSections(feed?.sections || []);
-          setPagination(feed?.pagination || null);
+          // Primeiro carregamento: usa versão otimizada para inicial load
+          const initialFeed = await api.getPublicFeedInitial();
+          setFeedData(initialFeed);
+          setSections(initialFeed?.sections || []);
+          setPagination(initialFeed?.pagination || null);
           setPage(1);
           setUseFallback(false);
           setInitialLoad(false);
+
+          // Em paralelo, carrega o feed completo se houver mais seções
+          if (
+            initialFeed?.pagination?.totalSections &&
+            initialFeed.pagination.totalSections > 1
+          ) {
+            // Dispara carregamento de forma não-bloqueante
+            api.getPublicFeed(undefined, 2, perPage).catch((err) => {
+              console.warn("Erro ao pré-carregar próximas seções:", err);
+            });
+          }
         } catch (feedError) {
           console.error("❌ Erro ao carregar feed:", feedError);
           setUseFallback(true);

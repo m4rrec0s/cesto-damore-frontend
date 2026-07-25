@@ -889,7 +889,6 @@ export function useCart(): CartContextType {
     calculateTotals,
     setOrderMetadata,
     transformOrderToCartItems,
-    cart.items,
   ]);
 
   const cartItemsToOrderItems = useCallback((items: CartItem[]) => {
@@ -1368,7 +1367,6 @@ export function useCart(): CartContextType {
     api,
     calculateTotals,
     syncCartToBackend,
-    cart,
     setOrderMetadata,
     cart.items.length,
   ]);
