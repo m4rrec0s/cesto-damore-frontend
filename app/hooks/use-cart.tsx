@@ -85,7 +85,40 @@ export interface AvailableDate {
   slots: TimeSlot[];
 }
 
-const toCartProductSnapshot = (product: Product): Product => {
+const CART_SESSION_KEY = "cesto_cart_session_state";
+const CART_SESSION_TTL = 60000;
+
+const saveCartToSession = (cartState: CartState): void => {
+    if (typeof window === "undefined") return;
+    try {
+        sessionStorage.setItem(
+            CART_SESSION_KEY,
+            JSON.stringify({
+                items: cartState.items,
+                total: cartState.total,
+                itemCount: cartState.itemCount,
+                timestamp: Date.now(),
+            }),
+        );
+    } catch {}
+};
+
+const loadCartFromSession = (): CartState | null => {
+    if (typeof window === "undefined") return null;
+    try {
+        const raw = sessionStorage.getItem(CART_SESSION_KEY);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        if (!parsed || !Array.isArray(parsed.items)) return null;
+        if (Date.now() - parsed.timestamp > CART_SESSION_TTL) {
+            sessionStorage.removeItem(CART_SESSION_KEY);
+            return null;
+        }
+        return { items: parsed.items, total: parsed.total ?? 0, itemCount: parsed.itemCount ?? 0 };
+    } catch {
+        return null;
+    }
+};
   const createdAt = product.created_at || new Date().toISOString();
   const updatedAt = product.updated_at || createdAt;
 
@@ -849,37 +882,42 @@ export function useCart(): CartContextType {
       };
 
       try {
-        const pendingOrder = await api.getPendingOrder(user.id);
-        if (
-          pendingOrder &&
-          pendingOrder.items &&
-          pendingOrder.items.length > 0
-        ) {
-          const serverCartItems = await transformOrderToCartItems(pendingOrder);
+         const sessionCart = loadCartFromSession();
 
-          if (
-            pendingOrder.send_anonymously !== undefined ||
-            pendingOrder.complement
-          ) {
-            _setOrderMetadata({
-              send_anonymously: pendingOrder.send_anonymously || false,
-              complement: pendingOrder.complement || undefined,
-            });
-          }
+         const pendingOrder = await api.getPendingOrder(user.id);
 
-          const updatedCart = calculateTotals(serverCartItems);
-          setCart(updatedCart);
-          setPendingOrderId(pendingOrder.id);
+         if (pendingOrder && pendingOrder.items && pendingOrder.items.length > 0) {
+           const serverCartItems = await transformOrderToCartItems(pendingOrder);
 
-          markInitialized();
-        } else {
-          markInitialized();
-        }
-      } catch (error) {
-        logger.debug("Erro ao carregar pedido pendente:", error);
+           if (
+             pendingOrder.send_anonymously !== undefined ||
+             pendingOrder.complement
+           ) {
+             _setOrderMetadata({
+               send_anonymously: pendingOrder.send_anonymously || false,
+               complement: pendingOrder.complement || undefined,
+             });
+           }
 
-        markInitialized();
-      }
+           const serverCart = calculateTotals(serverCartItems);
+           setCart(sessionCart ?? serverCart);
+           setPendingOrderId(pendingOrder.id);
+
+           markInitialized();
+         } else {
+           if (sessionCart) {
+             setCart(sessionCart);
+             setPendingOrderId(null);
+           }
+           markInitialized();
+         }
+       } catch (error) {
+         logger.debug("Erro ao carregar pedido pendente:", error);
+         if (sessionCart) {
+           setCart(sessionCart);
+         }
+         markInitialized();
+       }
     };
 
     loadPendingOrder();
@@ -1485,6 +1523,7 @@ export function useCart(): CartContextType {
           }
 
           const updatedCart = calculateTotals(newItems);
+          saveCartToSession(updatedCart);
           debouncedSync(updatedCart);
           return updatedCart;
         });
@@ -1538,6 +1577,7 @@ export function useCart(): CartContextType {
             ),
         );
         const updatedCart = calculateTotals(newItems);
+        saveCartToSession(updatedCart);
 
         void (async () => {
           try {
@@ -1629,12 +1669,13 @@ export function useCart(): CartContextType {
           }
           return item;
         });
-        const updatedCart = calculateTotals(newItems);
-        debouncedSync(updatedCart);
-        return updatedCart;
-      });
-    },
-    [calculateTotals, removeFromCart, debouncedSync],
+         const updatedCart = calculateTotals(newItems);
+         saveCartToSession(updatedCart);
+         debouncedSync(updatedCart);
+         return updatedCart;
+       });
+     },
+     [calculateTotals, removeFromCart, debouncedSync],
   );
 
   /**
@@ -1726,13 +1767,14 @@ export function useCart(): CartContextType {
     setCart(emptyCart);
 
     if (typeof window !== "undefined") {
-      try {
-        localStorage.removeItem("cart");
-      } catch (error) {
-        logger.debug("Erro ao limpar carrinho do localStorage:", error);
-      }
-    }
-    debouncedSync(emptyCart);
+       try {
+         localStorage.removeItem("cart");
+         sessionStorage.removeItem(CART_SESSION_KEY);
+       } catch (error) {
+         logger.debug("Erro ao limpar carrinho do localStorage:", error);
+       }
+     }
+     debouncedSync(emptyCart);
   }, [debouncedSync]);
 
   const createOrder = useCallback(
