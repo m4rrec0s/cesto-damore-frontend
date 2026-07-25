@@ -1915,7 +1915,7 @@ export function useCart(): CartContextType {
         { start: "09:00", end: "13:00" },
         { start: "14:00", end: "18:00" },
       ],
-      weekends: [{ start: "08:00", end: "11:00" }],
+      weekends: [{ start: "09:00", end: "13:00" }],
     };
   }, []);
 
