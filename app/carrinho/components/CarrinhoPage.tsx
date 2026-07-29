@@ -186,6 +186,7 @@ export default function CarrinhoPageContent() {
     updateOrderMetadata,
     getPaymentStatus,
     getStockAvailability,
+    getDeliveryHolidays,
   } = useApi();
   const {
     cart,
@@ -217,11 +218,20 @@ export default function CarrinhoPageContent() {
   const [optionSelected, setOptionSelected] = useState<"delivery" | "pickup">(
     "delivery",
   );
+  const [deliveryHolidays, setDeliveryHolidays] = useState<
+    { start_date: string; end_date: string }[]
+  >([]);
   const [couponModalOpen, setCouponModalOpen] = useState(false);
 
   useEffect(() => {
     setCurrentStep(getStepFromPath(pathname));
   }, [pathname]);
+
+  useEffect(() => {
+    getDeliveryHolidays().then(setDeliveryHolidays).catch((error) => {
+      logger.error("Error loading delivery holidays:", error);
+    });
+  }, [getDeliveryHolidays]);
 
   // Validate stock availability when entering cart
   const [insufficientStockItems, setInsufficientStockItems] = useState<
@@ -299,9 +309,22 @@ export default function CarrinhoPageContent() {
         return true;
       }
 
+      const isHoliday = deliveryHolidays.some((holiday) => {
+        const selectedDateKey = [
+          normalizedDate.getFullYear(),
+          String(normalizedDate.getMonth() + 1).padStart(2, "0"),
+          String(normalizedDate.getDate()).padStart(2, "0"),
+        ].join("-");
+        return (
+          selectedDateKey >= holiday.start_date.slice(0, 10) &&
+          selectedDateKey <= holiday.end_date.slice(0, 10)
+        );
+      });
+      if (isHoliday) return true;
+
       return isDateDisabledInCalendar(date);
     },
-    [getDeliveryDateBounds, isDateDisabledInCalendar],
+    [deliveryHolidays, getDeliveryDateBounds, isDateDisabledInCalendar],
   );
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
   const [selectedTime, setSelectedTime] = useState("");

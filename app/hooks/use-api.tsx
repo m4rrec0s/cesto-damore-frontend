@@ -2691,6 +2691,13 @@ class ApiService {
     );
     return response.data;
   };
+
+  getDeliveryHolidays = async (): Promise<
+    { start_date: string; end_date: string }[]
+  > => {
+    const response = await this.client.get("/delivery/holidays");
+    return response.data;
+  };
 }
 
 export function useApi() {
