@@ -9,7 +9,10 @@ export interface SpecialDeliveryDay {
   end?: string;
 }
 
-export const SPECIAL_DELIVERY_DAYS_ENV = "NEXT_PUBLIC_SPECIAL_DELIVERY_DAYS";
+export interface SpecialDeliveryEntry {
+  day: string;
+  windows: DeliveryWindow[];
+}
 
 export const DEFAULT_WEEKDAY_WINDOWS: DeliveryWindow[] = [
   { start: "09:00", end: "13:00" },
@@ -36,31 +39,22 @@ export function parseSpecialDeliveryDays(raw?: string): SpecialDeliveryDay[] {
   }
 }
 
-export function isSpecialDeliveryDay(date?: Date | null): boolean {
-  if (!date) return false;
-  const specials = parseSpecialDeliveryDays(
-    process.env[SPECIAL_DELIVERY_DAYS_ENV],
-  );
-  if (!specials.length) return false;
-  const dateKey = getDateKey(date);
-  return specials.some((s) => normalizeDay(s.day) === dateKey);
+export function normalizeDay(day: string): string {
+  const trimmed = day.trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+  const match = trimmed.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (match) return `${match[3]}-${match[2]}-${match[1]}`;
+  return trimmed;
 }
 
-export function getSpecialDeliveryWindows(
-  date?: Date | null,
-): DeliveryWindow[] | null {
-  if (!date) return null;
-  const specials = parseSpecialDeliveryDays(
-    process.env[SPECIAL_DELIVERY_DAYS_ENV],
-  );
-  if (!specials.length) return null;
-  const dateKey = getDateKey(date);
-  const match = specials.find((s) => normalizeDay(s.day) === dateKey);
-  if (!match) return null;
+export function resolveSpecialWindows(
+  config: SpecialDeliveryDay,
+): DeliveryWindow[] {
+  if (config.start && config.end) {
+    return [{ start: config.start, end: config.end }];
+  }
 
-  if (match.start && match.end) return [{ start: match.start, end: match.end }];
-
-  switch (match.time) {
+  switch (config.time) {
     case "morning":
       return [{ start: "09:00", end: "13:00" }];
     case "afternoon":
@@ -69,6 +63,31 @@ export function getSpecialDeliveryWindows(
     default:
       return DEFAULT_WEEKDAY_WINDOWS;
   }
+}
+
+export function buildSpecialEntries(
+  specials: SpecialDeliveryDay[],
+): SpecialDeliveryEntry[] {
+  return specials.map((s) => ({
+    day: normalizeDay(s.day),
+    windows: resolveSpecialWindows(s),
+  }));
+}
+
+export function findSpecialWindows(
+  date: Date,
+  entries: SpecialDeliveryEntry[],
+): DeliveryWindow[] | null {
+  const dateKey = getDateKey(date);
+  const match = entries.find((e) => e.day === dateKey);
+  return match ? match.windows : null;
+}
+
+export function isSpecialDeliveryDay(
+  date: Date,
+  entries: SpecialDeliveryEntry[],
+): boolean {
+  return findSpecialWindows(date, entries) !== null;
 }
 
 function getDateKey(date: Date): string {
@@ -84,12 +103,4 @@ function getDateKey(date: Date): string {
   }
   const [month, day, year] = parts[0].split("/").map(Number);
   return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-}
-
-function normalizeDay(day: string): string {
-  const trimmed = day.trim();
-  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
-  const match = trimmed.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
-  if (match) return `${match[3]}-${match[2]}-${match[1]}`;
-  return trimmed;
 }

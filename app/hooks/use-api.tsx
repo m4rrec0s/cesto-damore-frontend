@@ -2698,6 +2698,13 @@ class ApiService {
     const response = await this.client.get("/delivery/holidays");
     return response.data;
   };
+
+  getSpecialDeliveryDays = async (): Promise<
+    { day: string; windows: { start: string; end: string }[] }[]
+  > => {
+    const response = await this.client.get("/delivery/special-days");
+    return response.data;
+  };
 }
 
 export function useApi() {

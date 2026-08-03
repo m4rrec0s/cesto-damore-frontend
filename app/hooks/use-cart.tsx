@@ -13,7 +13,8 @@ import {
 import { useAuth } from "./use-auth";
 import type { CustomizationValue, PhotoUploadData } from "./use-customization";
 import {
-  getSpecialDeliveryWindows,
+  buildSpecialEntries,
+  findSpecialWindows,
   isSpecialDeliveryDay,
 } from "../utils/specialDeliveryDays";
 
@@ -514,6 +515,9 @@ export function useCart(): CartContextType {
 
   const [pendingOrderId, setPendingOrderId] = useState<string | null>(null);
   const [isSyncReady, setIsSyncReady] = useState<boolean>(false);
+  const [specialDeliveryEntries, setSpecialDeliveryEntries] = useState<
+    { day: string; windows: DeliveryWindow[] }[]
+  >([]);
 
   const clearPendingOrderId = useCallback(() => {
     setPendingOrderId(null);
@@ -606,6 +610,13 @@ export function useCart(): CartContextType {
     pendingOrderId,
     user,
   ]);
+
+  useEffect(() => {
+    api
+      .getSpecialDeliveryDays()
+      .then(setSpecialDeliveryEntries)
+      .catch(() => {});
+  }, [api]);
 
   const transformOrderToCartItems = useCallback(
     async (serverOrder: Order): Promise<CartItem[]> => {
@@ -1972,14 +1983,14 @@ export function useCart(): CartContextType {
 
   const getRelevantWindows = useCallback(
     (date: Date): DeliveryWindow[] => {
-      const specialWindows = getSpecialDeliveryWindows(date);
+      const specialWindows = findSpecialWindows(date, specialDeliveryEntries);
       if (specialWindows) return specialWindows;
 
       const isWknd = isWeekend(date);
       const windows = getDeliveryWindows();
       return isWknd ? windows.weekends : windows.weekdays;
     },
-    [getDeliveryWindows, isWeekend],
+    [getDeliveryWindows, isWeekend, specialDeliveryEntries],
   );
 
   const hasCustomItems = useCallback((): boolean => {
@@ -2266,14 +2277,13 @@ export function useCart(): CartContextType {
 
       const checkDate = createBrazilDate(year, month, day, 12, 0);
 
-      const specialWindows = getSpecialDeliveryWindows(checkDate);
-      const isSpecial = isSpecialDeliveryDay(checkDate);
+      const isSpecial = isSpecialDeliveryDay(checkDate, specialDeliveryEntries);
 
       if (checkDate.getDay() === 0 && !isSpecial) {
         return [];
       }
 
-      const relevantWindows = specialWindows ?? getRelevantWindows(checkDate);
+      const relevantWindows = findSpecialWindows(checkDate, specialDeliveryEntries) ?? getRelevantWindows(checkDate);
 
       const slots: TimeSlot[] = [];
       const earliestTime = getEarliestDeliveryDateTime();
@@ -2320,6 +2330,7 @@ export function useCart(): CartContextType {
       getEarliestDeliveryDateTime,
       createBrazilDate,
       getBrazilTimeComponents,
+      specialDeliveryEntries,
     ],
   );
 
