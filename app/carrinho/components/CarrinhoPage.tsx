@@ -6,6 +6,7 @@ import { useCartContext } from "@/app/hooks/cart-context";
 import { motion, AnimatePresence } from "framer-motion";
 import { type Order, useApi } from "@/app/hooks/use-api";
 import logger from "@/app/utils/logger";
+import { isSpecialDeliveryDay } from "@/app/utils/specialDeliveryDays";
 import { usePaymentManager } from "@/app/hooks/use-payment-manager";
 import type { CartCustomization } from "@/app/hooks/use-cart";
 import { Card } from "@/app/components/ui/card";
@@ -320,7 +321,7 @@ export default function CarrinhoPageContent() {
           selectedDateKey <= holiday.end_date.slice(0, 10)
         );
       });
-      if (isHoliday) return true;
+      if (isHoliday && !isSpecialDeliveryDay(normalizedDate)) return true;
 
       return isDateDisabledInCalendar(date);
     },

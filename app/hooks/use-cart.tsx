@@ -12,6 +12,10 @@ import {
 } from "./use-api";
 import { useAuth } from "./use-auth";
 import type { CustomizationValue, PhotoUploadData } from "./use-customization";
+import {
+  getSpecialDeliveryWindows,
+  isSpecialDeliveryDay,
+} from "../utils/specialDeliveryDays";
 
 export interface CartCustomization extends CustomizationValue {
   id?: string;
@@ -1966,6 +1970,18 @@ export function useCart(): CartContextType {
     return day === 0 || day === 6;
   }, []);
 
+  const getRelevantWindows = useCallback(
+    (date: Date): DeliveryWindow[] => {
+      const specialWindows = getSpecialDeliveryWindows(date);
+      if (specialWindows) return specialWindows;
+
+      const isWknd = isWeekend(date);
+      const windows = getDeliveryWindows();
+      return isWknd ? windows.weekends : windows.weekdays;
+    },
+    [getDeliveryWindows, isWeekend],
+  );
+
   const hasCustomItems = useCallback((): boolean => {
     return cart.items.some((item) => {
       const isCustomProduct = /quadro|polaroid/i.test(item.product.name);
@@ -2091,9 +2107,7 @@ export function useCart(): CartContextType {
       const { hour, minute } = getBrazilTimeComponents(date);
       const currentMinutes = hour * 60 + minute;
 
-      const isWknd = isWeekend(date);
-      const windows = getDeliveryWindows();
-      const relevantWindows = isWknd ? windows.weekends : windows.weekdays;
+      const relevantWindows = getRelevantWindows(date);
 
       return relevantWindows.some((window) => {
         const [startH, startM] = window.start.split(":").map(Number);
@@ -2105,7 +2119,7 @@ export function useCart(): CartContextType {
         return currentMinutes >= startTotal && currentMinutes <= endTotal;
       });
     },
-    [getDeliveryWindows, isWeekend, getBrazilTimeComponents],
+    [getRelevantWindows, getBrazilTimeComponents],
   );
 
   /**
@@ -2117,9 +2131,7 @@ export function useCart(): CartContextType {
       const { hour, minute } = getBrazilTimeComponents(date);
       const currentMinutes = hour * 60 + minute;
 
-      const isWknd = isWeekend(date);
-      const windows = getDeliveryWindows();
-      const relevantWindows = isWknd ? windows.weekends : windows.weekdays;
+      const relevantWindows = getRelevantWindows(date);
 
       for (const window of relevantWindows) {
         const [startH, startM] = window.start.split(":").map(Number);
@@ -2134,7 +2146,7 @@ export function useCart(): CartContextType {
       }
       return 0;
     },
-    [getBrazilTimeComponents, isWeekend, getDeliveryWindows],
+    [getBrazilTimeComponents, getRelevantWindows],
   );
 
   /**
@@ -2152,9 +2164,7 @@ export function useCart(): CartContextType {
         const { year, month, day, hour, minute } =
           getBrazilTimeComponents(candidate);
         const currentMinutes = hour * 60 + minute;
-        const isWknd = isWeekend(candidate);
-        const windows = getDeliveryWindows();
-        const relevantWindows = isWknd ? windows.weekends : windows.weekdays;
+        const relevantWindows = getRelevantWindows(candidate);
 
         for (const window of relevantWindows) {
           const [startH, startM] = window.start.split(":").map(Number);
@@ -2167,10 +2177,7 @@ export function useCart(): CartContextType {
 
         const nextDay = createBrazilDate(year, month, day + 1, 0, 0);
         const nextDayComponents = getBrazilTimeComponents(nextDay);
-        const nextIsWknd = isWeekend(nextDay);
-        const nextWindows = nextIsWknd
-          ? getDeliveryWindows().weekends
-          : getDeliveryWindows().weekdays;
+        const nextWindows = getRelevantWindows(nextDay);
 
         if (nextWindows.length > 0) {
           const [startH, startM] = nextWindows[0].start.split(":").map(Number);
@@ -2189,7 +2196,7 @@ export function useCart(): CartContextType {
       const { year, month, day } = getBrazilTimeComponents(candidate);
       return createBrazilDate(year, month, day + 1, 8, 0);
     },
-    [getBrazilTimeComponents, isWeekend, getDeliveryWindows, createBrazilDate],
+    [getBrazilTimeComponents, getRelevantWindows, createBrazilDate],
   );
 
   const getEarliestDeliveryDateTime = useCallback(() => {
@@ -2259,14 +2266,14 @@ export function useCart(): CartContextType {
 
       const checkDate = createBrazilDate(year, month, day, 12, 0);
 
-      if (checkDate.getDay() === 0) {
+      const specialWindows = getSpecialDeliveryWindows(checkDate);
+      const isSpecial = isSpecialDeliveryDay(checkDate);
+
+      if (checkDate.getDay() === 0 && !isSpecial) {
         return [];
       }
 
-      const isWknd = isWeekend(checkDate);
-
-      const windows = getDeliveryWindows();
-      const relevantWindows = isWknd ? windows.weekends : windows.weekdays;
+      const relevantWindows = specialWindows ?? getRelevantWindows(checkDate);
 
       const slots: TimeSlot[] = [];
       const earliestTime = getEarliestDeliveryDateTime();
@@ -2309,8 +2316,7 @@ export function useCart(): CartContextType {
       return slots;
     },
     [
-      getDeliveryWindows,
-      isWeekend,
+      getRelevantWindows,
       getEarliestDeliveryDateTime,
       createBrazilDate,
       getBrazilTimeComponents,
