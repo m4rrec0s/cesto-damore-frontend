@@ -27,11 +27,6 @@ export default function CarrinhoRapidoPage() {
   const cartTotal = cart?.total || 0;
 
   const handleOpenCompleteCart = () => {
-    if (!user) {
-      router.push(`/login?redirect=${encodeURIComponent("/carrinho")}`);
-      return;
-    }
-
     router.push("/carrinho");
   };
 
