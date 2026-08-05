@@ -2713,7 +2713,6 @@ export default function CarrinhoPageContent() {
                   )}
 
                   {currentStep === 2 && (
-                    <>
                     <StepDelivery
                       key="step2"
                       optionSelected={optionSelected}
@@ -2758,36 +2757,12 @@ export default function CarrinhoPageContent() {
                       formatDocument={formatDocument}
                       isValidPhone={isValidPhone}
                       formatPhoneNumber={formatPhoneNumber}
+                      customerName={customerName}
+                      setCustomerName={setCustomerName}
+                      customerEmail={customerEmail}
+                      setCustomerEmail={setCustomerEmail}
+                      user={user}
                     />
-
-                      <div className="bg-white rounded-lg border border-gray-100 p-6 space-y-4">
-                        <h3 className="text-lg font-bold text-gray-900">Seus dados</h3>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Nome completo</label>
-                            <input
-                              type="text"
-                              value={customerName}
-                              onChange={(e) => setCustomerName(e.target.value)}
-                              readOnly={!!user}
-                              placeholder="Seu nome"
-                              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent disabled:bg-gray-50 disabled:text-gray-500"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">E-mail</label>
-                            <input
-                              type="email"
-                              value={customerEmail}
-                              onChange={(e) => setCustomerEmail(e.target.value)}
-                              readOnly={!!user}
-                              placeholder="seu@email.com"
-                              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent disabled:bg-gray-50 disabled:text-gray-500"
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    </>
                   )}
 
                   {currentStep === 3 && (
