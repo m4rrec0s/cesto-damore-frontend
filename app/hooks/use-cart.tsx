@@ -432,6 +432,17 @@ interface CartContextType {
       deliveryCity?: string;
       deliveryState?: string;
       recipientPhone?: string;
+      sendAnonymously?: boolean;
+      complement?: string;
+      deliveryMethod?: "delivery" | "pickup";
+      discount?: number;
+      customerName?: string;
+      customerEmail?: string;
+      customerPhone?: string;
+      customerAddress?: string;
+      customerCity?: string;
+      customerState?: string;
+      customerZipCode?: string;
     },
   ) => Promise<unknown>;
   createOrderWithTransparentCheckout: (
@@ -1810,6 +1821,13 @@ export function useCart(): CartContextType {
         complement?: string;
         deliveryMethod?: "delivery" | "pickup";
         discount?: number;
+        customerName?: string;
+        customerEmail?: string;
+        customerPhone?: string;
+        customerAddress?: string;
+        customerCity?: string;
+        customerState?: string;
+        customerZipCode?: string;
       },
     ) => {
       if (cart.items.length === 0) {
@@ -1871,6 +1889,13 @@ export function useCart(): CartContextType {
         send_anonymously: options?.sendAnonymously,
         complement: options?.complement,
         delivery_method: options?.deliveryMethod || "delivery",
+        ...(options?.customerName ? { customer_name: options.customerName } : {}),
+        ...(options?.customerEmail ? { customer_email: options.customerEmail } : {}),
+        ...(options?.customerPhone ? { customer_phone: options.customerPhone } : {}),
+        ...(options?.customerAddress ? { customer_address: options.customerAddress } : {}),
+        ...(options?.customerCity ? { customer_city: options.customerCity } : {}),
+        ...(options?.customerState ? { customer_state: options.customerState } : {}),
+        ...(options?.customerZipCode ? { customer_zip_code: options.customerZipCode } : {}),
       };
 
       const order = await api.createOrder(payload);

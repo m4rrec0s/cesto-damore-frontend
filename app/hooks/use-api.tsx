@@ -1371,7 +1371,7 @@ class ApiService {
       5000,
     );
   createOrder = async (payload: {
-    user_id: string;
+    user_id?: string;
     items: OrderItemInput[];
     delivery_address?: string | null;
     delivery_city?: string;
@@ -1384,6 +1384,13 @@ class ApiService {
     send_anonymously?: boolean;
     complement?: string;
     delivery_method?: "delivery" | "pickup";
+    customer_name?: string;
+    customer_email?: string;
+    customer_phone?: string;
+    customer_address?: string;
+    customer_city?: string;
+    customer_state?: string;
+    customer_zip_code?: string;
   }) => {
     try {
       const sanitized = this.stripBase64FromOrderPayload(
@@ -1460,6 +1467,13 @@ class ApiService {
       delivery_method?: "delivery" | "pickup";
       payment_method?: "pix" | "card";
       discount?: number;
+      customer_name?: string;
+      customer_email?: string;
+      customer_phone?: string;
+      customer_address?: string;
+      customer_city?: string;
+      customer_state?: string;
+      customer_zip_code?: string;
     },
   ) => {
     const payload = { ...metadata } as {

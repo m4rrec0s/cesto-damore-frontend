@@ -57,6 +57,13 @@ interface CartContextType {
       complement?: string;
       deliveryMethod?: "delivery" | "pickup";
       discount?: number;
+      customerName?: string;
+      customerEmail?: string;
+      customerPhone?: string;
+      customerAddress?: string;
+      customerCity?: string;
+      customerState?: string;
+      customerZipCode?: string;
     },
   ) => Promise<unknown>;
   createOrderWithTransparentCheckout: (

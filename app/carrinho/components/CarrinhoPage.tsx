@@ -10,8 +10,7 @@ import { usePaymentManager } from "@/app/hooks/use-payment-manager";
 import type { CartCustomization } from "@/app/hooks/use-cart";
 import { Card } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
-import { User, Loader2, Tag } from "lucide-react";
-import Link from "next/link";
+import { Loader2, Tag } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { trackBeginCheckout, trackPurchaseFromOrder } from "@/lib/gtm";
@@ -110,6 +109,8 @@ type PersistedCheckoutForm = {
   sendAnonymously?: boolean;
   isSelfRecipient?: boolean;
   userDocument?: string;
+  customerName?: string;
+  customerEmail?: string;
   selectedDate?: string | null;
   selectedTime?: string;
   paymentMethod?: "pix" | "card";
@@ -345,6 +346,8 @@ export default function CarrinhoPageContent() {
   const [isLoadingCep, setIsLoadingCep] = useState(false);
   const [cepError, setCepError] = useState<string | null>(null);
   const [userDocument, setUserDocument] = useState<string>("");
+  const [customerName, setCustomerName] = useState("");
+  const [customerEmail, setCustomerEmail] = useState("");
   const [confirmationState, setConfirmationState] = useState<
     "none" | "animating" | "confirmed"
   >("none");
@@ -477,6 +480,8 @@ export default function CarrinhoPageContent() {
         setIsSelfRecipient(false);
       }
       if (persisted.userDocument) setUserDocument(persisted.userDocument);
+      if (persisted.customerName) setCustomerName(persisted.customerName);
+      if (persisted.customerEmail) setCustomerEmail(persisted.customerEmail);
       if (persisted.selectedDate) {
         const parsedDate = new Date(persisted.selectedDate);
         if (!Number.isNaN(parsedDate.getTime())) {
@@ -509,6 +514,8 @@ export default function CarrinhoPageContent() {
       sendAnonymously,
       isSelfRecipient,
       userDocument,
+      customerName,
+      customerEmail,
       selectedDate: selectedDate ? selectedDate.toISOString() : null,
       selectedTime,
       paymentMethod,
@@ -529,6 +536,8 @@ export default function CarrinhoPageContent() {
     sendAnonymously,
     isSelfRecipient,
     userDocument,
+    customerName,
+    customerEmail,
     selectedDate,
     selectedTime,
     paymentMethod,
@@ -874,6 +883,14 @@ export default function CarrinhoPageContent() {
 
   useEffect(() => {
     if (user) {
+      if (user.name && !customerName) {
+        setCustomerName(user.name);
+      }
+
+      if (user.email && !customerEmail) {
+        setCustomerEmail(user.email);
+      }
+
       if (user.zip_code && !zipCode) {
         setZipCode(user.zip_code.replace(/\D/g, ""));
       }
@@ -940,6 +957,30 @@ export default function CarrinhoPageContent() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
+
+  const customerMetadataTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (!currentOrderId) return;
+    if (customerMetadataTimeoutRef.current) {
+      clearTimeout(customerMetadataTimeoutRef.current);
+    }
+    customerMetadataTimeoutRef.current = setTimeout(() => {
+      updateOrderMetadata(currentOrderId, {
+        ...(customerName ? { customer_name: customerName } : {}),
+        ...(customerEmail ? { customer_email: customerEmail } : {}),
+        ...(customerPhone ? { customer_phone: normalizePhoneForBackend(customerPhone) } : {}),
+        ...(address && houseNumber ? { customer_address: `${address}, ${houseNumber}` } : {}),
+        ...(city ? { customer_city: city } : {}),
+        ...(state ? { customer_state: state } : {}),
+        ...(zipCode ? { customer_zip_code: zipCode } : {}),
+      }).catch(() => {});
+    }, 400);
+    return () => {
+      if (customerMetadataTimeoutRef.current) {
+        clearTimeout(customerMetadataTimeoutRef.current);
+      }
+    };
+  }, [currentOrderId, customerName, customerEmail, customerPhone, address, houseNumber, city, state, zipCode, updateOrderMetadata]);
 
   const [checkingPendingOrder, setCheckingPendingOrder] = useState(true);
   const [customizationsValidationStatus, setCustomizationsValidationStatus] =
@@ -1070,7 +1111,6 @@ export default function CarrinhoPageContent() {
     () =>
       !checkingPendingOrder &&
       !isLoading &&
-      Boolean(user) &&
       !currentOrderId &&
       !hasPendingOrder &&
       cartItems.length === 0 &&
@@ -1079,7 +1119,6 @@ export default function CarrinhoPageContent() {
     [
       checkingPendingOrder,
       isLoading,
-      user,
       currentOrderId,
       hasPendingOrder,
       cartItems.length,
@@ -1478,8 +1517,8 @@ export default function CarrinhoPageContent() {
             asRecord(mercadoPagoData?.payer)) as PixData["payer_info"]) ||
           ({
             id: "",
-            email: user?.email || "",
-            first_name: user?.name || "",
+            email: customerEmail || "",
+            first_name: customerName || "",
           } as PixData["payer_info"]),
       };
     },
@@ -1488,8 +1527,8 @@ export default function CarrinhoPageContent() {
       pendingOrder?.payment?.mercado_pago_id,
       pendingOrder?.payment?.status,
       currentOrderId,
-      user?.email,
-      user?.name,
+      customerEmail,
+      customerName,
     ],
   );
 
@@ -1582,28 +1621,6 @@ export default function CarrinhoPageContent() {
       setPaymentError(null);
 
       try {
-        if (!user) {
-          // Save cart data before redirecting to login
-          const { guestCartService } =
-            await import("@/app/services/guestCartService");
-
-          const itemsToSave = cart.items.map((item) => ({
-            productId: item.product_id,
-            quantity: item.quantity,
-            additionals:
-              item.additional_ids || item.additionals?.map((add) => add.id),
-            additionalColors: item.additional_colors,
-            customizations: item.customizations,
-          }));
-
-          if (itemsToSave.length > 0) {
-            guestCartService.saveGuestCart(itemsToSave);
-          }
-
-          router.push("/login");
-          return;
-        }
-
         if (typeof shippingCost === "number") {
           await updateOrderMetadata(currentOrderId, {
             payment_method: "pix",
@@ -1616,8 +1633,8 @@ export default function CarrinhoPageContent() {
         const payload = {
           orderId: currentOrderId,
           paymentMethodId: "pix" as const,
-          payerEmail: user.email || "",
-          payerName: user.name || "",
+          payerEmail: customerEmail || "",
+          payerName: customerName || "",
           payerDocument: userDocument || "00000000000",
           payerDocumentType: "CPF" as const,
         };
@@ -1673,8 +1690,8 @@ export default function CarrinhoPageContent() {
             responseData.payer_info ||
             ({
               id: "",
-              email: user.email || "",
-              first_name: user.name || "",
+              email: customerEmail || "",
+              first_name: customerName || "",
             } as PixData["payer_info"]),
         });
 
@@ -1702,7 +1719,8 @@ export default function CarrinhoPageContent() {
     currentStep,
     createTransparentPayment,
     updateOrderMetadata,
-    user,
+    customerName,
+    customerEmail,
     userDocument,
     cartTotal,
     shippingCost,
@@ -1778,11 +1796,6 @@ export default function CarrinhoPageContent() {
       setPaymentError(null);
 
       try {
-        if (!user) {
-          router.push("/login");
-          return;
-        }
-
         if (typeof shippingCost === "number") {
           await updateOrderMetadata(currentOrderId, {
             payment_method: "card",
@@ -1794,8 +1807,8 @@ export default function CarrinhoPageContent() {
 
         const payload = {
           orderId: currentOrderId,
-          payerEmail: user.email || "",
-          payerName: user.name || "",
+          payerEmail: customerEmail || "",
+          payerName: customerName || "",
           payerDocument:
             formData.payer?.identification?.number ||
             userDocument ||
@@ -1807,7 +1820,7 @@ export default function CarrinhoPageContent() {
           installments: formData.installments,
           issuer_id: String(formData.issuer_id || ""),
           payment_method_id: formData.payment_method_id,
-          cardholderName: user.name || "",
+          cardholderName: customerName || "",
           frontendPublicKeyFingerprint: formData.frontendPublicKeyFingerprint,
           frontendPublicKeyPrefix: formData.frontendPublicKeyPrefix,
         };
@@ -1891,7 +1904,8 @@ export default function CarrinhoPageContent() {
     },
     [
       currentOrderId,
-      user,
+      customerName,
+      customerEmail,
       userDocument,
       createTransparentPayment,
       updateOrderMetadata,
@@ -2154,20 +2168,6 @@ export default function CarrinhoPageContent() {
       </div>
     );
   }
-  if (!user) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-        <Card className="max-w-md w-full p-8 text-center">
-          <User className="h-16 w-16 mx-auto text-gray-400 mb-4" />
-          <h2 className="text-2xl font-bold mb-2">Faça login para continuar</h2>
-          <Button asChild className="mt-6 bg-rose-600 hover:bg-rose-700">
-            <Link href="/login">Fazer Login</Link>
-          </Button>
-        </Card>
-      </div>
-    );
-  }
-
   if (shouldRedirectEmptyCheckout) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
@@ -2340,7 +2340,7 @@ export default function CarrinhoPageContent() {
             : `${address}, ${houseNumber} - ${neighborhood}, ${city}/${state} - CEP: ${zipCode}`;
 
           const createdOrder = await createOrder(
-            user.id,
+            user?.id || "guest",
             deliveryAddress,
             finalDateForBackend || undefined,
             {
@@ -2354,6 +2354,13 @@ export default function CarrinhoPageContent() {
               complement: complemento,
               deliveryMethod: optionSelected as "delivery" | "pickup",
               discount: pickupDiscount,
+              customerName: customerName || undefined,
+              customerEmail: customerEmail || undefined,
+              customerPhone: customerPhone || undefined,
+              customerAddress: address && houseNumber ? `${address}, ${houseNumber}` : undefined,
+              customerCity: city || undefined,
+              customerState: state || undefined,
+              customerZipCode: zipCode || undefined,
             },
           );
 
@@ -2754,6 +2761,35 @@ export default function CarrinhoPageContent() {
                   )}
 
                   {currentStep === 3 && (
+                    <>
+                      <div className="bg-white rounded-lg border border-gray-100 p-6 space-y-4">
+                        <h3 className="text-lg font-bold text-gray-900">Seus dados</h3>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Nome completo</label>
+                            <input
+                              type="text"
+                              value={customerName}
+                              onChange={(e) => setCustomerName(e.target.value)}
+                              readOnly={!!user}
+                              placeholder="Seu nome"
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent disabled:bg-gray-50 disabled:text-gray-500"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">E-mail</label>
+                            <input
+                              type="email"
+                              value={customerEmail}
+                              onChange={(e) => setCustomerEmail(e.target.value)}
+                              readOnly={!!user}
+                              placeholder="seu@email.com"
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent disabled:bg-gray-50 disabled:text-gray-500"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
                     <StepPayment
                       key="step3"
                       paymentMethod={paymentMethod ?? null}
@@ -2767,9 +2803,10 @@ export default function CarrinhoPageContent() {
                       paymentError={paymentError}
                       handleGeneratePix={handleGeneratePix}
                       handleCardSubmit={handleCardSubmit}
-                      payerEmail={user?.email || ""}
-                      payerName={user?.name || ""}
+                      payerEmail={customerEmail || ""}
+                      payerName={customerName || ""}
                     />
+                    </>
                   )}
                 </AnimatePresence>
               </div>

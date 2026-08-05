@@ -33,7 +33,6 @@ import AdditionalCard from "./additional-card";
 import Link from "next/link";
 import { ProductCard } from "@/app/components/layout/product-card";
 import { useRouter } from "next/navigation";
-import { useAuth } from "@/app/hooks/use-auth";
 import {
   CustomizationType,
   type CustomizationInput,
@@ -42,7 +41,6 @@ import type { SlotDef } from "@/app/types/personalization";
 import { ItemCustomizationModal } from "./itemCustomizationsModal";
 import { ItemCustomizationInlineWithContext } from "./ItemCustomizationInlineWithContext";
 import { getInternalImageUrl, getPublicAssetUrl } from "@/lib/image-helper";
-import { useLoginPrompt } from "@/app/components/layout/app-wrapper";
 import { normalizeCustomizationData } from "@/app/lib/customization-serialization";
 import { validateCustomization, type LayoutImage } from "@/app/lib/frame-utils";
 import { trackViewItem, trackAddToCart } from "@/lib/gtm";
@@ -245,8 +243,6 @@ const ClientProductPage = ({ id }: { id: string }) => {
     validateCustomizationsV2,
   } = useApi();
   const { addToCart, cart } = useCartContext();
-  const { user } = useAuth();
-  const { openPrompt } = useLoginPrompt();
 
   const [product, setProduct] = useState<Product>({} as Product);
   const [loadingProduct, setLoadingProduct] = useState(true);
@@ -293,15 +289,6 @@ const ClientProductPage = ({ id }: { id: string }) => {
   const isUploading = false;
   const mainProductImageRef = useRef<HTMLImageElement | null>(null);
   const addToCartButtonRef = useRef<HTMLButtonElement | null>(null);
-
-  const ensureAuthenticated = useCallback(() => {
-    if (user) {
-      return true;
-    }
-
-    openPrompt({ force: true });
-    return false;
-  }, [user, openPrompt]);
 
   const isNewProduct = useCallback((createdAt: string) => {
     const createdDate = new Date(createdAt);
@@ -604,17 +591,13 @@ const ClientProductPage = ({ id }: { id: string }) => {
 
   const handleAddAdditionalToCart = useCallback(
     async (additionalId: string) => {
-      if (!ensureAuthenticated()) {
-        return;
-      }
-
       setSelectedAdditionalIds((prev) =>
         prev.includes(additionalId)
           ? prev.filter((id) => id !== additionalId)
           : [...prev, additionalId],
       );
     },
-    [ensureAuthenticated],
+    [],
   );
 
   const router = useRouter();
@@ -981,10 +964,6 @@ const ClientProductPage = ({ id }: { id: string }) => {
 
   const handleAddToCart = async () => {
     if (!product.id) return;
-
-    if (!ensureAuthenticated()) {
-      return;
-    }
 
     if (isUploading) {
       return;
@@ -2108,10 +2087,6 @@ const ClientProductPage = ({ id }: { id: string }) => {
                             <div
                               key={(layout as any).id}
                               onClick={() => {
-                                if (!ensureAuthenticated()) {
-                                  return;
-                                }
-
                                 const currentData =
                                   itemCustomizations[component.id] || [];
                                 const otherData = currentData.filter(
@@ -2226,7 +2201,6 @@ const ClientProductPage = ({ id }: { id: string }) => {
                               open ? component.id : null,
                             )
                           }
-                          onAuthCheck={ensureAuthenticated}
                         >
                           <ItemCustomizationInlineWithContext
                             componentId={component.id}
@@ -2337,7 +2311,6 @@ const ClientProductPage = ({ id }: { id: string }) => {
                           onOpenChange={(open) =>
                             setActiveAdditionalModal(open ? addId : null)
                           }
-                          onAuthCheck={ensureAuthenticated}
                         >
                           <ItemCustomizationInlineWithContext
                             componentId={addId}
@@ -2544,9 +2517,6 @@ const ClientProductPage = ({ id }: { id: string }) => {
                           additional={additional}
                           productId={product.id}
                           onCustomizeClick={(additionalId) => {
-                            if (!ensureAuthenticated()) {
-                              return;
-                            }
                             setActiveAdditionalModal(additionalId);
                           }}
                           onAddToCart={handleAddAdditionalToCart}
