@@ -57,6 +57,8 @@ const STEP_PATH_MAP = {
 } as const;
 
 const CHECKOUT_FORM_STORAGE_KEY = "checkout_form_state_v1";
+const GUEST_USER_ID_KEY = "guest_user_id";
+const GUEST_ORDER_ID_KEY = "guest_order_id";
 const CHECKOUT_PAYMENT_TOAST_ID = "checkout-payment-status";
 const CHECKOUT_FLOW_TOAST_ID = "checkout-flow-status";
 const CHECKOUT_PIX_TOAST_ID = "checkout-pix-status";
@@ -1092,10 +1094,21 @@ export default function CarrinhoPageContent() {
   }, [hasPendingOrder, pendingOrder]);
 
   useEffect(() => {
+    if (!hasPendingOrder && !user?.id) {
+      const storedOrderId = localStorage.getItem(GUEST_ORDER_ID_KEY);
+      if (storedOrderId) {
+        setCurrentOrderId(storedOrderId);
+        return;
+      }
+    }
     if (!hasPendingOrder) {
       try {
         disconnectSSE?.();
         localStorage.removeItem("pendingOrderId");
+        if (user?.id) {
+          localStorage.removeItem(GUEST_USER_ID_KEY);
+          localStorage.removeItem(GUEST_ORDER_ID_KEY);
+        }
         setCurrentOrderId(null);
       } catch (error) {
         logger.debug("Erro ao limpar pedido pendente:", error);
@@ -2386,6 +2399,21 @@ export default function CarrinhoPageContent() {
           }
 
           setCurrentOrderId(createdOrderId);
+
+          if (!user?.id) {
+            const guestUserId = (() => {
+              if (createdOrder && typeof createdOrder === "object") {
+                if ("user_id" in createdOrder && createdOrder.user_id) {
+                  return String(createdOrder.user_id);
+                }
+              }
+              return null;
+            })();
+            if (guestUserId) {
+              localStorage.setItem(GUEST_USER_ID_KEY, guestUserId);
+            }
+            localStorage.setItem(GUEST_ORDER_ID_KEY, createdOrderId);
+          }
 
           showFlowToast(
             "success",
