@@ -2713,6 +2713,7 @@ export default function CarrinhoPageContent() {
                   )}
 
                   {currentStep === 2 && (
+                    <>
                     <StepDelivery
                       key="step2"
                       optionSelected={optionSelected}
@@ -2758,10 +2759,7 @@ export default function CarrinhoPageContent() {
                       isValidPhone={isValidPhone}
                       formatPhoneNumber={formatPhoneNumber}
                     />
-                  )}
 
-                  {currentStep === 3 && (
-                    <>
                       <div className="bg-white rounded-lg border border-gray-100 p-6 space-y-4">
                         <h3 className="text-lg font-bold text-gray-900">Seus dados</h3>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -2789,7 +2787,11 @@ export default function CarrinhoPageContent() {
                           </div>
                         </div>
                       </div>
+                    </>
+                  )}
 
+                  {currentStep === 3 && (
+                    <>
                     <StepPayment
                       key="step3"
                       paymentMethod={paymentMethod ?? null}
