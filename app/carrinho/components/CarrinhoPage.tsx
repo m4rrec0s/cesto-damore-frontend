@@ -59,6 +59,7 @@ const STEP_PATH_MAP = {
 const CHECKOUT_FORM_STORAGE_KEY = "checkout_form_state_v1";
 const GUEST_USER_ID_KEY = "guest_user_id";
 const GUEST_ORDER_ID_KEY = "guest_order_id";
+const GUEST_ORDER_TOKEN_KEY = "guest_order_token";
 const CHECKOUT_PAYMENT_TOAST_ID = "checkout-payment-status";
 const CHECKOUT_FLOW_TOAST_ID = "checkout-flow-status";
 const CHECKOUT_PIX_TOAST_ID = "checkout-pix-status";
@@ -948,14 +949,6 @@ export default function CarrinhoPageContent() {
           }
         }
       }
-    } else if (!user) {
-      setZipCode("");
-      setAddress("");
-      setHouseNumber("");
-      setNeighborhood("");
-      setCity("");
-      setState("");
-      setCustomerPhone("");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
@@ -1098,6 +1091,31 @@ export default function CarrinhoPageContent() {
       const storedOrderId = localStorage.getItem(GUEST_ORDER_ID_KEY);
       if (storedOrderId) {
         setCurrentOrderId(storedOrderId);
+        void getOrder(storedOrderId)
+          .then((order) => {
+            if (order.status !== "PENDING") return;
+            if (order.delivery_address) {
+              const match = order.delivery_address.match(/^([^,]+),\s*(\d+)/);
+              if (match) {
+                setAddress(match[1].trim());
+                setHouseNumber(match[2].trim());
+              }
+            }
+            if (order.delivery_city) setCity(order.delivery_city);
+            if (order.delivery_state) setState(order.delivery_state.toUpperCase());
+            if (order.recipient_phone) {
+              setRecipientPhone(formatPhoneNumber(order.recipient_phone.replace(/\D/g, "")));
+            }
+            if (order.user?.name) setCustomerName(order.user.name);
+            if (order.user?.email) setCustomerEmail(order.user.email);
+            if (order.user?.phone) setCustomerPhone(formatPhoneNumber(order.user.phone));
+            if (order.user?.zip_code) setZipCode(order.user.zip_code.replace(/\D/g, ""));
+          })
+          .catch(() => {
+            localStorage.removeItem(GUEST_ORDER_ID_KEY);
+            localStorage.removeItem(GUEST_ORDER_TOKEN_KEY);
+            setCurrentOrderId(null);
+          });
         return;
       }
     }
@@ -1114,7 +1132,7 @@ export default function CarrinhoPageContent() {
         logger.debug("Erro ao limpar pedido pendente:", error);
       }
     }
-  }, [hasPendingOrder, disconnectSSE]);
+  }, [hasPendingOrder, user?.id, disconnectSSE, getOrder]);
 
   const cartItems = useMemo(
     () => (Array.isArray(cart?.items) ? cart.items : []),
@@ -2344,8 +2362,11 @@ export default function CarrinhoPageContent() {
         try {
           let finalDateForBackend = finalDeliveryDate;
           if (selectedTime === "23:59") {
-            finalDateForBackend = null;
+            finalDateForBackend = new Date(selectedDate!);
           }
+          const deliverySlot = selectedTime === "23:59"
+            ? "to_be_arranged"
+            : (finalDeliveryDate!.getHours() < 12 ? "morning" : "afternoon");
 
           const isPickup = optionSelected === "pickup";
           const deliveryAddress = isPickup
@@ -2353,7 +2374,7 @@ export default function CarrinhoPageContent() {
             : `${address}, ${houseNumber} - ${neighborhood}, ${city}/${state} - CEP: ${zipCode}`;
 
           const createdOrder = await createOrder(
-            user?.id || "guest",
+            user?.id,
             deliveryAddress,
             finalDateForBackend || undefined,
             {
@@ -2366,6 +2387,7 @@ export default function CarrinhoPageContent() {
               sendAnonymously,
               complement: complemento,
               deliveryMethod: optionSelected as "delivery" | "pickup",
+              deliverySlot,
               discount: pickupDiscount,
               customerName: customerName || undefined,
               customerEmail: customerEmail || undefined,
@@ -2413,6 +2435,14 @@ export default function CarrinhoPageContent() {
               localStorage.setItem(GUEST_USER_ID_KEY, guestUserId);
             }
             localStorage.setItem(GUEST_ORDER_ID_KEY, createdOrderId);
+            const guestOrderToken =
+              createdOrder && typeof createdOrder === "object" && "guestOrderToken" in createdOrder
+                ? String((createdOrder as { guestOrderToken?: string }).guestOrderToken || "")
+                : "";
+            if (!guestOrderToken) {
+              throw new Error("Não foi possível proteger acesso ao pedido.");
+            }
+            localStorage.setItem(GUEST_ORDER_TOKEN_KEY, guestOrderToken);
           }
 
           showFlowToast(
@@ -2449,8 +2479,11 @@ export default function CarrinhoPageContent() {
 
           let finalDateForBackend = finalDeliveryDate;
           if (selectedTime === "23:59") {
-            finalDateForBackend = null;
+            finalDateForBackend = new Date(selectedDate!);
           }
+          const deliverySlot = selectedTime === "23:59"
+            ? "to_be_arranged"
+            : (finalDeliveryDate!.getHours() < 12 ? "morning" : "afternoon");
 
           await updateOrderMetadata(currentOrderId, {
             delivery_address: deliveryAddress,
@@ -2458,6 +2491,7 @@ export default function CarrinhoPageContent() {
             delivery_state: isPickup ? "PB" : state,
             recipient_phone: normalizePhoneForBackend(recipientPhone),
             delivery_date: finalDateForBackend?.toISOString() || null,
+            delivery_slot: deliverySlot,
             send_anonymously: sendAnonymously,
             complement: complemento,
             delivery_method: optionSelected as "delivery" | "pickup",

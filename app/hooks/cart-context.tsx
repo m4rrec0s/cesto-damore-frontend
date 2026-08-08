@@ -43,7 +43,7 @@ interface CartContextType {
   ) => void;
   clearCart: () => void;
   createOrder: (
-    userId: string,
+    userId?: string,
     deliveryAddress?: string,
     deliveryDate?: Date,
     options?: {
@@ -56,6 +56,7 @@ interface CartContextType {
       sendAnonymously?: boolean;
       complement?: string;
       deliveryMethod?: "delivery" | "pickup";
+      deliverySlot?: "morning" | "afternoon" | "to_be_arranged";
       discount?: number;
       customerName?: string;
       customerEmail?: string;
@@ -67,7 +68,7 @@ interface CartContextType {
     },
   ) => Promise<unknown>;
   createOrderWithTransparentCheckout: (
-    userId: string,
+    userId?: string,
     deliveryAddress?: string,
     deliveryDate?: Date,
     options?: {

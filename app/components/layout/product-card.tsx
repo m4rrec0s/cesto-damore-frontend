@@ -62,7 +62,7 @@ export function ProductCard({
       >
         <img
           src={
-            getInternalImageUrl(props.image_url) ||
+            getInternalImageUrl(props.image_url, "w500") ||
             getPublicAssetUrl("placeholder-v2.png")
           }
           alt={props.name}

@@ -563,6 +563,7 @@ export interface Order {
   delivery_state?: string | null;
   delivery_method?: string | null;
   delivery_date?: string | null;
+  delivery_slot?: "morning" | "afternoon" | "to_be_arranged" | null;
   shipping_price?: number | null;
   payment_method?: string | null;
   grand_total?: number | null;
@@ -866,6 +867,14 @@ class ApiService {
 
       if (token) {
         config.headers.Authorization = `Bearer ${token}`;
+      } else {
+        const guestOrderToken =
+          typeof window !== "undefined"
+            ? localStorage.getItem("guest_order_token")
+            : null;
+        if (guestOrderToken) {
+          config.headers.Authorization = `Guest ${guestOrderToken}`;
+        }
       }
       return config;
     });
@@ -1377,6 +1386,7 @@ class ApiService {
     delivery_city?: string;
     delivery_state?: string;
     delivery_date?: Date | null;
+    delivery_slot?: "morning" | "afternoon" | "to_be_arranged";
     payment_method?: "pix" | "card";
     recipient_phone?: string;
     discount?: number;
@@ -1463,6 +1473,7 @@ class ApiService {
       delivery_state?: string | null;
       recipient_phone?: string | null;
       delivery_date?: string | Date | null;
+      delivery_slot?: "morning" | "afternoon" | "to_be_arranged";
       shipping_price?: number;
       delivery_method?: "delivery" | "pickup";
       payment_method?: "pix" | "card";
