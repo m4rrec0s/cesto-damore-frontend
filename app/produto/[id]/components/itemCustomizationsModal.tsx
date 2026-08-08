@@ -1301,7 +1301,7 @@ export function ItemCustomizationModal({
 
             return (
               <div key={field.id} className="space-y-1.5">
-                {maxLength && maxLength > 20 ? (
+                {!maxLength || maxLength > 20 ? (
                   <Textarea
                     id={field.id}
                     placeholder={field.placeholder}

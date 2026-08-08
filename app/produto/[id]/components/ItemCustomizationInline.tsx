@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import { Badge } from "@/app/components/ui/badge";
 import { Card } from "@/app/components/ui/card";
 import { Input } from "@/app/components/ui/input";
+import { Textarea } from "@/app/components/ui/textarea";
 import { Label } from "@/app/components/ui/label";
 import { Checkbox } from "@/app/components/ui/checkbox";
 import {
@@ -501,15 +502,26 @@ export function ItemCustomizationInline({
           return (
             <div key={field.id} className="space-y-2">
               <Label className="text-sm">{field.label}</Label>
-              <Input
-                type="text"
-                placeholder={field.placeholder || "Digite aqui..."}
-                value={value}
-                onChange={(e) =>
-                  handleTextChange(customization.id, field.id, e.target.value)
-                }
-                maxLength={maxLength}
-              />
+              {!maxLength ? (
+                <Textarea
+                  placeholder={field.placeholder || "Digite aqui..."}
+                  value={value}
+                  onChange={(e) =>
+                    handleTextChange(customization.id, field.id, e.target.value)
+                  }
+                  rows={4}
+                />
+              ) : (
+                <Input
+                  type="text"
+                  placeholder={field.placeholder || "Digite aqui..."}
+                  value={value}
+                  onChange={(e) =>
+                    handleTextChange(customization.id, field.id, e.target.value)
+                  }
+                  maxLength={maxLength}
+                />
+              )}
               {maxLength && (
                 <p className="text-xs text-gray-500 text-right">
                   {value.length} / {maxLength} caracteres
