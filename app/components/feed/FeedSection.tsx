@@ -296,7 +296,7 @@ export default function FeedSection({ section }: FeedSectionProps) {
                   <ProductCard
                     props={item.item_data as unknown as Product}
                     className="min-w-[180px] max-w-[200px] shrink-0 snap-start"
-                    imagePriority={true}
+                    imagePriority={index === 0}
                     isEmphasis={true}
                     index={index + 1}
                   />

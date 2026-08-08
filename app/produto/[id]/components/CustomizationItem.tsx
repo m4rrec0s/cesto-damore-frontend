@@ -31,7 +31,7 @@ interface CustomizationItemProps {
   pdfUrl?: string;
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
-  onAuthCheck: () => boolean;
+  onAuthCheck?: () => boolean;
   children: React.ReactNode;
 }
 
@@ -48,7 +48,6 @@ export function CustomizationItem({
   pdfUrl,
   isOpen,
   onOpenChange,
-  onAuthCheck,
   children,
 }: CustomizationItemProps) {
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -70,7 +69,6 @@ export function CustomizationItem({
   }, [isOpen]);
 
   const handleMobileOpen = () => {
-    if (!onAuthCheck()) return;
     setDrawerOpen(true);
     onOpenChange(true);
   };
@@ -172,7 +170,6 @@ export function CustomizationItem({
       <Collapsible
         open={isOpen}
         onOpenChange={(open) => {
-          if (open && !onAuthCheck()) return;
           onOpenChange(open);
         }}
         className="hidden md:block rounded-xl border border-gray-200 bg-white"

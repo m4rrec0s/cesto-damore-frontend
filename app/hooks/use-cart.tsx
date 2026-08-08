@@ -92,6 +92,8 @@ export interface AvailableDate {
 
 const CART_SESSION_KEY = "cesto_cart_session_state";
 const CART_SESSION_TTL = 60000;
+const GUEST_CART_KEY = "guest_cart_state";
+const GUEST_ORDER_ID_KEY = "guest_order_id";
 
 const saveCartToSession = (cartState: CartState): void => {
     if (typeof window === "undefined") return;
@@ -123,6 +125,23 @@ const loadCartFromSession = (): CartState | null => {
     } catch {
         return null;
     }
+};
+
+const loadGuestCart = (): CartState | null => {
+  if (typeof window === "undefined") return null;
+  try {
+    const parsed = JSON.parse(localStorage.getItem(GUEST_CART_KEY) || "null");
+    return Array.isArray(parsed?.items) ? parsed : null;
+  } catch {
+    return null;
+  }
+};
+
+const saveGuestCart = (cartState: CartState): void => {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(GUEST_CART_KEY, JSON.stringify(cartState));
+  } catch {}
 };
 
 const toCartProductSnapshot = (product: Product): Product => {
@@ -432,6 +451,18 @@ interface CartContextType {
       deliveryCity?: string;
       deliveryState?: string;
       recipientPhone?: string;
+      sendAnonymously?: boolean;
+      complement?: string;
+      deliveryMethod?: "delivery" | "pickup";
+      deliverySlot?: "morning" | "afternoon" | "to_be_arranged";
+      discount?: number;
+      customerName?: string;
+      customerEmail?: string;
+      customerPhone?: string;
+      customerAddress?: string;
+      customerCity?: string;
+      customerState?: string;
+      customerZipCode?: string;
     },
   ) => Promise<unknown>;
   createOrderWithTransparentCheckout: (
@@ -874,13 +905,8 @@ export function useCart(): CartContextType {
       setIsSyncReady(false);
 
       if (!currentUserId) {
-        setCart({ items: [], total: 0, itemCount: 0 });
+        setCart(loadGuestCart() || { items: [], total: 0, itemCount: 0 });
         _setOrderMetadata({});
-
-        if (typeof window !== "undefined") {
-          localStorage.removeItem("guest_cart_state");
-          localStorage.removeItem("guest_customizations");
-        }
       }
 
       previousUserIdRef.current = currentUserId;
@@ -888,18 +914,32 @@ export function useCart(): CartContextType {
   }, [user?.id]);
 
   useEffect(() => {
-    const loadPendingOrder = async () => {
-      if (!user) return;
-
-      if (isInitializedRef.current) return;
+      const loadPendingOrder = async () => {
+       if (isInitializedRef.current) return;
 
       const markInitialized = () => {
         isInitializedRef.current = true;
         setIsSyncReady(true);
       };
 
-      try {
+       try {
          const sessionCart = loadCartFromSession();
+
+         if (!user) {
+           const guestCart = loadGuestCart();
+           const guestOrderId = localStorage.getItem(GUEST_ORDER_ID_KEY);
+           if (guestOrderId) {
+             const guestOrder = await api.getOrder(guestOrderId);
+             if (guestOrder.status === "PENDING" && guestOrder.items?.length) {
+               setCart(calculateTotals(await transformOrderToCartItems(guestOrder)));
+               setPendingOrderId(guestOrder.id);
+             }
+           } else if (guestCart) {
+             setCart(guestCart);
+           }
+           markInitialized();
+           return;
+         }
 
          const pendingOrder = await api.getPendingOrder(user.id);
 
@@ -928,8 +968,12 @@ export function useCart(): CartContextType {
            }
            markInitialized();
          }
-       } catch (error) {
-         logger.debug("Erro ao carregar pedido pendente:", error);
+        } catch (error) {
+          logger.debug("Erro ao carregar pedido pendente:", error);
+          if (!user) {
+            const guestCart = loadGuestCart();
+            if (guestCart) setCart(guestCart);
+          }
          if (sessionCart) {
            setCart(sessionCart);
          }
@@ -985,10 +1029,32 @@ export function useCart(): CartContextType {
   const syncLockRef = useRef<boolean>(false);
   const pendingSyncCartRef = useRef<CartState | null>(null);
 
+  const applyBackendPrices = useCallback(
+    (prev: CartState, updatedOrder: any): CartState => {
+      const updatedItems = prev.items.map((cartItem) => {
+        const backendItem = updatedOrder.items?.find(
+          (oi: any) => oi.product_id === cartItem.product_id,
+        );
+        if (!backendItem) return cartItem;
+        const updatedAdditionals = cartItem.additionals?.map((add) => {
+          const backendAdd = backendItem.additionals?.find(
+            (ba: any) => ba.additional_id === add.id,
+          );
+          return backendAdd ? { ...add, price: backendAdd.price } : add;
+        });
+        return {
+          ...cartItem,
+          effectivePrice: backendItem.price,
+          additionals: updatedAdditionals,
+        };
+      });
+      return { ...prev, items: updatedItems, total: updatedOrder.grand_total };
+    },
+    [],
+  );
+
   const syncCartToBackend = useCallback(
     async (currentCart: CartState) => {
-      if (!user) return;
-
       if (!isSyncReady) {
         pendingSyncCartRef.current = currentCart;
         return;
@@ -1002,21 +1068,51 @@ export function useCart(): CartContextType {
       syncLockRef.current = true;
       try {
         const itemsPayload = cartItemsToOrderItems(currentCart.items);
+        const isGuest = !user;
+        const guestOrderId =
+          isGuest && typeof window !== "undefined"
+            ? localStorage.getItem(GUEST_ORDER_ID_KEY)
+            : null;
+        const orderIdToSync = isGuest ? guestOrderId : pendingOrderId;
+
+        const storeGuestAnchor = (created: any) => {
+          const order = created?.order || created;
+          const token = created?.guestOrderToken;
+          if (!order?.id) return;
+          setPendingOrderId(order.id);
+          if (isGuest && typeof window !== "undefined") {
+            localStorage.setItem(GUEST_ORDER_ID_KEY, order.id);
+            if (token) {
+              localStorage.setItem("guest_order_token", token);
+            }
+          }
+        };
+
+        const draftPayload = {
+          ...(isGuest ? {} : { user_id: user?.id }),
+          items: itemsPayload,
+          is_draft: true,
+          send_anonymously: orderMetadata.send_anonymously || false,
+          complement: orderMetadata.complement || undefined,
+        };
 
         if (itemsPayload.length === 0) {
-          if (pendingOrderId) {
+          if (orderIdToSync) {
             try {
-              const orderCheck = await api.getOrder(pendingOrderId).catch(() => null);
+              const orderCheck = await api.getOrder(orderIdToSync).catch(() => null);
               if (orderCheck && orderCheck.status !== "PENDING") {
                 clearPendingOrderId();
                 return;
               }
-              await api.deleteOrder(pendingOrderId);
+              await api.deleteOrder(orderIdToSync);
               clearPendingOrderId();
               setOrderMetadata({
                 send_anonymously: false,
                 complement: undefined,
               });
+              if (isGuest && typeof window !== "undefined") {
+                localStorage.removeItem(GUEST_ORDER_ID_KEY);
+              }
             } catch (error) {
               logger.debug("Erro ao deletar pedido pendente vazio:", error);
             }
@@ -1024,84 +1120,40 @@ export function useCart(): CartContextType {
           return;
         }
 
-        if (!pendingOrderId) {
+        if (!orderIdToSync) {
           try {
-            const existingPending = await api.getPendingOrder(user.id);
-            if (existingPending) {
-              setPendingOrderId(existingPending.id);
-              _setOrderMetadata({
-                send_anonymously: !!existingPending.send_anonymously,
-                complement: existingPending.complement || undefined,
-              });
-              const orderIdToUpdate = existingPending.id;
-              const updatedOrder = await api.updateOrderItems(orderIdToUpdate, itemsPayload);
-              if (updatedOrder?.grand_total != null) {
-                setCart((prev) => {
-                  const updatedItems = prev.items.map((cartItem) => {
-                    const backendItem = updatedOrder.items?.find(
-                      (oi: any) => oi.product_id === cartItem.product_id,
-                    );
-                    if (!backendItem) return cartItem;
-                    const updatedAdditionals = cartItem.additionals?.map((add) => {
-                      const backendAdd = backendItem.additionals?.find(
-                        (ba: any) => ba.additional_id === add.id,
-                      );
-                      return backendAdd ? { ...add, price: backendAdd.price } : add;
-                    });
-                    return {
-                      ...cartItem,
-                      effectivePrice: backendItem.price,
-                      additionals: updatedAdditionals,
-                    };
-                  });
-                  return { ...prev, items: updatedItems, total: updatedOrder.grand_total };
+            if (!isGuest) {
+              const existingPending = await api.getPendingOrder(user!.id);
+              if (existingPending) {
+                setPendingOrderId(existingPending.id);
+                _setOrderMetadata({
+                  send_anonymously: !!existingPending.send_anonymously,
+                  complement: existingPending.complement || undefined,
                 });
+                const updatedOrder = await api.updateOrderItems(
+                  existingPending.id,
+                  itemsPayload,
+                );
+                if (updatedOrder?.grand_total != null) {
+                  setCart((prev) => applyBackendPrices(prev, updatedOrder));
+                }
+                return;
               }
-              return;
             }
           } catch (error) {
             logger.debug("Erro ao verificar pedido pendente existente:", error);
           }
 
-          const payload: {
-            user_id: string;
-            items: OrderItem[];
-            is_draft: boolean;
-            send_anonymously: boolean;
-            complement?: string;
-          } = {
-            user_id: user.id,
-            items: itemsPayload,
-            is_draft: true,
-            send_anonymously: orderMetadata.send_anonymously || false,
-            complement: orderMetadata.complement || undefined,
-          };
-          const order = await api.createOrder(payload);
-          setPendingOrderId(order?.id || null);
+          const order = await api.createOrder(draftPayload);
+          storeGuestAnchor(order);
         } else {
           try {
-            const updatedOrder = await api.updateOrderItems(pendingOrderId, itemsPayload);
+            const updatedOrder = await api.updateOrderItems(
+              orderIdToSync,
+              itemsPayload,
+            );
             if (updatedOrder?.grand_total != null) {
-              setCart((prev) => {
-                const updatedItems = prev.items.map((cartItem) => {
-                  const backendItem = updatedOrder.items?.find(
-                    (oi: any) => oi.product_id === cartItem.product_id,
-                  );
-                  if (!backendItem) return cartItem;
-                  const updatedAdditionals = cartItem.additionals?.map((add) => {
-                    const backendAdd = backendItem.additionals?.find(
-                      (ba: any) => ba.additional_id === add.id,
-                    );
-                    return backendAdd ? { ...add, price: backendAdd.price } : add;
-                  });
-                  return {
-                    ...cartItem,
-                    effectivePrice: backendItem.price,
-                    additionals: updatedAdditionals,
-                  };
-                });
-                return { ...prev, items: updatedItems, total: updatedOrder.grand_total };
-              });
+              setCart((prev) => applyBackendPrices(prev, updatedOrder));
             }
           } catch (updateError: unknown) {
             logger.debug("Erro ao atualizar pedido:", updateError);
@@ -1111,22 +1163,11 @@ export function useCart(): CartContextType {
             if (status === 403 || status === 404) {
               logger.debug("⚠️ Pedido inválido, criando novo...");
               setPendingOrderId(null);
-
-              const payload: {
-                user_id: string;
-                items: OrderItem[];
-                is_draft: boolean;
-                send_anonymously: boolean;
-                complement?: string;
-              } = {
-                user_id: user.id,
-                items: itemsPayload,
-                is_draft: true,
-                send_anonymously: orderMetadata.send_anonymously || false,
-                complement: orderMetadata.complement || undefined,
-              };
-              const newOrder = await api.createOrder(payload);
-              setPendingOrderId(newOrder?.id || null);
+              if (isGuest && typeof window !== "undefined") {
+                localStorage.removeItem(GUEST_ORDER_ID_KEY);
+              }
+              const newOrder = await api.createOrder(draftPayload);
+              storeGuestAnchor(newOrder);
             } else {
               throw updateError;
             }
@@ -1144,6 +1185,9 @@ export function useCart(): CartContextType {
               send_anonymously: false,
               complement: undefined,
             });
+            if (!user && typeof window !== "undefined") {
+              localStorage.removeItem(GUEST_ORDER_ID_KEY);
+            }
             return;
           }
           if (status === 500) {
@@ -1171,7 +1215,7 @@ export function useCart(): CartContextType {
       orderMetadata,
       setOrderMetadata,
       clearPendingOrderId,
-      isAutoDeletableDraftOrder,
+      applyBackendPrices,
     ],
   );
 
@@ -1541,6 +1585,7 @@ export function useCart(): CartContextType {
 
           const updatedCart = calculateTotals(newItems);
           saveCartToSession(updatedCart);
+          saveGuestCart(updatedCart);
           debouncedSync(updatedCart);
           return updatedCart;
         });
@@ -1595,6 +1640,7 @@ export function useCart(): CartContextType {
         );
         const updatedCart = calculateTotals(newItems);
         saveCartToSession(updatedCart);
+        saveGuestCart(updatedCart);
 
         void (async () => {
           try {
@@ -1688,6 +1734,7 @@ export function useCart(): CartContextType {
         });
          const updatedCart = calculateTotals(newItems);
          saveCartToSession(updatedCart);
+         saveGuestCart(updatedCart);
          debouncedSync(updatedCart);
          return updatedCart;
        });
@@ -1759,6 +1806,8 @@ export function useCart(): CartContextType {
         };
 
         const updatedCart = calculateTotals(newItems);
+        saveCartToSession(updatedCart);
+        saveGuestCart(updatedCart);
         if (syncWithBackend) {
           debouncedSync(updatedCart);
         }
@@ -1786,7 +1835,10 @@ export function useCart(): CartContextType {
     if (typeof window !== "undefined") {
        try {
          localStorage.removeItem("cart");
-         sessionStorage.removeItem(CART_SESSION_KEY);
+          localStorage.removeItem(GUEST_CART_KEY);
+          localStorage.removeItem(GUEST_ORDER_ID_KEY);
+          localStorage.removeItem("guest_order_token");
+          sessionStorage.removeItem(CART_SESSION_KEY);
        } catch (error) {
          logger.debug("Erro ao limpar carrinho do localStorage:", error);
        }
@@ -1796,7 +1848,7 @@ export function useCart(): CartContextType {
 
   const createOrder = useCallback(
     async (
-      userId: string,
+      userId?: string,
       deliveryAddress?: string,
       deliveryDate?: Date,
       options?: {
@@ -1809,7 +1861,15 @@ export function useCart(): CartContextType {
         sendAnonymously?: boolean;
         complement?: string;
         deliveryMethod?: "delivery" | "pickup";
+        deliverySlot?: "morning" | "afternoon" | "to_be_arranged";
         discount?: number;
+        customerName?: string;
+        customerEmail?: string;
+        customerPhone?: string;
+        customerAddress?: string;
+        customerCity?: string;
+        customerState?: string;
+        customerZipCode?: string;
       },
     ) => {
       if (cart.items.length === 0) {
@@ -1859,7 +1919,7 @@ export function useCart(): CartContextType {
       const orderItems: OrderItem[] = cartItemsToOrderItems(cart.items);
 
       const payload = {
-        user_id: userId,
+        ...(userId ? { user_id: userId } : {}),
         payment_method: options.paymentMethod,
         items: orderItems,
         delivery_address: deliveryAddress,
@@ -1871,6 +1931,14 @@ export function useCart(): CartContextType {
         send_anonymously: options?.sendAnonymously,
         complement: options?.complement,
         delivery_method: options?.deliveryMethod || "delivery",
+        delivery_slot: options?.deliverySlot,
+        ...(options?.customerName ? { customer_name: options.customerName } : {}),
+        ...(options?.customerEmail ? { customer_email: options.customerEmail } : {}),
+        ...(options?.customerPhone ? { customer_phone: options.customerPhone } : {}),
+        ...(options?.customerAddress ? { customer_address: options.customerAddress } : {}),
+        ...(options?.customerCity ? { customer_city: options.customerCity } : {}),
+        ...(options?.customerState ? { customer_state: options.customerState } : {}),
+        ...(options?.customerZipCode ? { customer_zip_code: options.customerZipCode } : {}),
       };
 
       const order = await api.createOrder(payload);
@@ -2448,7 +2516,7 @@ export function useCart(): CartContextType {
 
   const createOrderWithTransparentCheckout = useCallback(
     async (
-      userId: string,
+      userId?: string,
       deliveryAddress?: string,
       deliveryDate?: Date,
       options?: {
@@ -2470,7 +2538,8 @@ export function useCart(): CartContextType {
         options,
       );
 
-      const checkoutUrl = `/checkout-transparente?orderId=${order.id}`;
+      const orderId = order?.id || (order as { order?: { id?: string } })?.order?.id;
+      const checkoutUrl = `/checkout-transparente?orderId=${orderId}`;
 
       return {
         order,

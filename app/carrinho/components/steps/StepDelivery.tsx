@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import {
   MapPin,
+  User,
   CheckCircle2,
   CalendarIcon,
   AlertCircle,
@@ -70,6 +71,11 @@ interface StepDeliveryProps {
   formatDocument: (val: string) => string;
   isValidPhone: (val: string) => boolean;
   formatPhoneNumber: (val: string) => string;
+  customerName: string;
+  setCustomerName: (val: string) => void;
+  customerEmail: string;
+  setCustomerEmail: (val: string) => void;
+  user: any;
 }
 
 export const StepDelivery = ({
@@ -114,6 +120,11 @@ export const StepDelivery = ({
   formatDocument,
   isValidPhone,
   formatPhoneNumber,
+  customerName,
+  setCustomerName,
+  customerEmail,
+  setCustomerEmail,
+  user,
 }: StepDeliveryProps) => {
   const isAddressComplete = !!(
     address?.trim() &&
@@ -377,12 +388,37 @@ export const StepDelivery = ({
         <div className="space-y-6">
           <div className="flex items-center gap-2 border-b border-gray-100 pb-4">
             <div className="p-1.5 bg-gray-50 rounded">
-              <MapPin className="h-4 w-4 text-gray-500" />
+              <User className="h-4 w-4 text-gray-500" />
             </div>
             <h3 className="font-bold text-gray-900">Dados do Cliente</h3>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+            <div className="space-y-2">
+              <Label className="text-xs font-bold text-gray-500 uppercase">
+                Nome completo
+              </Label>
+              <Input
+                value={customerName}
+                onChange={(e) => setCustomerName(e.target.value)}
+                readOnly={!!user}
+                placeholder="Seu nome"
+                className="h-10 border-gray-300 rounded focus:ring-[#3483fa] disabled:bg-gray-50 disabled:text-gray-500"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-xs font-bold text-gray-500 uppercase">
+                E-mail
+              </Label>
+              <Input
+                type="email"
+                value={customerEmail}
+                onChange={(e) => setCustomerEmail(e.target.value)}
+                readOnly={!!user}
+                placeholder="seu@email.com"
+                className="h-10 border-gray-300 rounded focus:ring-[#3483fa] disabled:bg-gray-50 disabled:text-gray-500"
+              />
+            </div>
             <div className="space-y-2">
               <Label className="text-xs font-bold text-gray-500 uppercase">
                 Seu WhatsApp
