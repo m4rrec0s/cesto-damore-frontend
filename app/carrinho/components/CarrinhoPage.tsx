@@ -500,9 +500,8 @@ export default function CarrinhoPageContent() {
     }
   }, []);
 
-  useEffect(() => {
+  const saveCheckoutForm = () => {
     if (typeof window === "undefined" || !hasHydratedCheckoutForm) return;
-
     const payload: PersistedCheckoutForm = {
       optionSelected,
       zipCode,
@@ -525,27 +524,7 @@ export default function CarrinhoPageContent() {
     };
 
     localStorage.setItem(CHECKOUT_FORM_STORAGE_KEY, JSON.stringify(payload));
-  }, [
-    optionSelected,
-    zipCode,
-    address,
-    houseNumber,
-    neighborhood,
-    city,
-    state,
-    customerPhone,
-    recipientPhone,
-    complemento,
-    sendAnonymously,
-    isSelfRecipient,
-    userDocument,
-    customerName,
-    customerEmail,
-    selectedDate,
-    selectedTime,
-    paymentMethod,
-    hasHydratedCheckoutForm,
-  ]);
+  };
 
   useEffect(() => {
     return () => {
@@ -2288,6 +2267,8 @@ export default function CarrinhoPageContent() {
       logger.debug("Requisição em progresso, ignorando clique duplicado");
       return;
     }
+
+    saveCheckoutForm();
 
     let finalDeliveryDate: Date | null = null;
     if (selectedDate && selectedTime) {
