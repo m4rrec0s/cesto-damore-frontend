@@ -268,12 +268,18 @@ export function useWebhookNotification({
       (typeof window !== "undefined" &&
         (localStorage.getItem("appToken") || localStorage.getItem("token"))) ||
       "";
+    const guestOrderToken =
+      typeof window !== "undefined"
+        ? localStorage.getItem("guest_order_token")
+        : "";
     const url = new URL(
       `/api/backend/webhooks/notifications/${orderId}`,
       window.location.origin,
     );
     if (authToken) {
       url.searchParams.set("token", authToken);
+    } else if (guestOrderToken) {
+      url.searchParams.set("guestToken", guestOrderToken);
     }
 
     try {

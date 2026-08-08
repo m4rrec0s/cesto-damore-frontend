@@ -75,6 +75,7 @@ interface StepDeliveryProps {
   setCustomerName: (val: string) => void;
   customerEmail: string;
   setCustomerEmail: (val: string) => void;
+  onFormInput: () => void;
   user: any;
 }
 
@@ -124,6 +125,7 @@ export const StepDelivery = ({
   setCustomerName,
   customerEmail,
   setCustomerEmail,
+  onFormInput,
   user,
 }: StepDeliveryProps) => {
   const isAddressComplete = !!(
@@ -154,6 +156,7 @@ export const StepDelivery = ({
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       className="space-y-6"
+      onInput={onFormInput}
     >
       <div className="space-y-4">
         <h2 className="text-xl font-bold text-gray-900 px-1">

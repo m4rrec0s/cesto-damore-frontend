@@ -410,6 +410,7 @@ export default function CarrinhoPageContent() {
   const creatingOrderRef = useRef(false);
   const lastRealtimeStatusRef = useRef<string | null>(null);
   const restoredFormRef = useRef(false);
+  const checkoutFormEditedRef = useRef(false);
   const [hasHydratedCheckoutForm, setHasHydratedCheckoutForm] = useState(false);
 
   const beginCheckoutFiredRef = useRef(false);
@@ -864,6 +865,8 @@ export default function CarrinhoPageContent() {
   }, [isSelfRecipient, customerPhone]);
 
   useEffect(() => {
+    if (checkoutFormEditedRef.current) return;
+
     if (user) {
       if (user.name && !customerName) {
         setCustomerName(user.name);
@@ -974,8 +977,10 @@ export default function CarrinhoPageContent() {
               ? "pix"
               : orderPaymentMethod === "card"
                 ? "card"
-                : undefined,
+              : undefined,
           );
+
+          if (checkoutFormEditedRef.current) return;
 
           if (pendingOrder.delivery_address) {
             const addressStr = pendingOrder.delivery_address;
@@ -1072,6 +1077,7 @@ export default function CarrinhoPageContent() {
         setCurrentOrderId(storedOrderId);
         void getOrder(storedOrderId)
           .then((order) => {
+            if (checkoutFormEditedRef.current) return;
             if (order.status !== "PENDING") return;
             if (order.delivery_address) {
               const match = order.delivery_address.match(/^([^,]+),\s*(\d+)/);
@@ -2804,6 +2810,9 @@ export default function CarrinhoPageContent() {
                       setCustomerName={setCustomerName}
                       customerEmail={customerEmail}
                       setCustomerEmail={setCustomerEmail}
+                      onFormInput={() => {
+                        checkoutFormEditedRef.current = true;
+                      }}
                       user={user}
                     />
                   )}
