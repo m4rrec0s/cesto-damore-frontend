@@ -556,6 +556,13 @@ export function useCart(): CartContextType {
     _setOrderMetadata({});
   }, []);
 
+  const clearGuestOrderAnchor = useCallback(() => {
+    if (typeof window === "undefined") return;
+    localStorage.removeItem(GUEST_ORDER_ID_KEY);
+    localStorage.removeItem("guest_order_token");
+    localStorage.removeItem("guest_user_id");
+  }, []);
+
   const isAutoDeletableDraftOrder = useCallback((order: Order | null) => {
     if (!order) return false;
     if ((order.status || "").toUpperCase() !== "PENDING") return false;
@@ -565,6 +572,7 @@ export function useCart(): CartContextType {
 
   const isInitializedRef = useRef<boolean>(false);
   const getOrderAttemptedRef = useRef<Set<string>>(new Set());
+  const deletingOrderIdsRef = useRef<Set<string>>(new Set());
   const previousUserIdRef = useRef<string | null>(null);
   const isRemoteUpdateRef = useRef<boolean>(false);
 
@@ -928,12 +936,14 @@ export function useCart(): CartContextType {
          if (!user) {
            const guestCart = loadGuestCart();
            const guestOrderId = localStorage.getItem(GUEST_ORDER_ID_KEY);
-           if (guestOrderId) {
-             const guestOrder = await api.getOrder(guestOrderId);
-             if (guestOrder.status === "PENDING" && guestOrder.items?.length) {
-               setCart(calculateTotals(await transformOrderToCartItems(guestOrder)));
-               setPendingOrderId(guestOrder.id);
-             }
+            if (guestOrderId) {
+              const guestOrder = await api.getOrder(guestOrderId);
+              if (guestOrder.status === "PENDING" && guestOrder.items?.length) {
+                setCart(calculateTotals(await transformOrderToCartItems(guestOrder)));
+                setPendingOrderId(guestOrder.id);
+              } else {
+                clearGuestOrderAnchor();
+              }
            } else if (guestCart) {
              setCart(guestCart);
            }
@@ -972,6 +982,7 @@ export function useCart(): CartContextType {
           logger.debug("Erro ao carregar pedido pendente:", error);
           if (!user) {
             const guestCart = loadGuestCart();
+            clearGuestOrderAnchor();
             if (guestCart) setCart(guestCart);
           }
          if (sessionCart) {
@@ -988,6 +999,7 @@ export function useCart(): CartContextType {
     calculateTotals,
     setOrderMetadata,
     transformOrderToCartItems,
+    clearGuestOrderAnchor,
   ]);
 
   const cartItemsToOrderItems = useCallback((items: CartItem[]) => {
@@ -1102,19 +1114,23 @@ export function useCart(): CartContextType {
               const orderCheck = await api.getOrder(orderIdToSync).catch(() => null);
               if (orderCheck && orderCheck.status !== "PENDING") {
                 clearPendingOrderId();
+                if (isGuest) clearGuestOrderAnchor();
                 return;
               }
-              await api.deleteOrder(orderIdToSync);
+              if (deletingOrderIdsRef.current.has(orderIdToSync)) return;
+              deletingOrderIdsRef.current.add(orderIdToSync);
+              const deletion = api.deleteOrder(orderIdToSync);
               clearPendingOrderId();
+              if (isGuest) clearGuestOrderAnchor();
               setOrderMetadata({
                 send_anonymously: false,
                 complement: undefined,
               });
-              if (isGuest && typeof window !== "undefined") {
-                localStorage.removeItem(GUEST_ORDER_ID_KEY);
-              }
+              await deletion;
             } catch (error) {
               logger.debug("Erro ao deletar pedido pendente vazio:", error);
+            } finally {
+              deletingOrderIdsRef.current.delete(orderIdToSync);
             }
           }
           return;
@@ -1163,8 +1179,8 @@ export function useCart(): CartContextType {
             if (status === 403 || status === 404) {
               logger.debug("⚠️ Pedido inválido, criando novo...");
               setPendingOrderId(null);
-              if (isGuest && typeof window !== "undefined") {
-                localStorage.removeItem(GUEST_ORDER_ID_KEY);
+                if (isGuest && typeof window !== "undefined") {
+                  clearGuestOrderAnchor();
               }
               const newOrder = await api.createOrder(draftPayload);
               storeGuestAnchor(newOrder);
@@ -1186,7 +1202,7 @@ export function useCart(): CartContextType {
               complement: undefined,
             });
             if (!user && typeof window !== "undefined") {
-              localStorage.removeItem(GUEST_ORDER_ID_KEY);
+              clearGuestOrderAnchor();
             }
             return;
           }
@@ -2384,12 +2400,21 @@ export function useCart(): CartContextType {
         }
       });
 
-      const agreeLaterDate = createBrazilDate(year, month, day, 23, 59);
-
-      slots.push({
-        value: agreeLaterDate.toISOString(),
-        label: "A combinar (entraremos em contato)",
-      });
+      if (relevantWindows.length > 0) {
+        const readyForDate = earliestTime > createBrazilDate(year, month, day, 0, 0)
+          ? earliestTime
+          : createBrazilDate(year, month, day, ...relevantWindows[0].start.split(":").map(Number));
+        const lastEnd = relevantWindows[relevantWindows.length - 1].end;
+        const [endH, endM] = lastEnd.split(":").map(Number);
+        const endDate = createBrazilDate(year, month, day, endH, endM);
+        if (readyForDate < endDate) {
+          const startLabel = readyForDate.toLocaleTimeString("pt-BR", { timeZone: "America/Sao_Paulo", hour: "2-digit", minute: "2-digit" });
+          slots.push({
+            value: createBrazilDate(year, month, day, 23, 59).toISOString(),
+            label: `Qualquer horário entre ${startLabel} e ${lastEnd}`,
+          });
+        }
+      }
 
       return slots;
     },

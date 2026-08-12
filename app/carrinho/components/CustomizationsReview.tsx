@@ -288,10 +288,8 @@ const normalizeAssetUrl = (value: string | undefined): string | undefined => {
   }
 
   if (trimmed.startsWith("/")) {
-    // Para uploads temporários, prefira URL relativa se API_BASE_URL não estiver disponível
-    // o proxy do Next.js vai redirecionar corretamente
     if (trimmed.startsWith("/uploads/temp/")) {
-      return trimmed; // Deixa como relativa, proxy cuida
+      return `/api/backend${trimmed}`;
     }
     return API_BASE_URL ? `${API_BASE_URL}${trimmed}` : trimmed;
   }

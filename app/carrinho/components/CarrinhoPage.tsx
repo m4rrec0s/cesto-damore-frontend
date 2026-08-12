@@ -1155,16 +1155,13 @@ export default function CarrinhoPageContent() {
     }
 
     if (hasServerReviewContext) {
-      if (customizationsValidationStatus?.source === "backend") {
-        // Validação dupla: local AND backend
-        return (
-          Boolean(customizationsValidationStatus?.valid) &&
-          localCustomizationsValid
-        );
-      }
-
-      // Se ainda não tem validação backend, usar validação local como fallback
-      return localCustomizationsValid;
+      // Pedido restaurado pode carregar antes da revisão assíncrona terminar.
+      // Nunca libere checkout com apenas validação local nesse caso.
+      return (
+        customizationsValidationStatus?.source === "backend" &&
+        Boolean(customizationsValidationStatus.valid) &&
+        localCustomizationsValid
+      );
     }
 
     if (customizationsValidationStatus?.source === "backend") {

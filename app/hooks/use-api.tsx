@@ -1425,14 +1425,16 @@ class ApiService {
     }
   };
   deleteOrder = async (id: string) => {
-    const res = await this.client.delete(`/orders/${id}`);
+    const res = await this.client.delete(`/orders/${id}`, {
+      validateStatus: (status) => status === 204 || (status >= 200 && status < 300) || status === 404,
+    });
     this.clearCache("orders");
     this.clearRequestCacheByPrefix(
       `orders:${id}`,
       `orderReview:${id}`,
       `orderValidation:${id}`,
     );
-    return res.data;
+    return res.status === 404 ? null : res.data;
   };
 
   deleteAllCanceledOrders = async () => {
