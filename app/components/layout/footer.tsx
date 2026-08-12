@@ -169,7 +169,7 @@ export function SiteFooter() {
               <li className="flex items-start gap-3 text-sm">
                 <Phone className="h-5 w-5 text-rose-400 flex-shrink-0 mt-0.5" />
                 <div>
-                  <p className="font-medium text-white">WhatsApp 24h</p>
+                  <p className="font-medium text-white">WhatsApp</p>
                   <a
                     href="https://tintim.link/whatsapp/0e438d1e-b6d6-41f8-ba1e-1a2554fb2089/e1e7a67b-23ad-4d79-b41f-faad52c88ddf"
                     className="text-rose-400 transition-colors"
@@ -194,8 +194,10 @@ export function SiteFooter() {
                 <Clock className="h-5 w-5 text-rose-400 flex-shrink-0 mt-0.5" />
                 <div>
                   <p className="font-medium text-white">Horário de Entrega</p>
-                  <p className="text-gray-400">Seg - Sex: 9h às 13h / 14h às 18h</p>
-                  <p className="text-gray-400">Sábado: 8h às 11h</p>
+                  <p className="text-gray-400">
+                    Seg - Sex: 9h às 13h / 14h às 18h
+                  </p>
+                  <p className="text-gray-400">Sábado: 9h às 13h</p>
                 </div>
               </li>
               <li className="flex items-start gap-3 text-sm">
@@ -217,42 +219,54 @@ export function SiteFooter() {
             </div>
 
             <div className="flex flex-wrap items-center justify-center gap-3">
-              <div className="bg-gray-800 px-4 py-2 rounded-lg border border-gray-700 hover:border-rose-500 transition-colors">
-                <span className="text-sm font-bold text-emerald-400">PIX</span>
-              </div>
+              <img
+                src={getPublicAssetUrl("pix.svg")}
+                alt="PIX"
+                title="PIX"
+                className="h-8 w-auto bg-white rounded-lg border border-gray-700 hover:border-rose-500 transition-colors px-2 py-1"
+              />
 
-              <div className="bg-gray-800 px-4 py-2 rounded-lg border border-gray-700 hover:border-rose-500 transition-colors flex items-center gap-2">
-                <div className="w-6 h-6 bg-blue-500 rounded flex items-center justify-center">
-                  <span className="text-white text-xs font-bold">MP</span>
-                </div>
-                <span className="text-sm font-medium">Mercado Pago</span>
-              </div>
+              <img
+                src={getPublicAssetUrl("mercado-pago.svg")}
+                alt="Mercado Pago"
+                title="Mercado Pago"
+                className="h-8 w-auto rounded-lg border border-gray-700 hover:border-rose-500 transition-colors"
+              />
 
-              <div className="bg-gray-800 px-3 py-2 rounded-lg border border-gray-700 hover:border-rose-500 transition-colors">
-                <span className="text-sm font-bold text-blue-600">VISA</span>
-              </div>
+              <img
+                src={getPublicAssetUrl("visa.svg")}
+                alt="Visa"
+                title="Visa"
+                className="h-8 w-auto rounded-lg border border-gray-700 hover:border-rose-500 transition-colors"
+              />
 
-              <div className="bg-gray-800 px-3 py-2 rounded-lg border border-gray-700 hover:border-rose-500 transition-colors flex items-center gap-1">
-                <div className="flex gap-0.5">
-                  <div className="w-4 h-4 rounded-full bg-red-500 opacity-80"></div>
-                  <div className="w-4 h-4 rounded-full bg-orange-500 opacity-80 -ml-2"></div>
-                </div>
-                <span className="text-sm font-bold">Mastercard</span>
-              </div>
+              <img
+                src={getPublicAssetUrl("mastercard.svg")}
+                alt="Mastercard"
+                title="Mastercard"
+                className="h-8 w-auto rounded-lg border border-gray-700 hover:border-rose-500 transition-colors"
+              />
 
-              <div className="bg-gray-800 px-3 py-2 rounded-lg border border-gray-700 hover:border-rose-500 transition-colors">
-                <span className="text-sm font-bold text-yellow-500">ELO</span>
-              </div>
+              <img
+                src={getPublicAssetUrl("elo.svg")}
+                alt="Elo"
+                title="Elo"
+                className="h-8 w-auto rounded-lg border border-gray-700 hover:border-rose-500 transition-colors"
+              />
 
-              <div className="bg-gray-800 px-3 py-2 rounded-lg border border-gray-700 hover:border-rose-500 transition-colors">
-                <span className="text-sm font-bold text-blue-400">AMEX</span>
-              </div>
+              <img
+                src={getPublicAssetUrl("american-express.svg")}
+                alt="American Express"
+                title="American Express"
+                className="h-8 w-auto rounded-lg border border-gray-700 hover:border-rose-500 transition-colors"
+              />
 
-              <div className="bg-gray-800 px-3 py-2 rounded-lg border border-gray-700 hover:border-rose-500 transition-colors">
-                <span className="text-sm font-bold text-red-600">
-                  Hipercard
-                </span>
-              </div>
+              <img
+                src={getPublicAssetUrl("hipercard.svg")}
+                alt="Hipercard"
+                title="Hipercard"
+                className="h-8 w-auto rounded-lg border border-gray-700 hover:border-rose-500 transition-colors"
+              />
             </div>
 
             <p className="text-xs text-gray-500 text-center mt-2">

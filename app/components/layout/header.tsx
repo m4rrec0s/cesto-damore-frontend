@@ -151,7 +151,7 @@ export function SiteHeader() {
         <div className="flex w-full max-w-[90%] mx-auto text-sm py-2 justify-between items-center px-4">
           <span className="text-xs flex items-center gap-2 font-medium">
             <span className="bg-white/20 rounded-full w-2 h-2 animate-pulse"></span>
-            Atendimento 24hrs no WhatsApp
+            Atendimento no WhatsApp
           </span>
           <span className="text-xs font-medium opacity-90">
             Entregas em Campina Grande e Região
