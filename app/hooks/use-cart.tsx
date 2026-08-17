@@ -2379,7 +2379,7 @@ export function useCart(): CartContextType {
         const windowStart = createBrazilDate(year, month, day, startH, startM);
         const windowEnd = createBrazilDate(year, month, day, endH, endM);
 
-        if (windowStart >= earliestTime) {
+        if (windowEnd > earliestTime) {
           const startLabel = windowStart.toLocaleTimeString("pt-BR", {
             timeZone: "America/Sao_Paulo",
             hour: "2-digit",
