@@ -1193,8 +1193,11 @@ export function useCart(): CartContextType {
         logger.debug("Erro ao sincronizar carrinho com backend:", error);
 
         try {
-          const maybe = error as { response?: { status: number } };
+          const maybe = error as {
+            response?: { status: number; data?: { code?: string } };
+          };
           const status = maybe?.response?.status;
+          const code = maybe?.response?.data?.code;
           if (status === 403 || status === 404) {
             setPendingOrderId(null);
             setOrderMetadata({
@@ -1203,6 +1206,17 @@ export function useCart(): CartContextType {
             });
             if (!user && typeof window !== "undefined") {
               clearGuestOrderAnchor();
+            }
+            return;
+          }
+          if (status === 409 || code === "GUEST_ORDER_TOKEN_REQUIRED") {
+            if (!user && typeof window !== "undefined") {
+              clearGuestOrderAnchor();
+              clearPendingOrderId();
+              setOrderMetadata({
+                send_anonymously: false,
+                complement: undefined,
+              });
             }
             return;
           }
