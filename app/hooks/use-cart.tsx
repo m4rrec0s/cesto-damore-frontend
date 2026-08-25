@@ -1221,8 +1221,11 @@ export function useCart(): CartContextType {
             return;
           }
           if (status === 500) {
-            toast.error(
-              "Erro ao sincronizar o carrinho com o servidor. Tente novamente mais tarde.",
+            // Background cart sync is best-effort and non-blocking: the cart
+            // remains functional locally. Do not alarm the user with a toast.
+            logger.debug(
+              "⚠️ Sincronização de carrinho com o backend falhou (não bloqueante):",
+              maybe?.response?.data ?? error,
             );
           }
         } catch {}

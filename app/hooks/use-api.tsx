@@ -1415,12 +1415,22 @@ class ApiService {
       );
       return res.data;
     } catch (error: unknown) {
-      console.error("API.createOrder failed:", {
-        payload,
-        error:
-          (error as unknown as { response?: { data?: unknown } })?.response
-            ?.data || error,
-      });
+      // Draft orders are best-effort background cart syncs (guest/local cart).
+      // A failure must not surface to the user, so avoid console.error noise.
+      if (payload.is_draft) {
+        console.debug("API.createOrder (draft) skipped:", {
+          error:
+            (error as unknown as { response?: { data?: unknown } })?.response
+              ?.data || error,
+        });
+      } else {
+        console.error("API.createOrder failed:", {
+          payload,
+          error:
+            (error as unknown as { response?: { data?: unknown } })?.response
+              ?.data || error,
+        });
+      }
       throw error;
     }
   };
