@@ -2356,6 +2356,24 @@ export default function CarrinhoPageContent() {
         }
       }
     }
+
+    // O valor do slot é um ISO (não a string "23:59"); detectar o período pela
+    // label evita erro de fuso horário e garante o delivery_slot correto.
+    const deliverySlots = generateTimeSlots(selectedDate || new Date());
+    const selectedSlot = deliverySlots.find((s) => s.value === selectedTime);
+    const isToBeArranged = Boolean(selectedSlot?.label?.includes("Qualquer"));
+    const computedFinalDateForBackend: Date | null = isToBeArranged
+      ? selectedDate
+        ? new Date(selectedDate)
+        : finalDeliveryDate
+      : finalDeliveryDate;
+    const computedDeliverySlot: "morning" | "afternoon" | "to_be_arranged" =
+      isToBeArranged
+        ? "to_be_arranged"
+        : selectedSlot?.label?.includes("Manhã")
+          ? "morning"
+          : "afternoon";
+
     if (currentStep === 1 && canProceedToStep2) {
       updateStepUrl(2);
       window.scrollTo({ top: 0, behavior: "smooth" });
@@ -2431,13 +2449,8 @@ export default function CarrinhoPageContent() {
         setIsProcessing(true);
         creatingOrderRef.current = true;
         try {
-          let finalDateForBackend = finalDeliveryDate;
-          if (selectedTime === "23:59") {
-            finalDateForBackend = new Date(selectedDate!);
-          }
-          const deliverySlot = selectedTime === "23:59"
-            ? "to_be_arranged"
-            : (finalDeliveryDate!.getHours() < 12 ? "morning" : "afternoon");
+          const finalDateForBackend = computedFinalDateForBackend;
+          const deliverySlot = computedDeliverySlot;
 
           const isPickup = optionSelected === "pickup";
           const deliveryAddress = isPickup
@@ -2548,13 +2561,8 @@ export default function CarrinhoPageContent() {
             ? "Retirada na Loja - Rua José de Alencar, 480, Prata, Campina Grande - PB, 58400-515"
             : `${address}, ${houseNumber} - ${neighborhood}, ${city}/${state} - CEP: ${zipCode}`;
 
-          let finalDateForBackend = finalDeliveryDate;
-          if (selectedTime === "23:59") {
-            finalDateForBackend = new Date(selectedDate!);
-          }
-          const deliverySlot = selectedTime === "23:59"
-            ? "to_be_arranged"
-            : (finalDeliveryDate!.getHours() < 12 ? "morning" : "afternoon");
+          const finalDateForBackend = computedFinalDateForBackend;
+          const deliverySlot = computedDeliverySlot;
 
           await updateOrderMetadata(currentOrderId, {
             delivery_address: deliveryAddress,
