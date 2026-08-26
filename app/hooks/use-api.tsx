@@ -1435,7 +1435,14 @@ class ApiService {
     }
   };
   deleteOrder = async (id: string) => {
-    const res = await this.client.delete(`/orders/${id}`, {
+    const guestToken =
+      typeof window !== "undefined"
+        ? localStorage.getItem("guest_order_token")
+        : null;
+    const url = guestToken
+      ? `/orders/${id}?guestToken=${encodeURIComponent(guestToken)}`
+      : `/orders/${id}`;
+    const res = await this.client.delete(url, {
       validateStatus: (status) => status === 204 || (status >= 200 && status < 300) || status === 404,
     });
     this.clearCache("orders");
@@ -2266,6 +2273,21 @@ class ApiService {
   validateCoupon = async (code: string) => {
     const res = await this.client.post('/coupons/validate', { code });
     return res.data;
+  };
+
+  validateDocument = async (value: string, type?: "CPF" | "CNPJ") => {
+    const res = await this.client.post('/payment/validate-document', {
+      value,
+      type,
+    });
+    return res.data as {
+      valid: boolean;
+      type: "CPF" | "CNPJ" | null;
+      exists: boolean;
+      checked: boolean;
+      situation?: string;
+      message?: string;
+    };
   };
 
   getAvailableCoupons = async () => {

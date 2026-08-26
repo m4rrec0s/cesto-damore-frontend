@@ -925,13 +925,15 @@ export function useCart(): CartContextType {
       const loadPendingOrder = async () => {
        if (isInitializedRef.current) return;
 
-      const markInitialized = () => {
-        isInitializedRef.current = true;
-        setIsSyncReady(true);
-      };
+       const markInitialized = () => {
+         isInitializedRef.current = true;
+         setIsSyncReady(true);
+       };
+
+       const sessionCart = loadCartFromSession();
 
        try {
-         const sessionCart = loadCartFromSession();
+
 
          if (!user) {
            const guestCart = loadGuestCart();
@@ -1688,16 +1690,21 @@ export function useCart(): CartContextType {
                   return;
                 }
                 await api.deleteOrder(pendingOrderId);
-                clearPendingOrderId();
-                setOrderMetadata({
-                  send_anonymously: false,
-                  complement: undefined,
-                });
               } catch (deleteErr) {
                 logger.debug(
                   `❌ [removeFromCart] Erro ao deletar pedido vazio ${pendingOrderId}:`,
                   deleteErr,
                 );
+              } finally {
+                // Limpar o anchor local sempre: se o delete falhou no servidor
+                // (ex.: token de guest ausente), o pedido pendente não deve ser
+                // restaurado no reload — senão o item removido reapareceria.
+                clearPendingOrderId();
+                if (!user) clearGuestOrderAnchor();
+                setOrderMetadata({
+                  send_anonymously: false,
+                  complement: undefined,
+                });
               }
             }
           } catch (err) {

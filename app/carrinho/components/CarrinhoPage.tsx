@@ -33,6 +33,7 @@ import {
 import type { CustomizationInput } from "@/app/types/customization";
 import { normalizeCustomizationData } from "@/app/lib/customization-serialization";
 import { CouponModal } from "./CouponModal";
+import { validateDocument } from "@/app/utils/validateDocument";
 
 const ACCEPTED_CITIES = [
   "Campina Grande",
@@ -191,6 +192,7 @@ export default function CarrinhoPageContent() {
     getPaymentStatus,
     getStockAvailability,
     getDeliveryHolidays,
+    validateDocument: validateDocumentApi,
   } = useApi();
   const {
     cart,
@@ -341,6 +343,7 @@ export default function CarrinhoPageContent() {
   const [neighborhood, setNeighborhood] = useState("");
   const [city, setCity] = useState("");
   const [state, setState] = useState("");
+  const [addressFromCep, setAddressFromCep] = useState(false);
   const [customerPhone, setCustomerPhone] = useState("");
   const [recipientPhone, setRecipientPhone] = useState("");
   const [complemento, setComplemento] = useState("");
@@ -406,12 +409,19 @@ export default function CarrinhoPageContent() {
   const pollingStartedRef = useRef(false);
   const sseDisconnectCountRef = useRef(0);
   const pixGeneratedForOrderRef = useRef<string | null>(null);
+  const pixAutoAttemptsRef = useRef<Record<string, number>>({});
   const updatingOrderMetadataRef = useRef(false);
   const creatingOrderRef = useRef(false);
   const lastRealtimeStatusRef = useRef<string | null>(null);
   const restoredFormRef = useRef(false);
   const checkoutFormEditedRef = useRef(false);
   const [hasHydratedCheckoutForm, setHasHydratedCheckoutForm] = useState(false);
+
+  useEffect(() => {
+    if (currentOrderId) {
+      pixAutoAttemptsRef.current[currentOrderId] = 0;
+    }
+  }, [currentOrderId]);
 
   const beginCheckoutFiredRef = useRef(false);
   useEffect(() => {
@@ -1345,8 +1355,12 @@ export default function CarrinhoPageContent() {
         return true;
       } catch (err) {
         logger.debug("Erro ao validar total do pedido:", err);
+        const apiErr =
+          (err as any)?.response?.data?.error ||
+          (err as any)?.response?.data?.message;
         setPaymentError(
-          "Não foi possível validar o valor do pedido. Tente novamente.",
+          apiErr ||
+            "Não foi possível validar o valor do pedido. Tente novamente.",
         );
         return false;
       }
@@ -1628,17 +1642,33 @@ export default function CarrinhoPageContent() {
       });
       if (!totalsOk) return;
 
+      const docValidation = validateDocument(userDocument);
+      if (!docValidation.valid) {
+        setPaymentError(
+          docValidation.message ||
+            "Informe um CPF/CNPJ válido antes de gerar o pagamento.",
+        );
+        showPixToast(
+          "error",
+          docValidation.message || "CPF/CNPJ inválido.",
+        );
+        return;
+      }
+
       setIsProcessing(true);
       setIsGeneratingPix(true);
 
       setPaymentError(null);
 
       try {
+        const couponDiscountValue =
+          (orderMetadata.couponDiscount as number) || 0;
+
         if (typeof shippingCost === "number") {
           await updateOrderMetadata(currentOrderId, {
             payment_method: "pix",
             shipping_price: shippingCost,
-            discount: pickupDiscount,
+            discount: pickupDiscount + couponDiscountValue,
             delivery_method: optionSelected as "delivery" | "pickup",
           });
         }
@@ -1648,8 +1678,9 @@ export default function CarrinhoPageContent() {
           paymentMethodId: "pix" as const,
           payerEmail: customerEmail || "",
           payerName: customerName || "",
-          payerDocument: userDocument || "00000000000",
-          payerDocumentType: "CPF" as const,
+          payerDocument: userDocument,
+          payerDocumentType: docValidation.type as "CPF" | "CNPJ",
+          couponCode: (orderMetadata.couponCode as string) || undefined,
         };
 
         const paymentResponse = await createTransparentPayment(payload);
@@ -1753,7 +1784,22 @@ export default function CarrinhoPageContent() {
   ]);
 
   useEffect(() => {
-    if (paymentMethod === "pix" && currentStep === 3 && currentOrderId) {
+    if (
+      paymentMethod === "pix" &&
+      currentStep === 3 &&
+      currentOrderId &&
+      !paymentError &&
+      !pixData &&
+      !isProcessing
+    ) {
+      const attempts = pixAutoAttemptsRef.current[currentOrderId] || 0;
+      if (attempts >= 2) {
+        logger.debug(
+          `Auto-geração de PIX para ${currentOrderId} interrompida após ${attempts} tentativas. Aguardando ação do usuário.`,
+        );
+        return;
+      }
+      pixAutoAttemptsRef.current[currentOrderId] = attempts + 1;
       generatePixPayment();
     }
   }, [
@@ -1764,6 +1810,9 @@ export default function CarrinhoPageContent() {
     pendingOrder?.payment?.mercado_pago_id,
     pendingOrder?.payment?.status,
     isPendingPaymentExpired,
+    paymentError,
+    pixData,
+    isProcessing,
     generatePixPayment,
   ]);
 
@@ -1805,15 +1854,29 @@ export default function CarrinhoPageContent() {
       });
       if (!totalsOk) return;
 
+      const cardDoc =
+        formData.payer?.identification?.number || userDocument || "";
+      const cardDocValidation = validateDocument(cardDoc);
+      if (!cardDocValidation.valid) {
+        setPaymentError(
+          cardDocValidation.message ||
+            "Informe um CPF/CNPJ válido antes de pagar.",
+        );
+        return;
+      }
+
       setIsProcessing(true);
       setPaymentError(null);
 
       try {
+        const couponDiscountValue =
+          (orderMetadata.couponDiscount as number) || 0;
+
         if (typeof shippingCost === "number") {
           await updateOrderMetadata(currentOrderId, {
             payment_method: "card",
             shipping_price: shippingCost,
-            discount: 0,
+            discount: couponDiscountValue,
             delivery_method: optionSelected as "delivery" | "pickup",
           });
         }
@@ -1822,12 +1885,9 @@ export default function CarrinhoPageContent() {
           orderId: currentOrderId,
           payerEmail: customerEmail || "",
           payerName: customerName || "",
-          payerDocument:
-            formData.payer?.identification?.number ||
-            userDocument ||
-            "00000000000",
-          payerDocumentType:
-            (formData.payer?.identification?.type as "CPF" | "CNPJ") || "CPF",
+          payerDocument: cardDoc,
+          payerDocumentType: cardDocValidation.type as "CPF" | "CNPJ",
+          couponCode: (orderMetadata.couponCode as string) || undefined,
           paymentMethodId: "credit_card" as const,
           cardToken: formData.token,
           installments: formData.installments,
@@ -2144,12 +2204,14 @@ export default function CarrinhoPageContent() {
       setNeighborhood(cepData.neighborhood);
       setCity(cepData.city);
       setState(cepData.state);
+      setAddressFromCep(true);
     } catch (error) {
       logger.debug("Erro ao buscar CEP:", error);
       setAddress("");
       setNeighborhood("");
       setCity("");
       setState("");
+      setAddressFromCep(false);
       setCepError(
         "Erro ao buscar informações do CEP. Verifique se o CEP está correto.",
       );
@@ -2242,7 +2304,7 @@ export default function CarrinhoPageContent() {
     const commonValid =
       customerPhone.trim() !== "" &&
       isValidPhone(customerPhone) &&
-      userDocument.trim().length >= 11 &&
+      validateDocument(userDocument).valid &&
       selectedDate !== undefined &&
       selectedTime !== "" &&
       isDeliveryScheduleValid &&
@@ -2298,6 +2360,31 @@ export default function CarrinhoPageContent() {
       updateStepUrl(2);
       window.scrollTo({ top: 0, behavior: "smooth" });
     } else if (currentStep === 2 && canProceedToStep3) {
+      const docCheck = await validateDocumentApi(userDocument);
+      if (!docCheck.valid) {
+        setPaymentError(
+          docCheck.message || "Informe um CPF/CNPJ válido antes de continuar.",
+        );
+        showFlowToast(
+          "error",
+          docCheck.message || "CPF/CNPJ inválido.",
+        );
+        return;
+      }
+
+      if (docCheck.checked && !docCheck.exists) {
+        setPaymentError(
+          docCheck.message ||
+            "CPF/CNPJ não encontrado. Verifique os dados informados.",
+        );
+        showFlowToast(
+          "error",
+          docCheck.message ||
+            "CPF/CNPJ não encontrado na base oficial. Verifique os dados.",
+        );
+        return;
+      }
+
       if (user?.id) {
         try {
           const fullAddress = `${address}, ${houseNumber} - ${neighborhood}, ${city}/${state} - CEP: ${zipCode}`;
@@ -2778,6 +2865,8 @@ export default function CarrinhoPageContent() {
                       setCity={setCity}
                       state={state}
                       setState={setState}
+                      addressLocked={addressFromCep}
+                      onCepEdited={() => setAddressFromCep(false)}
                       complemento={complemento}
                       setComplemento={setComplemento}
                       customerPhone={customerPhone}

@@ -23,6 +23,7 @@ import {
 } from "@/app/components/ui/popover";
 import { TimeSlotSelector } from "../TimeSlotSelector";
 import { cn } from "@/app/lib/utils";
+import { validateDocument } from "@/app/utils/validateDocument";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Card } from "@/app/components/ui/card";
@@ -45,6 +46,8 @@ interface StepDeliveryProps {
   setCity: (val: string) => void;
   state: string;
   setState: (val: string) => void;
+  addressLocked?: boolean;
+  onCepEdited?: () => void;
   complemento: string;
   setComplemento: (val: string) => void;
   customerPhone: string;
@@ -93,9 +96,11 @@ export const StepDelivery = ({
   neighborhood,
   setNeighborhood,
   city,
-  setCity: _setCity,
+  setCity,
   state,
-  setState: _setState,
+  setState,
+  addressLocked,
+  onCepEdited,
   complemento,
   setComplemento,
   customerPhone,
@@ -136,11 +141,6 @@ export const StepDelivery = ({
     city?.trim() &&
     state?.trim()
   );
-
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const unusedSetCity = _setCity;
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const unusedSetState = _setState;
 
   const [isEditing, setIsEditing] = useState(!isAddressComplete);
 
@@ -227,6 +227,7 @@ export const StepDelivery = ({
                           onChange={(e) => {
                             const val = e.target.value.replace(/\D/g, "");
                             setZipCode(val);
+                            onCepEdited?.();
                             if (val.length === 8) handleCepSearch(val);
                           }}
                           maxLength={8}
@@ -281,8 +282,44 @@ export const StepDelivery = ({
                     <Input
                       value={neighborhood}
                       onChange={(e) => setNeighborhood(e.target.value)}
-                      className="h-10 border-gray-300 rounded focus:ring-[#3483fa]"
+                      disabled={addressLocked}
+                      className="h-10 border-gray-300 rounded focus:ring-[#3483fa] disabled:bg-gray-50 disabled:text-gray-500"
                     />
+                    {addressLocked && (
+                      <span className="text-[10px] text-gray-400">
+                        Preenchido automaticamente pelo CEP
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label className="text-xs font-bold text-gray-500 uppercase">
+                        Cidade
+                      </Label>
+                      <Input
+                        value={city}
+                        onChange={(e) => setCity(e.target.value)}
+                        disabled={addressLocked}
+                        placeholder="Ex: Campina Grande"
+                        className="h-10 border-gray-300 rounded focus:ring-[#3483fa] disabled:bg-gray-50 disabled:text-gray-500"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs font-bold text-gray-500 uppercase">
+                        Estado
+                      </Label>
+                      <Input
+                        value={state}
+                        onChange={(e) =>
+                          setState(e.target.value.toUpperCase())
+                        }
+                        disabled={addressLocked}
+                        placeholder="Ex: PB"
+                        maxLength={2}
+                        className="h-10 border-gray-300 rounded focus:ring-[#3483fa] disabled:bg-gray-50 disabled:text-gray-500"
+                      />
+                    </div>
                   </div>
 
                   {cepError && (
@@ -451,8 +488,20 @@ export const StepDelivery = ({
                 }
                 placeholder="000.000.000-00"
                 maxLength={18}
-                className="h-10 border-gray-300 rounded focus:ring-[#3483fa]"
+                className={cn(
+                  "h-10 border-gray-300 rounded focus:ring-[#3483fa]",
+                  userDocument.trim().length >= 11 &&
+                    !validateDocument(userDocument).valid &&
+                    "border-red-500 focus:ring-red-500",
+                )}
               />
+              {userDocument.trim().length >= 11 &&
+                !validateDocument(userDocument).valid && (
+                  <span className="text-[10px] text-red-500 font-bold">
+                    {validateDocument(userDocument).message ||
+                      "CPF/CNPJ inválido"}
+                  </span>
+                )}
             </div>
           </div>
         </div>
