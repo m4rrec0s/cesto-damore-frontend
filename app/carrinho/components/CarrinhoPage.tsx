@@ -2574,6 +2574,7 @@ export default function CarrinhoPageContent() {
             send_anonymously: sendAnonymously,
             complement: complemento,
             delivery_method: optionSelected as "delivery" | "pickup",
+            customer_zip_code: zipCode,
           });
         } catch (err) {
           logger.debug("Erro ao atualizar metadata do pedido pendente:", err);
