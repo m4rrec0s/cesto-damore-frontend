@@ -53,6 +53,7 @@ interface CartContextType {
       deliveryCity?: string;
       deliveryState?: string;
       recipientPhone?: string;
+      recipientIsCustomer?: boolean;
       sendAnonymously?: boolean;
       complement?: string;
       deliveryMethod?: "delivery" | "pickup";
@@ -65,6 +66,8 @@ interface CartContextType {
       customerCity?: string;
       customerState?: string;
       customerZipCode?: string;
+      deliveryNumber?: string;
+      deliveryNeighborhood?: string;
     },
   ) => Promise<unknown>;
   createOrderWithTransparentCheckout: (

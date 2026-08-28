@@ -557,6 +557,8 @@ export interface Order {
   created_at: string;
   updated_at: string;
   delivery_address?: string | null;
+  delivery_number?: string | null;
+  delivery_neighborhood?: string | null;
   complement?: string | null;
   send_anonymously?: boolean | null;
   delivery_city?: string | null;
@@ -1383,12 +1385,15 @@ class ApiService {
     user_id?: string;
     items: OrderItemInput[];
     delivery_address?: string | null;
+    delivery_number?: string | null;
+    delivery_neighborhood?: string | null;
     delivery_city?: string;
     delivery_state?: string;
     delivery_date?: Date | null;
     delivery_slot?: "morning" | "afternoon" | "to_be_arranged";
     payment_method?: "pix" | "card";
     recipient_phone?: string;
+    recipient_is_customer?: boolean;
     discount?: number;
     is_draft?: boolean;
     send_anonymously?: boolean;
@@ -1488,9 +1493,12 @@ class ApiService {
       send_anonymously?: boolean;
       complement?: string;
       delivery_address?: string | null;
+      delivery_number?: string | null;
+      delivery_neighborhood?: string | null;
       delivery_city?: string | null;
       delivery_state?: string | null;
       recipient_phone?: string | null;
+      recipient_is_customer?: boolean;
       delivery_date?: string | Date | null;
       delivery_slot?: "morning" | "afternoon" | "to_be_arranged";
       shipping_price?: number;

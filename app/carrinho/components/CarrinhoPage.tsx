@@ -2412,7 +2412,7 @@ export default function CarrinhoPageContent() {
             address: fullAddress,
             city,
             state,
-            phone: customerPhone.replace(/\D/g, ""),
+            phone: normalizePhoneForBackend(customerPhone),
             document: userDocument.replace(/\D/g, "") || undefined,
           });
 
@@ -2453,9 +2453,7 @@ export default function CarrinhoPageContent() {
           const deliverySlot = computedDeliverySlot;
 
           const isPickup = optionSelected === "pickup";
-          const deliveryAddress = isPickup
-            ? "Retirada na Loja - Rua José de Alencar, 480, Prata, Campina Grande - PB, 58400-515"
-            : `${address}, ${houseNumber} - ${neighborhood}, ${city}/${state} - CEP: ${zipCode}`;
+          const deliveryAddress = isPickup ? "Rua José de Alencar" : address;
 
           const createdOrder = await createOrder(
             user?.id,
@@ -2465,9 +2463,12 @@ export default function CarrinhoPageContent() {
               shippingCost: shippingCost || 0,
               paymentMethod: "pix",
               grandTotal: grandTotal,
+              deliveryNumber: isPickup ? "480" : houseNumber,
+              deliveryNeighborhood: isPickup ? "Prata" : neighborhood,
               deliveryCity: isPickup ? "Campina Grande" : city,
               deliveryState: isPickup ? "PB" : state,
               recipientPhone: normalizePhoneForBackend(recipientPhone),
+              recipientIsCustomer: isSelfRecipient,
               sendAnonymously,
               complement: complemento,
               deliveryMethod: optionSelected as "delivery" | "pickup",
@@ -2558,17 +2559,20 @@ export default function CarrinhoPageContent() {
         try {
           const isPickup = optionSelected === "pickup";
           const deliveryAddress = isPickup
-            ? "Retirada na Loja - Rua José de Alencar, 480, Prata, Campina Grande - PB, 58400-515"
-            : `${address}, ${houseNumber} - ${neighborhood}, ${city}/${state} - CEP: ${zipCode}`;
+            ? "Rua José de Alencar"
+            : address;
 
           const finalDateForBackend = computedFinalDateForBackend;
           const deliverySlot = computedDeliverySlot;
 
           await updateOrderMetadata(currentOrderId, {
             delivery_address: deliveryAddress,
+            delivery_number: isPickup ? "480" : houseNumber,
+            delivery_neighborhood: isPickup ? "Prata" : neighborhood,
             delivery_city: isPickup ? "Campina Grande" : city,
             delivery_state: isPickup ? "PB" : state,
             recipient_phone: normalizePhoneForBackend(recipientPhone),
+            recipient_is_customer: isSelfRecipient,
             delivery_date: finalDateForBackend?.toISOString() || null,
             delivery_slot: deliverySlot,
             send_anonymously: sendAnonymously,

@@ -441,7 +441,7 @@ interface CartContextType {
   ) => void;
   clearCart: () => void;
   createOrder: (
-    userId: string,
+    userId?: string,
     deliveryAddress?: string,
     deliveryDate?: Date,
     options?: {
@@ -451,6 +451,7 @@ interface CartContextType {
       deliveryCity?: string;
       deliveryState?: string;
       recipientPhone?: string;
+      recipientIsCustomer?: boolean;
       sendAnonymously?: boolean;
       complement?: string;
       deliveryMethod?: "delivery" | "pickup";
@@ -463,10 +464,12 @@ interface CartContextType {
       customerCity?: string;
       customerState?: string;
       customerZipCode?: string;
+      deliveryNumber?: string;
+      deliveryNeighborhood?: string;
     },
   ) => Promise<unknown>;
   createOrderWithTransparentCheckout: (
-    userId: string,
+    userId?: string,
     deliveryAddress?: string,
     deliveryDate?: Date,
     options?: {
@@ -1898,6 +1901,7 @@ export function useCart(): CartContextType {
         deliveryCity?: string;
         deliveryState?: string;
         recipientPhone?: string;
+        recipientIsCustomer?: boolean;
         sendAnonymously?: boolean;
         complement?: string;
         deliveryMethod?: "delivery" | "pickup";
@@ -1910,6 +1914,8 @@ export function useCart(): CartContextType {
         customerCity?: string;
         customerState?: string;
         customerZipCode?: string;
+        deliveryNumber?: string;
+        deliveryNeighborhood?: string;
       },
     ) => {
       if (cart.items.length === 0) {
@@ -1963,10 +1969,13 @@ export function useCart(): CartContextType {
         payment_method: options.paymentMethod,
         items: orderItems,
         delivery_address: deliveryAddress,
+        delivery_number: options?.deliveryNumber,
+        delivery_neighborhood: options?.deliveryNeighborhood,
         delivery_city: deliveryCity,
         delivery_state: deliveryState,
         delivery_date: deliveryDate,
         recipient_phone: options.recipientPhone,
+        recipient_is_customer: options.recipientIsCustomer,
         discount: options.discount || 0,
         send_anonymously: options?.sendAnonymously,
         complement: options?.complement,
