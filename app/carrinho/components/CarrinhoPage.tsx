@@ -2434,11 +2434,17 @@ export default function CarrinhoPageContent() {
           return;
         }
 
-        if (optionSelected === "delivery" && !recipientPhone.trim()) {
+        const resolvedRecipientPhone = recipientPhone.trim()
+          ? recipientPhone
+          : isSelfRecipient
+            ? customerPhone
+            : "";
+
+        if (optionSelected === "delivery" && !resolvedRecipientPhone.trim()) {
           showFlowToast("error", "Por favor, informe o número do destinatário");
           return;
         }
-        if (optionSelected === "delivery" && !isValidPhone(recipientPhone)) {
+        if (optionSelected === "delivery" && !isValidPhone(resolvedRecipientPhone)) {
           showFlowToast(
             "error",
             "Por favor, informe um número de telefone válido para o destinatário",
@@ -2467,7 +2473,9 @@ export default function CarrinhoPageContent() {
               deliveryNeighborhood: isPickup ? "Prata" : neighborhood,
               deliveryCity: isPickup ? "Campina Grande" : city,
               deliveryState: isPickup ? "PB" : state,
-              recipientPhone: normalizePhoneForBackend(recipientPhone),
+               recipientPhone: normalizePhoneForBackend(
+                 resolvedRecipientPhone || customerPhone,
+               ),
               recipientIsCustomer: isSelfRecipient,
               sendAnonymously,
               complement: complemento,
@@ -2547,7 +2555,10 @@ export default function CarrinhoPageContent() {
         }
       }
 
-      if (currentOrderId) {
+      // Drafts may be created by cart synchronization before this step. Use
+      // pendingOrder as fallback so delivery data is saved on final advance.
+      const orderIdForMetadata = currentOrderId || pendingOrder?.id || null;
+      if (orderIdForMetadata) {
         if (updatingOrderMetadataRef.current) {
           logger.debug(
             "Já há uma atualização em progresso, ignorando requisição duplicada",
@@ -2565,13 +2576,19 @@ export default function CarrinhoPageContent() {
           const finalDateForBackend = computedFinalDateForBackend;
           const deliverySlot = computedDeliverySlot;
 
-          await updateOrderMetadata(currentOrderId, {
+          await updateOrderMetadata(orderIdForMetadata, {
             delivery_address: deliveryAddress,
             delivery_number: isPickup ? "480" : houseNumber,
             delivery_neighborhood: isPickup ? "Prata" : neighborhood,
             delivery_city: isPickup ? "Campina Grande" : city,
             delivery_state: isPickup ? "PB" : state,
-            recipient_phone: normalizePhoneForBackend(recipientPhone),
+            recipient_phone: normalizePhoneForBackend(
+              recipientPhone.trim()
+                ? recipientPhone
+                : isSelfRecipient || optionSelected === "pickup"
+                  ? customerPhone
+                  : "",
+            ),
             recipient_is_customer: isSelfRecipient,
             delivery_date: finalDateForBackend?.toISOString() || null,
             delivery_slot: deliverySlot,
