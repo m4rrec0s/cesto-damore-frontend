@@ -1228,6 +1228,8 @@ const ClientProductPage = ({ id }: { id: string }) => {
               highQualityUrl?: string;
               pages?: Array<{ pageId: string; pageIndex: number; url: string }>;
               pdfUrl?: string | null;
+              pdf_pending?: boolean;
+              pdf_pending_at?: string;
             };
 
             const imageCount = layoutData.images?.length || 0;
@@ -1296,28 +1298,39 @@ const ClientProductPage = ({ id }: { id: string }) => {
                 );
               }
             }
-            // Upload PDF if present (data URL from client-side jsPDF generation)
+            // PDF is required only for production. Retry silently; the customization itself remains saved.
             let uploadedPdfUrl: string | null = layoutData.pdfUrl ?? null;
-            if (uploadedPdfUrl && uploadedPdfUrl.startsWith("data:")) {
+            let pdfPending = false;
+            if (uploadedPdfUrl?.startsWith("data:")) {
               try {
                 const pdfRes = await fetch(uploadedPdfUrl);
                 const pdfBlob = await pdfRes.blob();
                 const pdfFile = new File([pdfBlob], "design-multi-page.pdf", {
                   type: "application/pdf",
                 });
-                const pdfUploadResult = await uploadCustomizationFile(pdfFile);
-                if (pdfUploadResult.success) {
-                  uploadedPdfUrl = pdfUploadResult.imageUrl;
-                } else {
-                  console.warn(
-                    `⚠️ [DYNAMIC_LAYOUT-AddToCart] PDF upload failed`,
-                  );
+
+                for (let attempt = 0; attempt < 3; attempt++) {
+                  try {
+                    const pdfUploadResult = await uploadCustomizationFile(pdfFile);
+                    if (pdfUploadResult.success) {
+                      uploadedPdfUrl = pdfUploadResult.imageUrl;
+                      break;
+                    }
+                  } catch {
+                    // Retry transient upload failures without interrupting checkout.
+                  }
+
+                  if (attempt < 2) {
+                    await new Promise((resolve) => setTimeout(resolve, 500 * (attempt + 1)));
+                  }
                 }
-              } catch (err) {
-                console.error(
-                  `❌ [DYNAMIC_LAYOUT-AddToCart] Error uploading PDF:`,
-                  err,
-                );
+              } catch {
+                // Keep the checkout silent; the pending state is handled by production.
+              }
+
+              if (uploadedPdfUrl?.startsWith("data:")) {
+                uploadedPdfUrl = null;
+                pdfPending = true;
               }
             }
 
@@ -1329,6 +1342,8 @@ const ClientProductPage = ({ id }: { id: string }) => {
               text: finalPreviewUrl,
               pages: layoutData.pages,
               pdfUrl: uploadedPdfUrl,
+              pdf_pending: pdfPending,
+              pdf_pending_at: pdfPending ? new Date().toISOString() : undefined,
             });
 
             cartCustomizations.push(cartCustomization);
