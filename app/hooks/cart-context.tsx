@@ -45,7 +45,7 @@ interface CartContextType {
   createOrder: (
     userId?: string,
     deliveryAddress?: string,
-    deliveryDate?: Date,
+    deliveryDate?: string | Date,
     options?: {
       shippingCost?: number;
       paymentMethod?: "pix" | "card";
@@ -73,7 +73,7 @@ interface CartContextType {
   createOrderWithTransparentCheckout: (
     userId?: string,
     deliveryAddress?: string,
-    deliveryDate?: Date,
+    deliveryDate?: string | Date,
     options?: {
       shippingCost?: number;
       paymentMethod?: "pix" | "card";

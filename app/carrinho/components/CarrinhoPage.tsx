@@ -34,6 +34,14 @@ import type { CustomizationInput } from "@/app/types/customization";
 import { normalizeCustomizationData } from "@/app/lib/customization-serialization";
 import { CouponModal } from "./CouponModal";
 import { validateDocument } from "@/app/utils/validateDocument";
+import {
+  getDeliveryDateForBackend,
+  getLegacyDeliveryTime,
+  getPersistedDeliveryDate,
+  getSaoPauloTime,
+  parseStoredDeliveryDate,
+  toSaoPauloSchedulingDate,
+} from "@/app/utils/deliveryDate";
 
 const ACCEPTED_CITIES = [
   "Campina Grande",
@@ -328,9 +336,7 @@ export default function CarrinhoPageContent() {
       });
       if (isHoliday) return true;
 
-      return isDateDisabledInCalendar(date);
-
-      return isDateDisabledInCalendar(date);
+      return isDateDisabledInCalendar(toSaoPauloSchedulingDate(date));
     },
     [deliveryHolidays, getDeliveryDateBounds, isDateDisabledInCalendar],
   );
@@ -497,8 +503,8 @@ export default function CarrinhoPageContent() {
       if (persisted.customerName) setCustomerName(persisted.customerName);
       if (persisted.customerEmail) setCustomerEmail(persisted.customerEmail);
       if (persisted.selectedDate) {
-        const parsedDate = new Date(persisted.selectedDate);
-        if (!Number.isNaN(parsedDate.getTime())) {
+        const parsedDate = parseStoredDeliveryDate(persisted.selectedDate);
+        if (parsedDate) {
           setSelectedDate(parsedDate);
         }
       }
@@ -529,7 +535,7 @@ export default function CarrinhoPageContent() {
       userDocument,
       customerName,
       customerEmail,
-      selectedDate: selectedDate ? selectedDate.toISOString() : null,
+      selectedDate: selectedDate ? getPersistedDeliveryDate(selectedDate) : null,
       selectedTime,
       paymentMethod,
     };
@@ -1036,17 +1042,15 @@ export default function CarrinhoPageContent() {
             setState((pendingOrder.delivery_state || "").toUpperCase());
           }
           if (pendingOrder.delivery_date) {
-            try {
-              const dt = new Date(pendingOrder.delivery_date);
-              if (!isNaN(Number(dt))) {
-                setSelectedDate(
-                  new Date(dt.getFullYear(), dt.getMonth(), dt.getDate()),
-                );
-                const hh = String(dt.getHours()).padStart(2, "0");
-                const mm = String(dt.getMinutes()).padStart(2, "0");
-                setSelectedTime(`${hh}:${mm}`);
-              }
-            } catch {}
+            const deliveryDate = parseStoredDeliveryDate(
+              pendingOrder.delivery_date,
+            );
+            if (deliveryDate) setSelectedDate(deliveryDate);
+
+            const legacyDeliveryTime = getLegacyDeliveryTime(
+              pendingOrder.delivery_date,
+            );
+            if (legacyDeliveryTime) setSelectedTime(legacyDeliveryTime);
           }
 
           if (pendingOrder.user?.phone) {
@@ -1240,7 +1244,7 @@ export default function CarrinhoPageContent() {
     if (!selectedDate || !selectedTime) return false;
     if (isDateDisabled(selectedDate)) return false;
 
-    const slots = generateTimeSlots(selectedDate);
+    const slots = generateTimeSlots(toSaoPauloSchedulingDate(selectedDate));
     if (!slots || slots.length === 0) return false;
 
     if (slots.some((slot) => slot.value === selectedTime)) {
@@ -1248,25 +1252,16 @@ export default function CarrinhoPageContent() {
     }
 
     // Backward compatibility for legacy values in HH:mm format.
-    const selectedParsed = new Date(selectedTime);
-    const selectedFromLegacy = !Number.isNaN(selectedParsed.getTime())
-      ? selectedParsed
-      : (() => {
-          const [h, m] = selectedTime.split(":").map(Number);
-          if (Number.isNaN(h) || Number.isNaN(m)) return null;
-          const legacyDate = new Date(selectedDate);
-          legacyDate.setHours(h, m, 0, 0);
-          return legacyDate;
-        })();
-
-    if (!selectedFromLegacy) return false;
+    const legacyTime = /^\d{2}:\d{2}$/.test(selectedTime)
+      ? selectedTime
+      : null;
+    if (!legacyTime) return false;
 
     return slots.some((slot) => {
       const slotDate = new Date(slot.value);
       return (
         !Number.isNaN(slotDate.getTime()) &&
-        slotDate.getHours() === selectedFromLegacy.getHours() &&
-        slotDate.getMinutes() === selectedFromLegacy.getMinutes()
+        getSaoPauloTime(slotDate) === legacyTime
       );
     });
   }, [selectedDate, selectedTime, isDateDisabled, generateTimeSlots]);
@@ -2335,38 +2330,18 @@ export default function CarrinhoPageContent() {
 
     saveCheckoutForm();
 
-    let finalDeliveryDate: Date | null = null;
-    if (selectedDate && selectedTime) {
-      try {
-        const parsedDate = new Date(selectedTime);
-        if (!isNaN(parsedDate.getTime())) {
-          finalDeliveryDate = parsedDate;
-        } else {
-          const [hours, minutes] = selectedTime.split(":").map(Number);
-          if (!isNaN(hours) && !isNaN(minutes)) {
-            finalDeliveryDate = new Date(selectedDate);
-            finalDeliveryDate.setHours(hours, minutes, 0, 0);
-          }
-        }
-      } catch {
-        const [hours, minutes] = selectedTime.split(":").map(Number);
-        if (!isNaN(hours) && !isNaN(minutes)) {
-          finalDeliveryDate = new Date(selectedDate);
-          finalDeliveryDate.setHours(hours, minutes, 0, 0);
-        }
-      }
-    }
-
     // O valor do slot é um ISO (não a string "23:59"); detectar o período pela
     // label evita erro de fuso horário e garante o delivery_slot correto.
-    const deliverySlots = generateTimeSlots(selectedDate || new Date());
+    const deliverySlots = generateTimeSlots(
+      toSaoPauloSchedulingDate(selectedDate || new Date()),
+    );
     const selectedSlot = deliverySlots.find((s) => s.value === selectedTime);
     const isToBeArranged = Boolean(selectedSlot?.label?.includes("Qualquer"));
-    const computedFinalDateForBackend: Date | null = isToBeArranged
-      ? selectedDate
-        ? new Date(selectedDate)
-        : finalDeliveryDate
-      : finalDeliveryDate;
+    const deliveryDateForBackend = getDeliveryDateForBackend({
+      selectedDate,
+      selectedTime,
+      isToBeArranged,
+    });
     const computedDeliverySlot: "morning" | "afternoon" | "to_be_arranged" =
       isToBeArranged
         ? "to_be_arranged"
@@ -2455,7 +2430,6 @@ export default function CarrinhoPageContent() {
         setIsProcessing(true);
         creatingOrderRef.current = true;
         try {
-          const finalDateForBackend = computedFinalDateForBackend;
           const deliverySlot = computedDeliverySlot;
 
           const isPickup = optionSelected === "pickup";
@@ -2464,7 +2438,7 @@ export default function CarrinhoPageContent() {
           const createdOrder = await createOrder(
             user?.id,
             deliveryAddress,
-            finalDateForBackend || undefined,
+            deliveryDateForBackend || undefined,
             {
               shippingCost: shippingCost || 0,
               paymentMethod: "pix",
@@ -2573,7 +2547,6 @@ export default function CarrinhoPageContent() {
             ? "Rua José de Alencar"
             : address;
 
-          const finalDateForBackend = computedFinalDateForBackend;
           const deliverySlot = computedDeliverySlot;
 
           await updateOrderMetadata(orderIdForMetadata, {
@@ -2590,7 +2563,7 @@ export default function CarrinhoPageContent() {
                   : "",
             ),
             recipient_is_customer: isSelfRecipient,
-            delivery_date: finalDateForBackend?.toISOString() || null,
+            delivery_date: deliveryDateForBackend,
             delivery_slot: deliverySlot,
             send_anonymously: sendAnonymously,
             complement: complemento,
@@ -2915,7 +2888,9 @@ export default function CarrinhoPageContent() {
                       selectedTime={selectedTime}
                       setSelectedTime={setSelectedTime}
                       isDateDisabled={isDateDisabled}
-                      timeSlots={generateTimeSlots(selectedDate || new Date())}
+                      timeSlots={generateTimeSlots(
+                        toSaoPauloSchedulingDate(selectedDate || new Date()),
+                      )}
                       isGeneratingSlots={isProcessing}
                       calendarOpen={calendarOpen}
                       setCalendarOpen={setCalendarOpen}

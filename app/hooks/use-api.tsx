@@ -1389,7 +1389,7 @@ class ApiService {
     delivery_neighborhood?: string | null;
     delivery_city?: string;
     delivery_state?: string;
-    delivery_date?: Date | null;
+    delivery_date?: string | Date | null;
     delivery_slot?: "morning" | "afternoon" | "to_be_arranged";
     payment_method?: "pix" | "card";
     recipient_phone?: string;
