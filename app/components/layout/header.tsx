@@ -161,12 +161,13 @@ export function SiteHeader() {
 
       <header className="sticky top-0 z-50 w-full bg-white/95 backdrop-blur-md border-b border-gray-100">
         <div className="mx-auto max-w-none sm:max-w-[90%] px-4">
-          <div className="flex flex-col md:hidden py-4 gap-4">
+            <div className="flex flex-col md:hidden py-3 gap-3">
             <div className="flex items-center justify-between relative">
               <Button
                 variant="ghost"
                 size="icon"
-                className="text-gray-900 bg-gray-50 rounded-full h-11 w-11 shadow-sm"
+                className="text-gray-900 bg-rose-50 rounded-full h-11 w-11 shadow-sm"
+                aria-label="Abrir menu"
                 onClick={() => setIsMobileMenuOpen(true)}
               >
                 <Menu className="h-5 w-5" />
@@ -187,7 +188,8 @@ export function SiteHeader() {
 
               <button
                 type="button"
-                className="relative text-gray-900 bg-gray-50 p-3 rounded-full shadow-sm"
+                className="relative text-gray-900 bg-rose-50 p-3 rounded-full shadow-sm"
+                aria-label="Abrir carrinho"
                 onClick={handleOpenCart}
                 data-cart-button="true"
               >
@@ -208,7 +210,7 @@ export function SiteHeader() {
                 placeholder="O que você procura hoje?"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-11 pr-4 py-6 bg-gray-50 border-none rounded-2xl text-sm placeholder:text-gray-400 focus-visible:ring-1 focus-visible:ring-rose-200"
+                className="w-full pl-11 pr-4 py-5 bg-rose-50/50 border border-rose-100 rounded-2xl text-sm placeholder:text-gray-400 focus-visible:ring-2 focus-visible:ring-rose-300"
               />
             </form>
 
