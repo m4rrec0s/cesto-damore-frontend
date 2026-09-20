@@ -1790,7 +1790,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
               )}
 
               {product.created_at && isNewProduct(product.created_at) && (
-                <Badge className="absolute top-4 right-4 bg-blue-500 hover:bg-blue-600 text-white">
+                <Badge className="absolute top-14 right-4 bg-blue-500 hover:bg-blue-600 text-white">
                   Novo
                 </Badge>
               )}
@@ -1866,7 +1866,10 @@ const ClientProductPage = ({ id }: { id: string }) => {
                   Componentes
                 </h3>
                 <div className="flex gap-3 overflow-x-auto pb-2">
-                  <div
+                  <button
+                    type="button"
+                    aria-label="Selecionar produto principal"
+                    aria-pressed={selectedComponent === null}
                     className={cn(
                       "relative w-20 h-20 flex-shrink-0 bg-gray-100 rounded-xl border-2 cursor-pointer transition-all",
                       selectedComponent === null
@@ -1885,10 +1888,13 @@ const ClientProductPage = ({ id }: { id: string }) => {
                       loading="lazy"
                       decoding="async"
                     />
-                  </div>
+                  </button>
 
                   {components.map((component) => (
-                    <div
+                    <button
+                      type="button"
+                      aria-label={`Selecionar ${component.item.name}`}
+                      aria-pressed={selectedComponent?.id === component.id}
                       key={component.id}
                       className={cn(
                         "relative w-20 h-20 flex-shrink-0 bg-gray-100 rounded-xl border-2 cursor-pointer transition-all",
@@ -1908,7 +1914,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
                         loading="lazy"
                         decoding="async"
                       />
-                    </div>
+                    </button>
                   ))}
 
                   {selectedAdditionalIds.map((addId) => {
@@ -2099,7 +2105,10 @@ const ClientProductPage = ({ id }: { id: string }) => {
                             (layout as any).id;
 
                           return (
-                            <div
+                            <button
+                              type="button"
+                              aria-label={`Selecionar layout ${layout.name}`}
+                              aria-pressed={isSelected}
                               key={(layout as any).id}
                               onClick={() => {
                                 const currentData =
@@ -2157,7 +2166,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
                                   <CheckCircle2 className="w-3 h-3" />
                                 </div>
                               )}
-                            </div>
+                            </button>
                           );
                         })}
                       </div>
@@ -2433,7 +2442,7 @@ const ClientProductPage = ({ id }: { id: string }) => {
                 (stockAvailability.get(product?.id)?.isLoading === false &&
                   stockAvailability.get(product?.id)?.status === "out_of_stock")
               }
-              className="w-full bg-gray-900 hover:bg-gray-800 text-white h-12 text-base font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+              className="sticky bottom-3 z-20 w-full bg-gray-900 text-white h-14 text-base font-semibold shadow-[0_10px_24px_rgba(31,20,23,0.24)] hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed"
               size="lg"
             >
               {addingToCart ? (

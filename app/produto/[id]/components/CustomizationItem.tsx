@@ -205,7 +205,7 @@ export function CustomizationItem({
 
         <Drawer open={drawerOpen} onOpenChange={handleDrawerClose} repositionInputs={false}>
           <DrawerContent
-            className="px-3 drawer-content-safe"
+            className="max-h-[92dvh] px-3 drawer-content-safe"
             onOpenAutoFocus={(e) => e.preventDefault()}
           >
             <DrawerHeader className="border-b border-gray-100 px-4 py-3 flex-shrink-0">
@@ -224,14 +224,15 @@ export function CustomizationItem({
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-8 w-8 flex-shrink-0 text-gray-400"
+                    className="h-11 w-11 flex-shrink-0 text-gray-500"
+                    aria-label="Fechar personalização"
                   >
                     <X className="h-4 w-4" />
                   </Button>
                 </DrawerClose>
               </div>
             </DrawerHeader>
-            <div className="overflow-y-auto max-h-[75svh]">
+            <div className="overflow-y-auto overscroll-contain px-1 pb-[max(1rem,env(safe-area-inset-bottom))]">
               {isMobile && children}
             </div>
           </DrawerContent>

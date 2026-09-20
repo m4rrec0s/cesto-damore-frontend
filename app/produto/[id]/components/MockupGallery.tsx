@@ -397,12 +397,13 @@ export function MockupGallery({
           className="h-full w-full object-cover"
         />
 
-        <div className="absolute inset-0 flex items-center justify-between p-3 opacity-0 group-hover:opacity-100 transition-opacity">
+        <div className="absolute inset-x-0 top-1/2 flex -translate-y-1/2 items-center justify-between p-3 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
           <Button
             variant="secondary"
             size="icon"
             onClick={prev}
-            className="rounded-full bg-white/90 hover:bg-white shadow-md h-9 w-9"
+            className="h-11 w-11 rounded-full bg-white/95 shadow-md hover:bg-white"
+            aria-label="Ver mockup anterior"
           >
             <ChevronLeft className="h-5 w-5" />
           </Button>
@@ -410,7 +411,8 @@ export function MockupGallery({
             variant="secondary"
             size="icon"
             onClick={next}
-            className="rounded-full bg-white/90 hover:bg-white shadow-md h-9 w-9"
+            className="h-11 w-11 rounded-full bg-white/95 shadow-md hover:bg-white"
+            aria-label="Ver próximo mockup"
           >
             <ChevronRight className="h-5 w-5" />
           </Button>
