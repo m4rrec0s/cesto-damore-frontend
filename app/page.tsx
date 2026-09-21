@@ -12,6 +12,7 @@ import { Loader, RefreshCw } from "lucide-react";
 import { DatabaseErrorFallback } from "./components/database-error-fallback";
 import FeedBannerCarousel from "./components/feed/FeedBannerCarousel";
 import FeedSection from "./components/feed/FeedSection";
+import { HomeWelcome, SocialReelsRail } from "./components/feed/HomeWelcome";
 
 interface GridProduct {
   id: string;
@@ -110,7 +111,6 @@ export default function Home() {
       setError(null);
 
       try {
-        let feed: PublicFeedResponse | null = null;
         try {
           // Primeiro carregamento: usa versão otimizada para inicial load
           const initialFeed = await api.getPublicFeedInitial();
@@ -201,6 +201,12 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-[#f7f4f1]">
+      <HomeWelcome
+        bestSellers={
+          sections.find((section) => section.section_type === "BEST_SELLERS")
+            ?.items || []
+        }
+      />
       {feedData &&
         !useFallback &&
         feedData.banners &&
@@ -230,11 +236,13 @@ export default function Home() {
             }
           >
             {sections &&
-              sections.map((section) => (
-                <div key={section.id}>
-                  <FeedSection section={section} />
-                </div>
-              ))}
+              sections
+                .filter((section) => section.section_type !== "BEST_SELLERS")
+                .map((section) => (
+                  <div key={section.id}>
+                    <FeedSection section={section} />
+                  </div>
+                ))}
           </InfiniteScroll>
         </div>
       ) : (
@@ -281,6 +289,7 @@ export default function Home() {
           </div>
         </section>
       )}
+      <SocialReelsRail />
     </div>
   );
 }

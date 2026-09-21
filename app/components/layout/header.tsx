@@ -4,18 +4,14 @@ import Link from "next/link";
 import {
   ShoppingCart,
   User,
-  Search,
   Menu,
   Settings,
   Home,
-  Grid,
   Tag,
   Heart,
   Sparkles,
-  Zap,
   Package,
   LogOut,
-  MapPin,
 } from "lucide-react";
 import { Button } from "@/app/components/ui/button";
 import Image from "next/image";
@@ -25,7 +21,7 @@ import { useCartContext } from "../../hooks/cart-context";
 import { useAuth } from "../../hooks/use-auth";
 import { useApi } from "../../hooks/use-api";
 import { useState, useEffect, useRef } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useLoginPrompt } from "./app-wrapper";
 import {
   Dialog,
@@ -62,6 +58,9 @@ export function SiteHeader() {
   const api = useApi();
   const { openPrompt } = useLoginPrompt();
   const router = useRouter();
+  const pathname = usePathname();
+  const isProductPage = pathname.startsWith("/produto/");
+  const headerTextClass = isProductPage ? "text-[#5b0618]" : "text-white";
 
   useEffect(() => {
     setIsClient(true);
@@ -134,20 +133,14 @@ export function SiteHeader() {
 
   const menuItems = [
     { href: "/", label: "Início", icon: Home },
-    { href: "/categorias", label: "Categorias", icon: Grid },
+    { href: "/cestas-romanticas", label: "Cestas", icon: Heart },
+    { href: "/itens-personalizados", label: "Personalizados", icon: Sparkles },
     { href: "/ofertas", label: "Ofertas", icon: Tag },
-    { href: "/cestas-romanticas", label: "Cestas Românticas", icon: Heart },
-    {
-      href: "/itens-personalizados",
-      label: "Itens Personalizados",
-      icon: Sparkles,
-    },
-    { href: "/cesto-express", label: "Cesto Express", icon: Zap },
   ];
 
   return (
-    <div className="flex flex-col items-center w-full">
-      <div className="flex w-full bg-gradient-to-r from-rose-500 to-rose-600 text-white shadow-lg overflow-hidden">
+    <div className="flex w-full flex-col items-center overflow-x-clip">
+      <div className={`flex w-full overflow-hidden border-b ${isProductPage ? "border-rose-100 bg-[#fffaf8] text-[#5b0618]" : "border-white/10 bg-[#5b0618] text-white/95"}`}>
         <div className="flex w-full max-w-[90%] mx-auto text-sm py-2 justify-between items-center px-4">
           <span className="text-xs flex items-center gap-2 font-medium">
             <span className="bg-white/20 rounded-full w-2 h-2 animate-pulse"></span>
@@ -159,9 +152,9 @@ export function SiteHeader() {
         </div>
       </div>
 
-      <header className="sticky top-0 z-50 w-full bg-white/95 backdrop-blur-md border-b border-gray-100">
+      <header className={`sticky top-0 z-50 w-full border-b backdrop-blur-md ${isProductPage ? "border-rose-100 bg-[#fffaf8]/95 text-[#5b0618] shadow-[0_8px_20px_rgba(91,6,24,0.08)]" : "border-white/10 bg-[#5b0618] text-white shadow-[0_10px_24px_rgba(43,0,12,0.24)]"}`}>
         <div className="mx-auto max-w-none sm:max-w-[90%] px-4">
-            <div className="flex flex-col md:hidden py-3 gap-3">
+          <div className="flex flex-col gap-3 py-3 xl:hidden">
             <div className="flex items-center justify-between relative">
               <Button
                 variant="ghost"
@@ -181,7 +174,7 @@ export function SiteHeader() {
                   src={getPublicAssetUrl("logo.png")}
                   alt="Logo"
                   fill
-                  className="object-contain"
+                  className={`object-contain ${isProductPage ? "" : "invert"}`}
                   priority
                 />
               </Link>
@@ -202,28 +195,22 @@ export function SiteHeader() {
               </button>
             </div>
 
-            <form onSubmit={handleSearch} className="relative">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+            {pathname !== "/" && pathname !== "/busca" && <form onSubmit={handleSearch} className="relative">
+              <span className="pointer-events-none absolute left-3 top-1/2 grid h-8 w-8 -translate-y-1/2 place-items-center rounded-full bg-rose-100">
+                <img src="/ana-idle.png" alt="" className="h-6 w-6 object-contain" />
+              </span>
               <Input
                 ref={mobileSearchInputRef}
                 type="text"
-                placeholder="O que você procura hoje?"
+                placeholder="Pergunte à Ana o presente ideal"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-11 pr-4 py-5 bg-rose-50/50 border border-rose-100 rounded-2xl text-sm placeholder:text-gray-400 focus-visible:ring-2 focus-visible:ring-rose-300"
+                className="w-full border border-rose-100 bg-rose-50/50 py-5 pl-12 pr-4 text-sm placeholder:text-gray-400 focus-visible:ring-2 focus-visible:ring-rose-300"
               />
-            </form>
-
-            <div className="flex items-center gap-2 text-[11px] text-gray-500 font-medium px-1">
-              <MapPin className="h-3.5 w-3.5 text-rose-500" />
-              <span>
-                Entregar em:{" "}
-                <span className="text-gray-900">Campina Grande, PB</span>
-              </span>
-            </div>
+            </form>}
           </div>
 
-          <div className="hidden md:flex h-20 items-center justify-between gap-8">
+          <div className="hidden h-20 min-w-0 items-center justify-between gap-4 xl:flex">
             <Link
               href="/"
               className="flex items-center flex-shrink-0 relative w-[140px] h-12"
@@ -233,49 +220,52 @@ export function SiteHeader() {
                 alt="Logo"
                 fill
                 priority
-                className="object-contain"
+                className={`object-contain ${isProductPage ? "" : "invert"}`}
               />
             </Link>
 
-            <div className="flex-1 max-w-2xl">
-              <form onSubmit={handleSearch} className="relative w-full">
-                <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
-                <Input
-                  type="text"
-                  placeholder="O que você procura hoje?"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-12 pr-4 py-6 bg-gray-50 border-gray-100 rounded-2xl focus-visible:ring-rose-400 focus-visible:border-rose-400"
-                />
-              </form>
-            </div>
+            <nav className={`flex min-w-0 flex-1 items-center justify-center gap-2 whitespace-nowrap text-[11px] font-semibold ${isProductPage ? "text-[#5b0618]/85" : "text-white/90"}`}>
+              {menuItems.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className="flex items-center gap-1.5 transition-colors hover:text-rose-200"
+                  >
+                    <Icon className="hidden h-3.5 w-3.5 2xl:block" />
+                    {item.label}
+                  </Link>
+                );
+              })}
+            </nav>
 
-            <div className="flex items-center gap-4">
+            <div className="flex shrink-0 items-center gap-2">
               <DropdownMenu
                 open={isUserDropdownOpen}
                 onOpenChange={setIsUserDropdownOpen}
               >
                 <DropdownMenuTrigger asChild>
-                  <button className="flex items-center gap-3 cursor-pointer group">
-                    <div className="bg-gray-50 p-2.5 rounded-full group-hover:bg-rose-50 transition-colors">
-                      <User className="h-5 w-5 text-gray-600 group-hover:text-rose-500" />
+                  <button className={`group flex h-12 cursor-pointer items-center gap-2.5 ${headerTextClass}`}>
+                    <div className="grid h-11 w-11 place-items-center rounded-full bg-white/10 transition-colors group-hover:bg-white/20">
+                      <User className="h-5 w-5 text-white" />
                     </div>
-                    <div className="text-left">
+                    <div className="text-left leading-tight">
                       {user ? (
                         <div className="flex flex-col items-start leading-none">
-                          <span className="text-[10px] text-gray-400 font-medium uppercase tracking-wider">
+                          <span className="text-[10px] text-rose-200 font-medium uppercase tracking-wider">
                             Perfil
                           </span>
-                          <span className="font-semibold text-sm text-gray-900 group-hover:text-rose-600">
+                          <span className={`text-sm font-semibold group-hover:text-rose-500 ${headerTextClass}`}>
                             {user.name.split(" ")[0]}
                           </span>
                         </div>
                       ) : (
                         <div className="flex flex-col items-start leading-none">
-                          <span className="text-[10px] text-gray-400 font-medium uppercase tracking-wider">
+                          <span className="text-[10px] text-rose-200 font-medium uppercase tracking-wider">
                             Acesse
                           </span>
-                          <span className="font-semibold text-sm text-gray-900 group-hover:text-rose-600">
+                          <span className={`text-sm font-semibold group-hover:text-rose-500 ${headerTextClass}`}>
                             Entrar
                           </span>
                         </div>
@@ -396,19 +386,19 @@ export function SiteHeader() {
                 </DropdownMenuContent>
               </DropdownMenu>
 
-              <div className="flex items-center gap-3 cursor-pointer group">
-                <div className="bg-gray-50 p-2.5 rounded-full group-hover:bg-rose-50 transition-colors">
-                  <Package className="h-5 w-5 text-gray-600 group-hover:text-rose-500" />
+              <div className="flex h-12 items-center gap-2.5 cursor-pointer group">
+                <div className="grid h-11 w-11 place-items-center rounded-full bg-white/10 transition-colors group-hover:bg-white/20">
+                  <Package className={`h-5 w-5 ${headerTextClass}`} />
                 </div>
-                <div className="text-left">
+                <div className="text-left leading-tight">
                   <Link
                     href="/pedidos"
                     className="flex flex-col items-start leading-none"
                   >
-                    <span className="text-[10px] text-gray-400 font-medium uppercase tracking-wider">
+                    <span className="text-[10px] text-rose-200 font-medium uppercase tracking-wider">
                       Pedidos
                     </span>
-                    <span className="font-semibold text-sm text-gray-900 group-hover:text-rose-600">
+                    <span className={`text-sm font-semibold group-hover:text-rose-500 ${headerTextClass}`}>
                       Ver Todos
                     </span>
                   </Link>
@@ -417,7 +407,7 @@ export function SiteHeader() {
 
               <button
                 onClick={handleOpenCart}
-                className="flex items-center gap-3 bg-gray-900 hover:bg-black text-white px-5 py-3 rounded-2xl transition-all shadow-md active:scale-95"
+                className="flex h-12 items-center gap-2.5 rounded-xl bg-white px-4 text-[#580617] shadow-md transition-all hover:bg-rose-50 active:scale-95"
                 data-cart-button="true"
               >
                 <div className="relative">
@@ -434,24 +424,6 @@ export function SiteHeader() {
           </div>
         </div>
       </header>
-
-      <div className="hidden lg:block w-full bg-white border-b border-gray-100 py-3">
-        <nav className="flex items-center justify-center gap-8 text-[13px] font-semibold text-gray-600 max-w-[90%] mx-auto">
-          {menuItems.map((item) => {
-            const Icon = item.icon;
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className="flex items-center gap-2 hover:text-rose-500 transition-colors"
-              >
-                <Icon className="h-4 w-4" />
-                {item.label}
-              </Link>
-            );
-          })}
-        </nav>
-      </div>
 
       <Sheet open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
         <SheetContent side="left" className="w-[280px] sm:w-[320px] p-0">
