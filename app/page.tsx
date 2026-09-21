@@ -12,7 +12,7 @@ import { Loader, RefreshCw } from "lucide-react";
 import { DatabaseErrorFallback } from "./components/database-error-fallback";
 import FeedBannerCarousel from "./components/feed/FeedBannerCarousel";
 import FeedSection from "./components/feed/FeedSection";
-import { HomeWelcome, SocialReelsRail } from "./components/feed/HomeWelcome";
+import { FloatingReels, HomeWelcome } from "./components/feed/HomeWelcome";
 
 interface GridProduct {
   id: string;
@@ -289,7 +289,7 @@ export default function Home() {
           </div>
         </section>
       )}
-      <SocialReelsRail />
+      <FloatingReels />
     </div>
   );
 }

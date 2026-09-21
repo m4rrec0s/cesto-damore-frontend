@@ -1,13 +1,16 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import type { PublicFeedItem } from "@/app/hooks/use-api";
 import {
   ArrowRight,
   ArrowUpRight,
+  ChevronLeft,
+  ChevronRight,
   Instagram,
   Send,
   Sparkles,
+  X,
   Zap,
 } from "lucide-react";
 
@@ -335,5 +338,38 @@ export function SocialReelsRail() {
         </div>
       </a>
     </section>
+  );
+}
+
+const reelIds = ["DdbrrRFD7mV", "DdQMY-Pjo9I", "DdDUBpYGmkV", "DcyfVHzFHNZ", "DctVkTqjsD4"];
+
+export function FloatingReels() {
+  const [activeReel, setActiveReel] = useState(0);
+  const [isOpen, setIsOpen] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) return;
+    const timer = window.setInterval(() => setActiveReel((current) => (current + 1) % reelIds.length), 5000);
+    return () => window.clearInterval(timer);
+  }, [isOpen]);
+
+  const previous = () => setActiveReel((current) => (current + reelIds.length - 1) % reelIds.length);
+  const next = () => setActiveReel((current) => (current + 1) % reelIds.length);
+
+  return (
+    <>
+      <button type="button" onClick={() => setIsOpen(true)} className="fixed bottom-5 left-4 z-40 hidden overflow-hidden rounded-2xl border-2 border-white bg-[#fff8f6] shadow-[0_12px_28px_rgba(53,17,26,0.22)] sm:block" aria-label="Abrir Reels Cesto d'Amore">
+        <div className="h-48 w-28 overflow-hidden"><iframe title="Prévia de Reel Cesto d'Amore" src={`https://www.instagram.com/reel/${reelIds[activeReel]}/embed/`} className="pointer-events-none h-[600px] w-[328px] origin-top-left scale-[0.34] border-0" loading="lazy" /></div>
+        <span className="flex items-center justify-center gap-1 border-t border-rose-100 bg-white py-1.5 text-[10px] font-bold text-rose-700"><Instagram className="h-3 w-3" /> Reels</span>
+      </button>
+      {isOpen && <div className="fixed inset-0 z-[60] grid place-items-center bg-black/90 p-3 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="Reels Cesto d'Amore">
+        <div className="relative flex h-[88vh] w-full max-w-5xl items-center justify-center overflow-hidden rounded-2xl bg-black shadow-2xl">
+          <button type="button" onClick={() => setIsOpen(false)} aria-label="Fechar Reels" className="absolute right-4 top-4 z-10 grid h-10 w-10 place-items-center rounded-full bg-black/60 text-white ring-1 ring-white/20"><X className="h-5 w-5" /></button>
+          <button type="button" onClick={previous} aria-label="Reel anterior" className="absolute left-4 z-10 grid h-11 w-11 place-items-center rounded-full bg-black/60 text-white ring-1 ring-white/20"><ChevronLeft className="h-6 w-6" /></button>
+          <div className="h-full w-full max-w-[500px] overflow-hidden bg-black transition-transform duration-300"><iframe title={`Reel Cesto d'Amore ${activeReel + 1}`} src={`https://www.instagram.com/reel/${reelIds[activeReel]}/embed/`} className="h-full w-full border-0" allow="autoplay; encrypted-media" /></div>
+          <button type="button" onClick={next} aria-label="Próximo reel" className="absolute right-4 z-10 grid h-11 w-11 place-items-center rounded-full bg-black/60 text-white ring-1 ring-white/20"><ChevronRight className="h-6 w-6" /></button>
+        </div>
+      </div>}
+    </>
   );
 }
