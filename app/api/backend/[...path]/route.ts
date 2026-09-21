@@ -150,6 +150,7 @@ const hopByHopHeaders = new Set([
   "upgrade",
   "host",
   "content-length",
+  "content-encoding",
 ]);
 
 async function proxyRequest(

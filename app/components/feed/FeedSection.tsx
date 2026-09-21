@@ -4,7 +4,7 @@ import { PublicFeedSection, PublicFeedItem } from "@/app/hooks/use-api";
 import { ChevronRight, Grid2x2, SlidersHorizontal, ClipboardList, Truck } from "lucide-react";
 import Link from "next/link";
 import { ProductCard } from "../layout/product-card";
-import { ProductGridWrapper, ProductGridItem, MasonryGridWrapper, MasonryGridItem } from "./ProductGrid";
+import { ProductGridWrapper, ProductGridItem } from "./ProductGrid";
 
 interface Product {
   id: string;
@@ -351,25 +351,19 @@ export default function FeedSection({ section }: FeedSectionProps) {
           </header>
         )}
 
-        {/* Mobile: Masonry Layout */}
         {displayItems.length > 0 && (
           <div className="block sm:hidden mb-6">
-            <MasonryGridWrapper>
-              {displayItems.map((item: PublicFeedItem, index: number) => (
-                <MasonryGridItem key={item.id}>
+            <div className="grid grid-cols-2 gap-3">
+              {displayItems.map((item: PublicFeedItem) => (
+                <div key={item.id}>
                   <ProductCard
                     props={item.item_data as unknown as Product}
                     imagePriority={false}
-                    imageAspectClass={getMobileAspectClass(
-                      section.id,
-                      item.id,
-                      index,
-                      displayItems.length,
-                    )}
+                    imageAspectClass="aspect-[4/5]"
                   />
-                </MasonryGridItem>
+                </div>
               ))}
-            </MasonryGridWrapper>
+            </div>
           </div>
         )}
 

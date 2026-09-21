@@ -50,7 +50,7 @@ export function ProductCard({
       href={`/produto/${props.id}`}
       prefetch={false}
       className={cn(
-        "group flex h-full w-full min-w-0 flex-col overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm transition-all hover:-translate-y-1 hover:shadow-md",
+        "group flex h-full w-full min-w-0 flex-col overflow-hidden rounded-2xl border border-rose-100/80 bg-white shadow-[0_8px_24px_rgba(77,20,31,0.08)] transition duration-200 hover:-translate-y-1 hover:shadow-[0_14px_30px_rgba(77,20,31,0.14)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 focus-visible:ring-offset-2 active:scale-[0.98]",
         className,
       )}
     >
@@ -69,6 +69,7 @@ export function ProductCard({
           className="h-full w-full object-cover object-center transition-transform duration-300 group-hover:scale-105"
           loading={imagePriority ? "eager" : "lazy"}
           fetchPriority={imagePriority ? "high" : "auto"}
+          sizes="(max-width: 639px) 50vw, (max-width: 1023px) 33vw, 16vw"
         />
 
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/10 via-transparent to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
@@ -93,13 +94,13 @@ export function ProductCard({
         ) : null}
       </div>
 
-      <div className="flex flex-1 flex-col gap-2 px-3 py-3">
+      <div className="flex flex-1 flex-col gap-2 px-3 py-3.5">
         <h3 className="min-h-[2.5rem] text-sm font-medium leading-snug text-gray-900 line-clamp-2">
           {props.name}
         </h3>
 
         <div className="mt-auto flex items-end gap-2">
-          <p className="text-lg font-semibold leading-none text-rose-600">
+          <p className="text-lg font-bold leading-none text-rose-700">
             {new Intl.NumberFormat("pt-BR", {
               style: "currency",
               currency: "BRL",

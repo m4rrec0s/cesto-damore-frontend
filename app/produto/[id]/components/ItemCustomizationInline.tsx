@@ -599,8 +599,9 @@ export function ItemCustomizationInline({
                 />
                 <button
                   onClick={() => handleRemoveFile(customization.id, index)}
-                  className="absolute top-1 right-1 bg-black/50 hover:bg-black/70 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                  className="absolute top-1 right-1 min-h-11 min-w-11 bg-black/65 hover:bg-black/80 text-white rounded-full p-1 opacity-100 transition-opacity sm:min-h-0 sm:min-w-0 sm:opacity-0 sm:group-hover:opacity-100"
                   title="Remover foto"
+                  aria-label={`Remover foto ${index + 1}`}
                 >
                   <X className="w-3 h-3" />
                 </button>
@@ -712,7 +713,7 @@ export function ItemCustomizationInline({
 
   return (
     <div className="space-y-4">
-      {customizations
+       {[...customizations]
         .sort((a) => (a.isRequired ? -1 : 1))
         .map((customization) => (
           <Card key={customization.id} className="p-4 bg-white">

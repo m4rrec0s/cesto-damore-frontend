@@ -1,11 +1,20 @@
 "use client";
 
-import { useEffect, useState, Suspense } from "react";
+import { useEffect, useRef, useState, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { ProductCard } from "@/app/components/layout/product-card";
 import { Button } from "@/app/components/ui/button";
-import { Search, X } from "lucide-react";
+import { Search, Send, X } from "lucide-react";
 import useApi, { Product, Category, Type } from "@/app/hooks/use-api";
+
+function AnaAvatar({ speaking }: { speaking: boolean }) {
+  return (
+    <div className={`relative grid h-20 w-20 shrink-0 place-items-center rounded-full bg-rose-100 shadow-sm ${speaking ? "animate-pulse" : ""}`} aria-label="Ana, assistente de presentes" role="img">
+      {speaking && <span className="absolute -inset-1 rounded-full border-2 border-rose-300 animate-ping" />}
+      <img src={speaking ? "/ana-speaking.png" : "/ana-idle.png"} alt="" className="relative h-16 w-16 object-contain" />
+    </div>
+  );
+}
 
 function SearchPageContent() {
   const searchParams = useSearchParams();
@@ -13,6 +22,7 @@ function SearchPageContent() {
   const api = useApi();
 
   const [products, setProducts] = useState<Product[]>([]);
+  const [alsoLike, setAlsoLike] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [types, setTypes] = useState<Type[]>([]);
   const [loading, setLoading] = useState(true);
@@ -29,6 +39,10 @@ function SearchPageContent() {
   const [totalPages, setTotalPages] = useState(1);
   const [showFilters] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [assistantMessage, setAssistantMessage] = useState("");
+  const [chatHistory, setChatHistory] = useState<string[]>([]);
+  const activeRequest = useRef<string | null>(null);
+  const query = searchParams.get("q");
 
   const loadFilters = async () => {
     try {
@@ -43,39 +57,101 @@ function SearchPageContent() {
     }
   };
 
+  useEffect(() => {
+    const saved: unknown = JSON.parse(window.localStorage.getItem("cda-discovery-history") || "[]");
+    if (!Array.isArray(saved)) return;
+    const active = saved.filter((entry): entry is { text: string; expiresAt: number } => Boolean(entry) && typeof entry === "object" && "text" in entry && typeof entry.text === "string" && "expiresAt" in entry && typeof entry.expiresAt === "number" && entry.expiresAt > Date.now());
+    window.localStorage.setItem("cda-discovery-history", JSON.stringify(active));
+    setChatHistory(active.map((entry) => entry.text));
+  }, []);
+
   const loadProducts = async () => {
     setLoading(true);
     setLoadError(null);
+    setAssistantMessage("");
+    setAlsoLike([]);
     try {
-      const params: {
-        page: number;
-        perPage: number;
-        search?: string;
-        category_id?: string;
-        type_id?: string;
-      } = {
-        page: currentPage,
-        perPage: 12,
-      };
+      const q = query;
+      if (!q) {
+        const response = await api.getProducts({ page: currentPage, perPage: 12 });
+        setProducts(response.products);
+        setTotalPages(response.pagination.totalPages);
+        setCurrentPage(response.pagination.page);
+        return;
+      }
 
-      const q = searchParams.get("q");
-      const category = searchParams.get("category");
-      const type = searchParams.get("type");
-      const page = searchParams.get("page");
-
-      if (q) params.search = q;
-      if (category) params.category_id = category;
-      if (type) params.type_id = type;
-      if (page) params.page = parseInt(page);
-
-      const response = await api.getProducts(params);
-      setProducts(response.products);
-      setTotalPages(response.pagination.totalPages);
-      setCurrentPage(response.pagination.page);
+      const visitorKey = "cda-discovery-visitor";
+      let visitorId = window.localStorage.getItem(visitorKey);
+      if (!visitorId) {
+        visitorId = crypto.randomUUID();
+        window.localStorage.setItem(visitorKey, visitorId);
+      }
+      const historyKey = "cda-discovery-history";
+      const savedHistory = JSON.parse(window.localStorage.getItem(historyKey) || "[]") as Array<{ text: string; expiresAt: number }>;
+      const history = savedHistory.filter((entry) => entry.expiresAt > Date.now()).map((entry) => entry.text);
+      const requestKey = `${q}:${visitorId}`;
+      if (activeRequest.current === requestKey) return;
+      activeRequest.current = requestKey;
+      const response = await fetch("/api/backend/discovery/recommendations/stream", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-discovery-visitor": visitorId },
+        body: JSON.stringify({ prompt: q, history }),
+      });
+      if (response.status === 429) {
+        const catalog = await api.getProducts({ page: 1, perPage: 12, search: q });
+        setAssistantMessage("Encontrei essas opções para você 🤩");
+        setProducts(catalog.products);
+        setTotalPages(catalog.pagination.totalPages);
+        setCurrentPage(catalog.pagination.page);
+        return;
+      }
+      if (!response.ok || !response.body) {
+        throw new Error("Curadoria indisponível");
+      }
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let selectedProducts: Product[] = [];
+      let streamedMessage = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const events = buffer.split("\n\n");
+        buffer = events.pop() || "";
+        for (const event of events) {
+          const line = event.split("\n").find((entry) => entry.startsWith("data: "));
+          if (!line) continue;
+          const data: unknown = JSON.parse(line.slice(6));
+          if (event.startsWith("event: token") && data && typeof data === "object" && "token" in data && typeof data.token === "string") {
+            streamedMessage += data.token;
+            setAssistantMessage((message) => message + data.token);
+          }
+          if (event.startsWith("event: products") && data && typeof data === "object" && "products" in data && Array.isArray(data.products)) {
+            selectedProducts = data.products as Product[];
+          }
+          if (event.startsWith("event: also_like") && data && typeof data === "object" && "products" in data && Array.isArray(data.products)) {
+            setAlsoLike(data.products as Product[]);
+          }
+        }
+      }
+      setProducts(selectedProducts);
+      if (streamedMessage) {
+        const expiresAt = Date.now() + 60 * 60 * 1000;
+        window.localStorage.setItem(historyKey, JSON.stringify([
+          ...savedHistory.filter((entry) => entry.expiresAt > Date.now()),
+          { text: `Cliente: ${q}`, expiresAt },
+          { text: `Ana: ${streamedMessage}`, expiresAt },
+        ].slice(-12)));
+        setChatHistory((messages) => [...messages, `Cliente: ${q}`, `Ana: ${streamedMessage}`].slice(-12));
+      }
+      setTotalPages(1);
+      setCurrentPage(1);
     } catch (error) {
       console.error("Erro ao buscar produtos:", error);
       setLoadError("Não foi possível carregar os produtos no momento.");
     } finally {
+      activeRequest.current = null;
       setLoading(false);
     }
   };
@@ -88,7 +164,7 @@ function SearchPageContent() {
   useEffect(() => {
     loadProducts();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams]);
+  }, [query]);
 
   const updateURL = (params: Record<string, string>) => {
     const newParams = new URLSearchParams(searchParams.toString());
@@ -231,6 +307,28 @@ function SearchPageContent() {
 
           
           <main className="flex-1">
+            {searchParams.get("q") && (loading || assistantMessage) && (
+              <div className="mb-6 flex gap-3 rounded-2xl border border-rose-100 bg-white px-5 py-4 shadow-sm">
+                <AnaAvatar speaking={loading} />
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-rose-500">Ana, sua curadora</p>
+                  <p className="mt-2 text-sm leading-6 text-gray-700">{assistantMessage || "Estou escolhendo opções especiais para você..."}</p>
+                </div>
+              </div>
+            )}
+            {searchParams.get("q") && chatHistory.length > 0 && !loading && (
+              <div className="mb-6 rounded-2xl border border-rose-100 bg-white p-4 shadow-sm">
+                <div className="max-h-44 space-y-2 overflow-y-auto pr-1">
+                  {chatHistory.map((message, index) => (
+                    <p key={`${message}-${index}`} className={`rounded-xl px-3 py-2 text-sm ${message.startsWith("Ana:") ? "mr-8 bg-rose-50 text-[#5b0618]" : "ml-8 bg-gray-100 text-gray-700"}`}>{message.replace(/^(Ana|Cliente):\s*/, "")}</p>
+                  ))}
+                </div>
+                <form className="relative mt-3" onSubmit={(event) => { event.preventDefault(); if (searchTerm.trim()) router.push(`/busca?q=${encodeURIComponent(searchTerm.trim())}`); }}>
+                  <input value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder="Continue conversando com a Ana..." className="w-full rounded-xl border border-rose-200 bg-white py-3 pl-4 pr-12 text-sm text-[#35111a] outline-none focus:border-rose-400" />
+                  <button type="submit" aria-label="Enviar mensagem" className="absolute right-2 top-1/2 grid h-8 w-8 -translate-y-1/2 place-items-center rounded-lg bg-[#5b0618] text-white"><Send className="h-4 w-4" /></button>
+                </form>
+              </div>
+            )}
             {loading ? (
               <div className="flex items-center justify-center h-64">
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-rose-500"></div>
@@ -263,7 +361,7 @@ function SearchPageContent() {
                   )}
                 </div>
 
-                <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3 sm:gap-6 mb-8">
+                 <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3 sm:gap-6 mb-8">
                   {products.map((product) => (
                     <ProductCard
                       key={product.id}
@@ -272,15 +370,25 @@ function SearchPageContent() {
                         name: product.name,
                         price: product.price,
                         image_url: product.image_url || null,
-                        categories: product.categories.map((cat) => ({
-                          category: cat,
-                        })),
+                        categories: product.categories,
                         discount: product.discount,
                       }}
                       className="max-sm:min-w-[150px]"
                     />
                   ))}
-                </div>
+                 </div>
+
+                 {alsoLike.length > 0 && (
+                   <section className="border-t border-rose-100 pt-8">
+                     <h2 className="text-2xl font-semibold tracking-tight text-[#35111a]">Você também pode gostar</h2>
+                     <p className="mt-1 text-sm text-gray-600">Outras opções para deixar presente ainda mais especial.</p>
+                     <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-6">
+                       {alsoLike.map((product) => (
+                         <ProductCard key={product.id} props={{ id: product.id, name: product.name, price: product.price, image_url: product.image_url || null, categories: product.categories, discount: product.discount }} />
+                       ))}
+                     </div>
+                   </section>
+                 )}
 
                 
                 {totalPages > 1 && (
