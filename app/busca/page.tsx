@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { ProductCard } from "@/app/components/layout/product-card";
 import { Button } from "@/app/components/ui/button";
-import { Search, Send, X } from "lucide-react";
+import { Search, X } from "lucide-react";
 import useApi, { Product, Category, Type } from "@/app/hooks/use-api";
 
 function AnaAvatar({ speaking }: { speaking: boolean }) {
@@ -40,7 +40,6 @@ function SearchPageContent() {
   const [showFilters] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [assistantMessage, setAssistantMessage] = useState("");
-  const [chatHistory, setChatHistory] = useState<string[]>([]);
   const activeRequest = useRef<string | null>(null);
   const query = searchParams.get("q");
 
@@ -56,14 +55,6 @@ function SearchPageContent() {
       console.error("Erro ao carregar filtros:", error);
     }
   };
-
-  useEffect(() => {
-    const saved: unknown = JSON.parse(window.localStorage.getItem("cda-discovery-history") || "[]");
-    if (!Array.isArray(saved)) return;
-    const active = saved.filter((entry): entry is { text: string; expiresAt: number } => Boolean(entry) && typeof entry === "object" && "text" in entry && typeof entry.text === "string" && "expiresAt" in entry && typeof entry.expiresAt === "number" && entry.expiresAt > Date.now());
-    window.localStorage.setItem("cda-discovery-history", JSON.stringify(active));
-    setChatHistory(active.map((entry) => entry.text));
-  }, []);
 
   const loadProducts = async () => {
     setLoading(true);
@@ -86,16 +77,16 @@ function SearchPageContent() {
         visitorId = crypto.randomUUID();
         window.localStorage.setItem(visitorKey, visitorId);
       }
-      const historyKey = "cda-discovery-history";
-      const savedHistory = JSON.parse(window.localStorage.getItem(historyKey) || "[]") as Array<{ text: string; expiresAt: number }>;
-      const history = savedHistory.filter((entry) => entry.expiresAt > Date.now()).map((entry) => entry.text);
+      const contextKey = "cda-discovery-context";
+      const savedContext: unknown = JSON.parse(window.localStorage.getItem(contextKey) || "null");
+      const context = savedContext && typeof savedContext === "object" && "expiresAt" in savedContext && typeof savedContext.expiresAt === "number" && savedContext.expiresAt > Date.now() && "intent" in savedContext ? savedContext.intent : {};
       const requestKey = `${q}:${visitorId}`;
       if (activeRequest.current === requestKey) return;
       activeRequest.current = requestKey;
       const response = await fetch("/api/backend/discovery/recommendations/stream", {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-discovery-visitor": visitorId },
-        body: JSON.stringify({ prompt: q, history }),
+        body: JSON.stringify({ prompt: q, context }),
       });
       if (response.status === 429) {
         const catalog = await api.getProducts({ page: 1, perPage: 12, search: q });
@@ -129,6 +120,7 @@ function SearchPageContent() {
           }
           if (event.startsWith("event: products") && data && typeof data === "object" && "products" in data && Array.isArray(data.products)) {
             selectedProducts = data.products as Product[];
+            if ("intent" in data) window.localStorage.setItem(contextKey, JSON.stringify({ intent: data.intent, expiresAt: Date.now() + 60 * 60 * 1000 }));
           }
           if (event.startsWith("event: also_like") && data && typeof data === "object" && "products" in data && Array.isArray(data.products)) {
             setAlsoLike(data.products as Product[]);
@@ -136,15 +128,6 @@ function SearchPageContent() {
         }
       }
       setProducts(selectedProducts);
-      if (streamedMessage) {
-        const expiresAt = Date.now() + 60 * 60 * 1000;
-        window.localStorage.setItem(historyKey, JSON.stringify([
-          ...savedHistory.filter((entry) => entry.expiresAt > Date.now()),
-          { text: `Cliente: ${q}`, expiresAt },
-          { text: `Ana: ${streamedMessage}`, expiresAt },
-        ].slice(-12)));
-        setChatHistory((messages) => [...messages, `Cliente: ${q}`, `Ana: ${streamedMessage}`].slice(-12));
-      }
       setTotalPages(1);
       setCurrentPage(1);
     } catch (error) {
@@ -314,19 +297,6 @@ function SearchPageContent() {
                   <p className="text-xs font-semibold uppercase tracking-[0.16em] text-rose-500">Ana, sua curadora</p>
                   <p className="mt-2 text-sm leading-6 text-gray-700">{assistantMessage || "Estou escolhendo opções especiais para você..."}</p>
                 </div>
-              </div>
-            )}
-            {searchParams.get("q") && chatHistory.length > 0 && !loading && (
-              <div className="mb-6 rounded-2xl border border-rose-100 bg-white p-4 shadow-sm">
-                <div className="max-h-44 space-y-2 overflow-y-auto pr-1">
-                  {chatHistory.map((message, index) => (
-                    <p key={`${message}-${index}`} className={`rounded-xl px-3 py-2 text-sm ${message.startsWith("Ana:") ? "mr-8 bg-rose-50 text-[#5b0618]" : "ml-8 bg-gray-100 text-gray-700"}`}>{message.replace(/^(Ana|Cliente):\s*/, "")}</p>
-                  ))}
-                </div>
-                <form className="relative mt-3" onSubmit={(event) => { event.preventDefault(); if (searchTerm.trim()) router.push(`/busca?q=${encodeURIComponent(searchTerm.trim())}`); }}>
-                  <input value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder="Continue conversando com a Ana..." className="w-full rounded-xl border border-rose-200 bg-white py-3 pl-4 pr-12 text-sm text-[#35111a] outline-none focus:border-rose-400" />
-                  <button type="submit" aria-label="Enviar mensagem" className="absolute right-2 top-1/2 grid h-8 w-8 -translate-y-1/2 place-items-center rounded-lg bg-[#5b0618] text-white"><Send className="h-4 w-4" /></button>
-                </form>
               </div>
             )}
             {loading ? (
