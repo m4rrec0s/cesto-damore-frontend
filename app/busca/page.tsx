@@ -41,7 +41,11 @@ function SearchPageContent() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [assistantMessage, setAssistantMessage] = useState("");
   const activeRequest = useRef<string | null>(null);
+  const requestAbort = useRef<AbortController | null>(null);
   const query = searchParams.get("q");
+  const categoryParam = searchParams.get("category") || "";
+  const typeParam = searchParams.get("type") || "";
+  const pageParam = parseInt(searchParams.get("page") || "1");
 
   const loadFilters = async () => {
     try {
@@ -57,6 +61,10 @@ function SearchPageContent() {
   };
 
   const loadProducts = async () => {
+    requestAbort.current?.abort();
+    activeRequest.current = null;
+    const abortController = new AbortController();
+    requestAbort.current = abortController;
     setLoading(true);
     setLoadError(null);
     setAssistantMessage("");
@@ -64,7 +72,12 @@ function SearchPageContent() {
     try {
       const q = query;
       if (!q) {
-        const response = await api.getProducts({ page: currentPage, perPage: 12 });
+        const response = await api.getProducts({
+          page: pageParam,
+          perPage: 12,
+          category_id: categoryParam || undefined,
+          type_id: typeParam || undefined,
+        });
         setProducts(response.products);
         setTotalPages(response.pagination.totalPages);
         setCurrentPage(response.pagination.page);
@@ -77,16 +90,14 @@ function SearchPageContent() {
         visitorId = crypto.randomUUID();
         window.localStorage.setItem(visitorKey, visitorId);
       }
-      const contextKey = "cda-discovery-context";
-      const savedContext: unknown = JSON.parse(window.localStorage.getItem(contextKey) || "null");
-      const context = savedContext && typeof savedContext === "object" && "expiresAt" in savedContext && typeof savedContext.expiresAt === "number" && savedContext.expiresAt > Date.now() && "intent" in savedContext ? savedContext.intent : {};
       const requestKey = `${q}:${visitorId}`;
       if (activeRequest.current === requestKey) return;
       activeRequest.current = requestKey;
       const response = await fetch("/api/backend/discovery/recommendations/stream", {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-discovery-visitor": visitorId },
-        body: JSON.stringify({ prompt: q, context }),
+        signal: abortController.signal,
+        body: JSON.stringify({ prompt: q }),
       });
       if (response.status === 429) {
         const catalog = await api.getProducts({ page: 1, perPage: 12, search: q });
@@ -120,7 +131,6 @@ function SearchPageContent() {
           }
           if (event.startsWith("event: products") && data && typeof data === "object" && "products" in data && Array.isArray(data.products)) {
             selectedProducts = data.products as Product[];
-            if ("intent" in data) window.localStorage.setItem(contextKey, JSON.stringify({ intent: data.intent, expiresAt: Date.now() + 60 * 60 * 1000 }));
           }
           if (event.startsWith("event: also_like") && data && typeof data === "object" && "products" in data && Array.isArray(data.products)) {
             setAlsoLike(data.products as Product[]);
@@ -131,11 +141,15 @@ function SearchPageContent() {
       setTotalPages(1);
       setCurrentPage(1);
     } catch (error) {
+      if ((error as Error).name === "AbortError") return;
       console.error("Erro ao buscar produtos:", error);
       setLoadError("Não foi possível carregar os produtos no momento.");
     } finally {
-      activeRequest.current = null;
-      setLoading(false);
+      if (requestAbort.current === abortController) {
+        activeRequest.current = null;
+        requestAbort.current = null;
+        setLoading(false);
+      }
     }
   };
 
@@ -145,9 +159,20 @@ function SearchPageContent() {
   }, []);
 
   useEffect(() => {
+    window.localStorage.removeItem("cda-discovery-context");
+  }, []);
+
+  useEffect(() => {
     loadProducts();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query]);
+  }, [query, categoryParam, typeParam, pageParam]);
+
+  useEffect(() => {
+    setSearchTerm(query || "");
+    setSelectedCategory(categoryParam);
+    setSelectedType(typeParam);
+    setCurrentPage(pageParam);
+  }, [query, categoryParam, typeParam, pageParam]);
 
   const updateURL = (params: Record<string, string>) => {
     const newParams = new URLSearchParams(searchParams.toString());
@@ -183,6 +208,16 @@ function SearchPageContent() {
     setSelectedType("");
     setSearchTerm("");
     router.push("/busca");
+  };
+
+  const handleSearchSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    updateURL({
+      q: searchTerm.trim(),
+      category: "",
+      type: "",
+      page: "1",
+    });
   };
 
   const activeFiltersCount =
@@ -289,7 +324,37 @@ function SearchPageContent() {
           </aside>
 
           
-          <main className="flex-1">
+           <main className="flex-1">
+            <section className="mb-6 rounded-2xl border border-rose-100 bg-white px-4 py-4 shadow-sm sm:px-5">
+              <div className="flex gap-3">
+                <AnaAvatar speaking={loading && Boolean(query)} />
+                <form className="min-w-0 flex-1" onSubmit={handleSearchSubmit}>
+                  <label
+                    htmlFor="ana-search"
+                    className="text-xs font-semibold uppercase tracking-[0.16em] text-rose-500"
+                  >
+                    Ana, sua curadora
+                  </label>
+                  <div className="mt-2 flex gap-2">
+                    <input
+                      id="ana-search"
+                      value={searchTerm}
+                      onChange={(event) => setSearchTerm(event.target.value)}
+                      placeholder="Ex.: presente romântico para homem até R$ 200"
+                      className="min-w-0 flex-1 rounded-xl border border-rose-200 bg-rose-50/40 px-4 py-2.5 text-sm text-[#35111a] outline-none placeholder:text-rose-300 focus:border-rose-400 focus:ring-2 focus:ring-rose-100"
+                    />
+                    <Button
+                      type="submit"
+                      disabled={!searchTerm.trim()}
+                      className="shrink-0 rounded-xl bg-[#8f2337] px-4 hover:bg-[#721a2b]"
+                    >
+                      <Search className="h-4 w-4 sm:mr-2" />
+                      <span className="hidden sm:inline">Buscar</span>
+                    </Button>
+                  </div>
+                </form>
+              </div>
+            </section>
             {searchParams.get("q") && (loading || assistantMessage) && (
               <div className="mb-6 flex gap-3 rounded-2xl border border-rose-100 bg-white px-5 py-4 shadow-sm">
                 <AnaAvatar speaking={loading} />
@@ -303,7 +368,7 @@ function SearchPageContent() {
               <div className="flex items-center justify-center h-64">
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-rose-500"></div>
               </div>
-            ) : products.length === 0 ? (
+            ) : products.length === 0 && alsoLike.length === 0 ? (
               <div className="text-center py-12">
                 <Search className="h-16 w-16 text-gray-300 mx-auto mb-4" />
                 <h3 className="text-xl font-medium text-gray-900 mb-2">
@@ -319,16 +384,45 @@ function SearchPageContent() {
                   Limpar filtros
                 </Button>
               </div>
+            ) : products.length === 0 ? (
+              <section className="rounded-2xl border border-rose-100 bg-white p-5 shadow-sm">
+                <h1 className="text-xl font-semibold tracking-tight text-[#35111a]">
+                  Você pode gostar
+                </h1>
+                <p className="text-sm text-gray-600">
+                  Não encontrei combinação exata. Estas opções seguem seu orçamento e estão ordenadas por valor.
+                </p>
+                <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-6">
+                  {alsoLike.map((product) => (
+                    <ProductCard
+                      key={product.id}
+                      props={{
+                        id: product.id,
+                        name: product.name,
+                        price: product.price,
+                        image_url: product.image_url || null,
+                        categories: product.categories,
+                        discount: product.discount,
+                      }}
+                    />
+                  ))}
+                </div>
+              </section>
             ) : (
               <>
-                <div className="mb-4 text-sm text-gray-600">
-                  {products.length} produto(s) encontrado(s)
-                  {searchParams.get("q") && (
+                <div className="mb-4">
+                  <h1 className="text-xl font-semibold tracking-tight text-[#35111a]">
+                    {query ? "Mais indicados para você" : "Você pode gostar"}
+                  </h1>
+                  <p className="mt-1 text-sm text-gray-600">
+                    {products.length} produto(s) encontrado(s)
+                    {query && (
                     <span className="font-medium">
                       {" "}
-                      para &quot;{searchParams.get("q")}&quot;
+                        para &quot;{query}&quot;
                     </span>
-                  )}
+                    )}
+                  </p>
                 </div>
 
                  <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3 sm:gap-6 mb-8">

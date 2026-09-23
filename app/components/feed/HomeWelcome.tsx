@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import type { PublicFeedItem } from "@/app/hooks/use-api";
 import {
   ArrowRight,
@@ -48,118 +48,66 @@ function AnaSearchMark() {
 
 export function HomeWelcome({ bestSellers }: HomeWelcomeProps) {
   const router = useRouter();
-  type DiscoveryProduct = {
-    id: string;
-    name: string;
-    price: number;
-    image_url: string | null;
-  };
   const [prompt, setPrompt] = useState("");
-  const [message, setMessage] = useState("");
-  const [recommendations, setRecommendations] = useState<DiscoveryProduct[]>(
-    [],
+  const surpriseProducts = useMemo(
+    () =>
+      bestSellers
+        .map(getBestSeller)
+        .filter(
+          (
+            product,
+          ): product is NonNullable<ReturnType<typeof getBestSeller>> =>
+            product !== null,
+        ),
+    [bestSellers],
   );
-  const [loading, setLoading] = useState(false);
+  const [isRouletteOpen, setIsRouletteOpen] = useState(false);
+  const [rouletteIndex, setRouletteIndex] = useState(0);
+  const [winner, setWinner] = useState<
+    NonNullable<ReturnType<typeof getBestSeller>> | null
+  >(null);
+  const rouletteInterval = useRef<number | null>(null);
+  const redirectTimeout = useRef<number | null>(null);
 
-  const discover = async (surprise: boolean) => {
-    setLoading(true);
-    setMessage("");
-    setRecommendations([]);
-    try {
-      const visitorKey = "cda-discovery-visitor";
-      let visitorId = window.localStorage.getItem(visitorKey);
-      if (!visitorId) {
-        visitorId = crypto.randomUUID();
-        window.localStorage.setItem(visitorKey, visitorId);
-      }
-      const response = await fetch("/api/backend/discovery/recommendations", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-discovery-visitor": visitorId,
-        },
-        body: JSON.stringify(surprise ? { surprise: true } : { prompt }),
-      });
-      const text = await response.text();
-      let data: unknown;
-      try {
-        data = JSON.parse(text);
-      } catch {
-        throw new Error("A curadoria está indisponível no momento.");
-      }
-      if (!data || typeof data !== "object")
-        throw new Error("Resposta inválida");
-      const result = data as {
-        message?: unknown;
-        products?: unknown;
-        error?: unknown;
-      };
-      if (response.status === 429) {
-        const catalogResponse = await fetch(
-          `/api/backend/products?perPage=4&search=${encodeURIComponent(prompt)}`,
-        );
-        const catalog: unknown = await catalogResponse.json();
-        if (
-          catalog &&
-          typeof catalog === "object" &&
-          "products" in catalog &&
-          Array.isArray(catalog.products)
-        ) {
-          setMessage("Encontrei essas opções para você 🤩");
-          setRecommendations(
-            catalog.products.filter(
-              (product): product is DiscoveryProduct =>
-                Boolean(product) &&
-                typeof product === "object" &&
-                "id" in product &&
-                typeof product.id === "string" &&
-                "name" in product &&
-                typeof product.name === "string" &&
-                "price" in product &&
-                typeof product.price === "number" &&
-                "image_url" in product &&
-                (typeof product.image_url === "string" ||
-                  product.image_url === null),
-            ),
-          );
-          return;
-        }
-      }
-      if (!response.ok || typeof result.message !== "string") {
-        throw new Error(
-          typeof result.error === "string"
-            ? result.error
-            : "Não consegui preparar sua seleção.",
-        );
-      }
-      setMessage(result.message);
-      if (Array.isArray(result.products)) {
-        setRecommendations(
-          result.products.filter(
-            (product): product is DiscoveryProduct =>
-              Boolean(product) &&
-              typeof product === "object" &&
-              "id" in product &&
-              typeof product.id === "string" &&
-              "name" in product &&
-              typeof product.name === "string" &&
-              "price" in product &&
-              typeof product.price === "number" &&
-              "image_url" in product &&
-              (typeof product.image_url === "string" ||
-                product.image_url === null),
-          ),
-        );
-      }
-    } catch (error) {
-      setMessage(
-        error instanceof Error
-          ? error.message
-          : "Não consegui preparar sua seleção.",
-      );
-    } finally {
-      setLoading(false);
+  const clearRouletteTimers = () => {
+    if (rouletteInterval.current) window.clearInterval(rouletteInterval.current);
+    if (redirectTimeout.current) window.clearTimeout(redirectTimeout.current);
+    rouletteInterval.current = null;
+    redirectTimeout.current = null;
+  };
+
+  useEffect(() => clearRouletteTimers, []);
+
+  const startSurprise = () => {
+    if (!surpriseProducts.length) {
+      router.push("/categorias");
+      return;
     }
+    clearRouletteTimers();
+    const winnerIndex = Math.floor(Math.random() * surpriseProducts.length);
+    setWinner(null);
+    setRouletteIndex(Math.floor(Math.random() * surpriseProducts.length));
+    setIsRouletteOpen(true);
+    let spins = 0;
+    rouletteInterval.current = window.setInterval(() => {
+      spins += 1;
+      setRouletteIndex((current) => (current + 1) % surpriseProducts.length);
+      if (spins !== 22) return;
+      if (rouletteInterval.current) window.clearInterval(rouletteInterval.current);
+      rouletteInterval.current = null;
+      setRouletteIndex(winnerIndex);
+      setWinner(surpriseProducts[winnerIndex]);
+      redirectTimeout.current = window.setTimeout(
+        () => router.push(`/produto/${surpriseProducts[winnerIndex].id}`),
+        1100,
+      );
+    }, 95);
+  };
+
+  const closeRoulette = () => {
+    clearRouletteTimers();
+    setIsRouletteOpen(false);
+    setWinner(null);
   };
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
@@ -212,7 +160,7 @@ export function HomeWelcome({ bestSellers }: HomeWelcomeProps) {
                   />
                   <button
                     type="submit"
-                    disabled={loading || !prompt.trim()}
+                      disabled={!prompt.trim()}
                     aria-label="Encontrar presentes"
                     className="grid h-11 w-11 place-items-center rounded-xl bg-[#4a1422] text-white disabled:opacity-50"
                   >
@@ -221,7 +169,7 @@ export function HomeWelcome({ bestSellers }: HomeWelcomeProps) {
                 </form>
                 <button
                   type="button"
-                  onClick={() => router.push("/busca?q=surpreenda-me")}
+                  onClick={startSurprise}
                   className="mt-4 inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-rose-200 bg-white/70 px-4 text-sm font-semibold text-[#5b0618] transition hover:bg-[#5b0618] hover:text-white"
                 >
                   <Sparkles className="h-4 w-4" /> Quero uma surpresa
@@ -292,6 +240,33 @@ export function HomeWelcome({ bestSellers }: HomeWelcomeProps) {
             ))}
         </div>
       </section>
+      {isRouletteOpen && (
+        <div className="fixed inset-0 z-[70] grid place-items-center bg-[#23060d]/75 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="Roleta de surpresa">
+          <div className="w-full max-w-lg overflow-hidden rounded-[2rem] border border-white/20 bg-[#fff8f6] shadow-2xl">
+            <div className="flex items-center justify-between bg-[#4a1422] px-5 py-4 text-white">
+              <div className="flex items-center gap-2"><Sparkles className="h-5 w-5 text-rose-200" /><span className="font-semibold">Ana está escolhendo uma surpresa</span></div>
+              <button type="button" onClick={closeRoulette} aria-label="Cancelar surpresa" className="rounded-full p-1 text-rose-100 hover:bg-white/10"><X className="h-5 w-5" /></button>
+            </div>
+            <div className="relative overflow-hidden px-4 py-8">
+              <div className="pointer-events-none absolute inset-y-5 left-1/2 z-10 w-[31%] -translate-x-1/2 rounded-2xl border-2 border-rose-500 bg-rose-100/25" />
+              <div className="grid grid-cols-3 gap-3">
+                {[-1, 0, 1].map((offset) => {
+                  const product = surpriseProducts[(rouletteIndex + offset + surpriseProducts.length) % surpriseProducts.length];
+                  return (
+                    <div key={`${product.id}-${offset}`} className="overflow-hidden rounded-xl border border-rose-100 bg-white shadow-sm">
+                      <div className="aspect-square bg-rose-50">{product.imageUrl && <img src={product.imageUrl} alt="" className="h-full w-full object-cover" />}</div>
+                      <p className="truncate p-2 text-center text-xs font-bold text-[#35111a]">{product.name}</p>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+            <p className="border-t border-rose-100 px-5 py-4 text-center text-sm font-medium text-[#5b0618]">
+              {winner ? `${winner.name} é sua surpresa. Vamos preparar os detalhes...` : "Girando a roleta..."}
+            </p>
+          </div>
+        </div>
+      )}
     </>
   );
 }
@@ -358,7 +333,7 @@ export function FloatingReels() {
 
   return (
     <>
-      <button type="button" onClick={() => setIsOpen(true)} className="fixed bottom-5 left-4 z-40 hidden overflow-hidden rounded-2xl border-2 border-white bg-[#fff8f6] shadow-[0_12px_28px_rgba(53,17,26,0.22)] sm:block" aria-label="Abrir Reels Cesto d'Amore">
+      <button type="button" onClick={() => setIsOpen(true)} className="pointer-events-none invisible fixed bottom-5 left-4 z-40 hidden overflow-hidden rounded-2xl border-2 border-white bg-[#fff8f6] shadow-[0_12px_28px_rgba(53,17,26,0.22)] lg:pointer-events-auto lg:visible lg:block" aria-label="Abrir Reels Cesto d'Amore">
         <div className="h-48 w-28 overflow-hidden"><iframe title="Prévia de Reel Cesto d'Amore" src={`https://www.instagram.com/reel/${reelIds[activeReel]}/embed/`} className="pointer-events-none h-[600px] w-[328px] origin-top-left scale-[0.34] border-0" loading="lazy" /></div>
         <span className="flex items-center justify-center gap-1 border-t border-rose-100 bg-white py-1.5 text-[10px] font-bold text-rose-700"><Instagram className="h-3 w-3" /> Reels</span>
       </button>
